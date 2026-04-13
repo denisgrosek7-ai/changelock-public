@@ -7,13 +7,14 @@ Use this checklist before the first public GitHub push.
 These placeholders are intentional examples and should be updated before treating the repo as production-ready:
 
 - `.github/CODEOWNERS`
-- `.github/workflows/build-sign-attest.yml`
 - `policies/global/artifact-policy.yaml`
 - `policies/tenants/acme/*`
 - `deploy/k8s/*` image references that still use `ghcr.io/my-org/...`
 - buyer-demo placeholders such as `my-org/acme-app`
 
 Keeping them is acceptable for a public technical POC, but they should be presented as examples, not live production values.
+
+The `build-sign-attest` GitHub Actions workflow no longer hardcodes `my-org/acme-app`. It derives the GHCR namespace from the repository owner and is intentionally manual-only so a public POC repo does not create accidental `production` deployments or broken package pushes on every `main` commit.
 
 ## 2. Decide what stays demo-only
 
@@ -22,6 +23,7 @@ Current local demo paths intentionally include:
 - fixture-backed verifier scenarios for deterministic `kind` demos
 - local Postgres defaults for `docker-compose.dev.yml`
 - local CORS defaults for `localhost` and `127.0.0.1`
+- a manual `build-sign-attest` workflow that is intended for explicit image publishing, signing, and attestation runs
 
 These are public-safe, but should stay clearly labeled as demo or local-dev defaults.
 
