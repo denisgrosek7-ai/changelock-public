@@ -1,0 +1,67 @@
+artifacts:
+  - image: ghcr.io/my-org/acme-app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    expectedRepository: my-org/acme-app
+    expectedRef: refs/heads/main
+    result:
+      signatureValid: true
+      attestationValid: true
+      verifiedIdentity: https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main
+      verifiedIssuer: https://token.actions.githubusercontent.com
+      verifiedSubject: repo:my-org/acme-app
+      verifiedRepo: my-org/acme-app
+      verifiedWorkflow: .github/workflows/build-sign-attest.yml
+      verifiedRef: refs/heads/main
+      verifiedCommitSHA: abc123
+      verifiedDigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  - image: ghcr.io/my-org/acme-app:latest
+    expectedRepository: my-org/acme-app
+    result:
+      signatureValid: true
+      attestationValid: true
+      verifiedIdentity: https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main
+      verifiedIssuer: https://token.actions.githubusercontent.com
+      verifiedSubject: repo:my-org/acme-app
+      verifiedRepo: my-org/acme-app
+      verifiedWorkflow: .github/workflows/build-sign-attest.yml
+      verifiedRef: refs/heads/main
+      verifiedCommitSHA: abc123
+  - image: ghcr.io/my-org/acme-app:1.0.0
+    expectedRepository: my-org/acme-app
+    result:
+      signatureValid: true
+      attestationValid: true
+      verifiedIdentity: https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main
+      verifiedIssuer: https://token.actions.githubusercontent.com
+      verifiedSubject: repo:my-org/acme-app
+      verifiedRepo: my-org/acme-app
+      verifiedWorkflow: .github/workflows/build-sign-attest.yml
+      verifiedRef: refs/heads/main
+      verifiedCommitSHA: abc123
+  - image: ghcr.io/my-org/acme-app@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    expectedRepository: my-org/acme-app
+    result:
+      signatureValid: true
+      attestationValid: true
+      verifiedIdentity: https://github.com/my-org/acme-app/.github/workflows/rogue.yml@refs/heads/main
+      verifiedIssuer: https://token.actions.githubusercontent.com
+      verifiedSubject: repo:my-org/acme-app
+      verifiedRepo: my-org/acme-app
+      verifiedWorkflow: .github/workflows/rogue.yml
+      verifiedRef: refs/heads/main
+      verifiedCommitSHA: abc123
+      verifiedDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  - image: ghcr.io/my-org/acme-app@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    error: simulated verification failure for unsigned image
+  - image: ghcr.io/my-org/acme-app@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+    expectedRepository: my-org/acme-app
+    result:
+      signatureValid: true
+      attestationValid: true
+      verifiedIdentity: https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main
+      verifiedIssuer: https://token.actions.githubusercontent.com
+      verifiedSubject: repo:my-org/acme-app
+      verifiedRepo: my-org/acme-app
+      verifiedWorkflow: .github/workflows/build-sign-attest.yml
+      verifiedRef: refs/heads/main
+      verifiedCommitSHA: abc123
+      verifiedDigest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd

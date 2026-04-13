@@ -1,0 +1,7 @@
+repositories:
+  - name: my-org/acme-app
+    defaultBranch: main
+    workflowAllowlist:
+      - .github/workflows/build-sign-attest.yml
+    releaseBranches:
+      - release/*

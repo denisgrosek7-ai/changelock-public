@@ -1,0 +1,18 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+
+audit:
+  backend: postgres
+  retention_days: 365
+
+verification:
+  allowed_registries:
+    - ghcr.io
+  allowed_workflow_identities:
+    - https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main
+  require_attestation: true
+  require_signature: true
+
+runtime:
+  poll_interval_seconds: 30

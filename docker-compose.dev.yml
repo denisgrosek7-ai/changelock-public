@@ -1,0 +1,128 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: changelock
+      POSTGRES_USER: changelock
+      POSTGRES_PASSWORD: changelock
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U changelock -d changelock"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5433:5432"
+    volumes:
+      - changelock-postgres:/var/lib/postgresql/data
+
+  api:
+    profiles: ["legacy-api"]
+    build: ./services/api
+    environment:
+      CHANGELOCK_CONFIG: /app/config/app-config.yaml
+    volumes:
+      - ./config:/app/config:ro
+    ports:
+      - "8080:8080"
+
+  policy-engine:
+    build:
+      context: .
+      dockerfile: ./services/policy-engine/Dockerfile
+    environment:
+      CHANGELOCK_POLICIES_DIR: /app/policies
+      AUDIT_WRITER_URL: http://audit-writer:8094
+    volumes:
+      - ./policies:/app/policies:ro
+    ports:
+      - "8090:8090"
+    depends_on:
+      audit-writer:
+        condition: service_started
+
+  attestation-verifier:
+    build:
+      context: .
+      dockerfile: ./services/attestation-verifier/Dockerfile
+    environment:
+      AUDIT_WRITER_URL: http://audit-writer:8094
+    ports:
+      - "8091:8091"
+    depends_on:
+      audit-writer:
+        condition: service_started
+
+  deploy-gate:
+    build:
+      context: .
+      dockerfile: ./services/deploy-gate/Dockerfile
+    environment:
+      CHANGELOCK_POLICIES_DIR: /app/policies
+      AUDIT_WRITER_URL: http://audit-writer:8094
+    volumes:
+      - ./policies:/app/policies:ro
+    ports:
+      - "8092:8092"
+    depends_on:
+      audit-writer:
+        condition: service_started
+
+  runtime-agent:
+    build:
+      context: .
+      dockerfile: ./services/runtime-agent/Dockerfile
+    environment:
+      AUDIT_WRITER_URL: http://audit-writer:8094
+    ports:
+      - "8093:8093"
+    depends_on:
+      audit-writer:
+        condition: service_started
+
+  audit-writer:
+    build:
+      context: .
+      dockerfile: ./services/audit-writer/Dockerfile
+    environment:
+      CHANGELOCK_AUDIT_STORE: postgres
+      CHANGELOCK_POSTGRES_DSN: postgres://changelock:changelock@postgres:5432/changelock?sslmode=disable
+      CHANGELOCK_CORS_ALLOW_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+      CHANGELOCK_REPORTS_TIMEOUT: 5s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8094:8094"
+
+  ui:
+    profiles: ["ui"]
+    build: ./ui
+    depends_on:
+      audit-writer:
+        condition: service_started
+    ports:
+      - "3000:80"
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      audit-writer:
+        condition: service_started
+      policy-engine:
+        condition: service_started
+      attestation-verifier:
+        condition: service_started
+      deploy-gate:
+        condition: service_started
+      runtime-agent:
+        condition: service_started
+    ports:
+      - "9090:9090"
+
+volumes:
+  changelock-postgres:

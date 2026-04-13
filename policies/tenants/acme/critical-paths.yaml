@@ -1,0 +1,7 @@
+criticalPaths:
+  - path: deploy/**
+    securityOwnerGroup: platform-security
+  - path: .github/workflows/**
+    securityOwnerGroup: platform-security
+  - path: services/deploy-gate/**
+    securityOwnerGroup: platform-security

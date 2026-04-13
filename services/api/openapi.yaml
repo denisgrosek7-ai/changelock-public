@@ -1,0 +1,26 @@
+openapi: 3.1.0
+info:
+  title: ChangeLock API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: OK
+  /v1/decision/deploy:
+    post:
+      responses:
+        '200':
+          description: Decision result
+  /v1/reports/{report_id}:
+    get:
+      parameters:
+        - in: path
+          name: report_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Report

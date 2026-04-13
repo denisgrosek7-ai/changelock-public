@@ -1,0 +1,16 @@
+apiVersion: changelock.io/v1alpha1
+kind: ArtifactPolicy
+metadata:
+  name: global-artifact-policy
+spec:
+  allowedRegistries:
+    - ghcr.io/my-org/acme-app
+  requireDigestPinning: true
+  requireProvenance: true
+  requireSignature: true
+  allowedSignerIdentities:
+    - "https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main"
+  allowedWorkflowFiles:
+    - ".github/workflows/build-sign-attest.yml"
+  allowedSubjects:
+    - "repo:my-org/acme-app"

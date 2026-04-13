@@ -1,0 +1,8 @@
+# Replace these example owners before enforcing branch protections on a real repository.
+# The current entries are a public-safe template for the technical POC.
+* @my-org/platform
+.github/workflows/* @my-org/platform-security
+deploy/* @my-org/platform-security
+policies/* @my-org/platform-security
+services/deploy-gate/* @my-org/platform-security
+services/policy-engine/* @my-org/platform-security

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acme-prod
+  labels:
+    changelock.io/enforce: enabled
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: changelock-demo
+  namespace: acme-prod
+automountServiceAccountToken: false

@@ -1,0 +1,3 @@
+watchNamespaces:
+  - acme-prod
+reportIntervalSeconds: 30

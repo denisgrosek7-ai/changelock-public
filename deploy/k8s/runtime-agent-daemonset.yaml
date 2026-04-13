@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: changelock-runtime-agent
+  namespace: changelock-system
+spec:
+  selector:
+    matchLabels:
+      app: changelock-runtime-agent
+  template:
+    metadata:
+      labels:
+        app: changelock-runtime-agent
+    spec:
+      serviceAccountName: changelock-runtime-agent
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: runtime-agent
+          image: ghcr.io/my-org/changelock-runtime-agent@sha256:REPLACE_ME
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

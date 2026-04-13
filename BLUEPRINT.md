@@ -1,0 +1,100 @@
+# ChangeLock full blueprint
+
+This document maps the repository, explains each file, and defines the minimum viable security controls.
+
+## Repository map
+- `.editorconfig`
+- `.github/CODEOWNERS`
+- `.github/dependabot.yml`
+- `.github/workflows/build-sign-attest.yml`
+- `.github/workflows/lint.yml`
+- `.github/workflows/release.yml`
+- `.github/workflows/test.yml`
+- `.github/workflows/verify-policy.yml`
+- `.gitignore`
+- `LICENSE`
+- `Makefile`
+- `README.md`
+- `config/app-config.example.yaml`
+- `config/logging.yaml`
+- `connectors/github-webhook/README.md`
+- `deploy/k8s/api-deployment.yaml`
+- `deploy/k8s/api-service.yaml`
+- `deploy/k8s/deploy-gate-deployment.yaml`
+- `deploy/k8s/namespace.yaml`
+- `deploy/k8s/networkpolicy-allow-internal.yaml`
+- `deploy/k8s/networkpolicy-default-deny.yaml`
+- `deploy/k8s/pdb-api.yaml`
+- `deploy/k8s/rbac-api.yaml`
+- `deploy/k8s/runtime-agent-daemonset.yaml`
+- `deploy/k8s/serviceaccount-api.yaml`
+- `deploy/kyverno/01-require-signed-images.yaml`
+- `deploy/kyverno/02-require-attestations.yaml`
+- `deploy/kyverno/03-block-latest-tag.yaml`
+- `deploy/kyverno/04-require-restricted-securitycontext.yaml`
+- `deploy/kyverno/05-restrict-serviceaccounts.yaml`
+- `deploy/vault/policies/changelock-api.hcl`
+- `deploy/vault/roles/changelock-db-role.hcl`
+- `docker-compose.dev.yml`
+- `docs/adr/0001-product-scope.md`
+- `docs/adr/0002-kyverno-over-sigstore-policy-controller.md`
+- `docs/adr/0003-keyless-signing.md`
+- `docs/architecture.md`
+- `docs/audit-evidence.md`
+- `docs/deployment-flow.md`
+- `docs/incident-runbook.md`
+- `docs/threat-model.md`
+- `docs/trust-boundaries.md`
+- `infra/terraform/envs/dev/main.tf`
+- `infra/terraform/envs/prod/main.tf`
+- `infra/terraform/modules/oidc_github/README.md`
+- `policies/global/artifact-policy.yaml`
+- `policies/global/change-policy.yaml`
+- `policies/global/runtime-policy.yaml`
+- `policies/tenants/acme/critical-paths.yaml`
+- `policies/tenants/acme/environments.yaml`
+- `policies/tenants/acme/repositories.yaml`
+- `policies/tenants/acme/tenant.yaml`
+- `scripts/bootstrap_local_kind.sh`
+- `scripts/cosign_verify.sh`
+- `scripts/verify_attestation.sh`
+- `security/baseline-checklist.md`
+- `security/sbom/syft.yaml`
+- `security/secrets/README.md`
+- `services/api/Dockerfile`
+- `services/api/openapi.yaml`
+- `services/api/requirements.txt`
+- `services/api/src/main.py`
+- `services/api/src/routers/decisions.py`
+- `services/api/src/routers/health.py`
+- `services/api/src/routers/reports.py`
+- `services/attestation-verifier/Dockerfile`
+- `services/attestation-verifier/requirements.txt`
+- `services/attestation-verifier/src/main.py`
+- `services/audit-writer/Dockerfile`
+- `services/audit-writer/requirements.txt`
+- `services/audit-writer/src/main.py`
+- `services/deploy-gate/Dockerfile`
+- `services/deploy-gate/requirements.txt`
+- `services/deploy-gate/src/main.py`
+- `services/policy-engine/Dockerfile`
+- `services/policy-engine/requirements.txt`
+- `services/policy-engine/src/main.py`
+- `services/runtime-agent/Dockerfile`
+- `services/runtime-agent/config.example.yaml`
+- `services/runtime-agent/requirements.txt`
+- `services/runtime-agent/src/main.py`
+- `tests/e2e/test_runtime_drift.py`
+- `tests/integration/test_deploy_gate.py`
+- `tests/policy/test_change_policy.py`
+- `ui/package.json`
+- `ui/src/App.tsx`
+
+## Build target
+- MVP deploy target: Kubernetes
+- Source of truth: GitHub
+- CI identity: GitHub Actions with OIDC
+- Artifact trust: GitHub attestations + Cosign signatures
+- Cluster enforcement: Kyverno verifyImages + validation policies
+- Secrets: Vault dynamic secrets
+- Audit: append-only event store

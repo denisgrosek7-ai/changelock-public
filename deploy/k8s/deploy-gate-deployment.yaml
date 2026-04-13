@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: changelock-deploy-gate
+  namespace: changelock-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: changelock-deploy-gate
+  template:
+    metadata:
+      labels:
+        app: changelock-deploy-gate
+    spec:
+      serviceAccountName: changelock-deploy-gate
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: deploy-gate
+          image: changelock/deploy-gate:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8443
+              name: https
+          env:
+            - name: PORT
+              value: "8443"
+            - name: TLS_CERT_FILE
+              value: /etc/changelock/tls/tls.crt
+            - name: TLS_KEY_FILE
+              value: /etc/changelock/tls/tls.key
+            - name: CHANGELOCK_POLICIES_DIR
+              value: /etc/changelock/policies
+            - name: CHANGELOCK_VERIFIER_FIXTURE
+              value: /etc/changelock/verifier/verifier-fixture.yaml
+            - name: CHANGELOCK_AUDIT_FILE
+              value: /dev/stdout
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/changelock/tls
+              readOnly: true
+            - name: policies-global
+              mountPath: /etc/changelock/policies/global
+              readOnly: true
+            - name: policies-acme
+              mountPath: /etc/changelock/policies/tenants/acme
+              readOnly: true
+            - name: verifier-fixture
+              mountPath: /etc/changelock/verifier
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: changelock-deploy-gate-tls
+        - name: policies-global
+          configMap:
+            name: changelock-policies-global
+        - name: policies-acme
+          configMap:
+            name: changelock-policies-acme
+        - name: verifier-fixture
+          configMap:
+            name: changelock-verifier-fixture
