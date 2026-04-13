@@ -258,6 +258,13 @@ Current metrics are enough for a practical first alerting layer:
 
 See [docs/observability.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/observability.md) for the scrape config and starter alerting guidance.
 
+## GitHub automation
+- `test` runs on pull requests and on `main` pushes and covers both `go test ./...` and the UI production build.
+- `lint` runs on pull requests and checks Go formatting.
+- `build-sign-attest` is now a manual workflow. It derives the GHCR namespace from the repository owner, builds the selected Dockerfile, pushes the image, emits provenance, and keylessly signs the resulting digest.
+- `build-sign-attest` intentionally does not target a GitHub `production` environment by default. This keeps the public POC repo free of noisy failed deployments when the workflow has not been explicitly configured for a real release path.
+- Dependabot is intentionally limited to GitHub Actions and the active `ui/` package set so the public repo does not open avoidable dependency PRs for the legacy optional `services/api` path.
+
 ### Optional local Prometheus
 ```bash
 cd /Users/denisgrosek/Downloads/changelock-blueprint
@@ -319,7 +326,7 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - richer alerts and production observability integrations
 
 ## GitHub publish readiness
-This repository is now structured for a public technical POC upload. Before the first push, use [docs/github-publish.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/github-publish.md) to review example placeholders, local-only defaults, and the exact first-upload sequence.
+This repository is now structured for a public technical POC upload. Use [docs/github-publish.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/github-publish.md) to review example placeholders, local-only defaults, manual GitHub Actions flows, and the exact first-upload sequence.
 
 ## Security baseline
 - No long-lived cloud credentials in CI
