@@ -113,7 +113,7 @@ Install missing local tooling on macOS with:
 - `brew install kubectl`
 
 ### Bootstrap
-1. `cd /Users/denisgrosek/Downloads/changelock-blueprint`
+1. `cd changelock-blueprint`
 2. `./scripts/bootstrap_local_kind.sh`
 
 What the bootstrap does:
@@ -186,15 +186,15 @@ Phase 5b adds a small buyer-demo friendly dashboard on top of the live audit-wri
 
 Example config:
 ```bash
-cp /Users/denisgrosek/Downloads/changelock-blueprint/ui/.env.example /Users/denisgrosek/Downloads/changelock-blueprint/ui/.env.local
+cp ui/.env.example ui/.env.local
 ```
 
 ### Run backend and UI together
 1. Start the Go backend stack:
-   - `cd /Users/denisgrosek/Downloads/changelock-blueprint`
+   - `cd changelock-blueprint`
    - `docker compose -f docker-compose.dev.yml up --build -d`
 2. Start the dashboard locally with Vite:
-   - `cd /Users/denisgrosek/Downloads/changelock-blueprint/ui`
+   - `cd ui`
    - `npm install`
    - `npm run dev:host`
 3. Open `http://127.0.0.1:5173`
@@ -256,7 +256,7 @@ Current metrics are enough for a practical first alerting layer:
 - audit forwarding failures
 - audit store write failures
 
-See [docs/observability.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/observability.md) for the scrape config and starter alerting guidance.
+See [docs/observability.md](docs/observability.md) for the scrape config and starter alerting guidance.
 
 ## GitHub automation
 - `test` runs on pull requests and on `main` pushes and covers both `go test ./...` and the UI production build.
@@ -267,7 +267,7 @@ See [docs/observability.md](/Users/denisgrosek/Downloads/changelock-blueprint/do
 
 ### Optional local Prometheus
 ```bash
-cd /Users/denisgrosek/Downloads/changelock-blueprint
+cd changelock-blueprint
 docker compose -f docker-compose.dev.yml --profile observability up -d prometheus
 curl -sS http://127.0.0.1:8094/metrics | rg '^changelock_'
 ```
@@ -326,7 +326,7 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - richer alerts and production observability integrations
 
 ## GitHub publish readiness
-This repository is now structured for a public technical POC upload. Use [docs/github-publish.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/github-publish.md) to review example placeholders, local-only defaults, manual GitHub Actions flows, and the exact first-upload sequence.
+This repository is now structured for a public technical POC upload. Use [docs/github-publish.md](docs/github-publish.md) to review example placeholders, local-only defaults, manual GitHub Actions flows, and the exact first-upload sequence.
 
 ## Security baseline
 - No long-lived cloud credentials in CI
