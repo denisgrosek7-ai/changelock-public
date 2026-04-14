@@ -167,6 +167,30 @@ export function EventDetails({ event }: Props) {
           </dd>
         </div>
         <div>
+          <dt>Exception</dt>
+          <dd>{event.is_exception ? "yes" : "no"}</dd>
+        </div>
+        <div>
+          <dt>Exception ID</dt>
+          <dd>{event.exception_id || "-"}</dd>
+        </div>
+        <div>
+          <dt>Exception Type</dt>
+          <dd>{event.exception_type || "-"}</dd>
+        </div>
+        <div>
+          <dt>Exception Ticket</dt>
+          <dd>{event.exception_ticket_id || "-"}</dd>
+        </div>
+        <div>
+          <dt>Approved By</dt>
+          <dd>{event.exception_approved_by || "-"}</dd>
+        </div>
+        <div>
+          <dt>Exception Expires</dt>
+          <dd>{formatTimestamp(event.exception_expires_at)}</dd>
+        </div>
+        <div>
           <dt>Drift Result</dt>
           <dd>{event.drift_result || "-"}</dd>
         </div>
@@ -180,6 +204,10 @@ export function EventDetails({ event }: Props) {
             <code>{event.digest || "-"}</code>
           </dd>
         </div>
+        <div>
+          <dt>CVE ID</dt>
+          <dd>{event.cve_id || "-"}</dd>
+        </div>
       </dl>
 
       {event.drift_classes && event.drift_classes.length > 0 ? (
@@ -192,6 +220,30 @@ export function EventDetails({ event }: Props) {
               </span>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {event.exception_id || event.exception_reason ? (
+        <section className="details-section">
+          <h3>Exception Metadata</h3>
+          <dl className="details-grid details-grid--compact">
+            <div>
+              <dt>Reason</dt>
+              <dd>{event.exception_reason || "-"}</dd>
+            </div>
+            <div>
+              <dt>Ticket</dt>
+              <dd>{event.exception_ticket_id || "-"}</dd>
+            </div>
+            <div>
+              <dt>Approved By</dt>
+              <dd>{event.exception_approved_by || "-"}</dd>
+            </div>
+            <div>
+              <dt>Expires</dt>
+              <dd>{formatTimestamp(event.exception_expires_at)}</dd>
+            </div>
+          </dl>
         </section>
       ) : null}
 

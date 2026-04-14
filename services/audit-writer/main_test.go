@@ -204,3 +204,132 @@ func TestAllowedOriginsFromEnvDefaults(t *testing.T) {
 		t.Fatalf("expected default docker ui origin")
 	}
 }
+
+func TestExceptionsLifecycleEndpoints(t *testing.T) {
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	createBody := bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-001",
+	  "exception_type":"BREAK_GLASS",
+	  "tenant_id":"acme",
+	  "environment":"prod",
+	  "namespace":"acme-prod",
+	  "reason":"P0 production fix",
+	  "ticket_id":"INC-1234",
+	  "approved_by":"oncall@example.com",
+	  "ttl_hours":2
+	}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions", createBody)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/exceptions?active=true&environment=prod", nil)
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+
+	var listed exceptionsResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listed.Exceptions) != 1 || listed.Exceptions[0].ExceptionID != "EX-2026-001" {
+		t.Fatalf("unexpected exceptions %#v", listed)
+	}
+
+	validateReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/validate", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-001",
+	  "tenant_id":"acme",
+	  "environment":"prod",
+	  "namespace":"acme-prod"
+	}`))
+	validateReq.Header.Set("Content-Type", "application/json")
+	validateRec := httptest.NewRecorder()
+	handler.ServeHTTP(validateRec, validateReq)
+
+	var validation audit.ExceptionValidationResult
+	if err := json.NewDecoder(validateRec.Body).Decode(&validation); err != nil {
+		t.Fatalf("decode validation response: %v", err)
+	}
+	if !validation.Valid || validation.Exception == nil || validation.Exception.ExceptionID != "EX-2026-001" {
+		t.Fatalf("unexpected validation %#v", validation)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/exceptions/EX-2026-001", nil)
+	deleteRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteRec, deleteReq)
+
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	reportReq := httptest.NewRequest(http.MethodGet, "/v1/reports/exceptions?environment=prod", nil)
+	reportRec := httptest.NewRecorder()
+	handler.ServeHTTP(reportRec, reportReq)
+
+	var report audit.ExceptionReport
+	if err := json.NewDecoder(reportRec.Body).Decode(&report); err != nil {
+		t.Fatalf("decode exception report: %v", err)
+	}
+	if len(report.RecentInactive) != 1 {
+		t.Fatalf("expected revoked exception in report, got %#v", report)
+	}
+
+	events, err := store.ListEvents(t.Context(), audit.EventFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("ListEvents() error = %v", err)
+	}
+	foundCreated := false
+	foundRevoked := false
+	for _, event := range events {
+		if event.EventType == audit.EventTypeExceptionCreated && event.ExceptionID == "EX-2026-001" {
+			foundCreated = true
+		}
+		if event.EventType == audit.EventTypeExceptionRevoked && event.ExceptionID == "EX-2026-001" {
+			foundRevoked = true
+		}
+	}
+	if !foundCreated || !foundRevoked {
+		t.Fatalf("expected lifecycle audit events, got %#v", events)
+	}
+}
+
+func TestValidateExceptionEndpointReturnsInvalidResult(t *testing.T) {
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+	if _, err := store.CreateException(t.Context(), audit.ExceptionCreateRequest{
+		ExceptionID:   "EX-2026-002",
+		ExceptionType: audit.ExceptionTypeDigestBypass,
+		ImageDigest:   "sha256:abc123",
+		Reason:        "digest bypass",
+		TicketID:      "INC-2000",
+		ApprovedBy:    "oncall@example.com",
+		TTLHours:      1,
+	}); err != nil {
+		t.Fatalf("CreateException() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/exceptions/validate", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-002",
+	  "image_digest":"sha256:def456"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var validation audit.ExceptionValidationResult
+	if err := json.NewDecoder(rec.Body).Decode(&validation); err != nil {
+		t.Fatalf("decode validation response: %v", err)
+	}
+	if validation.Valid || validation.Reason == "" {
+		t.Fatalf("expected invalid validation result, got %#v", validation)
+	}
+}

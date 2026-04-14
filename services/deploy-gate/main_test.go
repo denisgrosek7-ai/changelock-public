@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/verify"
@@ -20,6 +22,15 @@ type fakeArtifactVerifier struct {
 }
 
 func (f fakeArtifactVerifier) VerifyArtifact(_ context.Context, _ verify.ArtifactVerificationRequest) (verify.ArtifactVerification, error) {
+	return f.result, f.err
+}
+
+type fakeExceptionValidator struct {
+	result audit.ExceptionValidationResult
+	err    error
+}
+
+func (f fakeExceptionValidator) Validate(_ context.Context, _ audit.ExceptionValidationRequest) (audit.ExceptionValidationResult, error) {
 	return f.result, f.err
 }
 
@@ -152,6 +163,139 @@ func TestAdmissionReviewDeniesMutableAndPrivilegedWorkload(t *testing.T) {
 	deployEvent := findDecisionEvent(events, audit.EventTypeDeployGateDecision, audit.DecisionDeny)
 	if deployEvent == nil || len(deployEvent.Reasons) == 0 {
 		t.Fatalf("expected explainable DENY deploy gate event, got %#v", events)
+	}
+}
+
+func TestAdmissionReviewAllowsValidBreakGlassException(t *testing.T) {
+	t.Setenv("CHANGELOCK_POLICIES_DIR", "../../policies")
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	previousVerifier := artifactVerifier
+	previousWriter := auditWriter
+	previousValidator := exceptionValidator
+	artifactVerifier = fakeArtifactVerifier{}
+	expiresAt := time.Date(2026, 4, 14, 12, 0, 0, 0, time.UTC)
+	exceptionValidator = fakeExceptionValidator{
+		result: audit.ExceptionValidationResult{
+			Valid: true,
+			Exception: &audit.PolicyException{
+				ExceptionID:   "EX-2026-001",
+				ExceptionType: audit.ExceptionTypeBreakGlass,
+				Reason:        "P0 production fix",
+				TicketID:      "INC-1234",
+				ApprovedBy:    "oncall@example.com",
+				ExpiresAt:     expiresAt,
+				Active:        true,
+			},
+		},
+	}
+	auditWriter = audit.NewWriter(audit.NewFileSink(auditPath))
+	defer func() {
+		artifactVerifier = previousVerifier
+		auditWriter = previousWriter
+		exceptionValidator = previousValidator
+	}()
+
+	review := admissionReview{
+		Request: &admissionRequest{
+			UID:       "allow-break-glass",
+			Namespace: "acme-prod",
+			Kind:      objectReference{Kind: "Pod"},
+			Object: pod{
+				Metadata: objectMeta{
+					Name: "booking-api",
+					Annotations: map[string]string{
+						"changelock.io/tenant":       "acme",
+						"changelock.io/repository":   "my-org/acme-app",
+						"changelock.io/break-glass":  "true",
+						"changelock.io/exception-id": "EX-2026-001",
+						"changelock.io/reason":       "P0 production fix",
+						"changelock.io/ticket-id":    "INC-1234",
+						"changelock.io/environment":  "prod",
+					},
+				},
+				Spec: podSpec{
+					Containers: []container{{
+						Name:  "app",
+						Image: "ghcr.io/my-org/acme-app:latest",
+					}},
+				},
+			},
+		},
+	}
+
+	response := executeAdmissionRequest(t, review)
+	if !response.Response.Allowed {
+		t.Fatalf("expected break-glass admission to allow, got %#v", response.Response)
+	}
+
+	events := readAuditEvents(t, auditPath)
+	if !hasDecisionEvent(events, audit.EventTypeExceptionUsed, audit.DecisionAllow) {
+		t.Fatalf("expected exception_used event, got %#v", events)
+	}
+	if !hasDecisionEvent(events, audit.EventTypeDeployGateDecision, audit.DecisionAllow) {
+		t.Fatalf("expected ALLOW deploy gate event, got %#v", events)
+	}
+}
+
+func TestAdmissionReviewDeniesInvalidBreakGlassException(t *testing.T) {
+	t.Setenv("CHANGELOCK_POLICIES_DIR", "../../policies")
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	previousVerifier := artifactVerifier
+	previousWriter := auditWriter
+	previousValidator := exceptionValidator
+	artifactVerifier = fakeArtifactVerifier{}
+	exceptionValidator = fakeExceptionValidator{
+		result: audit.ExceptionValidationResult{
+			Valid:  false,
+			Reason: "exception is expired",
+		},
+	}
+	auditWriter = audit.NewWriter(audit.NewFileSink(auditPath))
+	defer func() {
+		artifactVerifier = previousVerifier
+		auditWriter = previousWriter
+		exceptionValidator = previousValidator
+	}()
+
+	review := admissionReview{
+		Request: &admissionRequest{
+			UID:       "deny-break-glass",
+			Namespace: "acme-prod",
+			Kind:      objectReference{Kind: "Pod"},
+			Object: pod{
+				Metadata: objectMeta{
+					Name: "booking-api",
+					Annotations: map[string]string{
+						"changelock.io/tenant":       "acme",
+						"changelock.io/repository":   "my-org/acme-app",
+						"changelock.io/break-glass":  "true",
+						"changelock.io/exception-id": "EX-2026-002",
+						"changelock.io/reason":       "hotfix",
+						"changelock.io/ticket-id":    "INC-2000",
+						"changelock.io/environment":  "prod",
+					},
+				},
+				Spec: podSpec{
+					Containers: []container{{
+						Name:  "app",
+						Image: "ghcr.io/my-org/acme-app:latest",
+					}},
+				},
+			},
+		},
+	}
+
+	response := executeAdmissionRequest(t, review)
+	if response.Response.Allowed {
+		t.Fatalf("expected invalid break-glass admission to deny, got %#v", response.Response)
+	}
+	if response.Response.Status == nil || !strings.Contains(response.Response.Status.Message, "exception is expired") {
+		t.Fatalf("expected exception deny message, got %#v", response.Response)
+	}
+
+	events := readAuditEvents(t, auditPath)
+	if !hasDecisionEvent(events, audit.EventTypeExceptionValidationFailed, audit.DecisionDeny) {
+		t.Fatalf("expected exception_validation_failed event, got %#v", events)
 	}
 }
 

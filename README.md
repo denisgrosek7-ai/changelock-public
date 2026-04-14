@@ -141,24 +141,35 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `services/deploy-gate` emits `policy_decision` and final `deploy_gate_decision`.
 - `services/policy-engine` emits `policy_decision` for direct API-driven evaluations.
 - `services/runtime-agent` emits `runtime_drift_result` for both clean scans and detected drift.
+- exception lifecycle and usage add:
+  - `exception_created`
+  - `exception_revoked`
+  - `exception_used`
+  - `exception_validation_failed`
 - The fallback sink remains append-only JSON lines on local disk.
 - When `AUDIT_WRITER_URL` is configured, services forward the same structured events to `services/audit-writer` over HTTP with request correlation and explicit timeouts.
-- Events include request correlation, tenant identifier, decision, reasons, policy identifier when available, and verifier evidence such as signer identity, issuer, workflow, ref, commit SHA, and digest.
+- Events include request correlation, tenant identifier, decision, reasons, policy identifier when available, verifier evidence such as signer identity, issuer, workflow, ref, commit SHA, and digest, plus additive exception metadata when a controlled bypass is used.
 
 ## Audit reports API
 `services/audit-writer` exposes:
 - `GET /health`
 - `POST /v1/ingest`
+- `POST /v1/exceptions`
+- `GET /v1/exceptions`
+- `DELETE /v1/exceptions/{exception_id}`
+- `POST /v1/exceptions/validate`
 - `GET /v1/reports/events`
 - `GET /v1/reports/summary`
 - `GET /v1/reports/denies`
 - `GET /v1/reports/runtime-drift`
+- `GET /v1/reports/exceptions`
 
 ### Example queries
 - `curl -sS http://127.0.0.1:8094/v1/reports/events?limit=20`
 - `curl -sS "http://127.0.0.1:8094/v1/reports/events?decision=DENY&tenant_id=acme"`
 - `curl -sS http://127.0.0.1:8094/v1/reports/summary`
 - `curl -sS http://127.0.0.1:8094/v1/reports/runtime-drift`
+- `curl -sS http://127.0.0.1:8094/v1/reports/exceptions`
 
 The reports API now backs the local read-only dashboard in `ui/`.
 
@@ -288,6 +299,85 @@ Phase 6b strengthens ChangeLock's evidence chain without changing the current de
 
 See [docs/supply-chain.md](docs/supply-chain.md) for the workflow behavior, digest correlation model, and policy bundle hashing details.
 
+## Phase 6c break-glass exceptions
+Phase 6c adds a minimal but auditable emergency bypass flow without weakening the default enforcement posture:
+
+- `audit-writer` now persists `policy_exceptions` in PostgreSQL with:
+  - `exception_id`
+  - `exception_type`
+  - optional tenant/environment/namespace/repo/image digest/CVE scope
+  - `reason`
+  - `ticket_id`
+  - `approved_by`
+  - `expires_at`
+  - `active`
+- supported exception types are:
+  - `BREAK_GLASS`
+  - `DIGEST_BYPASS`
+  - `CVE_WHITELIST`
+- break-glass intent is annotation-driven for workloads:
+  - `changelock.io/break-glass: "true"`
+  - `changelock.io/exception-id: "EX-2026-001"`
+  - `changelock.io/reason: "P0 production fix"`
+  - `changelock.io/ticket-id: "INC-1234"`
+- annotation presence alone does not authorize bypass
+- `policy-engine` and `deploy-gate` only short-circuit to `ALLOW` when:
+  - the referenced exception exists
+  - `active = true`
+  - `expires_at` is still in the future
+  - the stored scope matches the request
+- invalid or expired exception intent fails closed and emits `exception_validation_failed`
+- valid exception usage emits `exception_used` and leaves additive event fields in reports/UI:
+  - `is_exception`
+  - `exception_id`
+  - `exception_type`
+  - `exception_reason`
+  - `exception_ticket_id`
+  - `exception_approved_by`
+  - `exception_expires_at`
+
+### Break-glass API examples
+The exception store lives in the Go `audit-writer` + PostgreSQL path. The current `kind` webhook demo still defaults to local file audit output, so Phase 6c validation is easiest through the compose-backed stack on `127.0.0.1:8094`.
+
+Create an exception:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "exception_id":"EX-2026-001",
+    "exception_type":"BREAK_GLASS",
+    "tenant_id":"acme",
+    "environment":"prod",
+    "namespace":"acme-prod",
+    "reason":"P0 production fix",
+    "ticket_id":"INC-1234",
+    "approved_by":"oncall@example.com",
+    "ttl_hours":2
+  }'
+```
+
+List active exceptions:
+```bash
+curl -sS "http://127.0.0.1:8094/v1/exceptions?active=true&environment=prod"
+```
+
+Validate exception scope:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions/validate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "exception_id":"EX-2026-001",
+    "tenant_id":"acme",
+    "environment":"prod",
+    "namespace":"acme-prod"
+  }'
+```
+
+Revoke an exception:
+```bash
+curl -sS -X DELETE http://127.0.0.1:8094/v1/exceptions/EX-2026-001
+```
+
 ### Optional local Prometheus
 ```bash
 cd changelock-blueprint
@@ -326,6 +416,7 @@ These still use the real Kubernetes admission webhook path, but the artifact ver
 - `deploy/kyverno/04-require-restricted-securitycontext.yaml`
 - `deploy/kyverno/05-restrict-serviceaccounts.yaml`
 - `deploy/kyverno/06-require-digest-pinning.yaml`
+- `deploy/kyverno/07-break-glass-labels.yaml`
 
 The local bootstrap applies these by default in `demo` mode. The stricter image-signature and attestation policies in `01` and `02` remain available for real signed-image environments and can be enabled with `CHANGELOCK_KYVERNO_MODE=real`.
 
@@ -339,10 +430,9 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - The reports API is intentionally minimal and is not a replacement for a full SIEM or BI layer.
 - The Phase 5b dashboard is intentionally read-only and local-first.
 - Browser access assumes the local Vite proxy or the optional `nginx` UI profile; advanced auth, multi-user access, and richer analytics come later.
-- Phase 6b still does not add auth/RBAC, break-glass workflow controls, richer exception handling, or a full SBOM registry / vulnerability management platform.
+- Phase 6c still does not add auth/RBAC, multi-step enterprise approvals, signed exception tokens, richer exception analytics, or a full SBOM registry / vulnerability management platform.
 
 ## Roadmap
-- break-glass workflows with explicit evidence
 - auth and RBAC for dashboard and reports API
 - richer alerts and production observability integrations
 - stronger exception workflows and approval capture around temporary policy overrides

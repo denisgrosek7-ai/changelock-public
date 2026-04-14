@@ -43,6 +43,7 @@ export interface StoredEvent {
   workload?: string;
   image?: string;
   digest?: string;
+  cve_id?: string;
   decision: Decision;
   reasons?: string[];
   drift_result?: string;
@@ -52,6 +53,13 @@ export interface StoredEvent {
   policy_bundle_id?: string;
   policy_bundle_hash?: string;
   decision_hash?: string;
+  is_exception?: boolean;
+  exception_id?: string;
+  exception_type?: string;
+  exception_reason?: string;
+  exception_ticket_id?: string;
+  exception_approved_by?: string;
+  exception_expires_at?: string;
   evidence?: Record<string, unknown>;
   raw_event?: Record<string, unknown>;
 }

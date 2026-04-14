@@ -18,6 +18,11 @@ type Store interface {
 	Ingest(ctx context.Context, event Event) (StoredEvent, error)
 	ListEvents(ctx context.Context, filter EventFilter) ([]StoredEvent, error)
 	Summary(ctx context.Context, filter EventFilter) (Summary, error)
+	CreateException(ctx context.Context, request ExceptionCreateRequest) (PolicyException, error)
+	ListExceptions(ctx context.Context, filter ExceptionFilter) ([]PolicyException, error)
+	RevokeException(ctx context.Context, exceptionID string) (PolicyException, error)
+	ValidateException(ctx context.Context, request ExceptionValidationRequest) (ExceptionValidationResult, error)
+	ExceptionReport(ctx context.Context, filter ExceptionFilter) (ExceptionReport, error)
 	Ping(ctx context.Context) error
 	Close()
 }

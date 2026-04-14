@@ -1,0 +1,52 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-break-glass-annotations
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: require-break-glass-annotations-on-pods
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.annotations.\"changelock.io/break-glass\" || '' }}"
+            operator: Equals
+            value: "true"
+      validate:
+        message: "break-glass workloads must include exception-id, reason, and ticket-id annotations"
+        pattern:
+          metadata:
+            annotations:
+              changelock.io/exception-id: "?*"
+              changelock.io/reason: "?*"
+              changelock.io/ticket-id: "?*"
+    - name: require-break-glass-annotations-on-pod-templates
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.template.metadata.annotations.\"changelock.io/break-glass\" || '' }}"
+            operator: Equals
+            value: "true"
+      validate:
+        message: "break-glass workloads must include exception-id, reason, and ticket-id annotations"
+        pattern:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  changelock.io/exception-id: "?*"
+                  changelock.io/reason: "?*"
+                  changelock.io/ticket-id: "?*"
