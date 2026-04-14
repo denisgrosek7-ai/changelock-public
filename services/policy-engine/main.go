@@ -15,6 +15,7 @@ import (
 )
 
 var auditWriter = audit.NewDefaultWriter()
+var exceptionValidator audit.ExceptionValidator = newExceptionValidator()
 
 func main() {
 	addr := ":" + envOrDefault("PORT", "8090")
@@ -83,25 +84,38 @@ func evaluateChangeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if decision, handled := maybeBypassChange(r.Context(), requestID, bundle, request); handled {
+		httpjson.Write(w, http.StatusOK, decision)
+		return
+	}
+
 	decision := policy.EvaluateChange(bundle, request)
 	decision = policy.WithIdentity(bundle, decision, policy.DecisionIdentityInput{
-		RequestID: requestID,
-		Component: "policy-engine",
-		Repo:      request.Repository,
+		RequestID:   requestID,
+		Component:   "policy-engine",
+		Repo:        request.Repository,
+		Environment: request.Environment,
 	})
 	writeAuditEvent(r.Context(), audit.Event{
-		RequestID:        requestID,
-		Component:        "policy-engine",
-		EventType:        audit.EventTypePolicyDecision,
-		TenantID:         request.Tenant,
-		Repo:             request.Repository,
-		Branch:           request.Branch,
-		Decision:         decision.Decision,
-		Reasons:          decision.Reasons,
-		PolicyVersion:    bundle.Change.Metadata.Name,
-		PolicyBundleID:   decision.PolicyBundleID,
-		PolicyBundleHash: decision.PolicyBundleHash,
-		DecisionHash:     decision.DecisionHash,
+		RequestID:           requestID,
+		Component:           "policy-engine",
+		EventType:           audit.EventTypePolicyDecision,
+		TenantID:            request.Tenant,
+		Repo:                request.Repository,
+		Branch:              request.Branch,
+		Decision:            decision.Decision,
+		Reasons:             decision.Reasons,
+		PolicyVersion:       bundle.Change.Metadata.Name,
+		PolicyBundleID:      decision.PolicyBundleID,
+		PolicyBundleHash:    decision.PolicyBundleHash,
+		DecisionHash:        decision.DecisionHash,
+		IsException:         decision.IsException,
+		ExceptionID:         decision.ExceptionID,
+		ExceptionType:       decision.ExceptionType,
+		ExceptionReason:     decision.ExceptionReason,
+		ExceptionTicketID:   decision.ExceptionTicketID,
+		ExceptionApprovedBy: decision.ExceptionApprovedBy,
+		ExceptionExpiresAt:  decision.ExceptionExpiresAt,
 	})
 	httpjson.Write(w, http.StatusOK, decision)
 }
@@ -152,32 +166,45 @@ func evaluateArtifactHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	decision := policy.EvaluateArtifact(bundle, request)
 	digest := firstNonEmpty(resultDigest(request.Verification), audit.DigestFromImage(request.Image))
+	if decision, handled := maybeBypassArtifact(r.Context(), requestID, bundle, request, digest); handled {
+		httpjson.Write(w, http.StatusOK, decision)
+		return
+	}
+
+	decision := policy.EvaluateArtifact(bundle, request)
 	decision = policy.WithIdentity(bundle, decision, policy.DecisionIdentityInput{
 		RequestID:   requestID,
 		ImageDigest: digest,
 		Component:   "policy-engine",
 		Repo:        request.Repository,
+		Environment: request.Environment,
 	})
 	summary, evidence := audit.FromArtifactVerification(request.Verification)
 	writeAuditEvent(r.Context(), audit.Event{
-		RequestID:        requestID,
-		Component:        "policy-engine",
-		EventType:        audit.EventTypePolicyDecision,
-		TenantID:         request.Tenant,
-		Repo:             request.Repository,
-		Branch:           audit.BranchFromRef(firstNonEmpty(resultRef(request.Verification), "")),
-		Image:            request.Image,
-		Digest:           digest,
-		Decision:         decision.Decision,
-		Reasons:          decision.Reasons,
-		VerifierSummary:  summary,
-		Evidence:         evidence,
-		PolicyVersion:    bundle.Artifact.Metadata.Name,
-		PolicyBundleID:   decision.PolicyBundleID,
-		PolicyBundleHash: decision.PolicyBundleHash,
-		DecisionHash:     decision.DecisionHash,
+		RequestID:           requestID,
+		Component:           "policy-engine",
+		EventType:           audit.EventTypePolicyDecision,
+		TenantID:            request.Tenant,
+		Repo:                request.Repository,
+		Branch:              audit.BranchFromRef(firstNonEmpty(resultRef(request.Verification), "")),
+		Image:               request.Image,
+		Digest:              digest,
+		Decision:            decision.Decision,
+		Reasons:             decision.Reasons,
+		VerifierSummary:     summary,
+		Evidence:            evidence,
+		PolicyVersion:       bundle.Artifact.Metadata.Name,
+		PolicyBundleID:      decision.PolicyBundleID,
+		PolicyBundleHash:    decision.PolicyBundleHash,
+		DecisionHash:        decision.DecisionHash,
+		IsException:         decision.IsException,
+		ExceptionID:         decision.ExceptionID,
+		ExceptionType:       decision.ExceptionType,
+		ExceptionReason:     decision.ExceptionReason,
+		ExceptionTicketID:   decision.ExceptionTicketID,
+		ExceptionApprovedBy: decision.ExceptionApprovedBy,
+		ExceptionExpiresAt:  decision.ExceptionExpiresAt,
 	})
 	httpjson.Write(w, http.StatusOK, decision)
 }

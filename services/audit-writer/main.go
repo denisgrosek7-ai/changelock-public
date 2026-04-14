@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -32,6 +33,15 @@ type ingestResponse struct {
 
 type eventsResponse struct {
 	Events []audit.StoredEvent `json:"events"`
+}
+
+type exceptionsResponse struct {
+	Exceptions []audit.PolicyException `json:"exceptions"`
+}
+
+type exceptionResponse struct {
+	Status    string                `json:"status"`
+	Exception audit.PolicyException `json:"exception"`
 }
 
 func main() {
@@ -77,10 +87,14 @@ func newHandler(store audit.Store, backend string) http.Handler {
 	mux.HandleFunc("/health", srv.healthHandler)
 	mux.Handle("/metrics", metrics.Handler())
 	mux.HandleFunc("/v1/ingest", srv.ingestHandler)
+	mux.HandleFunc("/v1/exceptions", srv.exceptionsHandler)
+	mux.HandleFunc("/v1/exceptions/", srv.exceptionByIDHandler)
+	mux.HandleFunc("/v1/exceptions/validate", srv.validateExceptionHandler)
 	mux.HandleFunc("/v1/reports/events", srv.eventsHandler)
 	mux.HandleFunc("/v1/reports/summary", srv.summaryHandler)
 	mux.HandleFunc("/v1/reports/denies", srv.deniesHandler)
 	mux.HandleFunc("/v1/reports/runtime-drift", srv.runtimeDriftHandler)
+	mux.HandleFunc("/v1/reports/exceptions", srv.exceptionsReportHandler)
 	return metrics.InstrumentHTTP("audit-writer", srv.wrap(mux))
 }
 
@@ -207,6 +221,130 @@ func (s server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	httpjson.Write(w, http.StatusOK, eventsResponse{Events: events})
 }
 
+func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		filter, err := parseExceptionFilter(r)
+		if err != nil {
+			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+		defer cancel()
+
+		exceptions, err := s.store.ListExceptions(ctx, filter)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, audit.ErrInvalidException) {
+				status = http.StatusBadRequest
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				status = http.StatusGatewayTimeout
+			}
+			httpjson.Write(w, status, map[string]string{"error": err.Error()})
+			return
+		}
+
+		httpjson.Write(w, http.StatusOK, exceptionsResponse{Exceptions: exceptions})
+	case http.MethodPost:
+		var request audit.ExceptionCreateRequest
+		if err := httpjson.Decode(r, &request); err != nil {
+			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+		defer cancel()
+
+		exception, err := s.store.CreateException(ctx, request)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, audit.ErrInvalidException) {
+				status = http.StatusBadRequest
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				status = http.StatusGatewayTimeout
+			}
+			httpjson.Write(w, status, map[string]string{"error": err.Error()})
+			return
+		}
+
+		s.writeLifecycleAuditEvent(ctx, r, audit.EventTypeExceptionCreated, audit.DecisionAllow, exception, "exception created")
+		httpjson.Write(w, http.StatusCreated, exceptionResponse{
+			Status:    "created",
+			Exception: exception,
+		})
+	default:
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
+	exceptionID, err := exceptionIDFromPath(r.URL.Path)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if r.Method != http.MethodDelete {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	exception, err := s.store.RevokeException(ctx, exceptionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, audit.ErrInvalidException):
+			status = http.StatusBadRequest
+		case errors.Is(err, audit.ErrExceptionNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, context.DeadlineExceeded):
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	s.writeLifecycleAuditEvent(ctx, r, audit.EventTypeExceptionRevoked, audit.DecisionAllow, exception, "exception revoked")
+	httpjson.Write(w, http.StatusOK, exceptionResponse{
+		Status:    "revoked",
+		Exception: exception,
+	})
+}
+
+func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var request audit.ExceptionValidationRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	result, err := s.store.ValidateException(ctx, request)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidException) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpjson.Write(w, http.StatusOK, result)
+}
+
 func (s server) summaryHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
@@ -251,6 +389,36 @@ func (s server) runtimeDriftHandler(w http.ResponseWriter, r *http.Request) {
 	s.eventsHandler(w, r)
 }
 
+func (s server) exceptionsReportHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	filter, err := parseExceptionFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	report, err := s.store.ExceptionReport(ctx, filter)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidException) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpjson.Write(w, http.StatusOK, report)
+}
+
 func parseFilter(r *http.Request) (audit.EventFilter, error) {
 	query := r.URL.Query()
 	filter := audit.EventFilter{
@@ -269,6 +437,53 @@ func parseFilter(r *http.Request) (audit.EventFilter, error) {
 		filter.Limit = limit
 	}
 	return audit.NormalizeFilter(filter)
+}
+
+func parseExceptionFilter(r *http.Request) (audit.ExceptionFilter, error) {
+	query := r.URL.Query()
+	filter := audit.ExceptionFilter{
+		ExceptionType: query.Get("exception_type"),
+		TenantID:      query.Get("tenant_id"),
+		Environment:   query.Get("environment"),
+		Namespace:     query.Get("namespace"),
+		Repo:          query.Get("repo"),
+		ImageDigest:   query.Get("image_digest"),
+		CVEID:         query.Get("cve_id"),
+	}
+
+	if rawActive := strings.TrimSpace(query.Get("active")); rawActive != "" {
+		active, err := strconv.ParseBool(rawActive)
+		if err != nil {
+			return audit.ExceptionFilter{}, errors.New("active must be a boolean")
+		}
+		filter.Active = &active
+	}
+
+	if rawLimit := strings.TrimSpace(query.Get("limit")); rawLimit != "" {
+		limit, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			return audit.ExceptionFilter{}, errors.New("limit must be an integer")
+		}
+		filter.Limit = limit
+	}
+
+	return audit.NormalizeExceptionFilter(filter)
+}
+
+func exceptionIDFromPath(path string) (string, error) {
+	raw := strings.TrimPrefix(path, "/v1/exceptions/")
+	raw = strings.TrimSpace(strings.Trim(raw, "/"))
+	if raw == "" || raw == "validate" {
+		return "", errors.New("exception_id path segment is required")
+	}
+	value, err := url.PathUnescape(raw)
+	if err != nil {
+		return "", errors.New("invalid exception_id path segment")
+	}
+	if strings.TrimSpace(value) == "" {
+		return "", errors.New("exception_id path segment is required")
+	}
+	return value, nil
 }
 
 func requestIDFromHeader(r *http.Request) string {
@@ -352,7 +567,7 @@ func (s server) handleCORS(w http.ResponseWriter, r *http.Request) bool {
 	if origin != "" {
 		if _, ok := s.allowedOrigins[origin]; ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Request-Id")
 			w.Header().Set("Access-Control-Max-Age", "600")
 		} else if r.Method == http.MethodOptions {
@@ -366,4 +581,28 @@ func (s server) handleCORS(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+func (s server) writeLifecycleAuditEvent(ctx context.Context, r *http.Request, eventType, decision string, exception audit.PolicyException, reason string) {
+	_, _ = s.store.Ingest(ctx, audit.Event{
+		RequestID:           requestIDFromHeader(r),
+		Component:           "audit-writer",
+		EventType:           eventType,
+		Actor:               exception.ApprovedBy,
+		TenantID:            exception.TenantID,
+		Repo:                exception.Repo,
+		Environment:         exception.Environment,
+		Namespace:           exception.Namespace,
+		Digest:              exception.ImageDigest,
+		CVEID:               exception.CVEID,
+		Decision:            decision,
+		Reasons:             []string{reason},
+		IsException:         true,
+		ExceptionID:         exception.ExceptionID,
+		ExceptionType:       exception.ExceptionType,
+		ExceptionReason:     exception.Reason,
+		ExceptionTicketID:   exception.TicketID,
+		ExceptionApprovedBy: exception.ApprovedBy,
+		ExceptionExpiresAt:  &exception.ExpiresAt,
+	})
 }

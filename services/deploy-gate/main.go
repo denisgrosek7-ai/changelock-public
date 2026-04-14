@@ -23,6 +23,7 @@ var allowedOIDCIssuers = []string{
 
 var artifactVerifier verify.ArtifactVerifier = newArtifactVerifier()
 var auditWriter = audit.NewDefaultWriter()
+var exceptionValidator audit.ExceptionValidator = newExceptionValidator()
 
 type admissionReview struct {
 	APIVersion string             `json:"apiVersion,omitempty"`
@@ -174,17 +175,21 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 		return response
 	}
 
-	reasons := []string{}
-	reasons = append(reasons, evaluateRuntimePolicy(bundle.Runtime.Spec, request.Object)...)
-
 	annotations := request.Object.Metadata.Annotations
 	repository := resolveRepository(annotations)
 	branch := audit.BranchFromRef(annotations["changelock.io/workflow-ref"])
 	environment := firstNonEmpty(annotations["changelock.io/environment"], audit.EnvironmentFromNamespace(request.Namespace))
 	actor := request.Object.Metadata.Annotations["changelock.io/actor"]
 	containers := append([]container{}, append(request.Object.Spec.InitContainers, request.Object.Spec.Containers...)...)
+	primaryImage := selectPrimaryImage(containers, "")
+	primaryDigest := audit.DigestFromImage(primaryImage)
+	if response, handled := maybeBypassAdmission(context.Background(), requestID, bundle, request, tenant, repository, branch, environment, actor, primaryImage, primaryDigest); handled {
+		return response
+	}
+
+	reasons := []string{}
+	reasons = append(reasons, evaluateRuntimePolicy(bundle.Runtime.Spec, request.Object)...)
 	var primaryVerification *verify.ArtifactVerification
-	primaryImage := ""
 	for _, workloadContainer := range append([]container{}, append(request.Object.Spec.InitContainers, request.Object.Spec.Containers...)...) {
 		verification, verifyErr := artifactVerifier.VerifyArtifact(context.Background(), buildVerificationRequest(bundle, annotations, workloadContainer.Image))
 		if verifyErr != nil {
@@ -238,6 +243,16 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 	if len(reasons) > 0 {
 		decision = audit.DecisionDeny
 	}
+	finalDecision := policy.WithIdentity(bundle, policy.Decision{
+		Decision: decision,
+		Reasons:  reasons,
+	}, policy.DecisionIdentityInput{
+		RequestID:   requestID,
+		ImageDigest: firstNonEmpty(resultDigest(primaryVerification), audit.DigestFromImage(selectPrimaryImage(containers, primaryImage))),
+		Component:   "deploy-gate",
+		Repo:        firstNonEmpty(resultRepo(primaryVerification), repository),
+		Environment: environment,
+	})
 	summary, evidence := audit.FromArtifactVerification(primaryVerification)
 	writeAuditEvent(context.Background(), audit.Event{
 		RequestID:        requestID,
@@ -252,13 +267,14 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 		Workload:         request.Object.Metadata.Name,
 		Image:            selectPrimaryImage(containers, primaryImage),
 		Digest:           firstNonEmpty(resultDigest(primaryVerification), audit.DigestFromImage(selectPrimaryImage(containers, primaryImage))),
-		Decision:         decision,
-		Reasons:          reasons,
+		Decision:         finalDecision.Decision,
+		Reasons:          finalDecision.Reasons,
 		VerifierSummary:  summary,
 		Evidence:         evidence,
 		PolicyVersion:    bundle.Runtime.Metadata.Name,
-		PolicyBundleID:   bundle.BundleID,
-		PolicyBundleHash: bundle.BundleHash,
+		PolicyBundleID:   finalDecision.PolicyBundleID,
+		PolicyBundleHash: finalDecision.PolicyBundleHash,
+		DecisionHash:     finalDecision.DecisionHash,
 	})
 
 	if len(reasons) > 0 {

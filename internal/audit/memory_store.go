@@ -3,23 +3,29 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
 
 type MemoryStore struct {
-	mu      sync.Mutex
-	records []StoredEvent
-	nextID  int64
-	now     func() time.Time
+	mu              sync.Mutex
+	records         []StoredEvent
+	exceptions      map[string]PolicyException
+	nextID          int64
+	nextExceptionID int64
+	now             func() time.Time
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		nextID: 1,
-		now:    time.Now,
+		exceptions:      map[string]PolicyException{},
+		nextID:          1,
+		nextExceptionID: 1,
+		now:             time.Now,
 	}
 }
 
@@ -167,4 +173,217 @@ func cloneStoredEvent(record StoredEvent) StoredEvent {
 		record.RawEvent = slices.Clone(record.RawEvent)
 	}
 	return record
+}
+
+func (s *MemoryStore) CreateException(_ context.Context, request ExceptionCreateRequest) (PolicyException, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	request, err := NormalizeExceptionCreateRequest(request, s.now)
+	if err != nil {
+		return PolicyException{}, err
+	}
+	if _, exists := s.exceptions[request.ExceptionID]; exists {
+		return PolicyException{}, fmt.Errorf("%w: exception_id %q already exists", ErrInvalidException, request.ExceptionID)
+	}
+
+	exception := PolicyException{
+		ID:            s.nextExceptionID,
+		ExceptionID:   request.ExceptionID,
+		ExceptionType: request.ExceptionType,
+		TenantID:      request.TenantID,
+		Environment:   request.Environment,
+		Namespace:     request.Namespace,
+		Repo:          request.Repo,
+		ImageDigest:   request.ImageDigest,
+		CVEID:         request.CVEID,
+		Reason:        request.Reason,
+		TicketID:      request.TicketID,
+		ApprovedBy:    request.ApprovedBy,
+		CreatedAt:     s.now().UTC(),
+		ExpiresAt:     request.ExpiresAt.UTC(),
+		Active:        true,
+		Metadata:      normalizeMetadata(request.Metadata),
+	}
+	s.nextExceptionID++
+	s.exceptions[exception.ExceptionID] = exception
+
+	return clonePolicyException(exception), nil
+}
+
+func (s *MemoryStore) ListExceptions(_ context.Context, filter ExceptionFilter) ([]PolicyException, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filter, err := NormalizeExceptionFilter(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	exceptions := make([]PolicyException, 0, len(s.exceptions))
+	now := s.now().UTC()
+	for _, exception := range s.exceptions {
+		if !matchesExceptionFilter(exception, filter, now) {
+			continue
+		}
+		exceptions = append(exceptions, clonePolicyException(exception))
+	}
+
+	sort.Slice(exceptions, func(i, j int) bool {
+		return exceptions[i].CreatedAt.After(exceptions[j].CreatedAt)
+	})
+	if len(exceptions) > filter.Limit {
+		exceptions = exceptions[:filter.Limit]
+	}
+
+	return exceptions, nil
+}
+
+func (s *MemoryStore) RevokeException(_ context.Context, exceptionID string) (PolicyException, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exceptionID = strings.TrimSpace(exceptionID)
+	exception, ok := s.exceptions[exceptionID]
+	if !ok {
+		return PolicyException{}, ErrExceptionNotFound
+	}
+	exception.Active = false
+	s.exceptions[exceptionID] = exception
+	return clonePolicyException(exception), nil
+}
+
+func (s *MemoryStore) ValidateException(_ context.Context, request ExceptionValidationRequest) (ExceptionValidationResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	request, err := NormalizeExceptionValidationRequest(request)
+	if err != nil {
+		return ExceptionValidationResult{}, err
+	}
+
+	exception, ok := s.exceptions[request.ExceptionID]
+	if !ok {
+		return ExceptionValidationResult{Valid: false, Reason: "exception not found"}, nil
+	}
+
+	matched, reason := exception.Matches(request, s.now().UTC())
+	if !matched {
+		return ExceptionValidationResult{Valid: false, Reason: reason}, nil
+	}
+
+	exceptionCopy := clonePolicyException(exception)
+	return ExceptionValidationResult{
+		Valid:     true,
+		Exception: &exceptionCopy,
+	}, nil
+}
+
+func (s *MemoryStore) ExceptionReport(_ context.Context, filter ExceptionFilter) (ExceptionReport, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filter, err := NormalizeExceptionFilter(filter)
+	if err != nil {
+		return ExceptionReport{}, err
+	}
+
+	now := s.now().UTC()
+	report := ExceptionReport{
+		Active:         []PolicyException{},
+		RecentUsed:     []StoredEvent{},
+		RecentInactive: []PolicyException{},
+	}
+
+	for _, exception := range s.exceptions {
+		if !matchesExceptionScope(exception, filter) {
+			continue
+		}
+		if exception.IsCurrentlyActive(now) {
+			report.Active = append(report.Active, clonePolicyException(exception))
+			continue
+		}
+		report.RecentInactive = append(report.RecentInactive, clonePolicyException(exception))
+	}
+
+	sort.Slice(report.Active, func(i, j int) bool {
+		return report.Active[i].CreatedAt.After(report.Active[j].CreatedAt)
+	})
+	sort.Slice(report.RecentInactive, func(i, j int) bool {
+		return report.RecentInactive[i].CreatedAt.After(report.RecentInactive[j].CreatedAt)
+	})
+
+	for _, record := range s.records {
+		if record.EventType != EventTypeExceptionUsed {
+			continue
+		}
+		if !matchesExceptionEvent(record.Event, filter) {
+			continue
+		}
+		report.RecentUsed = append(report.RecentUsed, cloneStoredEvent(record))
+	}
+	sort.Slice(report.RecentUsed, func(i, j int) bool {
+		return report.RecentUsed[i].ReceivedAt.After(report.RecentUsed[j].ReceivedAt)
+	})
+
+	if len(report.Active) > filter.Limit {
+		report.Active = report.Active[:filter.Limit]
+	}
+	if len(report.RecentInactive) > filter.Limit {
+		report.RecentInactive = report.RecentInactive[:filter.Limit]
+	}
+	if len(report.RecentUsed) > filter.Limit {
+		report.RecentUsed = report.RecentUsed[:filter.Limit]
+	}
+
+	return report, nil
+}
+
+func matchesExceptionFilter(exception PolicyException, filter ExceptionFilter, now time.Time) bool {
+	if filter.Active != nil {
+		currentlyActive := exception.IsCurrentlyActive(now)
+		if *filter.Active != currentlyActive {
+			return false
+		}
+	}
+	return matchesExceptionScope(exception, filter)
+}
+
+func matchesExceptionScope(exception PolicyException, filter ExceptionFilter) bool {
+	if filter.ExceptionType != "" && exception.ExceptionType != filter.ExceptionType {
+		return false
+	}
+	if filter.TenantID != "" && exception.TenantID != filter.TenantID {
+		return false
+	}
+	if filter.Environment != "" && exception.Environment != filter.Environment {
+		return false
+	}
+	if filter.Namespace != "" && exception.Namespace != filter.Namespace {
+		return false
+	}
+	if filter.Repo != "" && exception.Repo != filter.Repo {
+		return false
+	}
+	if filter.ImageDigest != "" && exception.ImageDigest != filter.ImageDigest {
+		return false
+	}
+	if filter.CVEID != "" && exception.CVEID != filter.CVEID {
+		return false
+	}
+	return true
+}
+
+func matchesExceptionEvent(event Event, filter ExceptionFilter) bool {
+	if !matchesExceptionScope(PolicyException{
+		ExceptionType: event.ExceptionType,
+		TenantID:      event.TenantID,
+		Environment:   event.Environment,
+		Namespace:     event.Namespace,
+		Repo:          event.Repo,
+		ImageDigest:   event.Digest,
+	}, filter) {
+		return false
+	}
+	return true
 }

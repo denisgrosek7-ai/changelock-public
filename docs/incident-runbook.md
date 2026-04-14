@@ -8,6 +8,64 @@
 5. Rotate Vault roles or leases as needed.
 6. Export evidence bundle from audit store.
 
+## Controlled break-glass
+
+Use break-glass only when:
+- the production issue is time-critical
+- the normal policy path blocks the urgent fix
+- the exception is scoped as narrowly as possible
+- an operator can record approver, ticket, reason, and expiry up front
+
+Approval guidance:
+- `approved_by` should identify the human approver for the emergency change
+- `ticket_id` should point at the incident or emergency change record
+- `expires_at` or `ttl_hours` should be short-lived and explicit
+
+Create an exception through `audit-writer`:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "exception_id":"EX-2026-001",
+    "exception_type":"BREAK_GLASS",
+    "tenant_id":"acme",
+    "environment":"prod",
+    "namespace":"acme-prod",
+    "reason":"P0 production fix",
+    "ticket_id":"INC-1234",
+    "approved_by":"oncall@example.com",
+    "ttl_hours":2
+  }'
+```
+
+Use the exception in workload annotations:
+```yaml
+metadata:
+  annotations:
+    changelock.io/break-glass: "true"
+    changelock.io/exception-id: "EX-2026-001"
+    changelock.io/reason: "P0 production fix"
+    changelock.io/ticket-id: "INC-1234"
+```
+
+Important:
+- these annotations do not authorize bypass by themselves
+- `deploy-gate` and `policy-engine` only bypass when the referenced exception exists, is active, is not expired, and matches request scope
+- invalid or expired exception intent fails closed and emits `exception_validation_failed`
+- every successful bypass emits `exception_used`
+
+Revoke the exception as soon as the incident is resolved:
+```bash
+curl -sS -X DELETE http://127.0.0.1:8094/v1/exceptions/EX-2026-001
+```
+
+After incident resolution:
+- remove break-glass annotations from manifests
+- revoke or let the exception expire
+- confirm the follow-up deploy passes without bypass
+- review `exception_used`, `exception_revoked`, and related `deploy_gate_decision` events in the reports UI
+- capture any policy refinement needed so the same emergency path does not become normal practice
+
 ## Evidence needed
 - commit SHA
 - PR number
@@ -17,3 +75,4 @@
 - signature verification result
 - deployment object and namespace
 - runtime digest and drift findings
+- exception_id, exception_type, approver, ticket_id, expiry, and usage events when break-glass was used

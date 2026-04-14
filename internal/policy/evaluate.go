@@ -4,17 +4,25 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/denisgrosek/changelock/internal/identity"
 	"github.com/denisgrosek/changelock/internal/verify"
 )
 
 type Decision struct {
-	Decision         string   `json:"decision"`
-	Reasons          []string `json:"reasons"`
-	PolicyBundleID   string   `json:"policy_bundle_id,omitempty"`
-	PolicyBundleHash string   `json:"policy_bundle_hash,omitempty"`
-	DecisionHash     string   `json:"decision_hash,omitempty"`
+	Decision            string     `json:"decision"`
+	Reasons             []string   `json:"reasons"`
+	PolicyBundleID      string     `json:"policy_bundle_id,omitempty"`
+	PolicyBundleHash    string     `json:"policy_bundle_hash,omitempty"`
+	DecisionHash        string     `json:"decision_hash,omitempty"`
+	IsException         bool       `json:"is_exception,omitempty"`
+	ExceptionID         string     `json:"exception_id,omitempty"`
+	ExceptionType       string     `json:"exception_type,omitempty"`
+	ExceptionReason     string     `json:"exception_reason,omitempty"`
+	ExceptionTicketID   string     `json:"exception_ticket_id,omitempty"`
+	ExceptionApprovedBy string     `json:"exception_approved_by,omitempty"`
+	ExceptionExpiresAt  *time.Time `json:"exception_expires_at,omitempty"`
 }
 
 type DecisionIdentityInput struct {
@@ -26,21 +34,26 @@ type DecisionIdentityInput struct {
 }
 
 type ChangeEvaluationRequest struct {
-	Tenant             string   `json:"tenant"`
-	Repository         string   `json:"repository"`
-	Branch             string   `json:"branch"`
-	PullRequest        bool     `json:"pullRequest"`
-	SignedCommits      bool     `json:"signedCommits"`
-	Approvals          int      `json:"approvals"`
-	SecurityApprovals  int      `json:"securityApprovals"`
-	CodeOwnersApproved bool     `json:"codeOwnersApproved"`
-	ForcePush          bool     `json:"forcePush"`
-	ChangedFiles       []string `json:"changedFiles"`
+	Tenant             string           `json:"tenant"`
+	Repository         string           `json:"repository"`
+	Branch             string           `json:"branch"`
+	Environment        string           `json:"environment,omitempty"`
+	Namespace          string           `json:"namespace,omitempty"`
+	PullRequest        bool             `json:"pullRequest"`
+	SignedCommits      bool             `json:"signedCommits"`
+	Approvals          int              `json:"approvals"`
+	SecurityApprovals  int              `json:"securityApprovals"`
+	CodeOwnersApproved bool             `json:"codeOwnersApproved"`
+	ForcePush          bool             `json:"forcePush"`
+	ChangedFiles       []string         `json:"changedFiles"`
+	Exception          *ExceptionIntent `json:"exception,omitempty"`
 }
 
 type ArtifactEvaluationRequest struct {
 	Tenant         string                       `json:"tenant"`
 	Repository     string                       `json:"repository"`
+	Environment    string                       `json:"environment,omitempty"`
+	Namespace      string                       `json:"namespace,omitempty"`
 	Image          string                       `json:"image"`
 	Registry       string                       `json:"registry"`
 	DigestPinned   bool                         `json:"digestPinned"`
@@ -50,6 +63,28 @@ type ArtifactEvaluationRequest struct {
 	WorkflowFile   string                       `json:"workflowFile"`
 	Subject        string                       `json:"subject"`
 	Verification   *verify.ArtifactVerification `json:"verification,omitempty"`
+	Exception      *ExceptionIntent             `json:"exception,omitempty"`
+}
+
+type ExceptionIntent struct {
+	BreakGlass    bool   `json:"break_glass,omitempty"`
+	ExceptionID   string `json:"exception_id,omitempty"`
+	ExceptionType string `json:"exception_type,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+	TicketID      string `json:"ticket_id,omitempty"`
+	CVEID         string `json:"cve_id,omitempty"`
+}
+
+func (intent *ExceptionIntent) Requested() bool {
+	if intent == nil {
+		return false
+	}
+	return intent.BreakGlass ||
+		strings.TrimSpace(intent.ExceptionID) != "" ||
+		strings.TrimSpace(intent.ExceptionType) != "" ||
+		strings.TrimSpace(intent.Reason) != "" ||
+		strings.TrimSpace(intent.TicketID) != "" ||
+		strings.TrimSpace(intent.CVEID) != ""
 }
 
 func EvaluateChange(bundle *Bundle, request ChangeEvaluationRequest) Decision {
