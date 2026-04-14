@@ -199,28 +199,38 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 
 		artifactRequest := buildArtifactRequest(tenant, annotations, workloadContainer.Image, verification)
 		artifactDecision := policy.EvaluateArtifact(bundle, artifactRequest)
+		artifactDecision = policy.WithIdentity(bundle, artifactDecision, policy.DecisionIdentityInput{
+			RequestID:   requestID,
+			ImageDigest: firstNonEmpty(verification.VerifiedDigest, audit.DigestFromImage(workloadContainer.Image)),
+			Component:   "deploy-gate",
+			Repo:        firstNonEmpty(verification.VerifiedRepo, repository),
+			Environment: environment,
+		})
 		for _, reason := range artifactDecision.Reasons {
 			reasons = append(reasons, workloadContainer.Name+": "+reason)
 		}
 		summary, evidence := audit.FromArtifactVerification(&verification)
 		writeAuditEvent(context.Background(), audit.Event{
-			RequestID:       requestID,
-			Component:       "deploy-gate",
-			EventType:       audit.EventTypePolicyDecision,
-			Actor:           actor,
-			TenantID:        tenant,
-			Repo:            firstNonEmpty(verification.VerifiedRepo, repository),
-			Branch:          firstNonEmpty(audit.BranchFromRef(verification.VerifiedRef), branch),
-			Environment:     environment,
-			Namespace:       request.Namespace,
-			Workload:        request.Object.Metadata.Name,
-			Image:           workloadContainer.Image,
-			Digest:          firstNonEmpty(verification.VerifiedDigest, audit.DigestFromImage(workloadContainer.Image)),
-			Decision:        artifactDecision.Decision,
-			Reasons:         artifactDecision.Reasons,
-			VerifierSummary: summary,
-			Evidence:        evidence,
-			PolicyVersion:   bundle.Artifact.Metadata.Name,
+			RequestID:        requestID,
+			Component:        "deploy-gate",
+			EventType:        audit.EventTypePolicyDecision,
+			Actor:            actor,
+			TenantID:         tenant,
+			Repo:             firstNonEmpty(verification.VerifiedRepo, repository),
+			Branch:           firstNonEmpty(audit.BranchFromRef(verification.VerifiedRef), branch),
+			Environment:      environment,
+			Namespace:        request.Namespace,
+			Workload:         request.Object.Metadata.Name,
+			Image:            workloadContainer.Image,
+			Digest:           firstNonEmpty(verification.VerifiedDigest, audit.DigestFromImage(workloadContainer.Image)),
+			Decision:         artifactDecision.Decision,
+			Reasons:          artifactDecision.Reasons,
+			VerifierSummary:  summary,
+			Evidence:         evidence,
+			PolicyVersion:    bundle.Artifact.Metadata.Name,
+			PolicyBundleID:   artifactDecision.PolicyBundleID,
+			PolicyBundleHash: artifactDecision.PolicyBundleHash,
+			DecisionHash:     artifactDecision.DecisionHash,
 		})
 	}
 
@@ -230,23 +240,25 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 	}
 	summary, evidence := audit.FromArtifactVerification(primaryVerification)
 	writeAuditEvent(context.Background(), audit.Event{
-		RequestID:       requestID,
-		Component:       "deploy-gate",
-		EventType:       audit.EventTypeDeployGateDecision,
-		Actor:           actor,
-		TenantID:        tenant,
-		Repo:            firstNonEmpty(resultRepo(primaryVerification), repository),
-		Branch:          firstNonEmpty(audit.BranchFromRef(resultRef(primaryVerification)), branch),
-		Environment:     environment,
-		Namespace:       request.Namespace,
-		Workload:        request.Object.Metadata.Name,
-		Image:           selectPrimaryImage(containers, primaryImage),
-		Digest:          firstNonEmpty(resultDigest(primaryVerification), audit.DigestFromImage(selectPrimaryImage(containers, primaryImage))),
-		Decision:        decision,
-		Reasons:         reasons,
-		VerifierSummary: summary,
-		Evidence:        evidence,
-		PolicyVersion:   bundle.Runtime.Metadata.Name,
+		RequestID:        requestID,
+		Component:        "deploy-gate",
+		EventType:        audit.EventTypeDeployGateDecision,
+		Actor:            actor,
+		TenantID:         tenant,
+		Repo:             firstNonEmpty(resultRepo(primaryVerification), repository),
+		Branch:           firstNonEmpty(audit.BranchFromRef(resultRef(primaryVerification)), branch),
+		Environment:      environment,
+		Namespace:        request.Namespace,
+		Workload:         request.Object.Metadata.Name,
+		Image:            selectPrimaryImage(containers, primaryImage),
+		Digest:           firstNonEmpty(resultDigest(primaryVerification), audit.DigestFromImage(selectPrimaryImage(containers, primaryImage))),
+		Decision:         decision,
+		Reasons:          reasons,
+		VerifierSummary:  summary,
+		Evidence:         evidence,
+		PolicyVersion:    bundle.Runtime.Metadata.Name,
+		PolicyBundleID:   bundle.BundleID,
+		PolicyBundleHash: bundle.BundleHash,
 	})
 
 	if len(reasons) > 0 {

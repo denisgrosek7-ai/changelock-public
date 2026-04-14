@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/denisgrosek/changelock/internal/identity"
 	"gopkg.in/yaml.v3"
 )
 
@@ -106,6 +108,8 @@ type Bundle struct {
 	Tenant            Tenant
 	RepositoryConfigs map[string]RepositoryPolicy
 	CriticalPaths     []CriticalPathEntry
+	BundleID          string
+	BundleHash        string
 }
 
 func DefaultPoliciesDir() string {
@@ -123,24 +127,25 @@ func LoadBundle(policiesDir, tenant string) (*Bundle, error) {
 	bundle := &Bundle{
 		RepositoryConfigs: map[string]RepositoryPolicy{},
 	}
+	rawFiles := map[string][]byte{}
 
-	if err := loadYAML(filepath.Join(policiesDir, "global", "change-policy.yaml"), &bundle.Change); err != nil {
+	if err := loadBundleYAML(policiesDir, "global/change-policy.yaml", &bundle.Change, rawFiles); err != nil {
 		return nil, fmt.Errorf("load global change policy: %w", err)
 	}
-	if err := loadYAML(filepath.Join(policiesDir, "global", "artifact-policy.yaml"), &bundle.Artifact); err != nil {
+	if err := loadBundleYAML(policiesDir, "global/artifact-policy.yaml", &bundle.Artifact, rawFiles); err != nil {
 		return nil, fmt.Errorf("load global artifact policy: %w", err)
 	}
-	if err := loadYAML(filepath.Join(policiesDir, "global", "runtime-policy.yaml"), &bundle.Runtime); err != nil {
+	if err := loadBundleYAML(policiesDir, "global/runtime-policy.yaml", &bundle.Runtime, rawFiles); err != nil {
 		return nil, fmt.Errorf("load global runtime policy: %w", err)
 	}
 
-	tenantDir := filepath.Join(policiesDir, "tenants", tenant)
-	if err := loadYAML(filepath.Join(tenantDir, "tenant.yaml"), &bundle.Tenant); err != nil {
+	tenantDir := filepath.ToSlash(filepath.Join("tenants", tenant))
+	if err := loadBundleYAML(policiesDir, filepath.ToSlash(filepath.Join(tenantDir, "tenant.yaml")), &bundle.Tenant, rawFiles); err != nil {
 		return nil, fmt.Errorf("load tenant policy: %w", err)
 	}
 
 	var repositories RepositoryPolicies
-	if err := loadYAML(filepath.Join(tenantDir, "repositories.yaml"), &repositories); err != nil {
+	if err := loadBundleYAML(policiesDir, filepath.ToSlash(filepath.Join(tenantDir, "repositories.yaml")), &repositories, rawFiles); err != nil {
 		return nil, fmt.Errorf("load repository policy: %w", err)
 	}
 	for _, repository := range repositories.Repositories {
@@ -148,9 +153,11 @@ func LoadBundle(policiesDir, tenant string) (*Bundle, error) {
 	}
 
 	var criticalPaths CriticalPaths
-	if err := loadYAML(filepath.Join(tenantDir, "critical-paths.yaml"), &criticalPaths); err == nil {
+	if err := loadBundleYAML(policiesDir, filepath.ToSlash(filepath.Join(tenantDir, "critical-paths.yaml")), &criticalPaths, rawFiles); err == nil {
 		bundle.CriticalPaths = criticalPaths.CriticalPaths
 	}
+	bundle.BundleID = bundleID(bundle.Tenant.Metadata.Name, tenant)
+	bundle.BundleHash = identity.CanonicalFileSetHash(rawFiles)
 
 	return bundle, nil
 }
@@ -161,6 +168,31 @@ func loadYAML(path string, dst any) error {
 		return err
 	}
 	return yaml.Unmarshal(data, dst)
+}
+
+func loadBundleYAML(policiesDir, relativePath string, dst any, rawFiles map[string][]byte) error {
+	path := filepath.Join(policiesDir, filepath.FromSlash(relativePath))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	rawFiles[filepath.ToSlash(relativePath)] = canonicalPolicyBytes(data)
+	return yaml.Unmarshal(data, dst)
+}
+
+func canonicalPolicyBytes(data []byte) []byte {
+	return []byte(strings.ReplaceAll(string(data), "\r\n", "\n"))
+}
+
+func bundleID(metadataName, tenant string) string {
+	name := strings.TrimSpace(metadataName)
+	if name == "" {
+		name = strings.TrimSpace(tenant)
+	}
+	if name == "" {
+		name = "acme"
+	}
+	return "tenant:" + name
 }
 
 func (b *Bundle) RepositoryAllowed(repository string) bool {

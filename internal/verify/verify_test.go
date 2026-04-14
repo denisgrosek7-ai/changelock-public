@@ -185,6 +185,61 @@ func TestVerifyArtifactSubjectMismatchDenies(t *testing.T) {
 	}
 }
 
+func TestVerifyArtifactCarriesSupplyChainEvidence(t *testing.T) {
+	verifier := &CosignVerifier{
+		binary: "cosign",
+		runner: commandRunnerFunc(func(_ context.Context, _ string, args ...string) (commandOutput, error) {
+			switch args[0] {
+			case "verify":
+				return commandOutput{Stdout: []byte(`[{}]`)}, nil
+			case "verify-attestation":
+				return commandOutput{Stdout: []byte(validAttestationJSON(t, "ghcr.io/my-org/acme-app:deadbeef", "sha256:abc123"))}, nil
+			default:
+				return commandOutput{}, fmt.Errorf("unexpected command %q", strings.Join(args, " "))
+			}
+		}),
+	}
+
+	result, err := verifier.VerifyArtifact(context.Background(), ArtifactVerificationRequest{
+		Image:                   "ghcr.io/my-org/acme-app@sha256:abc123",
+		ExpectedRepository:      "my-org/acme-app",
+		AllowedSignerIdentities: []string{"https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main"},
+		AllowedOIDCIssuers:      []string{"https://token.actions.githubusercontent.com"},
+		SupplyChain: &SupplyChainEvidence{
+			SBOMFormat:              "spdx-json",
+			SBOMDigestRef:           "ghcr.io/my-org/acme-app@sha256:abc123",
+			SBOMHash:                "sha256:sbom",
+			SBOMArtifactRef:         "sbom.spdx.json",
+			VulnerabilityScanStatus: "passed",
+			VulnerabilityScanTool:   "trivy",
+			VulnerabilitySummary: &VulnerabilitySummary{
+				Critical: 0,
+				High:     1,
+				Total:    1,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("VerifyArtifact() error = %v", err)
+	}
+	if result.Evidence.SupplyChain == nil {
+		t.Fatal("expected supply chain evidence to be preserved")
+	}
+	if !result.Evidence.SupplyChain.MatchesDigest("sha256:abc123") {
+		t.Fatalf("expected SBOM digest ref to correlate to verified digest, got %#v", result.Evidence.SupplyChain)
+	}
+}
+
+func TestSupplyChainEvidenceMatchesDigest(t *testing.T) {
+	evidence := &SupplyChainEvidence{SBOMDigestRef: "ghcr.io/my-org/acme-app@sha256:abc123"}
+	if !evidence.MatchesDigest("sha256:abc123") {
+		t.Fatal("expected digest match")
+	}
+	if evidence.MatchesDigest("sha256:def456") {
+		t.Fatal("expected digest mismatch")
+	}
+}
+
 func validAttestationJSON(t *testing.T, subjectName, digest string) string {
 	t.Helper()
 

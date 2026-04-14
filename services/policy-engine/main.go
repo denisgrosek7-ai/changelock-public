@@ -62,6 +62,11 @@ func evaluateChangeHandler(w http.ResponseWriter, r *http.Request) {
 			Decision: "DENY",
 			Reasons:  []string{"policy bundle unavailable: " + err.Error()},
 		}
+		decision = policy.WithIdentity(nil, decision, policy.DecisionIdentityInput{
+			RequestID: requestID,
+			Component: "policy-engine",
+			Repo:      request.Repository,
+		})
 		writeAuditEvent(r.Context(), audit.Event{
 			RequestID:     requestID,
 			Component:     "policy-engine",
@@ -72,22 +77,31 @@ func evaluateChangeHandler(w http.ResponseWriter, r *http.Request) {
 			Decision:      decision.Decision,
 			Reasons:       decision.Reasons,
 			PolicyVersion: "bundle-load-error",
+			DecisionHash:  decision.DecisionHash,
 		})
 		httpjson.Write(w, http.StatusOK, decision)
 		return
 	}
 
 	decision := policy.EvaluateChange(bundle, request)
+	decision = policy.WithIdentity(bundle, decision, policy.DecisionIdentityInput{
+		RequestID: requestID,
+		Component: "policy-engine",
+		Repo:      request.Repository,
+	})
 	writeAuditEvent(r.Context(), audit.Event{
-		RequestID:     requestID,
-		Component:     "policy-engine",
-		EventType:     audit.EventTypePolicyDecision,
-		TenantID:      request.Tenant,
-		Repo:          request.Repository,
-		Branch:        request.Branch,
-		Decision:      decision.Decision,
-		Reasons:       decision.Reasons,
-		PolicyVersion: bundle.Change.Metadata.Name,
+		RequestID:        requestID,
+		Component:        "policy-engine",
+		EventType:        audit.EventTypePolicyDecision,
+		TenantID:         request.Tenant,
+		Repo:             request.Repository,
+		Branch:           request.Branch,
+		Decision:         decision.Decision,
+		Reasons:          decision.Reasons,
+		PolicyVersion:    bundle.Change.Metadata.Name,
+		PolicyBundleID:   decision.PolicyBundleID,
+		PolicyBundleHash: decision.PolicyBundleHash,
+		DecisionHash:     decision.DecisionHash,
 	})
 	httpjson.Write(w, http.StatusOK, decision)
 }
@@ -112,6 +126,12 @@ func evaluateArtifactHandler(w http.ResponseWriter, r *http.Request) {
 			Decision: "DENY",
 			Reasons:  []string{"policy bundle unavailable: " + err.Error()},
 		}
+		decision = policy.WithIdentity(nil, decision, policy.DecisionIdentityInput{
+			RequestID:   requestID,
+			ImageDigest: audit.DigestFromImage(request.Image),
+			Component:   "policy-engine",
+			Repo:        request.Repository,
+		})
 		summary, evidence := audit.FromArtifactVerification(request.Verification)
 		writeAuditEvent(r.Context(), audit.Event{
 			RequestID:       requestID,
@@ -126,27 +146,38 @@ func evaluateArtifactHandler(w http.ResponseWriter, r *http.Request) {
 			VerifierSummary: summary,
 			Evidence:        evidence,
 			PolicyVersion:   "bundle-load-error",
+			DecisionHash:    decision.DecisionHash,
 		})
 		httpjson.Write(w, http.StatusOK, decision)
 		return
 	}
 
 	decision := policy.EvaluateArtifact(bundle, request)
+	digest := firstNonEmpty(resultDigest(request.Verification), audit.DigestFromImage(request.Image))
+	decision = policy.WithIdentity(bundle, decision, policy.DecisionIdentityInput{
+		RequestID:   requestID,
+		ImageDigest: digest,
+		Component:   "policy-engine",
+		Repo:        request.Repository,
+	})
 	summary, evidence := audit.FromArtifactVerification(request.Verification)
 	writeAuditEvent(r.Context(), audit.Event{
-		RequestID:       requestID,
-		Component:       "policy-engine",
-		EventType:       audit.EventTypePolicyDecision,
-		TenantID:        request.Tenant,
-		Repo:            request.Repository,
-		Branch:          audit.BranchFromRef(firstNonEmpty(resultRef(request.Verification), "")),
-		Image:           request.Image,
-		Digest:          firstNonEmpty(resultDigest(request.Verification), audit.DigestFromImage(request.Image)),
-		Decision:        decision.Decision,
-		Reasons:         decision.Reasons,
-		VerifierSummary: summary,
-		Evidence:        evidence,
-		PolicyVersion:   bundle.Artifact.Metadata.Name,
+		RequestID:        requestID,
+		Component:        "policy-engine",
+		EventType:        audit.EventTypePolicyDecision,
+		TenantID:         request.Tenant,
+		Repo:             request.Repository,
+		Branch:           audit.BranchFromRef(firstNonEmpty(resultRef(request.Verification), "")),
+		Image:            request.Image,
+		Digest:           digest,
+		Decision:         decision.Decision,
+		Reasons:          decision.Reasons,
+		VerifierSummary:  summary,
+		Evidence:         evidence,
+		PolicyVersion:    bundle.Artifact.Metadata.Name,
+		PolicyBundleID:   decision.PolicyBundleID,
+		PolicyBundleHash: decision.PolicyBundleHash,
+		DecisionHash:     decision.DecisionHash,
 	})
 	httpjson.Write(w, http.StatusOK, decision)
 }

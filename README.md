@@ -262,9 +262,31 @@ See [docs/observability.md](docs/observability.md) for the scrape config and sta
 ## GitHub automation
 - `test` runs on pull requests and on `main` pushes and covers both `go test ./...` and the UI production build.
 - `lint` runs on pull requests and checks Go formatting.
-- `build-sign-attest` is now a manual workflow. It derives the GHCR namespace from the repository owner, builds the selected Dockerfile, pushes the image, emits provenance, and keylessly signs the resulting digest.
+- `build-sign-attest` is now a manual workflow. It derives the GHCR namespace from the repository owner, builds the selected Dockerfile, pushes the image, scans the pushed `image@digest` with Trivy, generates a Syft SPDX JSON SBOM for the same digest, emits provenance, and only then keylessly signs the digest when the configured vulnerability threshold passes.
 - `build-sign-attest` intentionally does not target a GitHub `production` environment by default. This keeps the public POC repo free of noisy failed deployments when the workflow has not been explicitly configured for a real release path.
+- `build-sign-attest` accepts `vuln_fail_severity` and defaults it to `CRITICAL`. The workflow uploads Trivy JSON, Trivy SARIF, an SPDX JSON SBOM, and a small supply-chain metadata file keyed to the same digest.
 - Dependabot is intentionally limited to GitHub Actions and the active `ui/` package set so the public repo does not open avoidable dependency PRs for the legacy optional `services/api` path.
+
+## Phase 6b supply-chain evidence
+Phase 6b strengthens ChangeLock's evidence chain without changing the current demo path:
+
+- Trivy scans the exact pushed image digest before provenance/signing continues.
+- Syft generates an SPDX JSON SBOM for the same `image@digest`.
+- workflow artifacts include a metadata file tying digest, SBOM ref, SBOM hash, vulnerability status, and report refs together.
+- policy decisions now include:
+  - `policy_bundle_id`
+  - `policy_bundle_hash`
+  - `decision_hash`
+- audit events preserve those same fields and can additionally carry:
+  - `sbom_format`
+  - `sbom_digest_ref`
+  - `sbom_hash`
+  - `sbom_artifact_ref`
+  - `vulnerability_scan_status`
+  - `vulnerability_summary`
+  - `vulnerability_report_ref`
+
+See [docs/supply-chain.md](docs/supply-chain.md) for the workflow behavior, digest correlation model, and policy bundle hashing details.
 
 ### Optional local Prometheus
 ```bash
@@ -317,14 +339,13 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - The reports API is intentionally minimal and is not a replacement for a full SIEM or BI layer.
 - The Phase 5b dashboard is intentionally read-only and local-first.
 - Browser access assumes the local Vite proxy or the optional `nginx` UI profile; advanced auth, multi-user access, and richer analytics come later.
-- Phase 6a still does not add authentication, RBAC, vulnerability scanning, SBOM-to-decision correlation, policy version hashing, or break-glass workflow controls.
+- Phase 6b still does not add auth/RBAC, break-glass workflow controls, richer exception handling, or a full SBOM registry / vulnerability management platform.
 
 ## Roadmap
-- vulnerability and SBOM correlation against image digests
-- policy version hashing and tamper-evident policy identity
 - break-glass workflows with explicit evidence
 - auth and RBAC for dashboard and reports API
 - richer alerts and production observability integrations
+- stronger exception workflows and approval capture around temporary policy overrides
 
 ## GitHub publish readiness
 This repository is now structured for a public technical POC upload. Use [docs/github-publish.md](docs/github-publish.md) to review example placeholders, local-only defaults, manual GitHub Actions flows, and the exact first-upload sequence.

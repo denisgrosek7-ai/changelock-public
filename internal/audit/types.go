@@ -20,26 +20,29 @@ const (
 )
 
 type Event struct {
-	RequestID       string           `json:"request_id"`
-	Timestamp       time.Time        `json:"timestamp"`
-	Component       string           `json:"component"`
-	EventType       string           `json:"event_type"`
-	Actor           string           `json:"actor,omitempty"`
-	TenantID        string           `json:"tenant_id,omitempty"`
-	Repo            string           `json:"repo,omitempty"`
-	Branch          string           `json:"branch,omitempty"`
-	Environment     string           `json:"environment,omitempty"`
-	Namespace       string           `json:"namespace,omitempty"`
-	Workload        string           `json:"workload,omitempty"`
-	Image           string           `json:"image,omitempty"`
-	Digest          string           `json:"digest,omitempty"`
-	Decision        string           `json:"decision"`
-	Reasons         []string         `json:"reasons,omitempty"`
-	DriftResult     string           `json:"drift_result,omitempty"`
-	DriftClasses    []string         `json:"drift_classes,omitempty"`
-	VerifierSummary *VerifierSummary `json:"verifier_summary,omitempty"`
-	PolicyVersion   string           `json:"policy_version,omitempty"`
-	Evidence        *Evidence        `json:"evidence,omitempty"`
+	RequestID        string           `json:"request_id"`
+	Timestamp        time.Time        `json:"timestamp"`
+	Component        string           `json:"component"`
+	EventType        string           `json:"event_type"`
+	Actor            string           `json:"actor,omitempty"`
+	TenantID         string           `json:"tenant_id,omitempty"`
+	Repo             string           `json:"repo,omitempty"`
+	Branch           string           `json:"branch,omitempty"`
+	Environment      string           `json:"environment,omitempty"`
+	Namespace        string           `json:"namespace,omitempty"`
+	Workload         string           `json:"workload,omitempty"`
+	Image            string           `json:"image,omitempty"`
+	Digest           string           `json:"digest,omitempty"`
+	Decision         string           `json:"decision"`
+	Reasons          []string         `json:"reasons,omitempty"`
+	DriftResult      string           `json:"drift_result,omitempty"`
+	DriftClasses     []string         `json:"drift_classes,omitempty"`
+	VerifierSummary  *VerifierSummary `json:"verifier_summary,omitempty"`
+	PolicyVersion    string           `json:"policy_version,omitempty"`
+	PolicyBundleID   string           `json:"policy_bundle_id,omitempty"`
+	PolicyBundleHash string           `json:"policy_bundle_hash,omitempty"`
+	DecisionHash     string           `json:"decision_hash,omitempty"`
+	Evidence         *Evidence        `json:"evidence,omitempty"`
 }
 
 type VerifierSummary struct {
@@ -53,18 +56,36 @@ type Evidence struct {
 }
 
 type ArtifactEvidence struct {
-	SignerIdentity           string `json:"signer_identity,omitempty"`
-	Issuer                   string `json:"issuer,omitempty"`
-	Subject                  string `json:"subject,omitempty"`
-	Repository               string `json:"repository,omitempty"`
-	Workflow                 string `json:"workflow,omitempty"`
-	Ref                      string `json:"ref,omitempty"`
-	CommitSHA                string `json:"commit_sha,omitempty"`
-	Digest                   string `json:"digest,omitempty"`
-	MatchedIdentity          string `json:"matched_identity,omitempty"`
-	AttestationPredicate     string `json:"attestation_predicate_type,omitempty"`
-	AttestationSubjectName   string `json:"attestation_subject_name,omitempty"`
-	AttestationSubjectDigest string `json:"attestation_subject_digest,omitempty"`
+	SignerIdentity                 string                `json:"signer_identity,omitempty"`
+	Issuer                         string                `json:"issuer,omitempty"`
+	Subject                        string                `json:"subject,omitempty"`
+	Repository                     string                `json:"repository,omitempty"`
+	Workflow                       string                `json:"workflow,omitempty"`
+	Ref                            string                `json:"ref,omitempty"`
+	CommitSHA                      string                `json:"commit_sha,omitempty"`
+	Digest                         string                `json:"digest,omitempty"`
+	MatchedIdentity                string                `json:"matched_identity,omitempty"`
+	AttestationPredicate           string                `json:"attestation_predicate_type,omitempty"`
+	AttestationSubjectName         string                `json:"attestation_subject_name,omitempty"`
+	AttestationSubjectDigest       string                `json:"attestation_subject_digest,omitempty"`
+	SBOMFormat                     string                `json:"sbom_format,omitempty"`
+	SBOMDigestRef                  string                `json:"sbom_digest_ref,omitempty"`
+	SBOMHash                       string                `json:"sbom_hash,omitempty"`
+	SBOMArtifactRef                string                `json:"sbom_artifact_ref,omitempty"`
+	VulnerabilityScanStatus        string                `json:"vulnerability_scan_status,omitempty"`
+	VulnerabilityScanTool          string                `json:"vulnerability_scan_tool,omitempty"`
+	VulnerabilitySeverityThreshold string                `json:"vulnerability_scan_severity_threshold,omitempty"`
+	VulnerabilitySummary           *VulnerabilitySummary `json:"vulnerability_summary,omitempty"`
+	VulnerabilityReportRef         string                `json:"vulnerability_report_ref,omitempty"`
+}
+
+type VulnerabilitySummary struct {
+	Critical int `json:"critical,omitempty"`
+	High     int `json:"high,omitempty"`
+	Medium   int `json:"medium,omitempty"`
+	Low      int `json:"low,omitempty"`
+	Unknown  int `json:"unknown,omitempty"`
+	Total    int `json:"total,omitempty"`
 }
 
 type RuntimeEvidence struct {
@@ -116,6 +137,28 @@ func FromArtifactVerification(result *verify.ArtifactVerification) (*VerifierSum
 		AttestationPredicate:     result.Evidence.AttestationPredicateType,
 		AttestationSubjectName:   result.Evidence.AttestationSubjectName,
 		AttestationSubjectDigest: result.Evidence.AttestationSubjectDigest,
+	}
+	if result.Evidence.SupplyChain != nil {
+		artifact.VulnerabilityScanStatus = result.Evidence.SupplyChain.VulnerabilityScanStatus
+		artifact.VulnerabilityScanTool = result.Evidence.SupplyChain.VulnerabilityScanTool
+		artifact.VulnerabilitySeverityThreshold = result.Evidence.SupplyChain.VulnerabilityScanSeverityThreshold
+		artifact.VulnerabilityReportRef = result.Evidence.SupplyChain.VulnerabilityReportRef
+		if result.Evidence.SupplyChain.VulnerabilitySummary != nil {
+			artifact.VulnerabilitySummary = &VulnerabilitySummary{
+				Critical: result.Evidence.SupplyChain.VulnerabilitySummary.Critical,
+				High:     result.Evidence.SupplyChain.VulnerabilitySummary.High,
+				Medium:   result.Evidence.SupplyChain.VulnerabilitySummary.Medium,
+				Low:      result.Evidence.SupplyChain.VulnerabilitySummary.Low,
+				Unknown:  result.Evidence.SupplyChain.VulnerabilitySummary.Unknown,
+				Total:    result.Evidence.SupplyChain.VulnerabilitySummary.Total,
+			}
+		}
+		if result.Evidence.SupplyChain.MatchesDigest(result.VerifiedDigest) {
+			artifact.SBOMFormat = result.Evidence.SupplyChain.SBOMFormat
+			artifact.SBOMDigestRef = result.Evidence.SupplyChain.SBOMDigestRef
+			artifact.SBOMHash = result.Evidence.SupplyChain.SBOMHash
+			artifact.SBOMArtifactRef = result.Evidence.SupplyChain.SBOMArtifactRef
+		}
 	}
 
 	evidence := &Evidence{Artifact: artifact}

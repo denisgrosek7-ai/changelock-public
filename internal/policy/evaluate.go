@@ -5,12 +5,24 @@ import (
 	"path"
 	"strings"
 
+	"github.com/denisgrosek/changelock/internal/identity"
 	"github.com/denisgrosek/changelock/internal/verify"
 )
 
 type Decision struct {
-	Decision string   `json:"decision"`
-	Reasons  []string `json:"reasons"`
+	Decision         string   `json:"decision"`
+	Reasons          []string `json:"reasons"`
+	PolicyBundleID   string   `json:"policy_bundle_id,omitempty"`
+	PolicyBundleHash string   `json:"policy_bundle_hash,omitempty"`
+	DecisionHash     string   `json:"decision_hash,omitempty"`
+}
+
+type DecisionIdentityInput struct {
+	RequestID   string
+	ImageDigest string
+	Component   string
+	Repo        string
+	Environment string
 }
 
 type ChangeEvaluationRequest struct {
@@ -139,6 +151,25 @@ func decisionFromReasons(reasons []string) Decision {
 		Decision: "DENY",
 		Reasons:  reasons,
 	}
+}
+
+func WithIdentity(bundle *Bundle, decision Decision, input DecisionIdentityInput) Decision {
+	if bundle != nil {
+		decision.PolicyBundleID = bundle.BundleID
+		decision.PolicyBundleHash = bundle.BundleHash
+	}
+
+	decision.DecisionHash = identity.DecisionHash(identity.DecisionInput{
+		PolicyBundleHash: decision.PolicyBundleHash,
+		ImageDigest:      input.ImageDigest,
+		RequestID:        input.RequestID,
+		Decision:         decision.Decision,
+		Component:        input.Component,
+		Repo:             input.Repo,
+		Environment:      input.Environment,
+	})
+
+	return decision
 }
 
 func hasCriticalPathChange(files []string, patterns []string) bool {

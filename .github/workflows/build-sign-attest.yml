@@ -14,15 +14,23 @@ on:
         description: "Docker build context"
         required: true
         default: "."
+      vuln_fail_severity:
+        description: "Fail signing when Trivy finds vulnerabilities at or above this severity"
+        required: true
+        default: "CRITICAL"
 permissions:
   contents: read
   id-token: write
   attestations: write
   packages: write
+  security-events: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CHANGELOCK_VULN_FAIL_SEVERITY: ${{ inputs.vuln_fail_severity }}
+      CHANGELOCK_SBOM_FORMAT: spdx-json
     steps:
       - uses: actions/checkout@v6
 
@@ -51,7 +59,159 @@ jobs:
       - name: Resolve image digest
         run: |
           DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d@ -f2)"
+          DIGEST_REF="${IMAGE_REPO}@${DIGEST}"
+          DIGEST_SAFE="$(printf '%s' "${DIGEST}" | tr ':/' '--')"
+          ARTIFACT_DIR="artifacts/supply-chain"
+          mkdir -p "${ARTIFACT_DIR}"
+          TRIVY_JSON="${ARTIFACT_DIR}/${{ inputs.image_name }}-${DIGEST_SAFE}-trivy.json"
+          TRIVY_SARIF="${ARTIFACT_DIR}/${{ inputs.image_name }}-${DIGEST_SAFE}-trivy.sarif"
+          TRIVY_SUMMARY="${ARTIFACT_DIR}/${{ inputs.image_name }}-${DIGEST_SAFE}-vulnerability-summary.json"
+          SBOM_PATH="${ARTIFACT_DIR}/${{ inputs.image_name }}-${DIGEST_SAFE}-sbom.spdx.json"
+          METADATA_PATH="${ARTIFACT_DIR}/${{ inputs.image_name }}-${DIGEST_SAFE}-supply-chain-evidence.json"
           echo "DIGEST=${DIGEST}" >> "$GITHUB_ENV"
+          echo "DIGEST_REF=${DIGEST_REF}" >> "$GITHUB_ENV"
+          echo "DIGEST_SAFE=${DIGEST_SAFE}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_DIR=${ARTIFACT_DIR}" >> "$GITHUB_ENV"
+          echo "TRIVY_JSON=${TRIVY_JSON}" >> "$GITHUB_ENV"
+          echo "TRIVY_SARIF=${TRIVY_SARIF}" >> "$GITHUB_ENV"
+          echo "TRIVY_SUMMARY=${TRIVY_SUMMARY}" >> "$GITHUB_ENV"
+          echo "SBOM_PATH=${SBOM_PATH}" >> "$GITHUB_ENV"
+          echo "METADATA_PATH=${METADATA_PATH}" >> "$GITHUB_ENV"
+
+      - name: Run Trivy image scan (JSON)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.DIGEST_REF }}
+          format: json
+          output: ${{ env.TRIVY_JSON }}
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          vuln-type: os,library
+
+      - name: Run Trivy image scan (SARIF)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.DIGEST_REF }}
+          format: sarif
+          output: ${{ env.TRIVY_SARIF }}
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          vuln-type: os,library
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM for image digest
+        run: |
+          syft --config security/sbom/syft.yaml "${DIGEST_REF}" -o "${CHANGELOCK_SBOM_FORMAT}=${SBOM_PATH}"
+
+      - name: Summarize vulnerability scan and correlate SBOM
+        id: supply_chain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          jq '
+            [ .Results[]?.Vulnerabilities[]? ] as $vulns |
+            {
+              critical: ($vulns | map(select(.Severity == "CRITICAL")) | length),
+              high: ($vulns | map(select(.Severity == "HIGH")) | length),
+              medium: ($vulns | map(select(.Severity == "MEDIUM")) | length),
+              low: ($vulns | map(select(.Severity == "LOW")) | length),
+              unknown: ($vulns | map(select(.Severity == "UNKNOWN")) | length),
+              total: ($vulns | length)
+            }
+          ' "${TRIVY_JSON}" > "${TRIVY_SUMMARY}"
+
+          case "${CHANGELOCK_VULN_FAIL_SEVERITY}" in
+            CRITICAL)
+              GATE_COUNT="$(jq '.critical' "${TRIVY_SUMMARY}")"
+              ;;
+            HIGH)
+              GATE_COUNT="$(jq '.critical + .high' "${TRIVY_SUMMARY}")"
+              ;;
+            MEDIUM)
+              GATE_COUNT="$(jq '.critical + .high + .medium' "${TRIVY_SUMMARY}")"
+              ;;
+            LOW)
+              GATE_COUNT="$(jq '.critical + .high + .medium + .low' "${TRIVY_SUMMARY}")"
+              ;;
+            UNKNOWN)
+              GATE_COUNT="$(jq '.total' "${TRIVY_SUMMARY}")"
+              ;;
+            *)
+              echo "Unsupported CHANGELOCK_VULN_FAIL_SEVERITY=${CHANGELOCK_VULN_FAIL_SEVERITY}" >&2
+              exit 1
+              ;;
+          esac
+
+          SCAN_STATUS="passed"
+          if [ "${GATE_COUNT}" -gt 0 ]; then
+            SCAN_STATUS="failed"
+          fi
+
+          SBOM_HASH="sha256:$(sha256sum "${SBOM_PATH}" | cut -d' ' -f1)"
+          jq -n \
+            --arg image "${IMAGE}" \
+            --arg image_repo "${IMAGE_REPO}" \
+            --arg digest "${DIGEST}" \
+            --arg digest_ref "${DIGEST_REF}" \
+            --arg sbom_format "${CHANGELOCK_SBOM_FORMAT}" \
+            --arg sbom_hash "${SBOM_HASH}" \
+            --arg sbom_artifact_ref "$(basename "${SBOM_PATH}")" \
+            --arg vulnerability_scan_status "${SCAN_STATUS}" \
+            --arg vulnerability_scan_tool "trivy" \
+            --arg vulnerability_scan_severity_threshold "${CHANGELOCK_VULN_FAIL_SEVERITY}" \
+            --arg vulnerability_report_ref "$(basename "${TRIVY_JSON}")" \
+            --arg vulnerability_sarif_ref "$(basename "${TRIVY_SARIF}")" \
+            --arg commit_sha "${GITHUB_SHA}" \
+            --arg workflow_name "${GITHUB_WORKFLOW}" \
+            --arg workflow_run_id "${GITHUB_RUN_ID}" \
+            --slurpfile vulnerability_summary "${TRIVY_SUMMARY}" \
+            '{
+              image: $image,
+              image_repo: $image_repo,
+              digest: $digest,
+              digest_ref: $digest_ref,
+              sbom_format: $sbom_format,
+              sbom_hash: $sbom_hash,
+              sbom_artifact_ref: $sbom_artifact_ref,
+              vulnerability_scan_status: $vulnerability_scan_status,
+              vulnerability_scan_tool: $vulnerability_scan_tool,
+              vulnerability_scan_severity_threshold: $vulnerability_scan_severity_threshold,
+              vulnerability_summary: $vulnerability_summary[0],
+              vulnerability_report_ref: $vulnerability_report_ref,
+              vulnerability_sarif_ref: $vulnerability_sarif_ref,
+              commit_sha: $commit_sha,
+              workflow_name: $workflow_name,
+              workflow_run_id: $workflow_run_id
+            }' > "${METADATA_PATH}"
+
+          echo "gate_status=${SCAN_STATUS}" >> "$GITHUB_OUTPUT"
+          echo "sbom_hash=${SBOM_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ env.TRIVY_SARIF }}
+
+      - name: Upload supply-chain artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-${{ inputs.image_name }}-${{ env.DIGEST_SAFE }}
+          path: |
+            ${{ env.TRIVY_JSON }}
+            ${{ env.TRIVY_SARIF }}
+            ${{ env.TRIVY_SUMMARY }}
+            ${{ env.SBOM_PATH }}
+            ${{ env.METADATA_PATH }}
+
+      - name: Block signing when vulnerability threshold is breached
+        if: steps.supply_chain.outputs.gate_status != 'passed'
+        run: |
+          echo "Trivy found vulnerabilities at or above ${CHANGELOCK_VULN_FAIL_SEVERITY} for ${DIGEST_REF}." >&2
+          cat "${TRIVY_SUMMARY}" >&2
+          exit 1
 
       - name: Generate provenance attestation
         uses: actions/attest-build-provenance@v4

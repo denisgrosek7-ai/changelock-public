@@ -6,6 +6,34 @@ type Props = {
   event: StoredEvent | null;
 };
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+function formatVulnerabilitySummary(value: unknown) {
+  const summary = asRecord(value);
+  if (!summary) {
+    return null;
+  }
+
+  const parts = ["critical", "high", "medium", "low", "unknown"]
+    .map((key) => {
+      const raw = summary[key];
+      return typeof raw === "number" && raw > 0 ? `${key}:${raw}` : null;
+    })
+    .filter(Boolean);
+
+  const total = typeof summary.total === "number" ? `total:${summary.total}` : null;
+  return [...parts, total].filter(Boolean).join(" · ");
+}
+
 function formatTimestamp(timestamp?: string) {
   if (!timestamp) {
     return "-";
@@ -39,6 +67,16 @@ export function EventDetails({ event }: Props) {
   const [copied, setCopied] = useState(false);
   const evidence = event?.evidence ? JSON.stringify(event.evidence, null, 2) : null;
   const rawEvent = event?.raw_event ? JSON.stringify(event.raw_event, null, 2) : null;
+  const artifactEvidence = asRecord(asRecord(event?.evidence)?.artifact);
+  const sbomArtifactRef = readString(artifactEvidence?.sbom_artifact_ref);
+  const sbomDigestRef = readString(artifactEvidence?.sbom_digest_ref);
+  const sbomFormat = readString(artifactEvidence?.sbom_format);
+  const sbomHash = readString(artifactEvidence?.sbom_hash);
+  const vulnerabilityStatus = readString(artifactEvidence?.vulnerability_scan_status);
+  const vulnerabilityTool = readString(artifactEvidence?.vulnerability_scan_tool);
+  const vulnerabilityThreshold = readString(artifactEvidence?.vulnerability_scan_severity_threshold);
+  const vulnerabilityReportRef = readString(artifactEvidence?.vulnerability_report_ref);
+  const vulnerabilitySummary = formatVulnerabilitySummary(artifactEvidence?.vulnerability_summary);
 
   async function copyRequestID() {
     if (!event?.request_id) {
@@ -113,6 +151,22 @@ export function EventDetails({ event }: Props) {
           <dd>{event.policy_version || "-"}</dd>
         </div>
         <div>
+          <dt>Policy Bundle</dt>
+          <dd>{event.policy_bundle_id || "-"}</dd>
+        </div>
+        <div>
+          <dt>Bundle Hash</dt>
+          <dd>
+            <code>{event.policy_bundle_hash || "-"}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Decision Hash</dt>
+          <dd>
+            <code>{event.decision_hash || "-"}</code>
+          </dd>
+        </div>
+        <div>
           <dt>Drift Result</dt>
           <dd>{event.drift_result || "-"}</dd>
         </div>
@@ -169,6 +223,54 @@ export function EventDetails({ event }: Props) {
           </dl>
         ) : (
           <div className="details-empty">No verifier summary recorded.</div>
+        )}
+      </section>
+
+      <section className="details-section">
+        <h3>Supply Chain Evidence</h3>
+        {sbomArtifactRef || sbomDigestRef || vulnerabilityStatus ? (
+          <dl className="details-grid details-grid--compact">
+            <div>
+              <dt>SBOM</dt>
+              <dd>{sbomArtifactRef || "-"}</dd>
+            </div>
+            <div>
+              <dt>SBOM Format</dt>
+              <dd>{sbomFormat || "-"}</dd>
+            </div>
+            <div>
+              <dt>SBOM Digest Ref</dt>
+              <dd className="details-break">{sbomDigestRef || "-"}</dd>
+            </div>
+            <div>
+              <dt>SBOM Hash</dt>
+              <dd>
+                <code>{sbomHash || "-"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Scan Status</dt>
+              <dd>{vulnerabilityStatus || "-"}</dd>
+            </div>
+            <div>
+              <dt>Scan Tool</dt>
+              <dd>{vulnerabilityTool || "-"}</dd>
+            </div>
+            <div>
+              <dt>Severity Threshold</dt>
+              <dd>{vulnerabilityThreshold || "-"}</dd>
+            </div>
+            <div>
+              <dt>Report Ref</dt>
+              <dd>{vulnerabilityReportRef || "-"}</dd>
+            </div>
+            <div>
+              <dt>Vulnerability Summary</dt>
+              <dd>{vulnerabilitySummary || "-"}</dd>
+            </div>
+          </dl>
+        ) : (
+          <div className="details-empty">No SBOM or vulnerability evidence recorded.</div>
         )}
       </section>
 

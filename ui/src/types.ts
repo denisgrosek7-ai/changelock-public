@@ -49,6 +49,9 @@ export interface StoredEvent {
   drift_classes?: string[];
   verifier_summary?: VerifierSummary;
   policy_version?: string;
+  policy_bundle_id?: string;
+  policy_bundle_hash?: string;
+  decision_hash?: string;
   evidence?: Record<string, unknown>;
   raw_event?: Record<string, unknown>;
 }
