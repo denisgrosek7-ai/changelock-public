@@ -333,3 +333,61 @@ func TestValidateExceptionEndpointReturnsInvalidResult(t *testing.T) {
 		t.Fatalf("expected invalid validation result, got %#v", validation)
 	}
 }
+
+func TestExceptionsReportEndpointFiltersByCVEID(t *testing.T) {
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+	exception, err := store.CreateException(t.Context(), audit.ExceptionCreateRequest{
+		ExceptionID:   "EX-CVE-REPORT",
+		ExceptionType: audit.ExceptionTypeCVEWhitelist,
+		TenantID:      "acme",
+		Environment:   "prod",
+		Repo:          "my-org/acme-app",
+		CVEID:         "CVE-2026-7777",
+		Reason:        "temporary waiver",
+		TicketID:      "SEC-7777",
+		ApprovedBy:    "security@example.com",
+		TTLHours:      1,
+	})
+	if err != nil {
+		t.Fatalf("CreateException() error = %v", err)
+	}
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		Component:           "policy-engine",
+		EventType:           audit.EventTypeExceptionUsed,
+		Decision:            audit.DecisionAllow,
+		TenantID:            "acme",
+		Environment:         "prod",
+		Repo:                "my-org/acme-app",
+		Digest:              "sha256:abc123",
+		CVEID:               "CVE-2026-7777",
+		IsException:         true,
+		ExceptionID:         exception.ExceptionID,
+		ExceptionType:       exception.ExceptionType,
+		ExceptionReason:     exception.Reason,
+		ExceptionTicketID:   exception.TicketID,
+		ExceptionApprovedBy: exception.ApprovedBy,
+		ExceptionExpiresAt:  &exception.ExpiresAt,
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/reports/exceptions?cve_id=CVE-2026-7777", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var report audit.ExceptionReport
+	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
+		t.Fatalf("decode exception report: %v", err)
+	}
+	if len(report.Active) != 1 || report.Active[0].ExceptionID != "EX-CVE-REPORT" {
+		t.Fatalf("unexpected active exceptions %#v", report.Active)
+	}
+	if len(report.RecentUsed) != 1 || report.RecentUsed[0].ExceptionID != "EX-CVE-REPORT" {
+		t.Fatalf("unexpected used events %#v", report.RecentUsed)
+	}
+}

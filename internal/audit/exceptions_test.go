@@ -132,6 +132,45 @@ func TestMemoryStoreExceptionLifecycle(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreCVEWhitelistCreateAndValidate(t *testing.T) {
+	store := NewMemoryStore()
+	base := time.Date(2026, 4, 14, 10, 0, 0, 0, time.UTC)
+	store.now = func() time.Time { return base }
+
+	exception, err := store.CreateException(context.Background(), ExceptionCreateRequest{
+		ExceptionID:   "EX-CVE-001",
+		ExceptionType: ExceptionTypeCVEWhitelist,
+		TenantID:      "acme",
+		Environment:   "prod",
+		Repo:          "my-org/acme-app",
+		CVEID:         "cve-2026-1234",
+		Reason:        "temporary CVE waiver",
+		TicketID:      "SEC-1234",
+		ApprovedBy:    "security@example.com",
+		TTLHours:      2,
+	})
+	if err != nil {
+		t.Fatalf("CreateException() error = %v", err)
+	}
+	if exception.CVEID != "CVE-2026-1234" {
+		t.Fatalf("expected normalized CVEID, got %#v", exception)
+	}
+
+	result, err := store.ValidateException(context.Background(), ExceptionValidationRequest{
+		ExceptionID: "EX-CVE-001",
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "my-org/acme-app",
+		CVEID:       "cve-2026-1234",
+	})
+	if err != nil {
+		t.Fatalf("ValidateException() error = %v", err)
+	}
+	if !result.Valid || result.Exception == nil || result.Exception.ExceptionID != "EX-CVE-001" {
+		t.Fatalf("unexpected validation result %#v", result)
+	}
+}
+
 func TestMemoryStoreExceptionReport(t *testing.T) {
 	store := NewMemoryStore()
 	base := time.Date(2026, 4, 14, 10, 0, 0, 0, time.UTC)
@@ -198,5 +237,113 @@ func TestMemoryStoreExceptionReport(t *testing.T) {
 	}
 	if len(report.RecentUsed) != 1 || report.RecentUsed[0].ExceptionID != "EX-ACTIVE" {
 		t.Fatalf("unexpected used events %#v", report.RecentUsed)
+	}
+}
+
+func TestMemoryStoreExceptionReportFiltersRecentUsedByCVEIDAndImageDigest(t *testing.T) {
+	store := NewMemoryStore()
+	base := time.Date(2026, 4, 14, 10, 0, 0, 0, time.UTC)
+	store.now = func() time.Time { return base }
+
+	cveException, err := store.CreateException(context.Background(), ExceptionCreateRequest{
+		ExceptionID:   "EX-CVE",
+		ExceptionType: ExceptionTypeCVEWhitelist,
+		TenantID:      "acme",
+		Environment:   "prod",
+		Namespace:     "acme-prod",
+		Repo:          "my-org/acme-app",
+		CVEID:         "CVE-2026-0001",
+		Reason:        "temporary waiver",
+		TicketID:      "SEC-1",
+		ApprovedBy:    "security@example.com",
+		TTLHours:      2,
+	})
+	if err != nil {
+		t.Fatalf("CreateException() cve error = %v", err)
+	}
+	digestException, err := store.CreateException(context.Background(), ExceptionCreateRequest{
+		ExceptionID:   "EX-DIGEST",
+		ExceptionType: ExceptionTypeDigestBypass,
+		TenantID:      "acme",
+		Environment:   "prod",
+		Namespace:     "acme-prod",
+		Repo:          "my-org/acme-app",
+		ImageDigest:   "sha256:def456",
+		Reason:        "digest bypass",
+		TicketID:      "SEC-2",
+		ApprovedBy:    "ops@example.com",
+		TTLHours:      2,
+	})
+	if err != nil {
+		t.Fatalf("CreateException() digest error = %v", err)
+	}
+
+	if _, err := store.Ingest(context.Background(), Event{
+		Component:           "policy-engine",
+		EventType:           EventTypeExceptionUsed,
+		Decision:            DecisionAllow,
+		TenantID:            "acme",
+		Environment:         "prod",
+		Namespace:           "acme-prod",
+		Repo:                "my-org/acme-app",
+		Digest:              "sha256:abc123",
+		CVEID:               "CVE-2026-0001",
+		IsException:         true,
+		ExceptionID:         cveException.ExceptionID,
+		ExceptionType:       cveException.ExceptionType,
+		ExceptionReason:     cveException.Reason,
+		ExceptionTicketID:   cveException.TicketID,
+		ExceptionApprovedBy: cveException.ApprovedBy,
+		ExceptionExpiresAt:  &cveException.ExpiresAt,
+	}); err != nil {
+		t.Fatalf("Ingest() cve event error = %v", err)
+	}
+	if _, err := store.Ingest(context.Background(), Event{
+		Component:           "policy-engine",
+		EventType:           EventTypeExceptionUsed,
+		Decision:            DecisionAllow,
+		TenantID:            "acme",
+		Environment:         "prod",
+		Namespace:           "acme-prod",
+		Repo:                "my-org/acme-app",
+		Digest:              "sha256:def456",
+		IsException:         true,
+		ExceptionID:         digestException.ExceptionID,
+		ExceptionType:       digestException.ExceptionType,
+		ExceptionReason:     digestException.Reason,
+		ExceptionTicketID:   digestException.TicketID,
+		ExceptionApprovedBy: digestException.ApprovedBy,
+		ExceptionExpiresAt:  &digestException.ExpiresAt,
+	}); err != nil {
+		t.Fatalf("Ingest() digest event error = %v", err)
+	}
+
+	cveReport, err := store.ExceptionReport(context.Background(), ExceptionFilter{
+		ExceptionType: ExceptionTypeCVEWhitelist,
+		CVEID:         "CVE-2026-0001",
+		Limit:         10,
+	})
+	if err != nil {
+		t.Fatalf("ExceptionReport() cve error = %v", err)
+	}
+	if len(cveReport.Active) != 1 || cveReport.Active[0].ExceptionID != "EX-CVE" {
+		t.Fatalf("unexpected cve active exceptions %#v", cveReport.Active)
+	}
+	if len(cveReport.RecentUsed) != 1 || cveReport.RecentUsed[0].ExceptionID != "EX-CVE" {
+		t.Fatalf("unexpected cve used events %#v", cveReport.RecentUsed)
+	}
+
+	digestReport, err := store.ExceptionReport(context.Background(), ExceptionFilter{
+		ImageDigest: "sha256:def456",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("ExceptionReport() digest error = %v", err)
+	}
+	if len(digestReport.Active) != 1 || digestReport.Active[0].ExceptionID != "EX-DIGEST" {
+		t.Fatalf("unexpected digest active exceptions %#v", digestReport.Active)
+	}
+	if len(digestReport.RecentUsed) != 1 || digestReport.RecentUsed[0].ExceptionID != "EX-DIGEST" {
+		t.Fatalf("unexpected digest used events %#v", digestReport.RecentUsed)
 	}
 }
