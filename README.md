@@ -195,6 +195,7 @@ cp ui/.env.example ui/.env.local
    - `docker compose -f docker-compose.dev.yml up --build -d`
 2. Start the dashboard locally with Vite:
    - `cd ui`
+   - use Node `22+` for the UI toolchain (`npm ci`, `npm run build`, `npm run dev:host`)
    - `npm install`
    - `npm run dev:host`
 3. Open `http://127.0.0.1:5173`
