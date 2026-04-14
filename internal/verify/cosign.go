@@ -55,6 +55,7 @@ func (v *CosignVerifier) VerifyArtifact(ctx context.Context, request ArtifactVer
 	verification := ArtifactVerification{
 		VerifiedDigest: digestFromImage(request.Image),
 	}
+	mergeSupplyChainEvidence(&verification.Evidence.SupplyChain, request.SupplyChain)
 
 	if verification.VerifiedDigest == "" {
 		verification.Reasons = append(verification.Reasons, "image must be digest-pinned for verification")
@@ -182,8 +183,67 @@ func mergeVerification(dst *ArtifactVerification, src ArtifactVerification) {
 	if dst.Evidence.AttestationSubjectDigest == "" {
 		dst.Evidence.AttestationSubjectDigest = src.Evidence.AttestationSubjectDigest
 	}
+	mergeSupplyChainEvidence(&dst.Evidence.SupplyChain, src.Evidence.SupplyChain)
 
 	dst.Reasons = append(dst.Reasons, src.Reasons...)
+}
+
+func mergeSupplyChainEvidence(dst **SupplyChainEvidence, src *SupplyChainEvidence) {
+	if src == nil {
+		return
+	}
+	if *dst == nil {
+		*dst = cloneSupplyChainEvidence(src)
+		return
+	}
+
+	target := *dst
+	if target.SBOMFormat == "" {
+		target.SBOMFormat = src.SBOMFormat
+	}
+	if target.SBOMDigestRef == "" {
+		target.SBOMDigestRef = src.SBOMDigestRef
+	}
+	if target.SBOMHash == "" {
+		target.SBOMHash = src.SBOMHash
+	}
+	if target.SBOMArtifactRef == "" {
+		target.SBOMArtifactRef = src.SBOMArtifactRef
+	}
+	if target.VulnerabilityScanStatus == "" {
+		target.VulnerabilityScanStatus = src.VulnerabilityScanStatus
+	}
+	if target.VulnerabilityScanTool == "" {
+		target.VulnerabilityScanTool = src.VulnerabilityScanTool
+	}
+	if target.VulnerabilityScanSeverityThreshold == "" {
+		target.VulnerabilityScanSeverityThreshold = src.VulnerabilityScanSeverityThreshold
+	}
+	if target.VulnerabilitySummary == nil && src.VulnerabilitySummary != nil {
+		target.VulnerabilitySummary = cloneVulnerabilitySummary(src.VulnerabilitySummary)
+	}
+	if target.VulnerabilityReportRef == "" {
+		target.VulnerabilityReportRef = src.VulnerabilityReportRef
+	}
+}
+
+func cloneSupplyChainEvidence(src *SupplyChainEvidence) *SupplyChainEvidence {
+	if src == nil {
+		return nil
+	}
+	clone := *src
+	if src.VulnerabilitySummary != nil {
+		clone.VulnerabilitySummary = cloneVulnerabilitySummary(src.VulnerabilitySummary)
+	}
+	return &clone
+}
+
+func cloneVulnerabilitySummary(src *VulnerabilitySummary) *VulnerabilitySummary {
+	if src == nil {
+		return nil
+	}
+	clone := *src
+	return &clone
 }
 
 func parseJSONObjects(data []byte) ([]json.RawMessage, error) {

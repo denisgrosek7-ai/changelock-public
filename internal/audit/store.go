@@ -73,7 +73,7 @@ func NormalizeEvent(event Event, now func() time.Time) Event {
 	if event.Digest == "" {
 		event.Digest = DigestFromImage(event.Image)
 	}
-	return event
+	return EnsureDecisionHash(event)
 }
 
 func ValidateEvent(event Event) error {

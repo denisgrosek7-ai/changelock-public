@@ -9,13 +9,14 @@ type ArtifactVerifier interface {
 }
 
 type ArtifactVerificationRequest struct {
-	Image                   string   `json:"image" yaml:"image"`
-	ExpectedRepository      string   `json:"expectedRepository,omitempty" yaml:"expectedRepository,omitempty"`
-	ExpectedRef             string   `json:"expectedRef,omitempty" yaml:"expectedRef,omitempty"`
-	ExpectedCommitSHA       string   `json:"expectedCommitSHA,omitempty" yaml:"expectedCommitSHA,omitempty"`
-	AllowedSignerIdentities []string `json:"allowedSignerIdentities,omitempty" yaml:"allowedSignerIdentities,omitempty"`
-	AllowedOIDCIssuers      []string `json:"allowedOidcIssuers,omitempty" yaml:"allowedOidcIssuers,omitempty"`
-	PredicateType           string   `json:"predicateType,omitempty" yaml:"predicateType,omitempty"`
+	Image                   string               `json:"image" yaml:"image"`
+	ExpectedRepository      string               `json:"expectedRepository,omitempty" yaml:"expectedRepository,omitempty"`
+	ExpectedRef             string               `json:"expectedRef,omitempty" yaml:"expectedRef,omitempty"`
+	ExpectedCommitSHA       string               `json:"expectedCommitSHA,omitempty" yaml:"expectedCommitSHA,omitempty"`
+	AllowedSignerIdentities []string             `json:"allowedSignerIdentities,omitempty" yaml:"allowedSignerIdentities,omitempty"`
+	AllowedOIDCIssuers      []string             `json:"allowedOidcIssuers,omitempty" yaml:"allowedOidcIssuers,omitempty"`
+	PredicateType           string               `json:"predicateType,omitempty" yaml:"predicateType,omitempty"`
+	SupplyChain             *SupplyChainEvidence `json:"supplyChain,omitempty" yaml:"supplyChain,omitempty"`
 }
 
 type ArtifactVerification struct {
@@ -34,10 +35,46 @@ type ArtifactVerification struct {
 }
 
 type VerificationEvidence struct {
-	MatchedIdentity          string `json:"matchedIdentity,omitempty" yaml:"matchedIdentity,omitempty"`
-	SignatureClaimsCount     int    `json:"signatureClaimsCount,omitempty" yaml:"signatureClaimsCount,omitempty"`
-	AttestationCount         int    `json:"attestationCount,omitempty" yaml:"attestationCount,omitempty"`
-	AttestationPredicateType string `json:"attestationPredicateType,omitempty" yaml:"attestationPredicateType,omitempty"`
-	AttestationSubjectName   string `json:"attestationSubjectName,omitempty" yaml:"attestationSubjectName,omitempty"`
-	AttestationSubjectDigest string `json:"attestationSubjectDigest,omitempty" yaml:"attestationSubjectDigest,omitempty"`
+	MatchedIdentity          string               `json:"matchedIdentity,omitempty" yaml:"matchedIdentity,omitempty"`
+	SignatureClaimsCount     int                  `json:"signatureClaimsCount,omitempty" yaml:"signatureClaimsCount,omitempty"`
+	AttestationCount         int                  `json:"attestationCount,omitempty" yaml:"attestationCount,omitempty"`
+	AttestationPredicateType string               `json:"attestationPredicateType,omitempty" yaml:"attestationPredicateType,omitempty"`
+	AttestationSubjectName   string               `json:"attestationSubjectName,omitempty" yaml:"attestationSubjectName,omitempty"`
+	AttestationSubjectDigest string               `json:"attestationSubjectDigest,omitempty" yaml:"attestationSubjectDigest,omitempty"`
+	SupplyChain              *SupplyChainEvidence `json:"supplyChain,omitempty" yaml:"supplyChain,omitempty"`
+}
+
+type SupplyChainEvidence struct {
+	SBOMFormat                         string                `json:"sbomFormat,omitempty" yaml:"sbomFormat,omitempty"`
+	SBOMDigestRef                      string                `json:"sbomDigestRef,omitempty" yaml:"sbomDigestRef,omitempty"`
+	SBOMHash                           string                `json:"sbomHash,omitempty" yaml:"sbomHash,omitempty"`
+	SBOMArtifactRef                    string                `json:"sbomArtifactRef,omitempty" yaml:"sbomArtifactRef,omitempty"`
+	VulnerabilityScanStatus            string                `json:"vulnerabilityScanStatus,omitempty" yaml:"vulnerabilityScanStatus,omitempty"`
+	VulnerabilityScanTool              string                `json:"vulnerabilityScanTool,omitempty" yaml:"vulnerabilityScanTool,omitempty"`
+	VulnerabilityScanSeverityThreshold string                `json:"vulnerabilityScanSeverityThreshold,omitempty" yaml:"vulnerabilityScanSeverityThreshold,omitempty"`
+	VulnerabilitySummary               *VulnerabilitySummary `json:"vulnerabilitySummary,omitempty" yaml:"vulnerabilitySummary,omitempty"`
+	VulnerabilityReportRef             string                `json:"vulnerabilityReportRef,omitempty" yaml:"vulnerabilityReportRef,omitempty"`
+}
+
+type VulnerabilitySummary struct {
+	Critical int `json:"critical,omitempty" yaml:"critical,omitempty"`
+	High     int `json:"high,omitempty" yaml:"high,omitempty"`
+	Medium   int `json:"medium,omitempty" yaml:"medium,omitempty"`
+	Low      int `json:"low,omitempty" yaml:"low,omitempty"`
+	Unknown  int `json:"unknown,omitempty" yaml:"unknown,omitempty"`
+	Total    int `json:"total,omitempty" yaml:"total,omitempty"`
+}
+
+func (e *SupplyChainEvidence) MatchesDigest(digest string) bool {
+	if e == nil {
+		return false
+	}
+
+	expected := firstNonEmpty(digest, digestFromImage(e.SBOMDigestRef))
+	if expected == "" {
+		return false
+	}
+
+	actual := firstNonEmpty(digestFromImage(e.SBOMDigestRef), e.SBOMDigestRef)
+	return actual == expected
 }

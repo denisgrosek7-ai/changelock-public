@@ -78,6 +78,21 @@ func TestFromArtifactVerificationBuildsEvidence(t *testing.T) {
 		VerifiedRef:       "refs/heads/main",
 		VerifiedCommitSHA: "abc123",
 		VerifiedDigest:    "sha256:abc123",
+		Evidence: verify.VerificationEvidence{
+			SupplyChain: &verify.SupplyChainEvidence{
+				SBOMFormat:              "spdx-json",
+				SBOMDigestRef:           "ghcr.io/my-org/acme-app@sha256:abc123",
+				SBOMHash:                "sha256:sbom",
+				SBOMArtifactRef:         "sbom.spdx.json",
+				VulnerabilityScanStatus: "passed",
+				VulnerabilityScanTool:   "trivy",
+				VulnerabilitySummary: &verify.VulnerabilitySummary{
+					Critical: 1,
+					Total:    1,
+				},
+				VulnerabilityReportRef: "trivy-report.json",
+			},
+		},
 	})
 
 	if summary == nil || evidence == nil {
@@ -88,6 +103,9 @@ func TestFromArtifactVerificationBuildsEvidence(t *testing.T) {
 	}
 	if evidence.Artifact.Repository != "my-org/acme-app" || evidence.Artifact.CommitSHA != "abc123" {
 		t.Fatalf("unexpected evidence %#v", evidence)
+	}
+	if evidence.Artifact.SBOMHash != "sha256:sbom" || evidence.Artifact.VulnerabilityReportRef != "trivy-report.json" {
+		t.Fatalf("expected supply-chain evidence to be preserved, got %#v", evidence.Artifact)
 	}
 }
 
@@ -113,5 +131,22 @@ func TestFromRuntimeComparisonBuildsEvidence(t *testing.T) {
 	}
 	if evidence.Runtime.ApprovedDigest != "sha256:approved" || evidence.Runtime.ActualConfigHash != "cfg-2" {
 		t.Fatalf("unexpected runtime evidence %#v", evidence.Runtime)
+	}
+}
+
+func TestNormalizeEventAddsDecisionHash(t *testing.T) {
+	event := NormalizeEvent(Event{
+		RequestID:        "req-1",
+		Component:        "deploy-gate",
+		EventType:        EventTypePolicyDecision,
+		Repo:             "my-org/acme-app",
+		Environment:      "prod",
+		Image:            "ghcr.io/my-org/acme-app@sha256:abc123",
+		PolicyBundleHash: "sha256:bundle",
+		Decision:         DecisionDeny,
+	}, nil)
+
+	if event.DecisionHash == "" {
+		t.Fatal("expected decision hash to be populated")
 	}
 }

@@ -69,6 +69,7 @@ func (v *FixtureVerifier) VerifyArtifact(_ context.Context, request ArtifactVeri
 		if result.VerifiedSubject == "" && result.VerifiedRepo != "" {
 			result.VerifiedSubject = repoSubject(result.VerifiedRepo)
 		}
+		mergeSupplyChainEvidence(&result.Evidence.SupplyChain, request.SupplyChain)
 		return result, nil
 	}
 
