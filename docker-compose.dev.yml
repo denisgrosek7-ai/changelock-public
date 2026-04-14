@@ -32,6 +32,7 @@ services:
     environment:
       CHANGELOCK_POLICIES_DIR: /app/policies
       AUDIT_WRITER_URL: http://audit-writer:8094
+      CHANGELOCK_INTERNAL_SERVICE_TOKEN: ${CHANGELOCK_INTERNAL_SERVICE_TOKEN:-service-internal-demo-token}
     volumes:
       - ./policies:/app/policies:ro
     ports:
@@ -59,6 +60,7 @@ services:
     environment:
       CHANGELOCK_POLICIES_DIR: /app/policies
       AUDIT_WRITER_URL: http://audit-writer:8094
+      CHANGELOCK_INTERNAL_SERVICE_TOKEN: ${CHANGELOCK_INTERNAL_SERVICE_TOKEN:-service-internal-demo-token}
     volumes:
       - ./policies:/app/policies:ro
     ports:
@@ -88,6 +90,8 @@ services:
       CHANGELOCK_POSTGRES_DSN: postgres://changelock:changelock@postgres:5432/changelock?sslmode=disable
       CHANGELOCK_CORS_ALLOW_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
       CHANGELOCK_REPORTS_TIMEOUT: 5s
+      CHANGELOCK_AUTH_MODE: ${CHANGELOCK_AUTH_MODE:-disabled}
+      CHANGELOCK_AUTH_TOKENS_JSON: ${CHANGELOCK_AUTH_TOKENS_JSON:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,7 +100,12 @@ services:
 
   ui:
     profiles: ["ui"]
-    build: ./ui
+    build:
+      context: ./ui
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_TOKEN: ${VITE_API_TOKEN:-}
+        VITE_API_TIMEOUT_MS: ${VITE_API_TIMEOUT_MS:-8000}
     depends_on:
       audit-writer:
         condition: service_started

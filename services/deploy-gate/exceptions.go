@@ -16,7 +16,7 @@ func newExceptionValidator() audit.ExceptionValidator {
 		os.Getenv("AUDIT_WRITER_URL"),
 		os.Getenv("CHANGELOCK_AUDIT_WRITER_URL"),
 	)
-	return audit.NewHTTPExceptionClient(baseURL, 2*time.Second)
+	return audit.NewHTTPExceptionClient(baseURL, 2*time.Second, os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN"))
 }
 
 func maybeBypassAdmission(

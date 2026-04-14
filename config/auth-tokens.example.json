@@ -1,0 +1,26 @@
+[
+  {
+    "token": "viewer-demo-token",
+    "subject": "demo-viewer",
+    "role": "viewer",
+    "token_id": "viewer-demo"
+  },
+  {
+    "token": "operator-demo-token",
+    "subject": "demo-operator",
+    "role": "operator",
+    "token_id": "operator-demo"
+  },
+  {
+    "token": "security-admin-demo-token",
+    "subject": "demo-admin",
+    "role": "security_admin",
+    "token_id": "security-admin-demo"
+  },
+  {
+    "token": "service-internal-demo-token",
+    "subject": "policy-engine",
+    "role": "service_internal",
+    "token_id": "service-internal-demo"
+  }
+]
