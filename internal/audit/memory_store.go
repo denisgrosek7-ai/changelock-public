@@ -382,6 +382,7 @@ func matchesExceptionEvent(event Event, filter ExceptionFilter) bool {
 		Namespace:     event.Namespace,
 		Repo:          event.Repo,
 		ImageDigest:   event.Digest,
+		CVEID:         event.CVEID,
 	}, filter) {
 		return false
 	}
