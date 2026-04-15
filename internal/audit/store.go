@@ -19,10 +19,17 @@ type Store interface {
 	ListEvents(ctx context.Context, filter EventFilter) ([]StoredEvent, error)
 	Summary(ctx context.Context, filter EventFilter) (Summary, error)
 	CreateException(ctx context.Context, request ExceptionCreateRequest) (PolicyException, error)
+	RequestException(ctx context.Context, request ExceptionCreateRequest, requestedBy string, requesterRole string) (PolicyException, error)
 	ListExceptions(ctx context.Context, filter ExceptionFilter) ([]PolicyException, error)
+	ApproveException(ctx context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error)
+	RejectException(ctx context.Context, exceptionID string, reason string, rejectedBy string, rejectorRole string) (PolicyException, error)
 	RevokeException(ctx context.Context, exceptionID string) (PolicyException, error)
 	ValidateException(ctx context.Context, request ExceptionValidationRequest) (ExceptionValidationResult, error)
 	ExceptionReport(ctx context.Context, filter ExceptionFilter) (ExceptionReport, error)
+	ListApprovalLogs(ctx context.Context, exceptionID string, limit int) ([]ApprovalLog, error)
+	Trends(ctx context.Context, filter TrendsFilter) (TrendsResponse, error)
+	TopViolators(ctx context.Context, filter TopViolatorsFilter) (TopViolatorsResponse, error)
+	DriftStats(ctx context.Context, filter DriftStatsFilter) (DriftStatsResponse, error)
 	Ping(ctx context.Context) error
 	Close()
 }

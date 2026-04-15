@@ -9,6 +9,8 @@ type Props = {
 };
 
 export function Filters({ filters, tab, onChange, onRefresh, onReset }: Props) {
+  const isEventTab = tab === "overview" || tab === "events" || tab === "denies" || tab === "runtime";
+
   return (
     <section className="panel filters-panel">
       <div className="filters-grid">
@@ -24,14 +26,16 @@ export function Filters({ filters, tab, onChange, onRefresh, onReset }: Props) {
           </label>
         ) : null}
 
-        <label>
-          <span>Component</span>
-          <input
-            value={filters.component}
-            onChange={(event) => onChange("component", event.target.value)}
-            placeholder="deploy-gate"
-          />
-        </label>
+        {isEventTab ? (
+          <label>
+            <span>Component</span>
+            <input
+              value={filters.component}
+              onChange={(event) => onChange("component", event.target.value)}
+              placeholder="deploy-gate"
+            />
+          </label>
+        ) : null}
 
         <label>
           <span>Repo</span>

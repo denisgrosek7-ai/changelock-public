@@ -444,7 +444,7 @@ func TestExceptionsLifecycleEndpoints(t *testing.T) {
 	foundCreated := false
 	foundRevoked := false
 	for _, event := range events {
-		if event.EventType == audit.EventTypeExceptionCreated && event.ExceptionID == "EX-2026-001" {
+		if event.EventType == audit.EventTypeExceptionApproved && event.ExceptionID == "EX-2026-001" {
 			foundCreated = true
 		}
 		if event.EventType == audit.EventTypeExceptionRevoked && event.ExceptionID == "EX-2026-001" {
@@ -732,6 +732,128 @@ func TestSecurityAdminCanCreateAndRevokeExceptions(t *testing.T) {
 	}
 }
 
+func TestOperatorCanRequestButCannotApproveOrRejectExceptions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	requestReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/request", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-PENDING",
+	  "exception_type":"BREAK_GLASS",
+	  "tenant_id":"acme",
+	  "environment":"prod",
+	  "namespace":"acme-prod",
+	  "reason":"operator request",
+	  "ticket_id":"INC-PENDING",
+	  "ttl_hours":1
+	}`))
+	requestReq.Header.Set("Content-Type", "application/json")
+	requestReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	requestRec := httptest.NewRecorder()
+	handler.ServeHTTP(requestRec, requestReq)
+	if requestRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", requestRec.Code, requestRec.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/EX-2026-PENDING/approve", bytes.NewBufferString(`{"reason":"approve"}`))
+	approveReq.Header.Set("Content-Type", "application/json")
+	approveReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	approveRec := httptest.NewRecorder()
+	handler.ServeHTTP(approveRec, approveReq)
+	if approveRec.Code != http.StatusForbidden {
+		t.Fatalf("expected approve 403, got %d: %s", approveRec.Code, approveRec.Body.String())
+	}
+
+	rejectReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/EX-2026-PENDING/reject", bytes.NewBufferString(`{"reason":"reject"}`))
+	rejectReq.Header.Set("Content-Type", "application/json")
+	rejectReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	rejectRec := httptest.NewRecorder()
+	handler.ServeHTTP(rejectRec, rejectReq)
+	if rejectRec.Code != http.StatusForbidden {
+		t.Fatalf("expected reject 403, got %d: %s", rejectRec.Code, rejectRec.Body.String())
+	}
+}
+
+func TestSecurityAdminCanApproveAndRejectRequestedExceptions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	requestReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/request", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-PENDING-ADMIN",
+	  "exception_type":"BREAK_GLASS",
+	  "tenant_id":"acme",
+	  "environment":"prod",
+	  "namespace":"acme-prod",
+	  "reason":"needs approval",
+	  "ticket_id":"INC-PENDING-ADMIN",
+	  "ttl_hours":1
+	}`))
+	requestReq.Header.Set("Content-Type", "application/json")
+	requestReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	requestRec := httptest.NewRecorder()
+	handler.ServeHTTP(requestRec, requestReq)
+	if requestRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", requestRec.Code, requestRec.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/EX-2026-PENDING-ADMIN/approve", bytes.NewBufferString(`{"reason":"approved for incident"}`))
+	approveReq.Header.Set("Content-Type", "application/json")
+	approveReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	approveRec := httptest.NewRecorder()
+	handler.ServeHTTP(approveRec, approveReq)
+	if approveRec.Code != http.StatusOK {
+		t.Fatalf("expected approve 200, got %d: %s", approveRec.Code, approveRec.Body.String())
+	}
+
+	var approvedResponse exceptionActionResponse
+	if err := json.NewDecoder(approveRec.Body).Decode(&approvedResponse); err != nil {
+		t.Fatalf("decode approve response: %v", err)
+	}
+	if approvedResponse.Exception.Status != audit.ExceptionStatusApproved {
+		t.Fatalf("unexpected approved response %#v", approvedResponse)
+	}
+
+	rejectCreateReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/request", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-PENDING-REJECT",
+	  "exception_type":"BREAK_GLASS",
+	  "tenant_id":"acme",
+	  "environment":"prod",
+	  "namespace":"acme-prod",
+	  "reason":"needs rejection",
+	  "ticket_id":"INC-PENDING-REJECT",
+	  "ttl_hours":1
+	}`))
+	rejectCreateReq.Header.Set("Content-Type", "application/json")
+	rejectCreateReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	rejectCreateRec := httptest.NewRecorder()
+	handler.ServeHTTP(rejectCreateRec, rejectCreateReq)
+	if rejectCreateRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rejectCreateRec.Code, rejectCreateRec.Body.String())
+	}
+
+	rejectReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/EX-2026-PENDING-REJECT/reject", bytes.NewBufferString(`{"reason":"missing evidence"}`))
+	rejectReq.Header.Set("Content-Type", "application/json")
+	rejectReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	rejectRec := httptest.NewRecorder()
+	handler.ServeHTTP(rejectRec, rejectReq)
+	if rejectRec.Code != http.StatusOK {
+		t.Fatalf("expected reject 200, got %d: %s", rejectRec.Code, rejectRec.Body.String())
+	}
+
+	var rejectedResponse exceptionActionResponse
+	if err := json.NewDecoder(rejectRec.Body).Decode(&rejectedResponse); err != nil {
+		t.Fatalf("decode reject response: %v", err)
+	}
+	if rejectedResponse.Exception.Status != audit.ExceptionStatusRejected || rejectedResponse.Exception.RejectionReason != "missing evidence" {
+		t.Fatalf("unexpected rejected response %#v", rejectedResponse)
+	}
+}
+
 func TestServiceInternalCanValidateButCannotCreateExceptions(t *testing.T) {
 	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
 	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
@@ -775,6 +897,54 @@ func TestServiceInternalCanValidateButCannotCreateExceptions(t *testing.T) {
 	handler.ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusForbidden {
 		t.Fatalf("expected create 403, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+}
+
+func TestViewerCanReadAnalyticsButCannotRequestExceptions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		Component:   "deploy-gate",
+		EventType:   audit.EventTypeDeployGateDecision,
+		Decision:    audit.DecisionDeny,
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "my-org/acme-app",
+		Reasons:     []string{"workflow mismatch"},
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+	handler := newHandler(store, "memory")
+
+	for _, path := range []string{
+		"/v1/analytics/trends",
+		"/v1/analytics/top-violators",
+		"/v1/analytics/drift-stats",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected analytics read 200 for %s, got %d: %s", path, rec.Code, rec.Body.String())
+		}
+	}
+
+	requestReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/request", bytes.NewBufferString(`{
+	  "exception_id":"EX-VIEWER-REQUEST",
+	  "exception_type":"BREAK_GLASS",
+	  "reason":"viewer cannot request",
+	  "ticket_id":"INC-VIEWER",
+	  "ttl_hours":1
+	}`))
+	requestReq.Header.Set("Content-Type", "application/json")
+	requestReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	requestRec := httptest.NewRecorder()
+	handler.ServeHTTP(requestRec, requestReq)
+	if requestRec.Code != http.StatusForbidden {
+		t.Fatalf("expected request 403, got %d: %s", requestRec.Code, requestRec.Body.String())
 	}
 }
 

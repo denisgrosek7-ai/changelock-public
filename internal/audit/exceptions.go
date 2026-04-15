@@ -15,7 +15,22 @@ const (
 	ExceptionTypeDigestBypass = "DIGEST_BYPASS"
 	ExceptionTypeCVEWhitelist = "CVE_WHITELIST"
 
-	EventTypeExceptionCreated          = "exception_created"
+	ExceptionStatusPending  = "PENDING"
+	ExceptionStatusApproved = "APPROVED"
+	ExceptionStatusRejected = "REJECTED"
+	ExceptionStatusRevoked  = "REVOKED"
+	ExceptionStatusExpired  = "EXPIRED"
+
+	ApprovalActionRequested        = "REQUESTED"
+	ApprovalActionApproved         = "APPROVED"
+	ApprovalActionRejected         = "REJECTED"
+	ApprovalActionRevoked          = "REVOKED"
+	ApprovalActionUsed             = "USED"
+	ApprovalActionValidationFailed = "VALIDATION_FAILED"
+
+	EventTypeExceptionRequested        = "exception_requested"
+	EventTypeExceptionApproved         = "exception_approved"
+	EventTypeExceptionRejected         = "exception_rejected"
 	EventTypeExceptionRevoked          = "exception_revoked"
 	EventTypeExceptionUsed             = "exception_used"
 	EventTypeExceptionValidationFailed = "exception_validation_failed"
@@ -27,22 +42,41 @@ var (
 )
 
 type PolicyException struct {
-	ID            int64           `json:"id"`
-	ExceptionID   string          `json:"exception_id"`
-	ExceptionType string          `json:"exception_type"`
-	TenantID      string          `json:"tenant_id,omitempty"`
-	Environment   string          `json:"environment,omitempty"`
-	Namespace     string          `json:"namespace,omitempty"`
-	Repo          string          `json:"repo,omitempty"`
-	ImageDigest   string          `json:"image_digest,omitempty"`
-	CVEID         string          `json:"cve_id,omitempty"`
-	Reason        string          `json:"reason"`
-	TicketID      string          `json:"ticket_id"`
-	ApprovedBy    string          `json:"approved_by"`
-	CreatedAt     time.Time       `json:"created_at"`
-	ExpiresAt     time.Time       `json:"expires_at"`
-	Active        bool            `json:"active"`
-	Metadata      json.RawMessage `json:"metadata,omitempty"`
+	ID              int64           `json:"id"`
+	ExceptionID     string          `json:"exception_id"`
+	ExceptionType   string          `json:"exception_type"`
+	Status          string          `json:"status"`
+	TenantID        string          `json:"tenant_id,omitempty"`
+	Environment     string          `json:"environment,omitempty"`
+	Namespace       string          `json:"namespace,omitempty"`
+	Repo            string          `json:"repo,omitempty"`
+	ImageDigest     string          `json:"image_digest,omitempty"`
+	CVEID           string          `json:"cve_id,omitempty"`
+	Reason          string          `json:"reason"`
+	TicketID        string          `json:"ticket_id"`
+	RequestedBy     string          `json:"requested_by,omitempty"`
+	RequestedAt     *time.Time      `json:"requested_at,omitempty"`
+	ApprovedBy      string          `json:"approved_by,omitempty"`
+	ApprovedAt      *time.Time      `json:"approved_at,omitempty"`
+	RejectedBy      string          `json:"rejected_by,omitempty"`
+	RejectedAt      *time.Time      `json:"rejected_at,omitempty"`
+	RejectionReason string          `json:"rejection_reason,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	ExpiresAt       time.Time       `json:"expires_at"`
+	Active          bool            `json:"active"`
+	LastUpdatedAt   *time.Time      `json:"last_updated_at,omitempty"`
+	Metadata        json.RawMessage `json:"metadata,omitempty"`
+}
+
+type ApprovalLog struct {
+	ID          int64           `json:"id"`
+	ExceptionID string          `json:"exception_id"`
+	Action      string          `json:"action"`
+	Actor       string          `json:"actor"`
+	ActorRole   string          `json:"actor_role,omitempty"`
+	Reason      string          `json:"reason,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
 }
 
 type ExceptionCreateRequest struct {
@@ -56,14 +90,20 @@ type ExceptionCreateRequest struct {
 	CVEID         string          `json:"cve_id,omitempty"`
 	Reason        string          `json:"reason"`
 	TicketID      string          `json:"ticket_id"`
-	ApprovedBy    string          `json:"approved_by"`
+	ApprovedBy    string          `json:"approved_by,omitempty"`
 	ExpiresAt     *time.Time      `json:"expires_at,omitempty"`
 	TTLHours      int             `json:"ttl_hours,omitempty"`
 	Metadata      json.RawMessage `json:"metadata,omitempty"`
 }
 
+type ExceptionActionRequest struct {
+	Reason   string          `json:"reason,omitempty"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
+}
+
 type ExceptionFilter struct {
 	Active        *bool
+	Status        string
 	ExceptionType string
 	TenantID      string
 	Environment   string
@@ -93,8 +133,13 @@ type ExceptionValidationResult struct {
 
 type ExceptionReport struct {
 	Active         []PolicyException `json:"active"`
+	Pending        []PolicyException `json:"pending,omitempty"`
+	Rejected       []PolicyException `json:"rejected,omitempty"`
+	Revoked        []PolicyException `json:"revoked,omitempty"`
+	Expired        []PolicyException `json:"expired,omitempty"`
 	RecentUsed     []StoredEvent     `json:"recent_used"`
 	RecentInactive []PolicyException `json:"recent_inactive"`
+	StatusCounts   map[string]int64  `json:"status_counts,omitempty"`
 }
 
 type ExceptionValidator interface {
@@ -128,8 +173,6 @@ func NormalizeExceptionCreateRequest(request ExceptionCreateRequest, now func() 
 		return request, fmt.Errorf("%w: reason is required", ErrInvalidException)
 	case request.TicketID == "":
 		return request, fmt.Errorf("%w: ticket_id is required", ErrInvalidException)
-	case request.ApprovedBy == "":
-		return request, fmt.Errorf("%w: approved_by is required", ErrInvalidException)
 	}
 
 	switch request.ExceptionType {
@@ -158,7 +201,14 @@ func NormalizeExceptionCreateRequest(request ExceptionCreateRequest, now func() 
 	return request, nil
 }
 
+func NormalizeExceptionActionRequest(request ExceptionActionRequest) ExceptionActionRequest {
+	request.Reason = strings.TrimSpace(request.Reason)
+	request.Metadata = normalizeMetadata(request.Metadata)
+	return request
+}
+
 func NormalizeExceptionFilter(filter ExceptionFilter) (ExceptionFilter, error) {
+	filter.Status = normalizeExceptionStatus(filter.Status)
 	filter.ExceptionType = normalizeExceptionType(filter.ExceptionType)
 	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	filter.Environment = strings.TrimSpace(filter.Environment)
@@ -166,6 +216,14 @@ func NormalizeExceptionFilter(filter ExceptionFilter) (ExceptionFilter, error) {
 	filter.Repo = strings.TrimSpace(filter.Repo)
 	filter.ImageDigest = strings.TrimSpace(filter.ImageDigest)
 	filter.CVEID = strings.TrimSpace(strings.ToUpper(filter.CVEID))
+
+	if filter.Status != "" {
+		switch filter.Status {
+		case ExceptionStatusPending, ExceptionStatusApproved, ExceptionStatusRejected, ExceptionStatusRevoked, ExceptionStatusExpired:
+		default:
+			return filter, fmt.Errorf("%w: unsupported status %q", ErrInvalidException, filter.Status)
+		}
+	}
 
 	if filter.ExceptionType != "" {
 		switch filter.ExceptionType {
@@ -202,17 +260,69 @@ func NormalizeExceptionValidationRequest(request ExceptionValidationRequest) (Ex
 	return request, nil
 }
 
+func NormalizeApprovalLog(log ApprovalLog) ApprovalLog {
+	log.Action = normalizeApprovalAction(log.Action)
+	log.Actor = strings.TrimSpace(log.Actor)
+	log.ActorRole = strings.TrimSpace(log.ActorRole)
+	log.Reason = strings.TrimSpace(log.Reason)
+	log.Metadata = normalizeMetadata(log.Metadata)
+	return log
+}
+
+func (exception PolicyException) EffectiveStatus(now time.Time) string {
+	status := normalizeExceptionStatus(exception.Status)
+	if status == "" {
+		if exception.Active {
+			status = ExceptionStatusApproved
+		} else {
+			status = ExceptionStatusRevoked
+		}
+	}
+
+	switch status {
+	case ExceptionStatusRejected, ExceptionStatusRevoked:
+		return status
+	case ExceptionStatusPending, ExceptionStatusApproved:
+		if !exception.ExpiresAt.After(now.UTC()) {
+			return ExceptionStatusExpired
+		}
+		if status == ExceptionStatusApproved && !exception.Active {
+			return ExceptionStatusRevoked
+		}
+		return status
+	case ExceptionStatusExpired:
+		return ExceptionStatusExpired
+	default:
+		if !exception.ExpiresAt.After(now.UTC()) {
+			return ExceptionStatusExpired
+		}
+		if exception.Active {
+			return ExceptionStatusApproved
+		}
+		return ExceptionStatusRevoked
+	}
+}
+
 func (exception PolicyException) IsCurrentlyActive(now time.Time) bool {
-	return exception.Active && exception.ExpiresAt.After(now.UTC())
+	return exception.EffectiveStatus(now) == ExceptionStatusApproved
 }
 
 func (exception PolicyException) Matches(request ExceptionValidationRequest, now time.Time) (bool, string) {
-	switch {
-	case !exception.Active:
-		return false, "exception is inactive"
-	case !exception.ExpiresAt.After(now.UTC()):
+	switch status := exception.EffectiveStatus(now); status {
+	case ExceptionStatusPending:
+		return false, "exception is pending approval"
+	case ExceptionStatusRejected:
+		return false, "exception is rejected"
+	case ExceptionStatusRevoked:
+		return false, "exception is revoked"
+	case ExceptionStatusExpired:
 		return false, "exception is expired"
-	case request.ExceptionType != "" && exception.ExceptionType != request.ExceptionType:
+	case ExceptionStatusApproved:
+	default:
+		return false, "exception is inactive"
+	}
+
+	if request.ExceptionType != "" && exception.ExceptionType != request.ExceptionType {
 		return false, "exception type does not match"
 	}
 
@@ -242,14 +352,51 @@ func (exception PolicyException) Matches(request ExceptionValidationRequest, now
 	return true, ""
 }
 
+func (exception PolicyException) WithEffectiveStatus(now time.Time) PolicyException {
+	copy := clonePolicyException(exception)
+	copy.Status = copy.EffectiveStatus(now)
+	return copy
+}
+
 func clonePolicyException(exception PolicyException) PolicyException {
 	if exception.Metadata != nil {
 		exception.Metadata = slices.Clone(exception.Metadata)
 	}
+	if exception.RequestedAt != nil {
+		requestedAt := exception.RequestedAt.UTC()
+		exception.RequestedAt = &requestedAt
+	}
+	if exception.ApprovedAt != nil {
+		approvedAt := exception.ApprovedAt.UTC()
+		exception.ApprovedAt = &approvedAt
+	}
+	if exception.RejectedAt != nil {
+		rejectedAt := exception.RejectedAt.UTC()
+		exception.RejectedAt = &rejectedAt
+	}
+	if exception.LastUpdatedAt != nil {
+		lastUpdatedAt := exception.LastUpdatedAt.UTC()
+		exception.LastUpdatedAt = &lastUpdatedAt
+	}
 	return exception
 }
 
+func cloneApprovalLog(log ApprovalLog) ApprovalLog {
+	if log.Metadata != nil {
+		log.Metadata = slices.Clone(log.Metadata)
+	}
+	return log
+}
+
 func normalizeExceptionType(value string) string {
+	return strings.ToUpper(strings.TrimSpace(value))
+}
+
+func normalizeExceptionStatus(value string) string {
+	return strings.ToUpper(strings.TrimSpace(value))
+}
+
+func normalizeApprovalAction(value string) string {
 	return strings.ToUpper(strings.TrimSpace(value))
 }
 

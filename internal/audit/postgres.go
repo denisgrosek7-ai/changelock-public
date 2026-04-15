@@ -162,7 +162,7 @@ func (s *PostgresStore) ListEvents(ctx context.Context, filter EventFilter) ([]S
 	}
 	defer rows.Close()
 
-	records, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (StoredEvent, error) {
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (StoredEvent, error) {
 		var record StoredEvent
 		if err := row.Scan(&record.ID, &record.ReceivedAt, &record.RawEvent); err != nil {
 			return StoredEvent{}, err
@@ -172,11 +172,6 @@ func (s *PostgresStore) ListEvents(ctx context.Context, filter EventFilter) ([]S
 		}
 		return record, nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return records, nil
 }
 
 func (s *PostgresStore) Summary(ctx context.Context, filter EventFilter) (Summary, error) {
@@ -330,19 +325,23 @@ func (s *PostgresStore) CreateException(ctx context.Context, request ExceptionCr
 
 	const statement = `
 INSERT INTO policy_exceptions (
-  exception_id, exception_type, tenant_id, environment, namespace, repo,
-  image_digest, cve_id, reason, ticket_id, approved_by, expires_at, metadata
+  exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by,
+  approved_at, expires_at, active, last_updated_at, metadata
 )
 VALUES (
-  $1, $2, $3, $4, $5, $6,
-  $7, $8, $9, $10, $11, $12, $13::jsonb
+  $1, $2, $3, $4, $5, $6, $7,
+  $8, $9, $10, $11, $12, $13, $14,
+  $15, $16, $17, $18, $19::jsonb
 )
-RETURNING id, created_at, active
+RETURNING id, created_at
 `
 
+	now := time.Now().UTC()
 	exception := PolicyException{
 		ExceptionID:   request.ExceptionID,
 		ExceptionType: request.ExceptionType,
+		Status:        ExceptionStatusApproved,
 		TenantID:      request.TenantID,
 		Environment:   request.Environment,
 		Namespace:     request.Namespace,
@@ -351,14 +350,20 @@ RETURNING id, created_at, active
 		CVEID:         request.CVEID,
 		Reason:        request.Reason,
 		TicketID:      request.TicketID,
+		RequestedBy:   request.ApprovedBy,
+		RequestedAt:   timePointer(now),
 		ApprovedBy:    request.ApprovedBy,
+		ApprovedAt:    timePointer(now),
 		ExpiresAt:     request.ExpiresAt.UTC(),
+		Active:        true,
+		LastUpdatedAt: timePointer(now),
 		Metadata:      normalizeMetadata(request.Metadata),
 	}
 
 	err = s.pool.QueryRow(ctx, statement,
 		exception.ExceptionID,
 		exception.ExceptionType,
+		exception.Status,
 		nullableString(exception.TenantID),
 		nullableString(exception.Environment),
 		nullableString(exception.Namespace),
@@ -367,18 +372,99 @@ RETURNING id, created_at, active
 		nullableString(exception.CVEID),
 		exception.Reason,
 		exception.TicketID,
-		exception.ApprovedBy,
+		nullableString(exception.RequestedBy),
+		exception.RequestedAt,
+		nullableString(exception.ApprovedBy),
+		exception.ApprovedAt,
 		exception.ExpiresAt,
+		exception.Active,
+		exception.LastUpdatedAt,
 		string(exception.Metadata),
-	).Scan(&exception.ID, &exception.CreatedAt, &exception.Active)
+	).Scan(&exception.ID, &exception.CreatedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
 			return PolicyException{}, fmt.Errorf("%w: exception_id %q already exists", ErrInvalidException, exception.ExceptionID)
 		}
 		return PolicyException{}, err
 	}
+	if err := s.insertApprovalLog(ctx, exception.ExceptionID, ApprovalActionApproved, exception.ApprovedBy, "", exception.Reason, nil); err != nil {
+		return PolicyException{}, err
+	}
 
-	return clonePolicyException(exception), nil
+	return exception.WithEffectiveStatus(now), nil
+}
+
+func (s *PostgresStore) RequestException(ctx context.Context, request ExceptionCreateRequest, requestedBy string, requesterRole string) (PolicyException, error) {
+	request, err := NormalizeExceptionCreateRequest(request, time.Now)
+	if err != nil {
+		return PolicyException{}, err
+	}
+
+	const statement = `
+INSERT INTO policy_exceptions (
+  exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at,
+  expires_at, active, last_updated_at, metadata
+)
+VALUES (
+  $1, $2, $3, $4, $5, $6, $7,
+  $8, $9, $10, $11, $12, $13,
+  $14, $15, $16, $17::jsonb
+)
+RETURNING id, created_at
+`
+
+	now := time.Now().UTC()
+	exception := PolicyException{
+		ExceptionID:   request.ExceptionID,
+		ExceptionType: request.ExceptionType,
+		Status:        ExceptionStatusPending,
+		TenantID:      request.TenantID,
+		Environment:   request.Environment,
+		Namespace:     request.Namespace,
+		Repo:          request.Repo,
+		ImageDigest:   request.ImageDigest,
+		CVEID:         request.CVEID,
+		Reason:        request.Reason,
+		TicketID:      request.TicketID,
+		RequestedBy:   strings.TrimSpace(requestedBy),
+		RequestedAt:   timePointer(now),
+		ExpiresAt:     request.ExpiresAt.UTC(),
+		Active:        false,
+		LastUpdatedAt: timePointer(now),
+		Metadata:      normalizeMetadata(request.Metadata),
+	}
+
+	err = s.pool.QueryRow(ctx, statement,
+		exception.ExceptionID,
+		exception.ExceptionType,
+		exception.Status,
+		nullableString(exception.TenantID),
+		nullableString(exception.Environment),
+		nullableString(exception.Namespace),
+		nullableString(exception.Repo),
+		nullableString(exception.ImageDigest),
+		nullableString(exception.CVEID),
+		exception.Reason,
+		exception.TicketID,
+		nullableString(exception.RequestedBy),
+		exception.RequestedAt,
+		exception.ExpiresAt,
+		exception.Active,
+		exception.LastUpdatedAt,
+		string(exception.Metadata),
+	).Scan(&exception.ID, &exception.CreatedAt)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			return PolicyException{}, fmt.Errorf("%w: exception_id %q already exists", ErrInvalidException, exception.ExceptionID)
+		}
+		return PolicyException{}, err
+	}
+	if err := s.insertApprovalLog(ctx, exception.ExceptionID, ApprovalActionRequested, requestedBy, requesterRole, exception.Reason, nil); err != nil {
+		return PolicyException{}, err
+	}
+
+	return exception.WithEffectiveStatus(now), nil
 }
 
 func (s *PostgresStore) ListExceptions(ctx context.Context, filter ExceptionFilter) ([]PolicyException, error) {
@@ -394,14 +480,98 @@ func (s *PostgresStore) ListExceptions(ctx context.Context, filter ExceptionFilt
 	}
 	defer rows.Close()
 
-	exceptions, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (PolicyException, error) {
-		return scanPolicyException(row)
+	now := time.Now().UTC()
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (PolicyException, error) {
+		exception, err := scanPolicyException(row)
+		if err != nil {
+			return PolicyException{}, err
+		}
+		return exception.WithEffectiveStatus(now), nil
 	})
+}
+
+func (s *PostgresStore) ApproveException(ctx context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error) {
+	exception, err := s.loadException(ctx, exceptionID)
 	if err != nil {
-		return nil, err
+		return PolicyException{}, err
 	}
 
-	return exceptions, nil
+	now := time.Now().UTC()
+	if exception.EffectiveStatus(now) != ExceptionStatusPending {
+		return PolicyException{}, fmt.Errorf("%w: only pending exceptions can be approved", ErrInvalidException)
+	}
+
+	const statement = `
+UPDATE policy_exceptions
+SET status = $2,
+    active = TRUE,
+    approved_by = $3,
+    approved_at = $4,
+    last_updated_at = $4
+WHERE exception_id = $1
+RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+`
+
+	row := s.pool.QueryRow(ctx, statement, strings.TrimSpace(exceptionID), ExceptionStatusApproved, strings.TrimSpace(approvedBy), now)
+	exception, err = scanPolicyException(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PolicyException{}, ErrExceptionNotFound
+		}
+		return PolicyException{}, err
+	}
+	if err := s.insertApprovalLog(ctx, exception.ExceptionID, ApprovalActionApproved, approvedBy, approverRole, exception.Reason, nil); err != nil {
+		return PolicyException{}, err
+	}
+
+	return exception.WithEffectiveStatus(now), nil
+}
+
+func (s *PostgresStore) RejectException(ctx context.Context, exceptionID string, reason string, rejectedBy string, rejectorRole string) (PolicyException, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return PolicyException{}, fmt.Errorf("%w: rejection reason is required", ErrInvalidException)
+	}
+
+	exception, err := s.loadException(ctx, exceptionID)
+	if err != nil {
+		return PolicyException{}, err
+	}
+
+	now := time.Now().UTC()
+	if exception.EffectiveStatus(now) != ExceptionStatusPending {
+		return PolicyException{}, fmt.Errorf("%w: only pending exceptions can be rejected", ErrInvalidException)
+	}
+
+	const statement = `
+UPDATE policy_exceptions
+SET status = $2,
+    active = FALSE,
+    rejected_by = $3,
+    rejected_at = $4,
+    rejection_reason = $5,
+    last_updated_at = $4
+WHERE exception_id = $1
+RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+`
+
+	row := s.pool.QueryRow(ctx, statement, strings.TrimSpace(exceptionID), ExceptionStatusRejected, strings.TrimSpace(rejectedBy), now, reason)
+	exception, err = scanPolicyException(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PolicyException{}, ErrExceptionNotFound
+		}
+		return PolicyException{}, err
+	}
+	if err := s.insertApprovalLog(ctx, exception.ExceptionID, ApprovalActionRejected, rejectedBy, rejectorRole, reason, nil); err != nil {
+		return PolicyException{}, err
+	}
+
+	return exception.WithEffectiveStatus(now), nil
 }
 
 func (s *PostgresStore) RevokeException(ctx context.Context, exceptionID string) (PolicyException, error) {
@@ -412,13 +582,17 @@ func (s *PostgresStore) RevokeException(ctx context.Context, exceptionID string)
 
 	const statement = `
 UPDATE policy_exceptions
-SET active = FALSE
+SET active = FALSE,
+    status = $2,
+    last_updated_at = $3
 WHERE exception_id = $1
-RETURNING id, exception_id, exception_type, tenant_id, environment, namespace, repo,
-  image_digest, cve_id, reason, ticket_id, approved_by, created_at, expires_at, active, metadata
+RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
 `
 
-	row := s.pool.QueryRow(ctx, statement, exceptionID)
+	now := time.Now().UTC()
+	row := s.pool.QueryRow(ctx, statement, exceptionID, ExceptionStatusRevoked, now)
 	exception, err := scanPolicyException(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -426,7 +600,11 @@ RETURNING id, exception_id, exception_type, tenant_id, environment, namespace, r
 		}
 		return PolicyException{}, err
 	}
-	return exception, nil
+	if err := s.insertApprovalLog(ctx, exception.ExceptionID, ApprovalActionRevoked, exception.ApprovedBy, "", "exception revoked", nil); err != nil {
+		return PolicyException{}, err
+	}
+
+	return exception.WithEffectiveStatus(now), nil
 }
 
 func (s *PostgresStore) ValidateException(ctx context.Context, request ExceptionValidationRequest) (ExceptionValidationResult, error) {
@@ -435,26 +613,24 @@ func (s *PostgresStore) ValidateException(ctx context.Context, request Exception
 		return ExceptionValidationResult{}, err
 	}
 
-	const statement = `
-SELECT id, exception_id, exception_type, tenant_id, environment, namespace, repo,
-  image_digest, cve_id, reason, ticket_id, approved_by, created_at, expires_at, active, metadata
-FROM policy_exceptions
-WHERE exception_id = $1
-`
-
-	exception, err := scanPolicyException(s.pool.QueryRow(ctx, statement, request.ExceptionID))
+	exception, err := s.loadException(ctx, request.ExceptionID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, ErrExceptionNotFound) {
+			_ = s.insertApprovalLog(ctx, request.ExceptionID, ApprovalActionValidationFailed, "", "", "exception not found", nil)
 			return ExceptionValidationResult{Valid: false, Reason: "exception not found"}, nil
 		}
 		return ExceptionValidationResult{}, err
 	}
 
-	matched, reason := exception.Matches(request, time.Now().UTC())
+	now := time.Now().UTC()
+	matched, reason := exception.Matches(request, now)
 	if !matched {
+		_ = s.insertApprovalLog(ctx, request.ExceptionID, ApprovalActionValidationFailed, "", "", reason, nil)
 		return ExceptionValidationResult{Valid: false, Reason: reason}, nil
 	}
+	_ = s.insertApprovalLog(ctx, request.ExceptionID, ApprovalActionUsed, "", "", "exception used", nil)
 
+	exception = exception.WithEffectiveStatus(now)
 	return ExceptionValidationResult{
 		Valid:     true,
 		Exception: &exception,
@@ -474,9 +650,30 @@ func (s *PostgresStore) ExceptionReport(ctx context.Context, filter ExceptionFil
 		return ExceptionReport{}, err
 	}
 
-	inactiveFilter := filter
-	inactiveFilter.Active = boolPointer(false)
-	inactive, err := s.ListExceptions(ctx, inactiveFilter)
+	pendingFilter := filter
+	pendingFilter.Status = ExceptionStatusPending
+	pending, err := s.ListExceptions(ctx, pendingFilter)
+	if err != nil {
+		return ExceptionReport{}, err
+	}
+
+	rejectedFilter := filter
+	rejectedFilter.Status = ExceptionStatusRejected
+	rejected, err := s.ListExceptions(ctx, rejectedFilter)
+	if err != nil {
+		return ExceptionReport{}, err
+	}
+
+	revokedFilter := filter
+	revokedFilter.Status = ExceptionStatusRevoked
+	revoked, err := s.ListExceptions(ctx, revokedFilter)
+	if err != nil {
+		return ExceptionReport{}, err
+	}
+
+	expiredFilter := filter
+	expiredFilter.Status = ExceptionStatusExpired
+	expired, err := s.ListExceptions(ctx, expiredFilter)
 	if err != nil {
 		return ExceptionReport{}, err
 	}
@@ -502,18 +699,77 @@ func (s *PostgresStore) ExceptionReport(ctx context.Context, filter ExceptionFil
 		return ExceptionReport{}, err
 	}
 
+	recentInactive := append([]PolicyException{}, rejected...)
+	recentInactive = append(recentInactive, revoked...)
+	recentInactive = append(recentInactive, expired...)
+	sort.Slice(recentInactive, func(i, j int) bool {
+		return recentInactive[i].CreatedAt.After(recentInactive[j].CreatedAt)
+	})
+
 	return ExceptionReport{
 		Active:         active,
+		Pending:        pending,
+		Rejected:       rejected,
+		Revoked:        revoked,
+		Expired:        expired,
 		RecentUsed:     used,
-		RecentInactive: inactive,
+		RecentInactive: recentInactive,
+		StatusCounts: map[string]int64{
+			ExceptionStatusApproved: int64(len(active)),
+			ExceptionStatusPending:  int64(len(pending)),
+			ExceptionStatusRejected: int64(len(rejected)),
+			ExceptionStatusRevoked:  int64(len(revoked)),
+			ExceptionStatusExpired:  int64(len(expired)),
+		},
 	}, nil
+}
+
+func (s *PostgresStore) ListApprovalLogs(ctx context.Context, exceptionID string, limit int) ([]ApprovalLog, error) {
+	exceptionID = strings.TrimSpace(exceptionID)
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	query := `
+SELECT id, exception_id, action, actor, actor_role, reason, created_at, metadata
+FROM approval_logs`
+	args := []any{}
+	if exceptionID != "" {
+		args = append(args, exceptionID)
+		query += fmt.Sprintf(" WHERE exception_id = $%d", len(args))
+	}
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d", len(args)+1)
+	args = append(args, limit)
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ApprovalLog, error) {
+		var log ApprovalLog
+		var actorRole sql.NullString
+		var reason sql.NullString
+		if err := row.Scan(&log.ID, &log.ExceptionID, &log.Action, &log.Actor, &actorRole, &reason, &log.CreatedAt, &log.Metadata); err != nil {
+			return ApprovalLog{}, err
+		}
+		log.ActorRole = nullableStringValue(actorRole)
+		log.Reason = nullableStringValue(reason)
+		log.Metadata = normalizeMetadata(log.Metadata)
+		return cloneApprovalLog(log), nil
+	})
 }
 
 func buildExceptionListQuery(filter ExceptionFilter) (string, []any) {
 	whereClause, args := buildExceptionWhereClause(filter)
 	query := `
-SELECT id, exception_id, exception_type, tenant_id, environment, namespace, repo,
-  image_digest, cve_id, reason, ticket_id, approved_by, created_at, expires_at, active, metadata
+SELECT id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
 FROM policy_exceptions` + whereClause + `
 ORDER BY created_at DESC
 LIMIT $` + fmt.Sprint(len(args)+1)
@@ -534,9 +790,17 @@ func buildExceptionWhereClause(filter ExceptionFilter) (string, []any) {
 
 	if filter.Active != nil {
 		if *filter.Active {
-			conditions = append(conditions, "active = TRUE", "expires_at > now()")
+			conditions = append(conditions, "status = '"+ExceptionStatusApproved+"'", "active = TRUE", "expires_at > now()")
 		} else {
-			conditions = append(conditions, "(active = FALSE OR expires_at <= now())")
+			conditions = append(conditions, "NOT (status = '"+ExceptionStatusApproved+"' AND active = TRUE AND expires_at > now())")
+		}
+	}
+	if filter.Status != "" {
+		switch filter.Status {
+		case ExceptionStatusExpired:
+			conditions = append(conditions, "status IN ('"+ExceptionStatusApproved+"', '"+ExceptionStatusPending+"')", "expires_at <= now()")
+		default:
+			appendCondition(filter.Status, "status")
 		}
 	}
 	appendCondition(filter.ExceptionType, "exception_type")
@@ -599,16 +863,27 @@ func scanPolicyException(row interface {
 	Scan(dest ...any) error
 }) (PolicyException, error) {
 	var exception PolicyException
+	var status sql.NullString
 	var tenantID sql.NullString
 	var environment sql.NullString
 	var namespace sql.NullString
 	var repo sql.NullString
 	var imageDigest sql.NullString
 	var cveID sql.NullString
+	var requestedBy sql.NullString
+	var requestedAt sql.NullTime
+	var approvedBy sql.NullString
+	var approvedAt sql.NullTime
+	var rejectedBy sql.NullString
+	var rejectedAt sql.NullTime
+	var rejectionReason sql.NullString
+	var lastUpdatedAt sql.NullTime
+
 	if err := row.Scan(
 		&exception.ID,
 		&exception.ExceptionID,
 		&exception.ExceptionType,
+		&status,
 		&tenantID,
 		&environment,
 		&namespace,
@@ -617,22 +892,95 @@ func scanPolicyException(row interface {
 		&cveID,
 		&exception.Reason,
 		&exception.TicketID,
-		&exception.ApprovedBy,
+		&requestedBy,
+		&requestedAt,
+		&approvedBy,
+		&approvedAt,
+		&rejectedBy,
+		&rejectedAt,
+		&rejectionReason,
 		&exception.CreatedAt,
 		&exception.ExpiresAt,
 		&exception.Active,
+		&lastUpdatedAt,
 		&exception.Metadata,
 	); err != nil {
 		return PolicyException{}, err
 	}
+
+	exception.Status = nullableStringValue(status)
 	exception.TenantID = nullableStringValue(tenantID)
 	exception.Environment = nullableStringValue(environment)
 	exception.Namespace = nullableStringValue(namespace)
 	exception.Repo = nullableStringValue(repo)
 	exception.ImageDigest = nullableStringValue(imageDigest)
 	exception.CVEID = nullableStringValue(cveID)
+	exception.RequestedBy = nullableStringValue(requestedBy)
+	exception.ApprovedBy = nullableStringValue(approvedBy)
+	exception.RejectedBy = nullableStringValue(rejectedBy)
+	exception.RejectionReason = nullableStringValue(rejectionReason)
+	if requestedAt.Valid {
+		exception.RequestedAt = timePointer(requestedAt.Time.UTC())
+	}
+	if approvedAt.Valid {
+		exception.ApprovedAt = timePointer(approvedAt.Time.UTC())
+	}
+	if rejectedAt.Valid {
+		exception.RejectedAt = timePointer(rejectedAt.Time.UTC())
+	}
+	if lastUpdatedAt.Valid {
+		exception.LastUpdatedAt = timePointer(lastUpdatedAt.Time.UTC())
+	}
 	exception.Metadata = normalizeMetadata(exception.Metadata)
 	return exception, nil
+}
+
+func (s *PostgresStore) loadException(ctx context.Context, exceptionID string) (PolicyException, error) {
+	exceptionID = strings.TrimSpace(exceptionID)
+	if exceptionID == "" {
+		return PolicyException{}, fmt.Errorf("%w: exception_id is required", ErrInvalidException)
+	}
+
+	const statement = `
+SELECT id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+FROM policy_exceptions
+WHERE exception_id = $1
+`
+
+	exception, err := scanPolicyException(s.pool.QueryRow(ctx, statement, exceptionID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PolicyException{}, ErrExceptionNotFound
+		}
+		return PolicyException{}, err
+	}
+	return exception, nil
+}
+
+func (s *PostgresStore) insertApprovalLog(ctx context.Context, exceptionID, action, actor, actorRole, reason string, metadata json.RawMessage) error {
+	log := NormalizeApprovalLog(ApprovalLog{
+		ExceptionID: exceptionID,
+		Action:      action,
+		Actor:       actor,
+		ActorRole:   actorRole,
+		Reason:      reason,
+		Metadata:    metadata,
+	})
+
+	_, err := s.pool.Exec(ctx, `
+INSERT INTO approval_logs (exception_id, action, actor, actor_role, reason, metadata)
+VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+`,
+		log.ExceptionID,
+		log.Action,
+		firstNonEmpty(log.Actor, "system"),
+		nullableString(log.ActorRole),
+		nullableString(log.Reason),
+		string(log.Metadata),
+	)
+	return err
 }
 
 func boolPointer(value bool) *bool {
@@ -663,4 +1011,13 @@ func nullableStringValue(value sql.NullString) string {
 		return ""
 	}
 	return strings.TrimSpace(value.String)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

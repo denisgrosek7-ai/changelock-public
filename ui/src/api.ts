@@ -1,12 +1,22 @@
 import type {
   AuditHealth,
   AuthStatus,
+  DriftStatsResponse,
   EventFilters,
   EventsResponse,
+  ExceptionActionResponse,
+  ExceptionReport,
+  ExceptionRequestInput,
+  ExceptionsResponse,
+  PolicyException,
   ReasonCount,
   StoredEvent,
   Summary,
   TabKey,
+  TopViolator,
+  TopViolatorsResponse,
+  TrendBucket,
+  TrendsResponse,
   VerifierSummary,
 } from "./types";
 
@@ -36,16 +46,26 @@ function buildURL(path: string, params?: Record<string, string | undefined>) {
   return url.toString();
 }
 
-async function fetchJSON<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
+async function fetchJSON<T>(
+  path: string,
+  options?: {
+    method?: string;
+    params?: Record<string, string | undefined>;
+    body?: unknown;
+  },
+): Promise<T> {
   const controller = new AbortController();
   const timeoutID = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   try {
-    const response = await fetch(buildURL(path, params), {
+    const response = await fetch(buildURL(path, options?.params), {
+      method: options?.method || "GET",
       headers: {
         Accept: "application/json",
+        ...(options?.body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
       },
+      body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
       cache: "no-store",
       signal: controller.signal,
     });
@@ -97,6 +117,13 @@ function readNumber(value: unknown, field: string): number {
   return value;
 }
 
+function readBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`Audit API returned invalid ${field}.`);
+  }
+  return value;
+}
+
 function readOptionalStringArray(value: unknown, field: string): string[] | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -122,8 +149,8 @@ function parseReasonCount(value: unknown): ReasonCount {
     throw new Error("Audit API returned invalid top_deny_reasons item.");
   }
   return {
-    reason: readString(value.reason, "top_deny_reasons.reason"),
-    count: readNumber(value.count, "top_deny_reasons.count"),
+    reason: readString(value.reason, "reason"),
+    count: readNumber(value.count, "count"),
   };
 }
 
@@ -205,9 +232,16 @@ function parseStoredEvent(value: unknown): StoredEvent {
     is_exception: typeof value.is_exception === "boolean" ? value.is_exception : undefined,
     exception_id: readOptionalString(value.exception_id, "events[].exception_id"),
     exception_type: readOptionalString(value.exception_type, "events[].exception_type"),
+    exception_status: readOptionalString(value.exception_status, "events[].exception_status") as StoredEvent["exception_status"],
     exception_reason: readOptionalString(value.exception_reason, "events[].exception_reason"),
     exception_ticket_id: readOptionalString(value.exception_ticket_id, "events[].exception_ticket_id"),
+    exception_requested_by: readOptionalString(value.exception_requested_by, "events[].exception_requested_by"),
+    exception_requested_at: readOptionalString(value.exception_requested_at, "events[].exception_requested_at"),
     exception_approved_by: readOptionalString(value.exception_approved_by, "events[].exception_approved_by"),
+    exception_approved_at: readOptionalString(value.exception_approved_at, "events[].exception_approved_at"),
+    exception_rejected_by: readOptionalString(value.exception_rejected_by, "events[].exception_rejected_by"),
+    exception_rejected_at: readOptionalString(value.exception_rejected_at, "events[].exception_rejected_at"),
+    exception_rejection_reason: readOptionalString(value.exception_rejection_reason, "events[].exception_rejection_reason"),
     exception_expires_at: readOptionalString(value.exception_expires_at, "events[].exception_expires_at"),
     evidence: readOptionalRecord(value.evidence, "events[].evidence"),
     raw_event: readOptionalRecord(value.raw_event, "events[].raw_event"),
@@ -223,6 +257,177 @@ function parseEventsResponse(value: unknown): EventsResponse {
   };
 }
 
+function parsePolicyException(value: unknown): PolicyException {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid exception payload.");
+  }
+  return {
+    id: readNumber(value.id, "exceptions[].id"),
+    exception_id: readString(value.exception_id, "exceptions[].exception_id"),
+    exception_type: readString(value.exception_type, "exceptions[].exception_type"),
+    status: readString(value.status, "exceptions[].status") as PolicyException["status"],
+    tenant_id: readOptionalString(value.tenant_id, "exceptions[].tenant_id"),
+    environment: readOptionalString(value.environment, "exceptions[].environment"),
+    namespace: readOptionalString(value.namespace, "exceptions[].namespace"),
+    repo: readOptionalString(value.repo, "exceptions[].repo"),
+    image_digest: readOptionalString(value.image_digest, "exceptions[].image_digest"),
+    cve_id: readOptionalString(value.cve_id, "exceptions[].cve_id"),
+    reason: readString(value.reason, "exceptions[].reason"),
+    ticket_id: readString(value.ticket_id, "exceptions[].ticket_id"),
+    requested_by: readOptionalString(value.requested_by, "exceptions[].requested_by"),
+    requested_at: readOptionalString(value.requested_at, "exceptions[].requested_at"),
+    approved_by: readOptionalString(value.approved_by, "exceptions[].approved_by"),
+    approved_at: readOptionalString(value.approved_at, "exceptions[].approved_at"),
+    rejected_by: readOptionalString(value.rejected_by, "exceptions[].rejected_by"),
+    rejected_at: readOptionalString(value.rejected_at, "exceptions[].rejected_at"),
+    rejection_reason: readOptionalString(value.rejection_reason, "exceptions[].rejection_reason"),
+    created_at: readString(value.created_at, "exceptions[].created_at"),
+    expires_at: readString(value.expires_at, "exceptions[].expires_at"),
+    active: readBoolean(value.active, "exceptions[].active"),
+    last_updated_at: readOptionalString(value.last_updated_at, "exceptions[].last_updated_at"),
+    metadata: readOptionalRecord(value.metadata, "exceptions[].metadata"),
+  };
+}
+
+function parseExceptionsResponse(value: unknown): ExceptionsResponse {
+  if (!isRecord(value) || !Array.isArray(value.exceptions)) {
+    throw new Error("Audit API returned invalid exceptions response.");
+  }
+  return { exceptions: value.exceptions.map(parsePolicyException) };
+}
+
+function parseExceptionActionResponse(value: unknown): ExceptionActionResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid exception action response.");
+  }
+  return {
+    status: readString(value.status, "status"),
+    exception: parsePolicyException(value.exception),
+  };
+}
+
+function parseExceptionReport(value: unknown): ExceptionReport {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid exception report.");
+  }
+  const parseExceptionArray = (field: string) => {
+    const raw = value[field];
+    if (raw === undefined || raw === null) {
+      return undefined;
+    }
+    if (!Array.isArray(raw)) {
+      throw new Error(`Audit API returned invalid ${field}.`);
+    }
+    return raw.map(parsePolicyException);
+  };
+  const recentUsed = value.recent_used;
+  if (!Array.isArray(recentUsed)) {
+    throw new Error("Audit API returned invalid recent_used.");
+  }
+  const recentInactiveRaw = value.recent_inactive;
+  if (!Array.isArray(recentInactiveRaw)) {
+    throw new Error("Audit API returned invalid recent_inactive.");
+  }
+
+  const statusCountsRaw = readOptionalRecord(value.status_counts, "status_counts") || {};
+  const statusCounts: Record<string, number> = {};
+  for (const [key, count] of Object.entries(statusCountsRaw)) {
+    statusCounts[key] = readNumber(count, `status_counts.${key}`);
+  }
+
+  return {
+    active: parseExceptionArray("active") || [],
+    pending: parseExceptionArray("pending"),
+    rejected: parseExceptionArray("rejected"),
+    revoked: parseExceptionArray("revoked"),
+    expired: parseExceptionArray("expired"),
+    recent_used: recentUsed.map(parseStoredEvent),
+    recent_inactive: recentInactiveRaw.map(parsePolicyException),
+    status_counts: statusCounts,
+  };
+}
+
+function parseTrendBucket(value: unknown): TrendBucket {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid trends bucket.");
+  }
+  return {
+    timestamp: readString(value.timestamp, "buckets[].timestamp"),
+    allow_count: readNumber(value.allow_count, "buckets[].allow_count"),
+    deny_count: readNumber(value.deny_count, "buckets[].deny_count"),
+    error_count: readNumber(value.error_count, "buckets[].error_count"),
+  };
+}
+
+function parseTrendsResponse(value: unknown): TrendsResponse {
+  if (!isRecord(value) || !Array.isArray(value.buckets)) {
+    throw new Error("Audit API returned invalid trends response.");
+  }
+  const totalsRaw = readOptionalRecord(value.totals, "totals") || {};
+  const totals: Record<string, number> = {};
+  for (const [key, count] of Object.entries(totalsRaw)) {
+    totals[key] = readNumber(count, `totals.${key}`);
+  }
+  return {
+    buckets: value.buckets.map(parseTrendBucket),
+    totals,
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
+function parseTopViolator(value: unknown): TopViolator {
+  if (!isRecord(value) || !Array.isArray(value.top_reasons)) {
+    throw new Error("Audit API returned invalid top-violator item.");
+  }
+  return {
+    key: readString(value.key, "items[].key"),
+    deny_count: readNumber(value.deny_count, "items[].deny_count"),
+    top_reasons: value.top_reasons.map(parseReasonCount),
+  };
+}
+
+function parseTopViolatorsResponse(value: unknown): TopViolatorsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid top-violators response.");
+  }
+  return {
+    items: value.items.map(parseTopViolator),
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
+function parseDriftStatsResponse(value: unknown): DriftStatsResponse {
+  if (!isRecord(value) || !Array.isArray(value.top_drifted_workloads)) {
+    throw new Error("Audit API returned invalid drift stats response.");
+  }
+  const countsRaw = readOptionalRecord(value.counts_by_drift_class, "counts_by_drift_class") || {};
+  const countsByClass: Record<string, number> = {};
+  for (const [key, count] of Object.entries(countsRaw)) {
+    countsByClass[key] = readNumber(count, `counts_by_drift_class.${key}`);
+  }
+  return {
+    total_runtime_drift_denies: readNumber(value.total_runtime_drift_denies, "total_runtime_drift_denies"),
+    counts_by_drift_class: countsByClass,
+    top_drifted_workloads: value.top_drifted_workloads.map((item) => {
+      if (!isRecord(item)) {
+        throw new Error("Audit API returned invalid top_drifted_workloads item.");
+      }
+      return {
+        workload: readString(item.workload, "top_drifted_workloads[].workload"),
+        namespace: readOptionalString(item.namespace, "top_drifted_workloads[].namespace"),
+        tenant_id: readOptionalString(item.tenant_id, "top_drifted_workloads[].tenant_id"),
+        environment: readOptionalString(item.environment, "top_drifted_workloads[].environment"),
+        count: readNumber(item.count, "top_drifted_workloads[].count"),
+      };
+    }),
+    mean_time_to_resolve_seconds:
+      value.mean_time_to_resolve_seconds === undefined || value.mean_time_to_resolve_seconds === null
+        ? null
+        : readNumber(value.mean_time_to_resolve_seconds, "mean_time_to_resolve_seconds"),
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
@@ -232,7 +437,7 @@ export async function getAuthStatus() {
 }
 
 export async function getSummary(filters: Pick<EventFilters, "environment" | "tenant_id">) {
-  return parseSummary(await fetchJSON<unknown>("/v1/reports/summary", filters));
+  return parseSummary(await fetchJSON<unknown>("/v1/reports/summary", { params: filters }));
 }
 
 export async function getEvents(tab: TabKey, filters: EventFilters) {
@@ -255,7 +460,87 @@ export async function getEvents(tab: TabKey, filters: EventFilters) {
         ? "/v1/reports/runtime-drift"
         : "/v1/reports/events";
 
-  return parseEventsResponse(await fetchJSON<unknown>(path, params));
+  return parseEventsResponse(await fetchJSON<unknown>(path, { params }));
+}
+
+export async function getExceptionReport(filters: {
+  status?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+}) {
+  return parseExceptionReport(await fetchJSON<unknown>("/v1/reports/exceptions", { params: filters }));
+}
+
+export async function getExceptions(filters: {
+  status?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  limit?: string;
+}) {
+  return parseExceptionsResponse(await fetchJSON<unknown>("/v1/exceptions", { params: filters }));
+}
+
+export async function requestException(input: ExceptionRequestInput) {
+  return parseExceptionActionResponse(await fetchJSON<unknown>("/v1/exceptions/request", { method: "POST", body: input }));
+}
+
+export async function approveException(exceptionID: string, reason?: string) {
+  return parseExceptionActionResponse(
+    await fetchJSON<unknown>(`/v1/exceptions/${encodeURIComponent(exceptionID)}/approve`, {
+      method: "POST",
+      body: { reason: reason || "" },
+    }),
+  );
+}
+
+export async function rejectException(exceptionID: string, reason: string) {
+  return parseExceptionActionResponse(
+    await fetchJSON<unknown>(`/v1/exceptions/${encodeURIComponent(exceptionID)}/reject`, {
+      method: "POST",
+      body: { reason },
+    }),
+  );
+}
+
+export async function revokeException(exceptionID: string) {
+  return parseExceptionActionResponse(
+    await fetchJSON<unknown>(`/v1/exceptions/${encodeURIComponent(exceptionID)}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
+export async function getTrends(filters: {
+  window_days?: string;
+  granularity?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  event_type?: string;
+}) {
+  return parseTrendsResponse(await fetchJSON<unknown>("/v1/analytics/trends", { params: filters }));
+}
+
+export async function getTopViolators(filters: {
+  window_days?: string;
+  limit?: string;
+  dimension?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+}) {
+  return parseTopViolatorsResponse(await fetchJSON<unknown>("/v1/analytics/top-violators", { params: filters }));
+}
+
+export async function getDriftStats(filters: {
+  window_days?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+}) {
+  return parseDriftStatsResponse(await fetchJSON<unknown>("/v1/analytics/drift-stats", { params: filters }));
 }
 
 export function apiBaseURL() {

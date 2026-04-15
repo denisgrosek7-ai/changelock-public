@@ -3,7 +3,7 @@
 ChangeLock is a vendor-neutral security control plane for Kubernetes delivery paths. It combines policy, cryptographic artifact verification, admission control, runtime drift checks, audit evidence, and a local dashboard so operators can explain exactly why a workload was allowed or denied.
 
 ## What works today
-ChangeLock is currently a sales-ready technical POC with a real Go control plane, real `cosign` verification, PostgreSQL-backed audit evidence, a local buyer-demo dashboard, a controlled break-glass exception path, minimal bearer-token RBAC for sensitive API surfaces, and a reproducible `kind` admission demo that exercises both allow and deny paths.
+ChangeLock is currently a sales-ready technical POC with a real Go control plane, real `cosign` verification, PostgreSQL-backed audit evidence, approval-aware break-glass governance, minimal bearer-token RBAC on sensitive API surfaces, operational analytics, a local buyer-demo dashboard, and a reproducible `kind` admission demo that exercises both allow and deny paths.
 
 ## MVP objective
 Block Kubernetes deployments unless the image:
@@ -19,7 +19,7 @@ Block Kubernetes deployments unless the image:
 - `services/attestation-verifier`: verifies GitHub attestations and Cosign signatures
 - `services/deploy-gate`: admission decision service for Kubernetes
 - `services/runtime-agent`: runtime drift detector
-- `services/audit-writer`: evidence writer, reports API, and exception source of truth
+- `services/audit-writer`: evidence writer, reports API, analytics API, and exception governance source of truth
 - `connectors/github-webhook`: ingests SCM events
 - `deploy/kyverno`: cluster-side enforcement policies
 - `policies/`: global and tenant-specific rules
@@ -154,7 +154,9 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `services/policy-engine` emits `policy_decision` for direct API-driven evaluations.
 - `services/runtime-agent` emits `runtime_drift_result` for both clean scans and detected drift.
 - exception lifecycle and usage add:
-  - `exception_created`
+  - `exception_requested`
+  - `exception_approved`
+  - `exception_rejected`
   - `exception_revoked`
   - `exception_used`
   - `exception_validation_failed`
@@ -167,7 +169,10 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `GET /health`
 - `POST /v1/ingest`
 - `POST /v1/exceptions`
+- `POST /v1/exceptions/request`
 - `GET /v1/exceptions`
+- `POST /v1/exceptions/{exception_id}/approve`
+- `POST /v1/exceptions/{exception_id}/reject`
 - `DELETE /v1/exceptions/{exception_id}`
 - `POST /v1/exceptions/validate`
 - `GET /v1/reports/events`
@@ -175,6 +180,9 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `GET /v1/reports/denies`
 - `GET /v1/reports/runtime-drift`
 - `GET /v1/reports/exceptions`
+- `GET /v1/analytics/trends`
+- `GET /v1/analytics/top-violators`
+- `GET /v1/analytics/drift-stats`
 
 ### Example queries
 - `curl -sS http://127.0.0.1:8094/v1/reports/events?limit=20`
@@ -320,7 +328,6 @@ Phase 6c adds a minimal but auditable emergency bypass flow without weakening th
   - optional tenant/environment/namespace/repo/image digest/CVE scope
   - `reason`
   - `ticket_id`
-  - `approved_by`
   - `expires_at`
   - `active`
 - supported exception types are:
@@ -335,7 +342,7 @@ Phase 6c adds a minimal but auditable emergency bypass flow without weakening th
 - annotation presence alone does not authorize bypass
 - `policy-engine` and `deploy-gate` only short-circuit to `ALLOW` when:
   - the referenced exception exists
-  - `active = true`
+  - it is approved
   - `expires_at` is still in the future
   - the stored scope matches the request
 - invalid or expired exception intent fails closed and emits `exception_validation_failed`
@@ -428,23 +435,30 @@ printf 'VITE_API_TOKEN=viewer-demo-token\n' >> .env.local
   - can read `GET /v1/reports/*`
   - can read `GET /v1/exceptions`
   - can read `GET /v1/reports/exceptions`
-  - cannot create or revoke exceptions
+  - can read `GET /v1/analytics/*`
+  - cannot request, approve, reject, or revoke exceptions
 - `operator`
-  - can read reports and exceptions
-  - cannot create or revoke exceptions
+  - can read reports, analytics, and exceptions
+  - can call `POST /v1/exceptions/request`
+  - cannot approve, reject, or revoke exceptions
 - `security_admin`
-  - can read reports and exceptions
-  - can create and revoke exceptions
+  - can read reports, analytics, and exceptions
+  - can request exceptions
+  - can create approved emergency exceptions directly
+  - can approve, reject, and revoke exceptions
   - can call `POST /v1/exceptions/validate`
 - `service_internal`
   - can call `POST /v1/exceptions/validate`
-  - cannot create or revoke exceptions
+  - cannot request, approve, reject, or revoke exceptions
   - is not intended as a normal dashboard role
 
 ### Protected routes
 - `GET /v1/auth/me`
 - `GET /v1/exceptions`
 - `POST /v1/exceptions`
+- `POST /v1/exceptions/request`
+- `POST /v1/exceptions/{exception_id}/approve`
+- `POST /v1/exceptions/{exception_id}/reject`
 - `DELETE /v1/exceptions/{exception_id}`
 - `POST /v1/exceptions/validate`
 - `GET /v1/reports/events`
@@ -452,6 +466,9 @@ printf 'VITE_API_TOKEN=viewer-demo-token\n' >> .env.local
 - `GET /v1/reports/denies`
 - `GET /v1/reports/runtime-drift`
 - `GET /v1/reports/exceptions`
+- `GET /v1/analytics/trends`
+- `GET /v1/analytics/top-violators`
+- `GET /v1/analytics/drift-stats`
 
 ### Example curl with tokens
 Viewer read:
@@ -492,6 +509,85 @@ curl -sS -X POST http://127.0.0.1:8094/v1/exceptions/validate \
 ```
 
 See [docs/auth-rbac.md](docs/auth-rbac.md) for the detailed token model and route matrix.
+
+## Phase 7b analytics and trends
+Phase 7b turns raw audit evidence into query-backed operational analytics without adding a separate warehouse or BI stack.
+
+- `GET /v1/analytics/trends`
+  - bucketed `ALLOW` / `DENY` / `ERROR` counts
+  - filterable by window, granularity, tenant, environment, repo, and event type
+- `GET /v1/analytics/top-violators`
+  - ranks repos, tenants, or environments with the most denies
+  - includes compact top-reason summaries
+- `GET /v1/analytics/drift-stats`
+  - summarizes runtime drift deny counts
+  - counts by drift class
+  - surfaces top drifted workloads
+  - computes an approximate MTTR only when enough runtime drift evidence exists
+
+Example:
+```bash
+curl -sS http://127.0.0.1:8094/v1/analytics/trends?window_days=30&granularity=day \
+  -H 'Authorization: Bearer viewer-demo-token'
+```
+
+## Phase 7c exception approvals and four-eyes governance
+Phase 7c evolves the earlier exception store into an approval-aware workflow while preserving the direct emergency fast path for `security_admin`.
+
+- explicit exception statuses:
+  - `PENDING`
+  - `APPROVED`
+  - `REJECTED`
+  - `REVOKED`
+  - `EXPIRED`
+- `POST /v1/exceptions/request`
+  - creates a `PENDING` request
+  - intended for `operator` and `security_admin`
+- `POST /v1/exceptions/{exception_id}/approve`
+  - `security_admin` only
+  - transitions `PENDING -> APPROVED`
+- `POST /v1/exceptions/{exception_id}/reject`
+  - `security_admin` only
+  - transitions `PENDING -> REJECTED`
+- `DELETE /v1/exceptions/{exception_id}`
+  - revokes approved or still-open exception entries
+- `POST /v1/exceptions`
+  - direct `security_admin` fast path
+  - immediately creates an already `APPROVED` exception for urgent incidents
+- `POST /v1/exceptions/validate`
+  - only honors `APPROVED` + unexpired + scope-matched exceptions
+  - fails closed for `PENDING`, `REJECTED`, `REVOKED`, and `EXPIRED`
+
+Request flow:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions/request \
+  -H 'Authorization: Bearer operator-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "exception_id":"EX-2026-700",
+    "exception_type":"BREAK_GLASS",
+    "tenant_id":"acme",
+    "environment":"prod",
+    "namespace":"acme-prod",
+    "reason":"P0 production restore",
+    "ticket_id":"INC-700",
+    "ttl_hours":2
+  }'
+```
+
+Approve flow:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions/EX-2026-700/approve \
+  -H 'Authorization: Bearer security-admin-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{"reason":"approved for incident response"}'
+```
+
+The dashboard now exposes:
+- analytics panels for trends, top violators, and drift stats
+- a pending exception queue
+- request/approve/reject actions gated by RBAC
+- status-aware exception evidence in event details
 
 ### Optional local Prometheus
 ```bash
@@ -543,14 +639,15 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - Full live signed-image verification inside the cluster and complete kind/Kyverno artifact-attestation proof are still follow-on work.
 - Static bearer tokens are the current access-control implementation; future enterprise work can replace them with OIDC/JWT validation and stronger service-to-service auth.
 - The reports API is intentionally minimal and is not a replacement for a full SIEM or BI layer.
-- The Phase 5b dashboard is intentionally read-only and local-first.
+- The dashboard remains local-first and intentionally simple; it now adds approval and analytics views but is not a full admin console.
 - Browser access assumes the local Vite proxy or the optional `nginx` UI profile and an env-configured bearer token when auth is enabled.
-- Phase 7a still does not add OIDC/SSO, multi-step enterprise approvals, signed exception tokens, richer exception analytics, or a full SBOM registry / vulnerability management platform.
+- Static bearer tokens are still the current access-control backend; future enterprise work can replace them with OIDC/JWT validation and stronger service-to-service auth.
 
 ## Roadmap
 - richer alerts and production observability integrations
 - stronger auth backends such as OIDC/JWT validation
-- stronger exception workflows and approval capture around temporary policy overrides
+- signed exception tokens and stronger service-to-service auth
+- deeper analytics, anomaly detection, and vulnerability operations
 
 ## GitHub publish readiness
 This repository is now structured for a public technical POC upload. Use [docs/github-publish.md](docs/github-publish.md) to review example placeholders, local-only defaults, manual GitHub Actions flows, and the exact first-upload sequence.
