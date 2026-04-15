@@ -94,6 +94,9 @@ type capabilities struct {
 }
 
 func main() {
+	if err := validateExceptionValidatorConfig(); err != nil {
+		log.Fatal(err)
+	}
 	addr := ":" + envOrDefault("PORT", "8092")
 	log.Printf("deploy-gate listening on %s", addr)
 	certFile := os.Getenv("TLS_CERT_FILE")

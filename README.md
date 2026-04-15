@@ -402,6 +402,8 @@ export CHANGELOCK_AUTH_TOKENS_JSON="$(tr -d '\n' < config/auth-tokens.example.js
 export CHANGELOCK_INTERNAL_SERVICE_TOKEN=service-internal-demo-token
 ```
 
+`CHANGELOCK_INTERNAL_SERVICE_TOKEN` must exactly match the `token` value of the `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`. When `CHANGELOCK_AUTH_MODE=static-token`, `policy-engine` and `deploy-gate` now fail fast if exception validation is configured but that internal service token is missing.
+
 Viewer dashboard config:
 ```bash
 cd ui

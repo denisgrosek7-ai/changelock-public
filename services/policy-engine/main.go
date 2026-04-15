@@ -18,6 +18,9 @@ var auditWriter = audit.NewDefaultWriter()
 var exceptionValidator audit.ExceptionValidator = newExceptionValidator()
 
 func main() {
+	if err := validateExceptionValidatorConfig(); err != nil {
+		log.Fatal(err)
+	}
 	addr := ":" + envOrDefault("PORT", "8090")
 	log.Printf("policy-engine listening on %s", addr)
 	log.Fatal((&http.Server{

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -55,15 +56,23 @@ func (c *HTTPExceptionClient) Validate(ctx context.Context, request ExceptionVal
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= http.StatusBadRequest {
+		var failure struct {
+			Error  string `json:"error"`
+			Reason string `json:"reason"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&failure); err == nil {
+			message := strings.TrimSpace(FirstNonEmpty(failure.Error, failure.Reason))
+			if message != "" {
+				return ExceptionValidationResult{}, fmt.Errorf("exception validate request failed with status %d: %s", resp.StatusCode, message)
+			}
+		}
+		return ExceptionValidationResult{}, fmt.Errorf("exception validate request failed with status %d", resp.StatusCode)
+	}
+
 	var result ExceptionValidationResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return ExceptionValidationResult{}, err
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		if result.Reason != "" {
-			return ExceptionValidationResult{}, ErrInvalidException
-		}
-		return ExceptionValidationResult{}, ErrInvalidException
 	}
 	return result, nil
 }

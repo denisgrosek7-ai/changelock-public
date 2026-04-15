@@ -58,6 +58,8 @@ Unprotected routes in this phase:
 
 When `CHANGELOCK_AUTH_MODE=static-token`, configure the matching `service_internal` token in both the caller and `audit-writer`.
 
+The value of `CHANGELOCK_INTERNAL_SERVICE_TOKEN` must exactly match the `token` field of a `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`. In `static-token` mode, `policy-engine` and `deploy-gate` now fail fast on startup if exception validation is configured but the internal service token is missing.
+
 ## UI
 
 The dashboard can send a bearer token when configured with:
