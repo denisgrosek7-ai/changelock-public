@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
+	"github.com/denisgrosek/changelock/internal/auth"
 	"github.com/denisgrosek/changelock/internal/httpjson"
 	"github.com/denisgrosek/changelock/internal/metrics"
 )
@@ -22,6 +23,7 @@ type server struct {
 	backend        string
 	allowedOrigins map[string]struct{}
 	requestTimeout time.Duration
+	authConfig     auth.Config
 }
 
 type ingestResponse struct {
@@ -44,6 +46,14 @@ type exceptionResponse struct {
 	Exception audit.PolicyException `json:"exception"`
 }
 
+type authInfoResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	AuthMode      string `json:"auth_mode"`
+	Subject       string `json:"subject,omitempty"`
+	Role          string `json:"role,omitempty"`
+	TokenID       string `json:"token_id,omitempty"`
+}
+
 func main() {
 	migrateOnly := flag.Bool("migrate-only", false, "apply database migrations and exit")
 	flag.Parse()
@@ -57,6 +67,11 @@ func main() {
 	}
 	defer store.Close()
 
+	authConfig, err := loadAuthConfigFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if *migrateOnly {
 		log.Printf("audit-writer migrations applied using %s backend", backend)
 		return
@@ -66,7 +81,7 @@ func main() {
 	log.Printf("audit-writer listening on %s using %s backend", addr, backend)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(store, backend),
+		Handler:           newHandlerWithAuth(store, backend, authConfig),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -76,17 +91,27 @@ func main() {
 }
 
 func newHandler(store audit.Store, backend string) http.Handler {
+	authConfig, err := loadAuthConfigFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithAuth(store, backend, authConfig)
+}
+
+func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Config) http.Handler {
 	srv := server{
 		store:          store,
 		backend:        backend,
 		allowedOrigins: allowedOriginsFromEnv(),
 		requestTimeout: envDurationOrDefault("CHANGELOCK_REPORTS_TIMEOUT", 5*time.Second),
+		authConfig:     authConfig,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.healthHandler)
 	mux.Handle("/metrics", metrics.Handler())
 	mux.HandleFunc("/v1/ingest", srv.ingestHandler)
+	mux.HandleFunc("/v1/auth/me", srv.authMeHandler)
 	mux.HandleFunc("/v1/exceptions", srv.exceptionsHandler)
 	mux.HandleFunc("/v1/exceptions/", srv.exceptionByIDHandler)
 	mux.HandleFunc("/v1/exceptions/validate", srv.validateExceptionHandler)
@@ -96,6 +121,13 @@ func newHandler(store audit.Store, backend string) http.Handler {
 	mux.HandleFunc("/v1/reports/runtime-drift", srv.runtimeDriftHandler)
 	mux.HandleFunc("/v1/reports/exceptions", srv.exceptionsReportHandler)
 	return metrics.InstrumentHTTP("audit-writer", srv.wrap(mux))
+}
+
+func loadAuthConfigFromEnv() (auth.Config, error) {
+	return auth.ParseConfig(
+		envOrDefault("CHANGELOCK_AUTH_MODE", auth.ModeDisabled),
+		os.Getenv("CHANGELOCK_AUTH_TOKENS_JSON"),
+	)
 }
 
 func newStoreFromEnv(ctx context.Context) (audit.Store, string, error) {
@@ -191,7 +223,31 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s server) authMeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	principal, _, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	httpjson.Write(w, http.StatusOK, authInfoResponse{
+		Authenticated: principal.Authenticated,
+		AuthMode:      principal.AuthMode,
+		Subject:       principal.Subject,
+		Role:          principal.Role,
+		TokenID:       principal.TokenID,
+	})
+}
+
 func (s server) eventsHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -224,6 +280,11 @@ func (s server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+		if !ok {
+			return
+		}
+		r = authorizedRequest
 		filter, err := parseExceptionFilter(r)
 		if err != nil {
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -247,6 +308,10 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 
 		httpjson.Write(w, http.StatusOK, exceptionsResponse{Exceptions: exceptions})
 	case http.MethodPost:
+		principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
+		if !ok {
+			return
+		}
 		var request audit.ExceptionCreateRequest
 		if err := httpjson.Decode(r, &request); err != nil {
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -268,7 +333,7 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.writeLifecycleAuditEvent(ctx, r, audit.EventTypeExceptionCreated, audit.DecisionAllow, exception, "exception created")
+		s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionCreated, audit.DecisionAllow, exception, "exception created")
 		httpjson.Write(w, http.StatusCreated, exceptionResponse{
 			Status:    "created",
 			Exception: exception,
@@ -279,6 +344,11 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
+	principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+
 	exceptionID, err := exceptionIDFromPath(r.URL.Path)
 	if err != nil {
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -308,7 +378,7 @@ func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeLifecycleAuditEvent(ctx, r, audit.EventTypeExceptionRevoked, audit.DecisionAllow, exception, "exception revoked")
+	s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionRevoked, audit.DecisionAllow, exception, "exception revoked")
 	httpjson.Write(w, http.StatusOK, exceptionResponse{
 		Status:    "revoked",
 		Exception: exception,
@@ -316,6 +386,11 @@ func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleService, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
 	if r.Method != http.MethodPost {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -346,6 +421,11 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (s server) summaryHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -376,6 +456,9 @@ func (s server) summaryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) deniesHandler(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin); !ok {
+		return
+	}
 	query := r.URL.Query()
 	query.Set("decision", audit.DecisionDeny)
 	r.URL.RawQuery = query.Encode()
@@ -383,6 +466,9 @@ func (s server) deniesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) runtimeDriftHandler(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin); !ok {
+		return
+	}
 	query := r.URL.Query()
 	query.Set("event_type", audit.EventTypeRuntimeDriftResult)
 	r.URL.RawQuery = query.Encode()
@@ -390,6 +476,11 @@ func (s server) runtimeDriftHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) exceptionsReportHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -417,6 +508,16 @@ func (s server) exceptionsReportHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	httpjson.Write(w, http.StatusOK, report)
+}
+
+func (s server) authorize(w http.ResponseWriter, r *http.Request, roles ...string) (auth.Principal, *http.Request, bool) {
+	principal, err := s.authConfig.Require(r, roles...)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return auth.Principal{}, r, false
+	}
+	r = r.WithContext(auth.WithPrincipal(r.Context(), principal))
+	return principal, r, true
 }
 
 func parseFilter(r *http.Request) (audit.EventFilter, error) {
@@ -568,7 +669,7 @@ func (s server) handleCORS(w http.ResponseWriter, r *http.Request) bool {
 		if _, ok := s.allowedOrigins[origin]; ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Request-Id")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-Id")
 			w.Header().Set("Access-Control-Max-Age", "600")
 		} else if r.Method == http.MethodOptions {
 			httpjson.Write(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
@@ -583,12 +684,15 @@ func (s server) handleCORS(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func (s server) writeLifecycleAuditEvent(ctx context.Context, r *http.Request, eventType, decision string, exception audit.PolicyException, reason string) {
+func (s server) writeLifecycleAuditEvent(ctx context.Context, r *http.Request, actor, eventType, decision string, exception audit.PolicyException, reason string) {
+	if actor == "" {
+		actor = exception.ApprovedBy
+	}
 	_, _ = s.store.Ingest(ctx, audit.Event{
 		RequestID:           requestIDFromHeader(r),
 		Component:           "audit-writer",
 		EventType:           eventType,
-		Actor:               exception.ApprovedBy,
+		Actor:               actor,
 		TenantID:            exception.TenantID,
 		Repo:                exception.Repo,
 		Environment:         exception.Environment,

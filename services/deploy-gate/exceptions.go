@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
+	"github.com/denisgrosek/changelock/internal/auth"
 	"github.com/denisgrosek/changelock/internal/policy"
 )
 
@@ -16,7 +18,23 @@ func newExceptionValidator() audit.ExceptionValidator {
 		os.Getenv("AUDIT_WRITER_URL"),
 		os.Getenv("CHANGELOCK_AUDIT_WRITER_URL"),
 	)
-	return audit.NewHTTPExceptionClient(baseURL, 2*time.Second)
+	return audit.NewHTTPExceptionClient(baseURL, 2*time.Second, os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN"))
+}
+
+func validateExceptionValidatorConfig() error {
+	baseURL := firstNonEmpty(
+		os.Getenv("CHANGELOCK_EXCEPTIONS_URL"),
+		os.Getenv("AUDIT_WRITER_URL"),
+		os.Getenv("CHANGELOCK_AUDIT_WRITER_URL"),
+	)
+	if strings.TrimSpace(baseURL) == "" {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("CHANGELOCK_AUTH_MODE")), auth.ModeStaticToken) &&
+		strings.TrimSpace(os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")) == "" {
+		return errors.New("CHANGELOCK_INTERNAL_SERVICE_TOKEN is required when CHANGELOCK_AUTH_MODE=static-token and exception validation is configured")
+	}
+	return nil
 }
 
 func maybeBypassAdmission(

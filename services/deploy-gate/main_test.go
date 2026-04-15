@@ -348,6 +348,21 @@ func readAuditEvents(t *testing.T, path string) []audit.Event {
 	return events
 }
 
+func TestValidateExceptionValidatorConfigRequiresServiceTokenWhenStaticAuthIsEnabled(t *testing.T) {
+	t.Setenv("AUDIT_WRITER_URL", "http://audit-writer:8094")
+	t.Setenv("CHANGELOCK_AUTH_MODE", "static-token")
+	t.Setenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN", "")
+
+	if err := validateExceptionValidatorConfig(); err == nil {
+		t.Fatal("expected missing service token error")
+	}
+
+	t.Setenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN", "service-internal-demo-token")
+	if err := validateExceptionValidatorConfig(); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
+	}
+}
+
 func hasDecisionEvent(events []audit.Event, eventType, decision string) bool {
 	return findDecisionEvent(events, eventType, decision) != nil
 }

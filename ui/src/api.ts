@@ -1,7 +1,18 @@
-import type { AuditHealth, EventFilters, EventsResponse, Summary, TabKey } from "./types";
+import type { AuditHealth, AuthStatus, EventFilters, EventsResponse, Summary, TabKey } from "./types";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+const API_TOKEN = (import.meta.env.VITE_API_TOKEN || "").trim();
 const API_TIMEOUT_MS = Number.parseInt(import.meta.env.VITE_API_TIMEOUT_MS || "8000", 10);
+
+export class APIError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "APIError";
+    this.status = status;
+  }
+}
 
 function buildURL(path: string, params?: Record<string, string | undefined>) {
   const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
@@ -21,7 +32,10 @@ async function fetchJSON<T>(path: string, params?: Record<string, string | undef
 
   try {
     const response = await fetch(buildURL(path, params), {
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+      },
       cache: "no-store",
       signal: controller.signal,
     });
@@ -30,11 +44,11 @@ async function fetchJSON<T>(path: string, params?: Record<string, string | undef
       const contentType = response.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
         const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error || `request failed with status ${response.status}`);
+        throw new APIError(response.status, payload.error || `request failed with status ${response.status}`);
       }
 
       const payload = await response.text();
-      throw new Error(payload || `request failed with status ${response.status}`);
+      throw new APIError(response.status, payload || `request failed with status ${response.status}`);
     }
 
     return response.json() as Promise<T>;
@@ -50,6 +64,10 @@ async function fetchJSON<T>(path: string, params?: Record<string, string | undef
 
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
+}
+
+export async function getAuthStatus() {
+  return fetchJSON<AuthStatus>("/v1/auth/me");
 }
 
 export async function getSummary(filters: Pick<EventFilters, "environment" | "tenant_id">) {
@@ -81,4 +99,8 @@ export async function getEvents(tab: TabKey, filters: EventFilters) {
 
 export function apiBaseURL() {
   return API_BASE_URL;
+}
+
+export function apiTokenConfigured() {
+  return API_TOKEN.length > 0;
 }

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { apiBaseURL, getEvents, getHealth, getSummary } from "./api";
+import { APIError, apiBaseURL, apiTokenConfigured, getAuthStatus, getEvents, getHealth, getSummary } from "./api";
 import { BuyerHighlights } from "./components/BuyerHighlights";
 import { EventDetails } from "./components/EventDetails";
 import { EventsTable } from "./components/EventsTable";
 import { Filters } from "./components/Filters";
 import { HealthBadge } from "./components/HealthBadge";
 import { SummaryCards } from "./components/SummaryCards";
-import type { AuditHealth, EventFilters, StoredEvent, Summary, TabKey } from "./types";
+import type { AuditHealth, AuthStatus, EventFilters, StoredEvent, Summary, TabKey } from "./types";
 
 const initialFilters: EventFilters = {
   decision: "",
@@ -32,6 +32,7 @@ export default function App() {
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<StoredEvent | null>(null);
   const [health, setHealth] = useState<AuditHealth | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
@@ -45,11 +46,7 @@ export default function App() {
       setError(null);
 
       try {
-        const [healthResult, summaryResult, eventsResult] = await Promise.allSettled([
-          getHealth(),
-          getSummary({ environment: filters.environment, tenant_id: filters.tenant_id }),
-          getEvents(activeTab, filters),
-        ]);
+        const [healthResult, authResult] = await Promise.allSettled([getHealth(), getAuthStatus()]);
 
         if (ignore) {
           return;
@@ -67,19 +64,50 @@ export default function App() {
           problems.push("Backend health is unavailable.");
         }
 
-        if (summaryResult.status === "fulfilled") {
-          setSummary(summaryResult.value);
+        if (authResult.status === "fulfilled") {
+          setAuthStatus(authResult.value);
         } else {
-          problems.push(summaryResult.reason instanceof Error ? summaryResult.reason.message : "Summary unavailable.");
+          setSummary(null);
+          setEvents([]);
+          setSelectedEvent(null);
+
+          if (authResult.reason instanceof APIError) {
+            if (authResult.reason.status === 401) {
+              problems.push("Dashboard API requires a valid bearer token.");
+            } else if (authResult.reason.status === 403) {
+              problems.push("Configured token is not allowed to access dashboard reports.");
+            } else {
+              problems.push(authResult.reason.message);
+            }
+          } else {
+            problems.push(authResult.reason instanceof Error ? authResult.reason.message : "Auth status unavailable.");
+          }
         }
 
-        if (eventsResult.status === "fulfilled") {
-          setEvents(eventsResult.value.events);
-          setSelectedEvent((current) =>
-            eventsResult.value.events.find((event) => event.id === current?.id) || eventsResult.value.events[0] || null,
-          );
-        } else {
-          problems.push(eventsResult.reason instanceof Error ? eventsResult.reason.message : "Events unavailable.");
+        if (authResult.status === "fulfilled") {
+          const [summaryResult, eventsResult] = await Promise.allSettled([
+            getSummary({ environment: filters.environment, tenant_id: filters.tenant_id }),
+            getEvents(activeTab, filters),
+          ]);
+
+          if (ignore) {
+            return;
+          }
+
+          if (summaryResult.status === "fulfilled") {
+            setSummary(summaryResult.value);
+          } else {
+            problems.push(summaryResult.reason instanceof Error ? summaryResult.reason.message : "Summary unavailable.");
+          }
+
+          if (eventsResult.status === "fulfilled") {
+            setEvents(eventsResult.value.events);
+            setSelectedEvent((current) =>
+              eventsResult.value.events.find((event) => event.id === current?.id) || eventsResult.value.events[0] || null,
+            );
+          } else {
+            problems.push(eventsResult.reason instanceof Error ? eventsResult.reason.message : "Events unavailable.");
+          }
         }
 
         if (problems.length === 0) {
@@ -128,6 +156,17 @@ export default function App() {
           <div className="panel health-panel">
             <span className="summary-label">API Base</span>
             <code>{apiBaseURL()}</code>
+          </div>
+          <div className="panel health-panel">
+            <span className="summary-label">Access</span>
+            <strong>{authStatus?.role || authStatus?.auth_mode || "unknown"}</strong>
+            <small>
+              {authStatus?.subject
+                ? `${authStatus.subject}${authStatus.token_id ? ` (${authStatus.token_id})` : ""}`
+                : apiTokenConfigured()
+                  ? "Token configured"
+                  : "No token configured"}
+            </small>
           </div>
         </div>
       </header>

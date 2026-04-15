@@ -9,7 +9,17 @@ import (
 	"testing"
 
 	"github.com/denisgrosek/changelock/internal/audit"
+	"github.com/denisgrosek/changelock/internal/auth"
 )
+
+func testAuthTokensJSON() string {
+	return `[
+	  {"token":"viewer-demo-token","subject":"demo-viewer","role":"viewer","token_id":"viewer-demo"},
+	  {"token":"operator-demo-token","subject":"demo-operator","role":"operator","token_id":"operator-demo"},
+	  {"token":"security-admin-demo-token","subject":"demo-admin","role":"security_admin","token_id":"security-admin-demo"},
+	  {"token":"service-internal-demo-token","subject":"policy-engine","role":"service_internal","token_id":"service-internal-demo"}
+	]`
+}
 
 func TestIngestStoresEvent(t *testing.T) {
 	store := audit.NewMemoryStore()
@@ -171,6 +181,9 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
 		t.Fatalf("expected allow origin header, got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type, X-Request-Id" {
+		t.Fatalf("expected authorization header support, got %q", got)
 	}
 }
 
@@ -389,5 +402,284 @@ func TestExceptionsReportEndpointFiltersByCVEID(t *testing.T) {
 	}
 	if len(report.RecentUsed) != 1 || report.RecentUsed[0].ExceptionID != "EX-CVE-REPORT" {
 		t.Fatalf("unexpected used events %#v", report.RecentUsed)
+	}
+}
+
+func TestAuthDisabledModeAllowsProtectedEndpoints(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeDisabled)
+	store := audit.NewMemoryStore()
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		Component: "deploy-gate",
+		EventType: audit.EventTypeDeployGateDecision,
+		Decision:  audit.DecisionAllow,
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/reports/events", nil)
+	rec := httptest.NewRecorder()
+	newHandler(store, "memory").ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestProtectedEndpointsRequireBearerToken(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/reports/events", nil)
+	rec := httptest.NewRecorder()
+	newHandler(audit.NewMemoryStore(), "memory").ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestProtectedEndpointsRejectMalformedAndInvalidTokens(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+	handler := newHandler(audit.NewMemoryStore(), "memory")
+
+	tests := []struct {
+		name   string
+		header string
+	}{
+		{name: "malformed", header: "Token nope"},
+		{name: "invalid", header: "Bearer nope"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/reports/events", nil)
+			req.Header.Set("Authorization", tc.header)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestViewerCanReadReportsAndExceptionsButCannotMutate(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		Component: "deploy-gate",
+		EventType: audit.EventTypeDeployGateDecision,
+		Decision:  audit.DecisionDeny,
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+	handler := newHandler(store, "memory")
+
+	readReq := httptest.NewRequest(http.MethodGet, "/v1/reports/events", nil)
+	readReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	readRec := httptest.NewRecorder()
+	handler.ServeHTTP(readRec, readReq)
+	if readRec.Code != http.StatusOK {
+		t.Fatalf("expected report read 200, got %d: %s", readRec.Code, readRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/exceptions", nil)
+	listReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected exception list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-010",
+	  "exception_type":"BREAK_GLASS",
+	  "reason":"viewer should not create",
+	  "ticket_id":"INC-10",
+	  "approved_by":"security@example.com",
+	  "ttl_hours":1
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+}
+
+func TestOperatorCannotCreateOrRevokeExceptions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	exception, err := store.CreateException(t.Context(), audit.ExceptionCreateRequest{
+		ExceptionID:   "EX-2026-OP",
+		ExceptionType: audit.ExceptionTypeBreakGlass,
+		Environment:   "prod",
+		Reason:        "operator test",
+		TicketID:      "INC-OP",
+		ApprovedBy:    "security@example.com",
+		TTLHours:      1,
+	})
+	if err != nil {
+		t.Fatalf("CreateException() error = %v", err)
+	}
+	handler := newHandler(store, "memory")
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-011",
+	  "exception_type":"BREAK_GLASS",
+	  "reason":"operator should not create",
+	  "ticket_id":"INC-11",
+	  "approved_by":"security@example.com",
+	  "ttl_hours":1
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/exceptions/"+exception.ExceptionID, nil)
+	deleteReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	deleteRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusForbidden {
+		t.Fatalf("expected revoke 403, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+}
+
+func TestSecurityAdminCanCreateAndRevokeExceptions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+	handler := newHandler(audit.NewMemoryStore(), "memory")
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-ADMIN",
+	  "exception_type":"BREAK_GLASS",
+	  "tenant_id":"acme",
+	  "reason":"admin create",
+	  "ticket_id":"INC-ADMIN",
+	  "approved_by":"security@example.com",
+	  "ttl_hours":1
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/exceptions/EX-2026-ADMIN", nil)
+	deleteReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	deleteRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+}
+
+func TestServiceInternalCanValidateButCannotCreateExceptions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	if _, err := store.CreateException(t.Context(), audit.ExceptionCreateRequest{
+		ExceptionID:   "EX-2026-SVC",
+		ExceptionType: audit.ExceptionTypeBreakGlass,
+		Environment:   "prod",
+		Reason:        "service validation",
+		TicketID:      "INC-SVC",
+		ApprovedBy:    "security@example.com",
+		TTLHours:      1,
+	}); err != nil {
+		t.Fatalf("CreateException() error = %v", err)
+	}
+	handler := newHandler(store, "memory")
+
+	validateReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions/validate", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-SVC"
+	}`))
+	validateReq.Header.Set("Content-Type", "application/json")
+	validateReq.Header.Set("Authorization", "Bearer service-internal-demo-token")
+	validateRec := httptest.NewRecorder()
+	handler.ServeHTTP(validateRec, validateReq)
+	if validateRec.Code != http.StatusOK {
+		t.Fatalf("expected validation 200, got %d: %s", validateRec.Code, validateRec.Body.String())
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/exceptions", bytes.NewBufferString(`{
+	  "exception_id":"EX-2026-SVC-CREATE",
+	  "exception_type":"BREAK_GLASS",
+	  "reason":"service should not create",
+	  "ticket_id":"INC-SVC-CREATE",
+	  "approved_by":"security@example.com",
+	  "ttl_hours":1
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer service-internal-demo-token")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusForbidden {
+		t.Fatalf("expected create 403, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+}
+
+func TestAuthMeReturnsCurrentPrincipal(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+	handler := newHandler(audit.NewMemoryStore(), "memory")
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response authInfoResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode auth me: %v", err)
+	}
+	if !response.Authenticated || response.AuthMode != auth.ModeStaticToken || response.Role != auth.RoleViewer || response.Subject != "demo-viewer" {
+		t.Fatalf("unexpected auth me response %#v", response)
+	}
+}
+
+func TestAuthMeRejectsServiceInternalRole(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+	handler := newHandler(audit.NewMemoryStore(), "memory")
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer service-internal-demo-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLoadAuthConfigFromEnvRejectsInvalidConfig(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", "bogus")
+	if _, err := loadAuthConfigFromEnv(); err == nil {
+		t.Fatal("expected invalid mode error")
+	}
+
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", `[{"token":"dup","subject":"viewer","role":"viewer","token_id":"dup"},{"token":"other","subject":"admin","role":"security_admin","token_id":"dup"}]`)
+	if _, err := loadAuthConfigFromEnv(); err == nil {
+		t.Fatal("expected duplicate token_id error")
 	}
 }

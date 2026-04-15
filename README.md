@@ -378,6 +378,109 @@ Revoke an exception:
 curl -sS -X DELETE http://127.0.0.1:8094/v1/exceptions/EX-2026-001
 ```
 
+## Phase 7a auth and RBAC
+Phase 7a adds minimal bearer-token auth and explicit RBAC for sensitive reports and exception paths without introducing sessions or external identity providers.
+
+- auth modes:
+  - `CHANGELOCK_AUTH_MODE=disabled`
+  - `CHANGELOCK_AUTH_MODE=static-token`
+- static-token mode reads `CHANGELOCK_AUTH_TOKENS_JSON`
+- internal exception validation can send `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
+- the dashboard can send `VITE_API_TOKEN`
+- `/health` stays open
+- `/metrics` behavior is unchanged in this phase
+- `POST /v1/ingest` is unchanged in this phase
+
+### Demo token config
+Example non-secret demo token file:
+- `config/auth-tokens.example.json`
+
+Load it locally:
+```bash
+export CHANGELOCK_AUTH_MODE=static-token
+export CHANGELOCK_AUTH_TOKENS_JSON="$(tr -d '\n' < config/auth-tokens.example.json)"
+export CHANGELOCK_INTERNAL_SERVICE_TOKEN=service-internal-demo-token
+```
+
+`CHANGELOCK_INTERNAL_SERVICE_TOKEN` must exactly match the `token` value of the `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`. When `CHANGELOCK_AUTH_MODE=static-token`, `policy-engine` and `deploy-gate` now fail fast if exception validation is configured but that internal service token is missing.
+
+Viewer dashboard config:
+```bash
+cd ui
+cp .env.example .env.local
+printf 'VITE_API_TOKEN=viewer-demo-token\n' >> .env.local
+```
+
+### RBAC matrix
+- `viewer`
+  - can read `GET /v1/reports/*`
+  - can read `GET /v1/exceptions`
+  - can read `GET /v1/reports/exceptions`
+  - cannot create or revoke exceptions
+- `operator`
+  - can read reports and exceptions
+  - cannot create or revoke exceptions
+- `security_admin`
+  - can read reports and exceptions
+  - can create and revoke exceptions
+  - can call `POST /v1/exceptions/validate`
+- `service_internal`
+  - can call `POST /v1/exceptions/validate`
+  - cannot create or revoke exceptions
+  - is not intended as a normal dashboard role
+
+### Protected routes
+- `GET /v1/auth/me`
+- `GET /v1/exceptions`
+- `POST /v1/exceptions`
+- `DELETE /v1/exceptions/{exception_id}`
+- `POST /v1/exceptions/validate`
+- `GET /v1/reports/events`
+- `GET /v1/reports/summary`
+- `GET /v1/reports/denies`
+- `GET /v1/reports/runtime-drift`
+- `GET /v1/reports/exceptions`
+
+### Example curl with tokens
+Viewer read:
+```bash
+curl -sS http://127.0.0.1:8094/v1/reports/summary \
+  -H 'Authorization: Bearer viewer-demo-token'
+```
+
+Security admin create:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions \
+  -H 'Authorization: Bearer security-admin-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "exception_id":"EX-2026-001",
+    "exception_type":"BREAK_GLASS",
+    "tenant_id":"acme",
+    "environment":"prod",
+    "namespace":"acme-prod",
+    "reason":"P0 production fix",
+    "ticket_id":"INC-1234",
+    "approved_by":"security@example.com",
+    "ttl_hours":2
+  }'
+```
+
+Internal service validate:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/exceptions/validate \
+  -H 'Authorization: Bearer service-internal-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "exception_id":"EX-2026-001",
+    "tenant_id":"acme",
+    "environment":"prod",
+    "namespace":"acme-prod"
+  }'
+```
+
+See [docs/auth-rbac.md](docs/auth-rbac.md) for the detailed token model and route matrix.
+
 ### Optional local Prometheus
 ```bash
 cd changelock-blueprint
@@ -426,15 +529,15 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - Automatic Kyverno installation depends on outbound internet access to fetch the upstream install manifest.
 - The webhook TLS bootstrap uses a self-signed cert generated locally for the `kind` demo.
 - Full live signed-image verification inside the cluster and complete kind/Kyverno artifact-attestation proof are still follow-on work.
-- The PostgreSQL-backed audit store does not add auth in this phase; keep it internal-only in local or trusted environments.
+- Static bearer tokens are the current access-control implementation; future enterprise work can replace them with OIDC/JWT validation and stronger service-to-service auth.
 - The reports API is intentionally minimal and is not a replacement for a full SIEM or BI layer.
 - The Phase 5b dashboard is intentionally read-only and local-first.
-- Browser access assumes the local Vite proxy or the optional `nginx` UI profile; advanced auth, multi-user access, and richer analytics come later.
-- Phase 6c still does not add auth/RBAC, multi-step enterprise approvals, signed exception tokens, richer exception analytics, or a full SBOM registry / vulnerability management platform.
+- Browser access assumes the local Vite proxy or the optional `nginx` UI profile and an env-configured bearer token when auth is enabled.
+- Phase 7a still does not add OIDC/SSO, multi-step enterprise approvals, signed exception tokens, richer exception analytics, or a full SBOM registry / vulnerability management platform.
 
 ## Roadmap
-- auth and RBAC for dashboard and reports API
 - richer alerts and production observability integrations
+- stronger auth backends such as OIDC/JWT validation
 - stronger exception workflows and approval capture around temporary policy overrides
 
 ## GitHub publish readiness

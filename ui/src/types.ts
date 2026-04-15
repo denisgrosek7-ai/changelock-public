@@ -7,6 +7,14 @@ export interface AuditHealth {
   error?: string;
 }
 
+export interface AuthStatus {
+  authenticated: boolean;
+  auth_mode: string;
+  subject?: string;
+  role?: string;
+  token_id?: string;
+}
+
 export interface ReasonCount {
   reason: string;
   count: number;
