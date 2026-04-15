@@ -2,14 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func testAuthTokensJSON() string {
@@ -19,6 +24,51 @@ func testAuthTokensJSON() string {
 	  {"token":"security-admin-demo-token","subject":"demo-admin","role":"security_admin","token_id":"security-admin-demo"},
 	  {"token":"service-internal-demo-token","subject":"policy-engine","role":"service_internal","token_id":"service-internal-demo"}
 	]`
+}
+
+func postgresReportsTestDSN() string {
+	for _, candidate := range []string{
+		strings.TrimSpace(os.Getenv("CHANGELOCK_POSTGRES_TEST_DSN")),
+		strings.TrimSpace(os.Getenv("CHANGELOCK_POSTGRES_DSN")),
+		"postgres://changelock:changelock@127.0.0.1:5433/changelock?sslmode=disable",
+	} {
+		if candidate != "" {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func newPostgresReportsTestStore(t *testing.T) *audit.PostgresStore {
+	t.Helper()
+
+	dsn := postgresReportsTestDSN()
+	if dsn == "" {
+		t.Skip("Postgres reports test DSN is not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Skipf("postgres unavailable for reports integration test: %v", err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(ctx); err != nil {
+		t.Skipf("postgres unavailable for reports integration test: %v", err)
+	}
+
+	store, err := audit.NewPostgresStore(ctx, dsn)
+	if err != nil {
+		t.Fatalf("NewPostgresStore() error = %v", err)
+	}
+	if err := store.Migrate(ctx); err != nil {
+		store.Close()
+		t.Fatalf("Migrate() error = %v", err)
+	}
+	t.Cleanup(store.Close)
+	return store
 }
 
 func TestIngestStoresEvent(t *testing.T) {
@@ -116,6 +166,101 @@ func TestReportsSummaryReturnsCounts(t *testing.T) {
 	}
 	if summary.TotalEvents != 2 || summary.TotalAllow != 1 || summary.TotalDeny != 1 {
 		t.Fatalf("unexpected summary %#v", summary)
+	}
+}
+
+func TestPostgresReportsRoundTripPreservesRawEventAndSummary(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeDisabled)
+
+	store := newPostgresReportsTestStore(t)
+	handler := newHandler(store, "postgres")
+	tenantID := fmt.Sprintf("pgtest-%d", time.Now().UnixNano())
+
+	ingestEvent := func(body string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/v1/ingest", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	ingestEvent(fmt.Sprintf(`{
+	  "request_id":"req-postgres-deny",
+	  "component":"deploy-gate",
+	  "event_type":"deploy_gate_decision",
+	  "tenant_id":%q,
+	  "repo":"my-org/acme-app",
+	  "environment":"prod",
+	  "decision":"DENY",
+	  "reasons":["workflow mismatch"],
+	  "policy_version":"tenant-acme-v1",
+	  "evidence":{"artifact":{"repository":"my-org/acme-app","digest":"sha256:abc123"}}
+	}`, tenantID))
+	ingestEvent(fmt.Sprintf(`{
+	  "request_id":"req-postgres-drift",
+	  "component":"runtime-agent",
+	  "event_type":"runtime_drift_result",
+	  "tenant_id":%q,
+	  "environment":"prod",
+	  "decision":"DENY",
+	  "drift_result":"image_drift",
+	  "reasons":["image drift"]
+	}`, tenantID))
+
+	eventsReq := httptest.NewRequest(http.MethodGet, "/v1/reports/events?tenant_id="+tenantID+"&limit=10", nil)
+	eventsRec := httptest.NewRecorder()
+	handler.ServeHTTP(eventsRec, eventsReq)
+	if eventsRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", eventsRec.Code, eventsRec.Body.String())
+	}
+
+	var response eventsResponse
+	if err := json.NewDecoder(eventsRec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode events response: %v", err)
+	}
+	if len(response.Events) != 2 {
+		t.Fatalf("expected 2 events, got %#v", response)
+	}
+
+	var deployRecord *audit.StoredEvent
+	for i := range response.Events {
+		if response.Events[i].RequestID == "req-postgres-deny" {
+			deployRecord = &response.Events[i]
+			break
+		}
+	}
+	if deployRecord == nil {
+		t.Fatalf("expected deploy-gate event in %#v", response.Events)
+	}
+	if len(deployRecord.RawEvent) == 0 || !bytes.Contains(deployRecord.RawEvent, []byte(`"request_id":"req-postgres-deny"`)) {
+		t.Fatalf("expected raw_event preservation, got %#v", deployRecord)
+	}
+	if deployRecord.Evidence == nil || deployRecord.Evidence.Artifact == nil || deployRecord.Evidence.Artifact.Digest != "sha256:abc123" {
+		t.Fatalf("expected artifact evidence roundtrip, got %#v", deployRecord)
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/v1/reports/summary?tenant_id="+tenantID, nil)
+	summaryRec := httptest.NewRecorder()
+	handler.ServeHTTP(summaryRec, summaryReq)
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
+	}
+
+	var summary audit.Summary
+	if err := json.NewDecoder(summaryRec.Body).Decode(&summary); err != nil {
+		t.Fatalf("decode summary response: %v", err)
+	}
+	if summary.TotalEvents != 2 || summary.TotalDeny != 2 {
+		t.Fatalf("unexpected summary %#v", summary)
+	}
+	if summary.CountsByEventType[audit.EventTypeDeployGateDecision] != 1 || summary.CountsByEventType[audit.EventTypeRuntimeDriftResult] != 1 {
+		t.Fatalf("unexpected event-type counts %#v", summary.CountsByEventType)
+	}
+	if summary.RecentRuntimeDriftDeny != 1 {
+		t.Fatalf("expected runtime drift deny count, got %#v", summary)
 	}
 }
 

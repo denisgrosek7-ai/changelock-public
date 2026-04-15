@@ -115,6 +115,24 @@ The dashboard detail panel renders them when present.
 
 ## Validation notes
 
+## Verification evidence boundaries
+
+ChangeLock uses three different proof layers here, and they should not be conflated:
+
+- Live service path:
+  - `services/attestation-verifier` uses `internal/verify.CosignVerifier`
+  - `CosignVerifier` shells out to the configured `cosign` binary for `cosign verify` and `cosign verify-attestation`
+  - this is the real production-minded verification path
+- Unit test path:
+  - `internal/verify/verify_test.go` replaces the command runner with a stub
+  - those tests prove JSON parsing, subject/digest matching, deny reasons, and evidence normalization
+  - they do **not** prove a live registry/network/OIDC round-trip
+- Demo and deterministic local path:
+  - the local `kind` bootstrap can mount fixture-backed verifier outcomes so allow/deny scenarios remain reproducible
+  - this keeps the buyer demo deterministic without requiring every local scenario to depend on public signed artifacts
+
+The manual GitHub workflow provides the closest public live proof for Phase 6b supply-chain behavior because it runs the real build, push, Trivy, Syft, provenance, and signing steps in GitHub Actions.
+
 ### GitHub workflow
 
 Run the manual workflow from GitHub:
@@ -134,4 +152,3 @@ Expected result:
 
 - `gofmt -w internal/identity/*.go internal/policy/*.go internal/audit/*.go internal/verify/*.go services/policy-engine/main.go services/deploy-gate/main.go ui/src/components/EventDetails.tsx ui/src/types.ts`
 - `go test ./...`
-

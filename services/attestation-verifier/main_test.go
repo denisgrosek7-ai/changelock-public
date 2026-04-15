@@ -111,6 +111,86 @@ func TestArtifactHandlerWritesDenyAuditEvent(t *testing.T) {
 	}
 }
 
+func TestArtifactHandlerNormalizesVerifierEvidenceIntoAuditEvent(t *testing.T) {
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	previousVerifier := artifactVerifier
+	previousWriter := auditWriter
+	artifactVerifier = fakeArtifactVerifier{
+		result: verify.ArtifactVerification{
+			SignatureValid:    true,
+			AttestationValid:  true,
+			VerifiedRepo:      "my-org/acme-app",
+			VerifiedWorkflow:  ".github/workflows/build-sign-attest.yml",
+			VerifiedRef:       "refs/heads/main",
+			VerifiedCommitSHA: "abc123",
+			VerifiedDigest:    "sha256:abc123",
+			VerifiedIdentity:  "https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main",
+			VerifiedIssuer:    "https://token.actions.githubusercontent.com",
+			Evidence: verify.VerificationEvidence{
+				MatchedIdentity:          "https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main",
+				SignatureClaimsCount:     1,
+				AttestationCount:         1,
+				AttestationPredicateType: verify.DefaultPredicateType,
+				AttestationSubjectName:   "ghcr.io/my-org/acme-app:deadbeef",
+				AttestationSubjectDigest: "sha256:abc123",
+				SupplyChain: &verify.SupplyChainEvidence{
+					SBOMFormat:                         "spdx-json",
+					SBOMDigestRef:                      "ghcr.io/my-org/acme-app@sha256:abc123",
+					SBOMHash:                           "sha256:sbom",
+					SBOMArtifactRef:                    "deploy-gate-sbom.spdx.json",
+					VulnerabilityScanStatus:            "passed",
+					VulnerabilityScanTool:              "trivy",
+					VulnerabilityScanSeverityThreshold: "CRITICAL",
+					VulnerabilityReportRef:             "deploy-gate-trivy.json",
+					VulnerabilitySummary: &verify.VulnerabilitySummary{
+						High:  1,
+						Total: 1,
+					},
+				},
+			},
+		},
+	}
+	auditWriter = audit.NewWriter(audit.NewFileSink(auditPath))
+	defer func() {
+		artifactVerifier = previousVerifier
+		auditWriter = previousWriter
+	}()
+
+	payload, err := json.Marshal(verify.ArtifactVerificationRequest{
+		Image:                   "ghcr.io/my-org/acme-app@sha256:abc123",
+		ExpectedRepository:      "my-org/acme-app",
+		ExpectedRef:             "refs/heads/main",
+		ExpectedCommitSHA:       "abc123",
+		AllowedSignerIdentities: []string{"https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main"},
+		AllowedOIDCIssuers:      []string{"https://token.actions.githubusercontent.com"},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	request := newJSONRequest(t, "POST", "/verify/artifact", payload)
+	recorder := newRecorder()
+	newHandler().ServeHTTP(recorder, request)
+
+	events := readAuditEvents(t, auditPath)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 audit event, got %d", len(events))
+	}
+	event := events[0]
+	if event.VerifierSummary == nil || !event.VerifierSummary.SignatureValid || !event.VerifierSummary.AttestationValid {
+		t.Fatalf("expected verifier summary to be preserved, got %#v", event)
+	}
+	if event.Evidence == nil || event.Evidence.Artifact == nil {
+		t.Fatalf("expected artifact evidence, got %#v", event)
+	}
+	if event.Evidence.Artifact.Repository != "my-org/acme-app" {
+		t.Fatalf("expected repository evidence, got %#v", event.Evidence.Artifact)
+	}
+	if event.Evidence.Artifact.SBOMHash != "sha256:sbom" || event.Evidence.Artifact.VulnerabilityScanTool != "trivy" {
+		t.Fatalf("expected supply-chain evidence to be normalized, got %#v", event.Evidence.Artifact)
+	}
+}
+
 func newJSONRequest(t *testing.T, method, path string, payload []byte) *http.Request {
 	t.Helper()
 	request, err := http.NewRequest(method, path, bytes.NewReader(payload))

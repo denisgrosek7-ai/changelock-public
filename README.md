@@ -49,6 +49,18 @@ Block Kubernetes deployments unless the image:
 - Demo-assisted today:
   - some local `kind` artifact-verification scenarios use a fixture-backed verifier so the demo remains deterministic without depending on public signed images and public provenance for every case
 
+## Verification proof boundaries
+- Real service/runtime path:
+  - `services/attestation-verifier` calls `internal/verify.CosignVerifier`
+  - `CosignVerifier` shells out to the configured `cosign` binary for live signature and attestation checks
+- Unit test path:
+  - `internal/verify/verify_test.go` stubs the command runner
+  - those tests prove parsing, matching, and normalization logic, not a live registry or OIDC round-trip
+- Deterministic demo path:
+  - local `kind` bootstrap can mount fixture-backed verifier outcomes for repeatable allow/deny demos
+- Closest public live proof for Phase 6b:
+  - the manual GitHub `build-sign-attest` workflow runs the real build, push, Trivy, Syft, provenance, and signing path in GitHub Actions
+
 ## Local development
 1. Install `Go 1.26+`.
 2. Install `cosign` and make sure it is on `PATH`, or set `CHANGELOCK_COSIGN_BIN`.
