@@ -3,7 +3,7 @@
 ChangeLock is a vendor-neutral security control plane for Kubernetes delivery paths. It combines policy, cryptographic artifact verification, admission control, runtime drift checks, audit evidence, and a local dashboard so operators can explain exactly why a workload was allowed or denied.
 
 ## What works today
-ChangeLock is currently a sales-ready technical POC with a real Go control plane, real `cosign` verification, PostgreSQL-backed audit evidence, a local buyer-demo dashboard, and a reproducible `kind` admission demo that exercises both allow and deny paths.
+ChangeLock is currently a sales-ready technical POC with a real Go control plane, real `cosign` verification, PostgreSQL-backed audit evidence, a local buyer-demo dashboard, a controlled break-glass exception path, minimal bearer-token RBAC for sensitive API surfaces, and a reproducible `kind` admission demo that exercises both allow and deny paths.
 
 ## MVP objective
 Block Kubernetes deployments unless the image:
@@ -14,12 +14,12 @@ Block Kubernetes deployments unless the image:
 5. matches runtime policy and environment rules.
 
 ## Architecture at a glance
-- `services/api`: policy API and admin API
+- `services/api`: optional legacy API profile from the earlier prototype path
 - `services/policy-engine`: evaluates repo/build/deploy/runtime rules
 - `services/attestation-verifier`: verifies GitHub attestations and Cosign signatures
 - `services/deploy-gate`: admission decision service for Kubernetes
 - `services/runtime-agent`: runtime drift detector
-- `services/audit-writer`: evidence and audit log writer
+- `services/audit-writer`: evidence writer, reports API, and exception source of truth
 - `connectors/github-webhook`: ingests SCM events
 - `deploy/kyverno`: cluster-side enforcement policies
 - `policies/`: global and tenant-specific rules
