@@ -11,18 +11,25 @@ import (
 )
 
 type Decision struct {
-	Decision            string     `json:"decision"`
-	Reasons             []string   `json:"reasons"`
-	PolicyBundleID      string     `json:"policy_bundle_id,omitempty"`
-	PolicyBundleHash    string     `json:"policy_bundle_hash,omitempty"`
-	DecisionHash        string     `json:"decision_hash,omitempty"`
-	IsException         bool       `json:"is_exception,omitempty"`
-	ExceptionID         string     `json:"exception_id,omitempty"`
-	ExceptionType       string     `json:"exception_type,omitempty"`
-	ExceptionReason     string     `json:"exception_reason,omitempty"`
-	ExceptionTicketID   string     `json:"exception_ticket_id,omitempty"`
-	ExceptionApprovedBy string     `json:"exception_approved_by,omitempty"`
-	ExceptionExpiresAt  *time.Time `json:"exception_expires_at,omitempty"`
+	Decision                 string     `json:"decision"`
+	Reasons                  []string   `json:"reasons"`
+	PolicyBundleID           string     `json:"policy_bundle_id,omitempty"`
+	PolicyBundleHash         string     `json:"policy_bundle_hash,omitempty"`
+	DecisionHash             string     `json:"decision_hash,omitempty"`
+	IsException              bool       `json:"is_exception,omitempty"`
+	ExceptionID              string     `json:"exception_id,omitempty"`
+	ExceptionType            string     `json:"exception_type,omitempty"`
+	ExceptionStatus          string     `json:"exception_status,omitempty"`
+	ExceptionReason          string     `json:"exception_reason,omitempty"`
+	ExceptionTicketID        string     `json:"exception_ticket_id,omitempty"`
+	ExceptionRequestedBy     string     `json:"exception_requested_by,omitempty"`
+	ExceptionRequestedAt     *time.Time `json:"exception_requested_at,omitempty"`
+	ExceptionApprovedBy      string     `json:"exception_approved_by,omitempty"`
+	ExceptionApprovedAt      *time.Time `json:"exception_approved_at,omitempty"`
+	ExceptionRejectedBy      string     `json:"exception_rejected_by,omitempty"`
+	ExceptionRejectedAt      *time.Time `json:"exception_rejected_at,omitempty"`
+	ExceptionRejectionReason string     `json:"exception_rejection_reason,omitempty"`
+	ExceptionExpiresAt       *time.Time `json:"exception_expires_at,omitempty"`
 }
 
 type DecisionIdentityInput struct {

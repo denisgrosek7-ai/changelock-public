@@ -1,6 +1,6 @@
 # Phase 7a auth and RBAC
 
-Phase 7a adds a small bearer-token auth layer for sensitive report and exception surfaces without introducing sessions or external identity providers.
+Phase 7a adds a small bearer-token auth layer for sensitive report and exception surfaces without introducing sessions or external identity providers. Phase 7b/7c reuses the same token model and RBAC layer for analytics and exception approval governance.
 
 ## Auth modes
 - `CHANGELOCK_AUTH_MODE=disabled`
@@ -35,6 +35,9 @@ Validation is fail-fast on startup for:
 
 Protected routes:
 - `POST /v1/exceptions` -> `security_admin`
+- `POST /v1/exceptions/request` -> `operator | security_admin`
+- `POST /v1/exceptions/{exception_id}/approve` -> `security_admin`
+- `POST /v1/exceptions/{exception_id}/reject` -> `security_admin`
 - `DELETE /v1/exceptions/{exception_id}` -> `security_admin`
 - `GET /v1/exceptions` -> `viewer | operator | security_admin`
 - `POST /v1/exceptions/validate` -> `service_internal | security_admin`
@@ -43,6 +46,9 @@ Protected routes:
 - `GET /v1/reports/denies` -> `viewer | operator | security_admin`
 - `GET /v1/reports/runtime-drift` -> `viewer | operator | security_admin`
 - `GET /v1/reports/exceptions` -> `viewer | operator | security_admin`
+- `GET /v1/analytics/trends` -> `viewer | operator | security_admin`
+- `GET /v1/analytics/top-violators` -> `viewer | operator | security_admin`
+- `GET /v1/analytics/drift-stats` -> `viewer | operator | security_admin`
 - `GET /v1/auth/me` -> `viewer | operator | security_admin`
 
 Unprotected routes in this phase:
@@ -68,7 +74,28 @@ The dashboard can send a bearer token when configured with:
 
 Recommended browser/dashboard token:
 - use a `viewer` token for read-only dashboards
-- reserve `security_admin` tokens for CLI or operator flows
+- use an `operator` token when you want request-only exception workflow access from the UI
+- reserve `security_admin` tokens for approvals, revokes, and direct emergency create flows
+
+## Exception governance
+
+The approval-aware lifecycle introduced in 7c uses the existing RBAC model:
+
+- `viewer`
+  - read analytics, reports, and exception lists
+  - cannot request, approve, reject, or revoke
+- `operator`
+  - read analytics, reports, and exception lists
+  - can create `PENDING` requests through `POST /v1/exceptions/request`
+  - cannot approve, reject, or revoke
+- `security_admin`
+  - full read access
+  - can request
+  - can directly create already `APPROVED` emergency exceptions with `POST /v1/exceptions`
+  - can approve, reject, and revoke
+- `service_internal`
+  - validate only
+  - no human approval permissions
 
 ## Future path
 

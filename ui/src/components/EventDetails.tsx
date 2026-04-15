@@ -179,12 +179,40 @@ export function EventDetails({ event }: Props) {
           <dd>{event.exception_type || "-"}</dd>
         </div>
         <div>
+          <dt>Exception Status</dt>
+          <dd>{event.exception_status || "-"}</dd>
+        </div>
+        <div>
           <dt>Exception Ticket</dt>
           <dd>{event.exception_ticket_id || "-"}</dd>
         </div>
         <div>
+          <dt>Requested By</dt>
+          <dd>{event.exception_requested_by || "-"}</dd>
+        </div>
+        <div>
+          <dt>Requested At</dt>
+          <dd>{formatTimestamp(event.exception_requested_at)}</dd>
+        </div>
+        <div>
           <dt>Approved By</dt>
           <dd>{event.exception_approved_by || "-"}</dd>
+        </div>
+        <div>
+          <dt>Approved At</dt>
+          <dd>{formatTimestamp(event.exception_approved_at)}</dd>
+        </div>
+        <div>
+          <dt>Rejected By</dt>
+          <dd>{event.exception_rejected_by || "-"}</dd>
+        </div>
+        <div>
+          <dt>Rejected At</dt>
+          <dd>{formatTimestamp(event.exception_rejected_at)}</dd>
+        </div>
+        <div>
+          <dt>Rejection Reason</dt>
+          <dd>{event.exception_rejection_reason || "-"}</dd>
         </div>
         <div>
           <dt>Exception Expires</dt>

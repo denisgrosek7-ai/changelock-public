@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -42,6 +43,11 @@ type exceptionsResponse struct {
 }
 
 type exceptionResponse struct {
+	Status    string                `json:"status"`
+	Exception audit.PolicyException `json:"exception"`
+}
+
+type exceptionActionResponse struct {
 	Status    string                `json:"status"`
 	Exception audit.PolicyException `json:"exception"`
 }
@@ -113,8 +119,12 @@ func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Confi
 	mux.HandleFunc("/v1/ingest", srv.ingestHandler)
 	mux.HandleFunc("/v1/auth/me", srv.authMeHandler)
 	mux.HandleFunc("/v1/exceptions", srv.exceptionsHandler)
+	mux.HandleFunc("/v1/exceptions/request", srv.requestExceptionHandler)
 	mux.HandleFunc("/v1/exceptions/", srv.exceptionByIDHandler)
 	mux.HandleFunc("/v1/exceptions/validate", srv.validateExceptionHandler)
+	mux.HandleFunc("/v1/analytics/trends", srv.trendsHandler)
+	mux.HandleFunc("/v1/analytics/top-violators", srv.topViolatorsHandler)
+	mux.HandleFunc("/v1/analytics/drift-stats", srv.driftStatsHandler)
 	mux.HandleFunc("/v1/reports/events", srv.eventsHandler)
 	mux.HandleFunc("/v1/reports/summary", srv.summaryHandler)
 	mux.HandleFunc("/v1/reports/denies", srv.deniesHandler)
@@ -321,6 +331,9 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 		defer cancel()
 
+		if strings.TrimSpace(request.ApprovedBy) == "" {
+			request.ApprovedBy = principal.Subject
+		}
 		exception, err := s.store.CreateException(ctx, request)
 		if err != nil {
 			status := http.StatusInternalServerError
@@ -333,7 +346,7 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionCreated, audit.DecisionAllow, exception, "exception created")
+		s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionApproved, audit.DecisionAllow, exception, "direct emergency exception created as approved")
 		httpjson.Write(w, http.StatusCreated, exceptionResponse{
 			Status:    "created",
 			Exception: exception,
@@ -343,27 +356,103 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
-	principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
+func (s server) requestExceptionHandler(w http.ResponseWriter, r *http.Request) {
+	principal, r, ok := s.authorize(w, r, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
-
-	exceptionID, err := exceptionIDFromPath(r.URL.Path)
-	if err != nil {
-		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	if r.Method != http.MethodPost {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
 
-	if r.Method != http.MethodDelete {
-		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	var request audit.ExceptionCreateRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
 
-	exception, err := s.store.RevokeException(ctx, exceptionID)
+	exception, err := s.store.RequestException(ctx, request, principal.Subject, principal.Role)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidException) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionRequested, audit.DecisionAllow, exception, "exception requested for approval")
+	httpjson.Write(w, http.StatusCreated, exceptionActionResponse{Status: "requested", Exception: exception})
+}
+
+func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
+	exceptionID, action, err := exceptionActionFromPath(r.URL.Path)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	switch {
+	case action == "" && r.Method == http.MethodDelete:
+		principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
+		if !ok {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+		defer cancel()
+
+		exception, err := s.store.RevokeException(ctx, exceptionID)
+		if err != nil {
+			status := http.StatusInternalServerError
+			switch {
+			case errors.Is(err, audit.ErrInvalidException):
+				status = http.StatusBadRequest
+			case errors.Is(err, audit.ErrExceptionNotFound):
+				status = http.StatusNotFound
+			case errors.Is(err, context.DeadlineExceeded):
+				status = http.StatusGatewayTimeout
+			}
+			httpjson.Write(w, status, map[string]string{"error": err.Error()})
+			return
+		}
+
+		s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionRevoked, audit.DecisionAllow, exception, "exception revoked")
+		httpjson.Write(w, http.StatusOK, exceptionResponse{
+			Status:    "revoked",
+			Exception: exception,
+		})
+	case action == "approve" && r.Method == http.MethodPost:
+		s.approveExceptionHandler(w, r, exceptionID)
+	case action == "reject" && r.Method == http.MethodPost:
+		s.rejectExceptionHandler(w, r, exceptionID)
+	default:
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (s server) approveExceptionHandler(w http.ResponseWriter, r *http.Request, exceptionID string) {
+	principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+
+	var request audit.ExceptionActionRequest
+	if err := httpjson.Decode(r, &request); err != nil && !errors.Is(err, io.EOF) {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	exception, err := s.store.ApproveException(ctx, exceptionID, principal.Subject, principal.Role)
 	if err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -378,11 +467,51 @@ func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionRevoked, audit.DecisionAllow, exception, "exception revoked")
-	httpjson.Write(w, http.StatusOK, exceptionResponse{
-		Status:    "revoked",
-		Exception: exception,
-	})
+	reason := "exception approved"
+	if normalized := audit.NormalizeExceptionActionRequest(request); normalized.Reason != "" {
+		reason = normalized.Reason
+	}
+	s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionApproved, audit.DecisionAllow, exception, reason)
+	httpjson.Write(w, http.StatusOK, exceptionActionResponse{Status: "approved", Exception: exception})
+}
+
+func (s server) rejectExceptionHandler(w http.ResponseWriter, r *http.Request, exceptionID string) {
+	principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+
+	var request audit.ExceptionActionRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	request = audit.NormalizeExceptionActionRequest(request)
+	if request.Reason == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "reason is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	exception, err := s.store.RejectException(ctx, exceptionID, request.Reason, principal.Subject, principal.Role)
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, audit.ErrInvalidException):
+			status = http.StatusBadRequest
+		case errors.Is(err, audit.ErrExceptionNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, context.DeadlineExceeded):
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionRejected, audit.DecisionDeny, exception, request.Reason)
+	httpjson.Write(w, http.StatusOK, exceptionActionResponse{Status: "rejected", Exception: exception})
 }
 
 func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request) {
@@ -418,6 +547,111 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	httpjson.Write(w, http.StatusOK, result)
+}
+
+func (s server) trendsHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	filter, err := parseTrendsFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	response, err := s.store.Trends(ctx, filter)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidFilter) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpjson.Write(w, http.StatusOK, response)
+}
+
+func (s server) topViolatorsHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	filter, err := parseTopViolatorsFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	response, err := s.store.TopViolators(ctx, filter)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidFilter) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpjson.Write(w, http.StatusOK, response)
+}
+
+func (s server) driftStatsHandler(w http.ResponseWriter, r *http.Request) {
+	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	filter, err := parseDriftStatsFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	response, err := s.store.DriftStats(ctx, filter)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidFilter) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpjson.Write(w, http.StatusOK, response)
 }
 
 func (s server) summaryHandler(w http.ResponseWriter, r *http.Request) {
@@ -543,6 +777,7 @@ func parseFilter(r *http.Request) (audit.EventFilter, error) {
 func parseExceptionFilter(r *http.Request) (audit.ExceptionFilter, error) {
 	query := r.URL.Query()
 	filter := audit.ExceptionFilter{
+		Status:        query.Get("status"),
 		ExceptionType: query.Get("exception_type"),
 		TenantID:      query.Get("tenant_id"),
 		Environment:   query.Get("environment"),
@@ -571,20 +806,95 @@ func parseExceptionFilter(r *http.Request) (audit.ExceptionFilter, error) {
 	return audit.NormalizeExceptionFilter(filter)
 }
 
-func exceptionIDFromPath(path string) (string, error) {
+func parseTrendsFilter(r *http.Request) (audit.TrendsFilter, error) {
+	query := r.URL.Query()
+	filter := audit.TrendsFilter{
+		WindowDays:  30,
+		Granularity: query.Get("granularity"),
+		TenantID:    query.Get("tenant_id"),
+		Environment: query.Get("environment"),
+		Repo:        query.Get("repo"),
+		EventType:   query.Get("event_type"),
+	}
+	if raw := strings.TrimSpace(query.Get("window_days")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return audit.TrendsFilter{}, errors.New("window_days must be an integer")
+		}
+		filter.WindowDays = value
+	}
+	return audit.NormalizeTrendsFilter(filter)
+}
+
+func parseTopViolatorsFilter(r *http.Request) (audit.TopViolatorsFilter, error) {
+	query := r.URL.Query()
+	filter := audit.TopViolatorsFilter{
+		WindowDays:  30,
+		Limit:       5,
+		Dimension:   query.Get("dimension"),
+		TenantID:    query.Get("tenant_id"),
+		Environment: query.Get("environment"),
+		Repo:        query.Get("repo"),
+	}
+	if raw := strings.TrimSpace(query.Get("window_days")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return audit.TopViolatorsFilter{}, errors.New("window_days must be an integer")
+		}
+		filter.WindowDays = value
+	}
+	if raw := strings.TrimSpace(query.Get("limit")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return audit.TopViolatorsFilter{}, errors.New("limit must be an integer")
+		}
+		filter.Limit = value
+	}
+	return audit.NormalizeTopViolatorsFilter(filter)
+}
+
+func parseDriftStatsFilter(r *http.Request) (audit.DriftStatsFilter, error) {
+	query := r.URL.Query()
+	filter := audit.DriftStatsFilter{
+		WindowDays:  30,
+		TenantID:    query.Get("tenant_id"),
+		Environment: query.Get("environment"),
+		Repo:        query.Get("repo"),
+		Namespace:   query.Get("namespace"),
+		Workload:    query.Get("workload"),
+	}
+	if raw := strings.TrimSpace(query.Get("window_days")); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return audit.DriftStatsFilter{}, errors.New("window_days must be an integer")
+		}
+		filter.WindowDays = value
+	}
+	return audit.NormalizeDriftStatsFilter(filter)
+}
+
+func exceptionActionFromPath(path string) (string, string, error) {
 	raw := strings.TrimPrefix(path, "/v1/exceptions/")
 	raw = strings.TrimSpace(strings.Trim(raw, "/"))
 	if raw == "" || raw == "validate" {
-		return "", errors.New("exception_id path segment is required")
+		return "", "", errors.New("exception_id path segment is required")
 	}
-	value, err := url.PathUnescape(raw)
+	parts := strings.Split(raw, "/")
+	if len(parts) > 2 {
+		return "", "", errors.New("invalid exception path")
+	}
+	value, err := url.PathUnescape(parts[0])
 	if err != nil {
-		return "", errors.New("invalid exception_id path segment")
+		return "", "", errors.New("invalid exception_id path segment")
 	}
 	if strings.TrimSpace(value) == "" {
-		return "", errors.New("exception_id path segment is required")
+		return "", "", errors.New("exception_id path segment is required")
 	}
-	return value, nil
+	action := ""
+	if len(parts) == 2 {
+		action = strings.TrimSpace(parts[1])
+	}
+	return value, action, nil
 }
 
 func requestIDFromHeader(r *http.Request) string {
@@ -686,27 +996,34 @@ func (s server) handleCORS(w http.ResponseWriter, r *http.Request) bool {
 
 func (s server) writeLifecycleAuditEvent(ctx context.Context, r *http.Request, actor, eventType, decision string, exception audit.PolicyException, reason string) {
 	if actor == "" {
-		actor = exception.ApprovedBy
+		actor = firstNonEmpty(exception.ApprovedBy, exception.RequestedBy, exception.RejectedBy)
 	}
 	_, _ = s.store.Ingest(ctx, audit.Event{
-		RequestID:           requestIDFromHeader(r),
-		Component:           "audit-writer",
-		EventType:           eventType,
-		Actor:               actor,
-		TenantID:            exception.TenantID,
-		Repo:                exception.Repo,
-		Environment:         exception.Environment,
-		Namespace:           exception.Namespace,
-		Digest:              exception.ImageDigest,
-		CVEID:               exception.CVEID,
-		Decision:            decision,
-		Reasons:             []string{reason},
-		IsException:         true,
-		ExceptionID:         exception.ExceptionID,
-		ExceptionType:       exception.ExceptionType,
-		ExceptionReason:     exception.Reason,
-		ExceptionTicketID:   exception.TicketID,
-		ExceptionApprovedBy: exception.ApprovedBy,
-		ExceptionExpiresAt:  &exception.ExpiresAt,
+		RequestID:                requestIDFromHeader(r),
+		Component:                "audit-writer",
+		EventType:                eventType,
+		Actor:                    actor,
+		TenantID:                 exception.TenantID,
+		Repo:                     exception.Repo,
+		Environment:              exception.Environment,
+		Namespace:                exception.Namespace,
+		Digest:                   exception.ImageDigest,
+		CVEID:                    exception.CVEID,
+		Decision:                 decision,
+		Reasons:                  []string{reason},
+		IsException:              true,
+		ExceptionID:              exception.ExceptionID,
+		ExceptionType:            exception.ExceptionType,
+		ExceptionStatus:          exception.Status,
+		ExceptionReason:          exception.Reason,
+		ExceptionTicketID:        exception.TicketID,
+		ExceptionRequestedBy:     exception.RequestedBy,
+		ExceptionRequestedAt:     exception.RequestedAt,
+		ExceptionApprovedBy:      exception.ApprovedBy,
+		ExceptionApprovedAt:      exception.ApprovedAt,
+		ExceptionRejectedBy:      exception.RejectedBy,
+		ExceptionRejectedAt:      exception.RejectedAt,
+		ExceptionRejectionReason: exception.RejectionReason,
+		ExceptionExpiresAt:       &exception.ExpiresAt,
 	})
 }

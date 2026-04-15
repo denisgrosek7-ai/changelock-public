@@ -45,6 +45,7 @@ func TestScanPolicyExceptionHandlesNullScopeFields(t *testing.T) {
 			int64(1),
 			"EX-2026-001",
 			ExceptionTypeBreakGlass,
+			ExceptionStatusApproved,
 			nil,
 			"prod",
 			"acme-prod",
@@ -53,10 +54,17 @@ func TestScanPolicyExceptionHandlesNullScopeFields(t *testing.T) {
 			nil,
 			"P0 production restore",
 			"INC-1234",
+			nil,
+			nil,
 			"security-lead",
+			now,
+			nil,
+			nil,
+			nil,
 			now,
 			now.Add(2 * time.Hour),
 			true,
+			now,
 			json.RawMessage(`{}`),
 		},
 	}
@@ -101,6 +109,12 @@ func (r fakePolicyExceptionRow) Scan(dest ...any) error {
 				*d = sql.NullString{}
 			} else {
 				*d = sql.NullString{String: value.(string), Valid: true}
+			}
+		case *sql.NullTime:
+			if value == nil {
+				*d = sql.NullTime{}
+			} else {
+				*d = sql.NullTime{Time: value.(time.Time), Valid: true}
 			}
 		case *time.Time:
 			*d = value.(time.Time)

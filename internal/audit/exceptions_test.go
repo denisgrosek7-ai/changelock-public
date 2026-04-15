@@ -127,7 +127,7 @@ func TestMemoryStoreExceptionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateException() after revoke error = %v", err)
 	}
-	if afterRevoke.Valid || afterRevoke.Reason != "exception is inactive" {
+	if afterRevoke.Valid || afterRevoke.Reason != "exception is revoked" {
 		t.Fatalf("unexpected post-revoke validation %#v", afterRevoke)
 	}
 }
@@ -345,5 +345,238 @@ func TestMemoryStoreExceptionReportFiltersRecentUsedByCVEIDAndImageDigest(t *tes
 	}
 	if len(digestReport.RecentUsed) != 1 || digestReport.RecentUsed[0].ExceptionID != "EX-DIGEST" {
 		t.Fatalf("unexpected digest used events %#v", digestReport.RecentUsed)
+	}
+}
+
+func TestMemoryStoreApprovalLifecycleAndLogs(t *testing.T) {
+	store := NewMemoryStore()
+	base := time.Date(2026, 4, 15, 9, 0, 0, 0, time.UTC)
+	store.now = func() time.Time { return base }
+
+	pending, err := store.RequestException(context.Background(), ExceptionCreateRequest{
+		ExceptionID:   "EX-PENDING-001",
+		ExceptionType: ExceptionTypeBreakGlass,
+		TenantID:      "acme",
+		Environment:   "prod",
+		Namespace:     "acme-prod",
+		Reason:        "production restore",
+		TicketID:      "INC-7000",
+		TTLHours:      2,
+	}, "demo-operator", "operator")
+	if err != nil {
+		t.Fatalf("RequestException() error = %v", err)
+	}
+	if pending.Status != ExceptionStatusPending || pending.RequestedBy != "demo-operator" {
+		t.Fatalf("unexpected pending exception %#v", pending)
+	}
+
+	pendingResult, err := store.ValidateException(context.Background(), ExceptionValidationRequest{
+		ExceptionID: "EX-PENDING-001",
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+	})
+	if err != nil {
+		t.Fatalf("ValidateException() pending error = %v", err)
+	}
+	if pendingResult.Valid || pendingResult.Reason != "exception is pending approval" {
+		t.Fatalf("unexpected pending validation %#v", pendingResult)
+	}
+
+	approved, err := store.ApproveException(context.Background(), "EX-PENDING-001", "demo-admin", "security_admin")
+	if err != nil {
+		t.Fatalf("ApproveException() error = %v", err)
+	}
+	if approved.Status != ExceptionStatusApproved || approved.ApprovedBy != "demo-admin" {
+		t.Fatalf("unexpected approved exception %#v", approved)
+	}
+
+	validResult, err := store.ValidateException(context.Background(), ExceptionValidationRequest{
+		ExceptionID: "EX-PENDING-001",
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+	})
+	if err != nil {
+		t.Fatalf("ValidateException() approved error = %v", err)
+	}
+	if !validResult.Valid || validResult.Exception == nil || validResult.Exception.Status != ExceptionStatusApproved {
+		t.Fatalf("unexpected approved validation %#v", validResult)
+	}
+
+	revoked, err := store.RevokeException(context.Background(), "EX-PENDING-001")
+	if err != nil {
+		t.Fatalf("RevokeException() error = %v", err)
+	}
+	if revoked.Status != ExceptionStatusRevoked {
+		t.Fatalf("unexpected revoked exception %#v", revoked)
+	}
+
+	revokedResult, err := store.ValidateException(context.Background(), ExceptionValidationRequest{
+		ExceptionID: "EX-PENDING-001",
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+	})
+	if err != nil {
+		t.Fatalf("ValidateException() revoked error = %v", err)
+	}
+	if revokedResult.Valid || revokedResult.Reason != "exception is revoked" {
+		t.Fatalf("unexpected revoked validation %#v", revokedResult)
+	}
+
+	rejectedPending, err := store.RequestException(context.Background(), ExceptionCreateRequest{
+		ExceptionID:   "EX-PENDING-REJECT",
+		ExceptionType: ExceptionTypeBreakGlass,
+		TenantID:      "acme",
+		Environment:   "prod",
+		Namespace:     "acme-prod",
+		Reason:        "unverified request",
+		TicketID:      "INC-7001",
+		TTLHours:      2,
+	}, "demo-operator", "operator")
+	if err != nil {
+		t.Fatalf("RequestException() rejected pending error = %v", err)
+	}
+	if _, err := store.RejectException(context.Background(), rejectedPending.ExceptionID, "missing evidence", "demo-admin", "security_admin"); err != nil {
+		t.Fatalf("RejectException() error = %v", err)
+	}
+
+	rejectedResult, err := store.ValidateException(context.Background(), ExceptionValidationRequest{
+		ExceptionID: rejectedPending.ExceptionID,
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+	})
+	if err != nil {
+		t.Fatalf("ValidateException() rejected error = %v", err)
+	}
+	if rejectedResult.Valid || rejectedResult.Reason != "exception is rejected" {
+		t.Fatalf("unexpected rejected validation %#v", rejectedResult)
+	}
+
+	logs, err := store.ListApprovalLogs(context.Background(), "EX-PENDING-001", 10)
+	if err != nil {
+		t.Fatalf("ListApprovalLogs() error = %v", err)
+	}
+	actions := []string{}
+	for _, log := range logs {
+		actions = append(actions, log.Action)
+	}
+	for _, expected := range []string{ApprovalActionRequested, ApprovalActionApproved, ApprovalActionUsed, ApprovalActionRevoked, ApprovalActionValidationFailed} {
+		found := false
+		for _, action := range actions {
+			if action == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected approval action %q in %#v", expected, actions)
+		}
+	}
+}
+
+func TestMemoryStoreAnalytics(t *testing.T) {
+	store := NewMemoryStore()
+	base := time.Date(2026, 4, 15, 8, 0, 0, 0, time.UTC)
+	current := base
+	store.now = func() time.Time { return current }
+
+	ingestAt := func(ts time.Time, event Event) {
+		t.Helper()
+		current = ts
+		if _, err := store.Ingest(context.Background(), event); err != nil {
+			t.Fatalf("Ingest() error = %v", err)
+		}
+	}
+
+	ingestAt(base, Event{
+		Component:   "deploy-gate",
+		EventType:   EventTypeDeployGateDecision,
+		Decision:    DecisionAllow,
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "my-org/acme-app",
+	})
+	ingestAt(base.Add(30*time.Minute), Event{
+		Component:   "deploy-gate",
+		EventType:   EventTypeDeployGateDecision,
+		Decision:    DecisionDeny,
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "my-org/acme-app",
+		Reasons:     []string{"workflow mismatch"},
+	})
+	ingestAt(base.Add(time.Hour), Event{
+		Component:   "policy-engine",
+		EventType:   EventTypePolicyDecision,
+		Decision:    DecisionError,
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "my-org/acme-app",
+		Reasons:     []string{"policy load failed"},
+	})
+	ingestAt(base.Add(2*time.Hour), Event{
+		Component:   "runtime-agent",
+		EventType:   EventTypeRuntimeDriftResult,
+		Decision:    DecisionDeny,
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+		Workload:    "booking-api",
+		Repo:        "my-org/acme-app",
+		DriftResult: "image_drift",
+	})
+	ingestAt(base.Add(3*time.Hour), Event{
+		Component:   "runtime-agent",
+		EventType:   EventTypeRuntimeDriftResult,
+		Decision:    DecisionAllow,
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+		Workload:    "booking-api",
+		Repo:        "my-org/acme-app",
+		DriftResult: "no_drift",
+	})
+
+	trends, err := store.Trends(context.Background(), TrendsFilter{
+		WindowDays:  30,
+		Granularity: "day",
+		TenantID:    "acme",
+	})
+	if err != nil {
+		t.Fatalf("Trends() error = %v", err)
+	}
+	if len(trends.Buckets) == 0 || trends.Totals["allow"] != 2 || trends.Totals["deny"] != 2 || trends.Totals["error"] != 1 {
+		t.Fatalf("unexpected trends %#v", trends)
+	}
+
+	topViolators, err := store.TopViolators(context.Background(), TopViolatorsFilter{
+		WindowDays: 30,
+		Dimension:  "repo",
+		TenantID:   "acme",
+	})
+	if err != nil {
+		t.Fatalf("TopViolators() error = %v", err)
+	}
+	if len(topViolators.Items) != 1 || topViolators.Items[0].Key != "my-org/acme-app" || topViolators.Items[0].DenyCount != 2 {
+		t.Fatalf("unexpected top violators %#v", topViolators)
+	}
+
+	driftStats, err := store.DriftStats(context.Background(), DriftStatsFilter{
+		WindowDays:  30,
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "my-org/acme-app",
+	})
+	if err != nil {
+		t.Fatalf("DriftStats() error = %v", err)
+	}
+	if driftStats.TotalRuntimeDriftDenies != 1 || driftStats.CountsByDriftClass["image_drift"] != 1 {
+		t.Fatalf("unexpected drift stats %#v", driftStats)
+	}
+	if driftStats.MeanTimeToResolveSeconds == nil || *driftStats.MeanTimeToResolveSeconds != int64(time.Hour.Seconds()) {
+		t.Fatalf("unexpected mttr %#v", driftStats)
 	}
 }
