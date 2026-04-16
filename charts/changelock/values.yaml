@@ -195,6 +195,9 @@ deployGate:
   tls:
     enabled: false
     secretName: ""
+  # Optional VEX-aware deploy-time vulnerability evaluation.
+  # Use "enforce" only when audit-writer vulnerability/VEX APIs are reachable.
+  vexDeployMode: disabled
   webhook:
     enabled: false
     name: pods.changelock.io

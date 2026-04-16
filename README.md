@@ -174,6 +174,30 @@ See:
 - `docs/hsm-kms-integration.md`
 - `docs/cross-cluster-sync.md`
 
+## Phase 8g VEX / exploitability-driven vulnerability operations
+
+Phase 8g adds an explicit exploitability layer on top of raw scanner findings:
+
+- canonical VEX statements with statuses:
+  - `not_affected`
+  - `affected`
+  - `fixed`
+  - `under_investigation`
+- standards-based ingest for:
+  - CSAF VEX JSON subset
+  - CycloneDX VEX JSON subset
+- `GET /v1/vulnerabilities/net` for raw vs VEX-resolved vs net actionable counts
+- `GET /v1/vex`, `POST /v1/vex`, and `POST /v1/vex/{id}/revoke`
+- optional startup import from `CHANGELOCK_VEX_IMPORT_DIR`
+- optional deploy-time VEX-aware enforcement via `CHANGELOCK_VEX_DEPLOY_MODE=enforce`
+
+This refines vulnerability decisioning. It does not remove raw evidence, replace approval exceptions, or silently auto-allow findings with no explicit VEX state.
+
+See:
+
+- `docs/vulnerability-ops.md`
+- `docs/vex-exploitability-ops.md`
+
 ## Phase 7e production packaging and readiness
 
 Phase 7e adds the production-minded packaging layer:

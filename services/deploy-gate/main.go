@@ -24,6 +24,7 @@ var allowedOIDCIssuers = []string{
 var artifactVerifier verify.ArtifactVerifier = newArtifactVerifier()
 var auditWriter = audit.NewDefaultWriter()
 var exceptionValidator audit.ExceptionValidator = newExceptionValidator()
+var vulnerabilityEvaluator vulnerabilityNetEvaluator = newVulnerabilityNetEvaluator()
 
 type admissionReview struct {
 	APIVersion string             `json:"apiVersion,omitempty"`
@@ -95,6 +96,9 @@ type capabilities struct {
 
 func main() {
 	if err := validateExceptionValidatorConfig(); err != nil {
+		log.Fatal(err)
+	}
+	if err := validateVulnerabilityNetEvaluatorConfig(); err != nil {
 		log.Fatal(err)
 	}
 	addr := ":" + envOrDefault("PORT", "8092")
@@ -216,6 +220,26 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 		})
 		for _, reason := range artifactDecision.Reasons {
 			reasons = append(reasons, workloadContainer.Name+": "+reason)
+		}
+		if vulnerabilityEvaluator != nil && vulnerabilityEvaluator.Enabled() {
+			threshold := ""
+			if verification.Evidence.SupplyChain != nil {
+				threshold = strings.ToUpper(strings.TrimSpace(verification.Evidence.SupplyChain.VulnerabilityScanSeverityThreshold))
+			}
+			if threshold != "" {
+				netResponse, netErr := vulnerabilityEvaluator.NetVulnerabilities(
+					context.Background(),
+					tenant,
+					environment,
+					firstNonEmpty(verification.VerifiedDigest, audit.DigestFromImage(workloadContainer.Image)),
+					threshold,
+				)
+				if netErr != nil {
+					reasons = append(reasons, workloadContainer.Name+": vex-aware vulnerability evaluation failed: "+netErr.Error())
+				} else if netResponse.ThresholdBreached {
+					reasons = append(reasons, workloadContainer.Name+": net actionable vulnerabilities remain at or above "+threshold+" after VEX evaluation")
+				}
+			}
 		}
 		summary, evidence := audit.FromArtifactVerification(&verification)
 		writeAuditEvent(context.Background(), audit.Event{

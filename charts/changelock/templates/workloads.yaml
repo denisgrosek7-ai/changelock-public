@@ -553,6 +553,8 @@ spec:
               value: /etc/changelock/policies
             - name: AUDIT_WRITER_URL
               value: http://{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}:{{ .Values.auditWriter.service.port }}
+            - name: CHANGELOCK_VEX_DEPLOY_MODE
+              value: {{ .Values.deployGate.vexDeployMode | quote }}
             {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
             - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
               valueFrom:

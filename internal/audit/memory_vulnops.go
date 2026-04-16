@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	internalvex "github.com/denisgrosek/changelock/internal/vex"
 )
 
 func (s *MemoryStore) IngestSBOM(_ context.Context, request SBOMIngestRequest) (SBOMIngestResult, error) {
@@ -264,6 +266,7 @@ func (s *MemoryStore) ListActiveVulnerabilities(_ context.Context, filter Vulner
 
 	filter = NormalizeVulnerabilityActiveFilter(filter)
 	now := s.now().UTC()
+	scope := vexScopeFromFilter(filter)
 	results := make([]VulnerabilityFinding, 0)
 	for _, finding := range s.findings {
 		if finding.Status != VulnerabilityFindingStatusOpen {
@@ -284,14 +287,14 @@ func (s *MemoryStore) ListActiveVulnerabilities(_ context.Context, filter Vulner
 		if !matchesDigestScopeFilters(s.workloadRefsForDigestLocked(finding.ImageDigest), filter.TenantID, filter.Environment) {
 			continue
 		}
-		decision := s.currentDecisionLocked(finding.ImageDigest, finding.CVEID, now)
-		if activeDecisionApplies(decision, now) && decision.Decision == VulnerabilityDecisionNotAffected && !filter.IncludeSuppressed {
+		statement := s.currentVEXStatementLocked(finding, scope, now)
+		if statement != nil && internalvex.SuppressesFinding(*statement) && !filter.IncludeSuppressed {
 			continue
 		}
-		item := cloneVulnerabilityFinding(finding)
-		if decision != nil && activeDecisionApplies(decision, now) {
-			copy := cloneVulnerabilityDecision(*decision)
-			item.Decision = &copy
+		item := cloneVulnerabilityFindingWithVEX(finding)
+		if statement != nil {
+			item.VEX = statementToVEXMatch(*statement)
+			item.Decision = statementToLegacyDecision(*statement)
 		}
 		results = append(results, item)
 	}
@@ -422,9 +425,8 @@ func (s *MemoryStore) VulnerabilityTimeline(_ context.Context, filter Vulnerabil
 			FirstSeenAt:    finding.FirstSeenAt,
 			LastSeenAt:     finding.LastSeenAt,
 		}
-		if decision := s.currentDecisionLocked(finding.ImageDigest, finding.CVEID, now); activeDecisionApplies(decision, now) {
-			copy := cloneVulnerabilityDecision(*decision)
-			entry.Decision = &copy
+		if statement := s.currentVEXStatementLocked(finding, internalvex.EvaluationScope{TenantID: filter.TenantID}, now); statement != nil {
+			entry.Decision = statementToLegacyDecision(*statement)
 		}
 		items = append(items, entry)
 	}
@@ -445,7 +447,8 @@ func (s *MemoryStore) ListVulnerabilityDecisions(_ context.Context, filter Vulne
 
 	filter = NormalizeVulnerabilityDecisionFilter(filter)
 	decisions := make([]VulnerabilityDecision, 0)
-	for _, decision := range s.decisions {
+	for _, statement := range s.vexStatements {
+		decision := statementToLegacyDecision(statement)
 		if filter.ImageDigest != "" && decision.ImageDigest != filter.ImageDigest {
 			continue
 		}
@@ -458,7 +461,7 @@ func (s *MemoryStore) ListVulnerabilityDecisions(_ context.Context, filter Vulne
 		if !matchesDigestScopeFilters(s.workloadRefsForDigestLocked(decision.ImageDigest), filter.TenantID, "") {
 			continue
 		}
-		decisions = append(decisions, cloneVulnerabilityDecision(decision))
+		decisions = append(decisions, cloneVulnerabilityDecision(*decision))
 	}
 	sort.Slice(decisions, func(i, j int) bool { return decisions[i].CreatedAt.After(decisions[j].CreatedAt) })
 	if len(decisions) > filter.Limit {
@@ -471,18 +474,19 @@ func (s *MemoryStore) GetVulnerabilityDecision(_ context.Context, decisionID int
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	decision, ok := s.decisions[decisionID]
+	statement, ok := s.vexStatements[decisionID]
 	if !ok {
 		return VulnerabilityDecision{}, ErrExceptionNotFound
 	}
-	return cloneVulnerabilityDecision(decision), nil
+	decision := statementToLegacyDecision(statement)
+	return cloneVulnerabilityDecision(*decision), nil
 }
 
 func (s *MemoryStore) CreateVulnerabilityDecision(_ context.Context, request VulnerabilityDecisionCreateRequest, decidedBy string) (VulnerabilityDecision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	request, err := NormalizeVulnerabilityDecisionCreateRequest(request, s.now)
+	createRequest, err := legacyDecisionCreateRequestToVEX(request)
 	if err != nil {
 		return VulnerabilityDecision{}, err
 	}
@@ -490,44 +494,24 @@ func (s *MemoryStore) CreateVulnerabilityDecision(_ context.Context, request Vul
 	if decidedBy == "" {
 		return VulnerabilityDecision{}, fmt.Errorf("%w: decided_by is required", ErrInvalidException)
 	}
-	now := s.now().UTC()
-	for id, decision := range s.decisions {
-		if decision.ImageDigest == request.ImageDigest && decision.CVEID == request.CVEID && decision.Active {
-			decision.Active = false
-			decision.UpdatedAt = now
-			s.decisions[id] = decision
-		}
+	statement, err := s.createVEXStatementLocked(createRequest, decidedBy)
+	if err != nil {
+		return VulnerabilityDecision{}, err
 	}
-	decision := VulnerabilityDecision{
-		ID:            s.nextDecisionID,
-		ImageDigest:   request.ImageDigest,
-		CVEID:         request.CVEID,
-		Decision:      request.Decision,
-		Justification: request.Justification,
-		DecidedBy:     decidedBy,
-		ExpiresAt:     normalizeTimePointer(request.ExpiresAt),
-		Active:        true,
-		Metadata:      normalizeMetadata(request.Metadata),
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}
-	s.nextDecisionID++
-	s.decisions[decision.ID] = decision
-	return cloneVulnerabilityDecision(decision), nil
+	decision := statementToLegacyDecision(statement)
+	return cloneVulnerabilityDecision(*decision), nil
 }
 
 func (s *MemoryStore) DeactivateVulnerabilityDecision(_ context.Context, decisionID int64) (VulnerabilityDecision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	decision, ok := s.decisions[decisionID]
-	if !ok {
-		return VulnerabilityDecision{}, ErrExceptionNotFound
+	statement, err := s.revokeVEXStatementLocked(decisionID, "")
+	if err != nil {
+		return VulnerabilityDecision{}, err
 	}
-	decision.Active = false
-	decision.UpdatedAt = s.now().UTC()
-	s.decisions[decisionID] = decision
-	return cloneVulnerabilityDecision(decision), nil
+	decision := statementToLegacyDecision(statement)
+	return cloneVulnerabilityDecision(*decision), nil
 }
 
 func (s *MemoryStore) ListActiveDigests(_ context.Context, windowDays int, limit int) ([]ActiveDigestRef, error) {
@@ -593,16 +577,22 @@ func (s *MemoryStore) LookupDigestScopes(_ context.Context, imageDigest string, 
 }
 
 func (s *MemoryStore) currentDecisionLocked(imageDigest, cveID string, now time.Time) *VulnerabilityDecision {
-	var current *VulnerabilityDecision
-	for _, decision := range s.decisions {
-		if decision.ImageDigest != imageDigest || decision.CVEID != cveID {
+	finding := VulnerabilityFinding{ImageDigest: imageDigest, CVEID: cveID}
+	statement := s.currentVEXStatementLocked(finding, internalvex.EvaluationScope{}, now)
+	if statement == nil {
+		return nil
+	}
+	return statementToLegacyDecision(*statement)
+}
+
+func (s *MemoryStore) currentVEXStatementLocked(finding VulnerabilityFinding, scope internalvex.EvaluationScope, now time.Time) *internalvex.Statement {
+	var current *internalvex.Statement
+	for _, statement := range s.vexStatements {
+		if !internalvex.Matches(statement, findingRefFromFinding(finding), scope, now) {
 			continue
 		}
-		if !activeDecisionApplies(&decision, now) {
-			continue
-		}
-		if current == nil || decision.CreatedAt.After(current.CreatedAt) {
-			copy := decision
+		if current == nil || statement.UpdatedAt.After(current.UpdatedAt) {
+			copy := statement
 			current = &copy
 		}
 	}

@@ -121,6 +121,7 @@ type VulnerabilityFinding struct {
 	Metadata       json.RawMessage        `json:"metadata,omitempty"`
 	FirstSeenAt    time.Time              `json:"first_seen_at"`
 	LastSeenAt     time.Time              `json:"last_seen_at"`
+	VEX            *VEXMatch              `json:"vex,omitempty"`
 	Decision       *VulnerabilityDecision `json:"decision,omitempty"`
 }
 

@@ -98,6 +98,9 @@ podAntiAffinity:
 {{- fail "set only one of auth.createSecret or auth.existingSecret" -}}
 {{- end -}}
 {{- if eq $profile "production" -}}
+  {{- if not (or (eq .Values.deployGate.vexDeployMode "disabled") (eq .Values.deployGate.vexDeployMode "enforce")) -}}
+    {{- fail "deployGate.vexDeployMode must be disabled or enforce" -}}
+  {{- end -}}
   {{- if eq .Values.auth.mode "disabled" -}}
     {{- fail "production deploymentProfile requires auth.mode to be static-token or oidc-jwt" -}}
   {{- end -}}

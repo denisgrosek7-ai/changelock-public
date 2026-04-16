@@ -27,6 +27,7 @@ Use this as operator guidance, not a contractual support promise.
 - audit ingest and reports
 - exception approval governance
 - analytics and vulnerability operations
+- exploitability-aware vulnerability operations with canonical VEX statements and CSAF/CycloneDX ingest subsets
 - static-token auth for dev/demo
 - OIDC/JWT bearer validation for enterprise deployments
 - tenant-scoped report and governance reads/writes enforced by the audit-writer API
@@ -43,6 +44,7 @@ Production expectations:
   - `CHANGELOCK_SIGNER_SOFTWARE_SECRET` if software signing is intentionally used
 - treat `software` signing as dev/demo or lower-trust unless your own risk review explicitly accepts it
 - use the go-live checks in `docs/operations/go-live-checklist.md` before opening production traffic
+- if VEX-as-code is enabled, treat the imported JSON documents as controlled security inputs and keep their mount path explicit
 
 ## Out of scope for current platform support
 
@@ -54,3 +56,4 @@ Production expectations:
 - Vault-native secret rotation
 - async export pipelines
 - AI-assisted policy recommendation
+- full OpenVEX support or a full advisory-publishing ecosystem

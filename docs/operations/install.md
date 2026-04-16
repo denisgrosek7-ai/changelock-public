@@ -36,6 +36,7 @@ Recommended production posture:
   - `service_internal` bearer token for service-to-service and ingest flows
 - deploy-gate TLS secret present
 - webhook enabled
+- optional VEX-aware deploy enforcement only when the vulnerability API path is intended to be fail-closed
 - prod values example layered on top
 
 Create the auth secret for OIDC/JWT mode:
@@ -76,6 +77,8 @@ Production notes:
 - the prod example expects `signer.existingSecret=changelock-signer` in `vault-transit` mode
 - do not copy demo tokens into production secrets
 - if you switch to `static-token` auth in production, supply a non-demo `CHANGELOCK_AUTH_TOKENS_JSON` and a distinct internal service token in the auth secret
+- if you enable `deployGate.vexDeployMode=enforce`, make sure `audit-writer` vulnerability/VEX endpoints are reachable from `deploy-gate`
+- if you want VEX-as-code imports, set `auditWriter.env.CHANGELOCK_VEX_IMPORT_DIR` and mount the JSON documents into the `audit-writer` container through your own Helm overlay or manifest customization
 
 ## Supported deployment modes
 
@@ -97,6 +100,11 @@ Production notes:
   - `deploymentProfile=production`
   - `signer.mode=vault-transit`
   - signer secret and Vault transit config required
+- VEX-aware production
+  - optional
+  - `deployGate.vexDeployMode=enforce`
+  - `audit-writer` vulnerability + VEX APIs must be reachable
+  - use canonical VEX statements or imported CSAF/CycloneDX VEX documents
 
 ## Webhook enablement
 

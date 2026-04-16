@@ -30,6 +30,10 @@ Prerequisites for the scripted smoke path:
   - `deploymentProfile=production`
   - `signer.mode=vault-transit`
   - signer secret and Vault transit settings configured
+- VEX-aware production
+  - `deployGate.vexDeployMode=enforce`
+  - `audit-writer` vulnerability/VEX APIs reachable from `deploy-gate`
+  - optional `auditWriter.env.CHANGELOCK_VEX_IMPORT_DIR` only when mounted VEX documents are intentionally used
 
 ## Required prechecks
 
@@ -74,6 +78,8 @@ The script checks:
 - machine-authenticated `/v1/ingest`
 - `/v1/reports/summary`
 - `/v1/sync/status` when `CHANGELOCK_EXPECT_SYNC_MODE` is set
+- `/v1/vex/status` when VEX is enabled
+- `/v1/vulnerabilities/net` when VEX-aware vulnerability evaluation is enabled
 - optional exception request/approve/validate/revoke flow when `CHANGELOCK_RUN_EXCEPTION_FLOW=true`
 
 ## Manual interpretation
@@ -87,6 +93,10 @@ The script checks:
   - `verified` is expected when signer support is enabled and verify-on-read is on
   - `failed` must be treated as a blocker
   - `disabled` is acceptable only when signer support is intentionally not enabled
+- VEX verification:
+  - `raw_count` must remain greater than or equal to `actionable_count`
+  - `resolved_by_vex_count` should only reflect explicitly scoped statements
+  - `threshold_breached=true` remains a blocker when deploy-time VEX enforcement is enabled
 
 ## Optional signer validation
 

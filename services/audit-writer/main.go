@@ -100,8 +100,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	vexConfig, err := loadVEXConfigFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if syncRuntime != nil {
 		syncRuntime.signing = signingRuntime
+	}
+	if imported, err := importVEXDirectory(ctx, store, vexConfig, "vex-importer"); err != nil {
+		log.Fatal(err)
+	} else if imported > 0 {
+		log.Printf("audit-writer imported %d VEX statements from %s", imported, vexConfig.ImportDir)
 	}
 
 	if *migrateOnly {
@@ -211,11 +220,16 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/analytics/top-violators", srv.topViolatorsHandler)
 	mux.HandleFunc("/v1/analytics/drift-stats", srv.driftStatsHandler)
 	mux.HandleFunc("/v1/vulnerabilities/active", srv.activeVulnerabilitiesHandler)
+	mux.HandleFunc("/v1/vulnerabilities/net", srv.vulnerabilityNetHandler)
 	mux.HandleFunc("/v1/vulnerabilities/blast-radius", srv.vulnerabilityBlastRadiusHandler)
 	mux.HandleFunc("/v1/vulnerabilities/timeline", srv.vulnerabilityTimelineHandler)
 	mux.HandleFunc("/v1/vulnerabilities/rescan", srv.vulnerabilityRescanHandler)
 	mux.HandleFunc("/v1/vulnerabilities/decisions", srv.vulnerabilityDecisionsHandler)
 	mux.HandleFunc("/v1/vulnerabilities/decisions/", srv.vulnerabilityDecisionByIDHandler)
+	mux.HandleFunc("/v1/vex/status", srv.vexStatusHandler)
+	mux.HandleFunc("/v1/vex/ingest", srv.vexIngestHandler)
+	mux.HandleFunc("/v1/vex", srv.vexStatementsHandler)
+	mux.HandleFunc("/v1/vex/", srv.vexStatementByIDHandler)
 	mux.HandleFunc("/v1/reports/events", srv.eventsHandler)
 	mux.HandleFunc("/v1/reports/summary", srv.summaryHandler)
 	mux.HandleFunc("/v1/reports/denies", srv.deniesHandler)

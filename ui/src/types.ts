@@ -2,6 +2,7 @@ export type Decision = "ALLOW" | "DENY" | "ERROR";
 export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED";
 export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
+export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
 export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "exceptions" | "inventory" | "vulnerabilities";
 
 export interface AuditHealth {
@@ -260,6 +261,89 @@ export interface ActiveWorkloadRef {
   digest?: string;
 }
 
+export interface VEXScope {
+  image_digest?: string;
+  package_name?: string;
+  purl?: string;
+  repo?: string;
+  workload?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  namespace?: string;
+}
+
+export interface VEXMatch {
+  id: number;
+  source_format: string;
+  source_ref?: string;
+  vulnerability_id: string;
+  status: VEXStatus;
+  justification?: string;
+  action_statement?: string;
+  impact_statement?: string;
+  fixed_version?: string;
+  created_by?: string;
+  updated_by?: string;
+  expires_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VEXStatement {
+  id: number;
+  statement_key?: string;
+  source_format: string;
+  source_ref?: string;
+  vulnerability_id: string;
+  scope: VEXScope;
+  status: VEXStatus;
+  justification?: string;
+  action_statement?: string;
+  impact_statement?: string;
+  fixed_version?: string;
+  created_by?: string;
+  updated_by?: string;
+  expires_at?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  active: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VEXStatementsResponse {
+  statements: VEXStatement[];
+}
+
+export interface VEXStatementActionResponse {
+  status: string;
+  statement: VEXStatement;
+}
+
+export interface VEXStatusSummary {
+  active_count: number;
+  expiring_count: number;
+  revoked_count: number;
+  counts_by_status: Record<string, number>;
+  applied_filters?: Record<string, string>;
+}
+
+export interface VEXCreateInput {
+  source_format?: "api";
+  source_ref?: string;
+  vulnerability_id: string;
+  scope: VEXScope;
+  status: VEXStatus;
+  justification?: string;
+  action_statement?: string;
+  impact_statement?: string;
+  fixed_version?: string;
+  expires_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface VulnerabilityDecision {
   id: number;
   image_digest: string;
@@ -292,11 +376,23 @@ export interface VulnerabilityFinding {
   metadata?: Record<string, unknown>;
   first_seen_at: string;
   last_seen_at: string;
+  vex?: VEXMatch;
   decision?: VulnerabilityDecision;
 }
 
 export interface VulnerabilitiesResponse {
   findings: VulnerabilityFinding[];
+}
+
+export interface VulnerabilityNetResponse {
+  raw_count: number;
+  resolved_by_vex_count: number;
+  actionable_count: number;
+  under_investigation_count: number;
+  severity_threshold?: string;
+  threshold_breached: boolean;
+  findings: VulnerabilityFinding[];
+  applied_filters: Record<string, string>;
 }
 
 export interface VulnerabilityBlastRadiusItem {

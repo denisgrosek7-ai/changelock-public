@@ -68,3 +68,19 @@ Check:
 - `CHANGELOCK_VULNOPS_SCANNER`
 - `CHANGELOCK_VULNOPS_TRIVY_PATH`
 - `CHANGELOCK_VULNOPS_GRYPE_PATH`
+
+## VEX import or deploy-time mismatch
+
+Symptoms:
+- `audit-writer` fails during startup after enabling `CHANGELOCK_VEX_IMPORT_DIR`
+- `deploy-gate` starts denying with `vex-aware vulnerability evaluation failed`
+- vulnerability dashboard counts show raw findings but no expected VEX resolution
+
+Check:
+- `CHANGELOCK_VEX_IMPORT_DIR`
+- that the mounted VEX directory exists and contains valid JSON documents
+- `CHANGELOCK_VEX_DEPLOY_MODE`
+- `AUDIT_WRITER_URL`
+- `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
+- `GET /v1/vex/status`
+- `GET /v1/vulnerabilities/net`

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/signing"
+	internalvex "github.com/denisgrosek/changelock/internal/vex"
 )
 
 type MemoryStore struct {
@@ -22,6 +23,7 @@ type MemoryStore struct {
 	scanRuns            []VulnerabilityScanRun
 	findings            map[string]VulnerabilityFinding
 	decisions           map[int64]VulnerabilityDecision
+	vexStatements       map[int64]internalvex.Statement
 	nextID              int64
 	nextExceptionID     int64
 	nextApprovalLogID   int64
@@ -30,6 +32,7 @@ type MemoryStore struct {
 	nextScanRunID       int64
 	nextFindingID       int64
 	nextDecisionID      int64
+	nextVEXStatementID  int64
 	now                 func() time.Time
 }
 
@@ -42,6 +45,7 @@ func NewMemoryStore() *MemoryStore {
 		scanRuns:            []VulnerabilityScanRun{},
 		findings:            map[string]VulnerabilityFinding{},
 		decisions:           map[int64]VulnerabilityDecision{},
+		vexStatements:       map[int64]internalvex.Statement{},
 		nextID:              1,
 		nextExceptionID:     1,
 		nextApprovalLogID:   1,
@@ -50,6 +54,7 @@ func NewMemoryStore() *MemoryStore {
 		nextScanRunID:       1,
 		nextFindingID:       1,
 		nextDecisionID:      1,
+		nextVEXStatementID:  1,
 		now:                 time.Now,
 	}
 }

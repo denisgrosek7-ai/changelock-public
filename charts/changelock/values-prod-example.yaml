@@ -109,6 +109,8 @@ attestationVerifier:
 deployGate:
   replicaCount: 3
   antiAffinity: required
+  # Optional: set to enforce once VEX-aware vulnerability evaluation is part of the admission posture.
+  vexDeployMode: disabled
   tls:
     enabled: true
     secretName: changelock-deploy-gate-tls

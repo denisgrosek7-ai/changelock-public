@@ -23,12 +23,19 @@ import type {
   TopViolatorsResponse,
   TrendBucket,
   TrendsResponse,
+  VEXCreateInput,
+  VEXMatch,
+  VEXStatement,
+  VEXStatementActionResponse,
+  VEXStatementsResponse,
+  VEXStatusSummary,
   VulnerabilityBlastRadiusItem,
   VulnerabilityBlastRadiusResponse,
   VulnerabilityDecision,
   VulnerabilityDecisionInput,
   VulnerabilityDecisionsResponse,
   VulnerabilityFinding,
+  VulnerabilityNetResponse,
   VulnerabilitiesResponse,
   VulnerabilityRescanResponse,
   VulnerabilityTimelineEntry,
@@ -529,6 +536,67 @@ function parseVulnerabilityDecision(value: unknown): VulnerabilityDecision {
   };
 }
 
+function parseVEXMatch(value: unknown): VEXMatch {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex match.");
+  }
+  return {
+    id: readNumber(value.id, "vex.id"),
+    source_format: readString(value.source_format, "vex.source_format"),
+    source_ref: readOptionalString(value.source_ref, "vex.source_ref"),
+    vulnerability_id: readString(value.vulnerability_id, "vex.vulnerability_id"),
+    status: readString(value.status, "vex.status") as VEXMatch["status"],
+    justification: readOptionalString(value.justification, "vex.justification"),
+    action_statement: readOptionalString(value.action_statement, "vex.action_statement"),
+    impact_statement: readOptionalString(value.impact_statement, "vex.impact_statement"),
+    fixed_version: readOptionalString(value.fixed_version, "vex.fixed_version"),
+    created_by: readOptionalString(value.created_by, "vex.created_by"),
+    updated_by: readOptionalString(value.updated_by, "vex.updated_by"),
+    expires_at: readOptionalString(value.expires_at, "vex.expires_at"),
+    created_at: readString(value.created_at, "vex.created_at"),
+    updated_at: readString(value.updated_at, "vex.updated_at"),
+  };
+}
+
+function parseVEXStatement(value: unknown): VEXStatement {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex statement.");
+  }
+  const scope = readOptionalRecord(value.scope, "statement.scope") || {};
+  return {
+    id: readNumber(value.id, "statement.id"),
+    statement_key: readOptionalString(value.statement_key, "statement.statement_key"),
+    source_format: readString(value.source_format, "statement.source_format"),
+    source_ref: readOptionalString(value.source_ref, "statement.source_ref"),
+    vulnerability_id: readString(value.vulnerability_id, "statement.vulnerability_id"),
+    scope: {
+      image_digest: readOptionalString(scope.image_digest, "statement.scope.image_digest"),
+      package_name: readOptionalString(scope.package_name, "statement.scope.package_name"),
+      purl: readOptionalString(scope.purl, "statement.scope.purl"),
+      repo: readOptionalString(scope.repo, "statement.scope.repo"),
+      workload: readOptionalString(scope.workload, "statement.scope.workload"),
+      tenant_id: readOptionalString(scope.tenant_id, "statement.scope.tenant_id"),
+      cluster_id: readOptionalString(scope.cluster_id, "statement.scope.cluster_id"),
+      environment: readOptionalString(scope.environment, "statement.scope.environment"),
+      namespace: readOptionalString(scope.namespace, "statement.scope.namespace"),
+    },
+    status: readString(value.status, "statement.status") as VEXStatement["status"],
+    justification: readOptionalString(value.justification, "statement.justification"),
+    action_statement: readOptionalString(value.action_statement, "statement.action_statement"),
+    impact_statement: readOptionalString(value.impact_statement, "statement.impact_statement"),
+    fixed_version: readOptionalString(value.fixed_version, "statement.fixed_version"),
+    created_by: readOptionalString(value.created_by, "statement.created_by"),
+    updated_by: readOptionalString(value.updated_by, "statement.updated_by"),
+    expires_at: readOptionalString(value.expires_at, "statement.expires_at"),
+    revoked_at: readOptionalString(value.revoked_at, "statement.revoked_at"),
+    revoked_by: readOptionalString(value.revoked_by, "statement.revoked_by"),
+    active: readBoolean(value.active, "statement.active"),
+    metadata: readOptionalRecord(value.metadata, "statement.metadata"),
+    created_at: readString(value.created_at, "statement.created_at"),
+    updated_at: readString(value.updated_at, "statement.updated_at"),
+  };
+}
+
 function parseVulnerabilityFinding(value: unknown): VulnerabilityFinding {
   if (!isRecord(value)) {
     throw new Error("Audit API returned invalid vulnerability finding.");
@@ -551,6 +619,7 @@ function parseVulnerabilityFinding(value: unknown): VulnerabilityFinding {
     metadata: readOptionalRecord(value.metadata, "findings[].metadata"),
     first_seen_at: readString(value.first_seen_at, "findings[].first_seen_at"),
     last_seen_at: readString(value.last_seen_at, "findings[].last_seen_at"),
+    vex: value.vex ? parseVEXMatch(value.vex) : undefined,
     decision: value.decision ? parseVulnerabilityDecision(value.decision) : undefined,
   };
 }
@@ -644,6 +713,59 @@ function parseVulnerabilityDecisionActionResponse(value: unknown): { status: str
   return {
     status: readString(value.status, "status"),
     decision: parseVulnerabilityDecision(value.decision),
+  };
+}
+
+function parseVEXStatementsResponse(value: unknown): VEXStatementsResponse {
+  if (!isRecord(value) || !Array.isArray(value.statements)) {
+    throw new Error("Audit API returned invalid vex statements response.");
+  }
+  return {
+    statements: value.statements.map(parseVEXStatement),
+  };
+}
+
+function parseVEXStatementActionResponse(value: unknown): VEXStatementActionResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex action response.");
+  }
+  return {
+    status: readString(value.status, "status"),
+    statement: parseVEXStatement(value.statement),
+  };
+}
+
+function parseVEXStatusSummary(value: unknown): VEXStatusSummary {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex status.");
+  }
+  const counts = readOptionalRecord(value.counts_by_status, "counts_by_status") || {};
+  const countsByStatus: Record<string, number> = {};
+  for (const [key, count] of Object.entries(counts)) {
+    countsByStatus[key] = readNumber(count, `counts_by_status.${key}`);
+  }
+  return {
+    active_count: readNumber(value.active_count, "active_count"),
+    expiring_count: readNumber(value.expiring_count, "expiring_count"),
+    revoked_count: readNumber(value.revoked_count, "revoked_count"),
+    counts_by_status: countsByStatus,
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> | undefined,
+  };
+}
+
+function parseVulnerabilityNetResponse(value: unknown): VulnerabilityNetResponse {
+  if (!isRecord(value) || !Array.isArray(value.findings)) {
+    throw new Error("Audit API returned invalid vulnerability net response.");
+  }
+  return {
+    raw_count: readNumber(value.raw_count, "raw_count"),
+    resolved_by_vex_count: readNumber(value.resolved_by_vex_count, "resolved_by_vex_count"),
+    actionable_count: readNumber(value.actionable_count, "actionable_count"),
+    under_investigation_count: readNumber(value.under_investigation_count, "under_investigation_count"),
+    severity_threshold: readOptionalString(value.severity_threshold, "severity_threshold"),
+    threshold_breached: readBoolean(value.threshold_breached, "threshold_breached"),
+    findings: value.findings.map(parseVulnerabilityFinding),
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
   };
 }
 
@@ -851,6 +973,19 @@ export async function getActiveVulnerabilities(filters: {
   return parseVulnerabilitiesResponse(await fetchJSON<unknown>("/v1/vulnerabilities/active", { params: filters }));
 }
 
+export async function getNetVulnerabilities(filters: {
+  severity?: string;
+  severity_threshold?: string;
+  cve_id?: string;
+  image_digest?: string;
+  component_name?: string;
+  tenant_id?: string;
+  environment?: string;
+  limit?: string;
+}) {
+  return parseVulnerabilityNetResponse(await fetchJSON<unknown>("/v1/vulnerabilities/net", { params: filters }));
+}
+
 export async function getVulnerabilityBlastRadius(filters: {
   cve_id?: string;
   component_name?: string;
@@ -878,6 +1013,44 @@ export async function getVulnerabilityDecisions(filters: {
   limit?: string;
 }) {
   return parseVulnerabilityDecisionsResponse(await fetchJSON<unknown>("/v1/vulnerabilities/decisions", { params: filters }));
+}
+
+export async function getVEXStatements(filters: {
+  vulnerability_id?: string;
+  image_digest?: string;
+  package_name?: string;
+  tenant_id?: string;
+  environment?: string;
+  active?: string;
+  limit?: string;
+}) {
+  return parseVEXStatementsResponse(await fetchJSON<unknown>("/v1/vex", { params: filters }));
+}
+
+export async function getVEXStatus(filters?: {
+  vulnerability_id?: string;
+  image_digest?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+}) {
+  return parseVEXStatusSummary(await fetchJSON<unknown>("/v1/vex/status", { params: filters }));
+}
+
+export async function createVEXStatement(input: VEXCreateInput) {
+  return parseVEXStatementActionResponse(
+    await fetchJSON<unknown>("/v1/vex", {
+      method: "POST",
+      body: input,
+    }),
+  );
+}
+
+export async function revokeVEXStatement(statementID: number) {
+  return parseVEXStatementActionResponse(
+    await fetchJSON<unknown>(`/v1/vex/${encodeURIComponent(String(statementID))}/revoke`, {
+      method: "POST",
+    }),
+  );
 }
 
 export async function createVulnerabilityDecision(input: VulnerabilityDecisionInput) {
