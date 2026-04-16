@@ -1,4 +1,4 @@
-.PHONY: bootstrap lint test build run-local audit-up audit-run audit-migrate ui-install ui-dev ui-build observability-up metrics-check package helm-lint helm-template helm-template-prod helm-package kind-up kind-down kind-load-images e2e
+.PHONY: bootstrap lint test build run-local audit-up audit-run audit-migrate ui-install ui-dev ui-build observability-up metrics-check package helm-lint helm-template helm-template-prod helm-package go-live-smoke kind-up kind-down kind-load-images e2e
 
 bootstrap:
 	go mod download
@@ -58,6 +58,9 @@ helm-template-prod:
 
 helm-package:
 	helm package charts/changelock
+
+go-live-smoke:
+	./scripts/smoke/go_live_validation.sh
 
 kind-load-images:
 	./scripts/load_images_kind.sh

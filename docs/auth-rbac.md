@@ -14,6 +14,8 @@ ChangeLock now supports two production-usable bearer-token backends plus the ori
 
 ## Static token mode
 
+The example below is for local demo/dev usage. Do not reuse these token values in production.
+
 Example `CHANGELOCK_AUTH_TOKENS_JSON`:
 
 ```json
@@ -140,6 +142,7 @@ Protected routes:
 - `POST /v1/exceptions/{exception_id}/approve` -> `security_admin`
 - `POST /v1/exceptions/{exception_id}/reject` -> `security_admin`
 - `DELETE /v1/exceptions/{exception_id}` -> `security_admin`
+- `POST /v1/ingest` -> `service_internal`
 - `POST /v1/exceptions/validate` -> `service_internal | security_admin`
 - `POST /v1/sbom/ingest` -> `security_admin | service_internal`
 - `GET /v1/sbom/images/{image_digest}` -> `viewer | operator | security_admin`
@@ -156,7 +159,6 @@ Still unprotected:
 
 - `GET /health`
 - `/metrics`
-- `POST /v1/ingest`
 
 ## Tenant scoping
 
@@ -216,11 +218,13 @@ When the CLI runs with `--offline` or without `CHANGELOCK_CLI_API_URL`, API-assi
 
 ## Static-token internal service auth
 
-`policy-engine` and `deploy-gate` can send a bearer token to exception validation with:
+`policy-engine`, `deploy-gate`, `attestation-verifier`, and `runtime-agent` can send a bearer token to `audit-writer` trust-sensitive endpoints with:
 
 - `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 
 When `CHANGELOCK_AUTH_MODE=static-token`, the token must exactly match the `token` field of a `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`.
+
+Even when `CHANGELOCK_AUTH_MODE=disabled`, `POST /v1/ingest` still requires the internal service bearer token. Disabled auth mode no longer leaves audit ingest anonymous.
 
 ## Cross-cluster machine auth
 
@@ -246,6 +250,15 @@ Rules:
 
 The Helm chart now exposes OIDC/JWT settings through `charts/changelock/values.yaml`:
 
+- `deploymentProfile`
+  - `demo` keeps local/evaluation posture simple
+  - `production` enables Helm-side guardrails for auth, sync, and signer configuration
+- `auth.createSecret`
+  - in demo profile, the chart auto-generates a release-local internal service token if none is provided
+  - in production, prefer `auth.existingSecret` or an explicitly managed secret-creation flow
+- do not copy demo bearer tokens into production chart values or secrets
+- use `charts/changelock/values-prod-example.yaml` as the production baseline
+
 - `auth.mode`
 - `auth.roleClaim`
 - `auth.tenantClaim`
@@ -258,3 +271,22 @@ The Helm chart now exposes OIDC/JWT settings through `charts/changelock/values.y
 - `auth.oidc.audiences`
 - `auth.oidc.jwksUrl`
 - `auth.oidc.clockSkew`
+- `sync.mode`
+- `sync.clusterId`
+- `sync.hubUrl`
+- `sync.pollInterval`
+- `sync.failMode`
+- `sync.cacheDir`
+- `sync.requireClusterId`
+- `sync.tokenExistingSecret`
+- `sync.clusterBindingsJson`
+- `sync.clusterBindingsExistingSecret`
+- `signer.mode`
+- `signer.purposes`
+- `signer.keyId`
+- `signer.algorithm`
+- `signer.verifyOnRead`
+- `signer.existingSecret`
+- `signer.vault.addr`
+- `signer.vault.transitPath`
+- `signer.vault.transitKey`

@@ -1,6 +1,11 @@
+# Production baseline example.
+# Do not use demo tokens or docker-compose.dev.yml defaults with this file.
+deploymentProfile: production
+
 auth:
   mode: oidc-jwt
   createSecret: false
+  # Secret must provide CHANGELOCK_INTERNAL_SERVICE_TOKEN.
   existingSecret: changelock-auth
   roleClaim: groups
   tenantClaim: tenant_id
@@ -14,6 +19,35 @@ auth:
     audiences: changelock-ui
     jwksUrl: https://issuer.example.com/.well-known/jwks.json
     clockSkew: 1m
+
+sync:
+  mode: hub
+  requireClusterId: true
+  failMode: last-known-good
+  pollInterval: 30s
+  cacheDir: /var/lib/changelock-sync
+  # Secret must provide CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON for hub mode.
+  clusterBindingsExistingSecret: changelock-sync
+  clusterBindingsKey: CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON
+  # Spoke example:
+  # mode: spoke
+  # clusterId: prod-eu
+  # hubUrl: https://changelock-hub.example.com
+  # tokenExistingSecret: changelock-sync
+  # tokenKey: CHANGELOCK_SYNC_TOKEN
+
+signer:
+  mode: vault-transit
+  purposes: exceptions,sync-snapshots
+  keyId: changelock-control-plane
+  algorithm: sha2-256
+  verifyOnRead: true
+  # Secret must provide CHANGELOCK_VAULT_TOKEN.
+  existingSecret: changelock-signer
+  vault:
+    addr: https://vault.example.com
+    transitPath: transit
+    transitKey: changelock-control-plane
 
 postgresql:
   enabled: false

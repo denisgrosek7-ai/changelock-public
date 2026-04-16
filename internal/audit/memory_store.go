@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 type MemoryStore struct {
@@ -307,6 +309,21 @@ func (s *MemoryStore) ReplaceApprovedExceptions(_ context.Context, exceptions []
 	}
 
 	return nil
+}
+
+func (s *MemoryStore) SetExceptionSignature(_ context.Context, exceptionID string, envelope *signing.Envelope) (PolicyException, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exception, ok := s.exceptions[strings.TrimSpace(exceptionID)]
+	if !ok {
+		return PolicyException{}, ErrExceptionNotFound
+	}
+	exception.Signature = cloneSignatureEnvelope(envelope)
+	now := s.now().UTC()
+	exception.LastUpdatedAt = timePointer(now)
+	s.exceptions[exception.ExceptionID] = exception
+	return clonePolicyException(exception), nil
 }
 
 func (s *MemoryStore) ApproveException(_ context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error) {

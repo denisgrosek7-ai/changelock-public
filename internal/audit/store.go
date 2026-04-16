@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 var (
@@ -38,6 +40,7 @@ type Store interface {
 	ApproveException(ctx context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error)
 	RejectException(ctx context.Context, exceptionID string, reason string, rejectedBy string, rejectorRole string) (PolicyException, error)
 	RevokeException(ctx context.Context, exceptionID string) (PolicyException, error)
+	SetExceptionSignature(ctx context.Context, exceptionID string, envelope *signing.Envelope) (PolicyException, error)
 	ValidateException(ctx context.Context, request ExceptionValidationRequest) (ExceptionValidationResult, error)
 	ExceptionReport(ctx context.Context, filter ExceptionFilter) (ExceptionReport, error)
 	ListApprovalLogs(ctx context.Context, exceptionID string, limit int) ([]ApprovalLog, error)

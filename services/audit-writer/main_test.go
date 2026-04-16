@@ -21,8 +21,12 @@ import (
 func TestMain(m *testing.M) {
 	_ = os.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeDisabled)
 	_ = os.Unsetenv("CHANGELOCK_AUTH_TOKENS_JSON")
-	_ = os.Unsetenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")
+	_ = os.Setenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN", "service-internal-demo-token")
 	os.Exit(m.Run())
+}
+
+func machineAuthHeader(req *http.Request) {
+	req.Header.Set("Authorization", "Bearer service-internal-demo-token")
 }
 
 func testAuthTokensJSON() string {
@@ -87,6 +91,7 @@ func TestIngestStoresEvent(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/ingest", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Request-Id", "req-123")
+	machineAuthHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -112,12 +117,62 @@ func TestIngestRejectsInvalidEvent(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/ingest", bytes.NewBufferString(`{"event_type":"policy_decision","decision":"DENY"}`))
 	req.Header.Set("Content-Type", "application/json")
+	machineAuthHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestIngestRejectsUnauthenticatedRequests(t *testing.T) {
+	handler := newHandler(audit.NewMemoryStore(), "memory")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/ingest", bytes.NewBufferString(`{"component":"deploy-gate","event_type":"deploy_gate_decision","decision":"DENY"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestIngestRejectsHumanTokenWhenAuthIsEnabled(t *testing.T) {
+	authConfig, err := auth.ParseConfig(auth.ModeStaticToken, testAuthTokensJSON())
+	if err != nil {
+		t.Fatalf("ParseConfig() error = %v", err)
+	}
+	handler := newHandlerWithRuntimesAndSigning(audit.NewMemoryStore(), "memory", authConfig, nil, newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}), nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/ingest", bytes.NewBufferString(`{"component":"deploy-gate","event_type":"deploy_gate_decision","decision":"DENY"}`))
+	req.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestIngestAcceptsServiceTokenWhenAuthIsEnabled(t *testing.T) {
+	authConfig, err := auth.ParseConfig(auth.ModeStaticToken, testAuthTokensJSON())
+	if err != nil {
+		t.Fatalf("ParseConfig() error = %v", err)
+	}
+	handler := newHandlerWithRuntimesAndSigning(audit.NewMemoryStore(), "memory", authConfig, nil, newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}), nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/ingest", bytes.NewBufferString(`{"component":"deploy-gate","event_type":"deploy_gate_decision","decision":"DENY"}`))
+	req.Header.Set("Authorization", "Bearer service-internal-demo-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -206,6 +261,7 @@ func TestPostgresReportsRoundTripPreservesRawEventAndSummary(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, "/v1/ingest", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
+		machineAuthHeader(req)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusCreated {
@@ -1209,7 +1265,7 @@ func TestServiceInternalCanTriggerRescanButCannotWriteHumanDecisionRoutes(t *tes
 				}},
 			},
 		},
-	})
+	}, nil, nil)
 
 	rescanReq := httptest.NewRequest(http.MethodPost, "/v1/vulnerabilities/rescan", bytes.NewBufferString(`{"image_digest":"sha256:rescan1"}`))
 	rescanReq.Header.Set("Authorization", "Bearer service-internal-demo-token")

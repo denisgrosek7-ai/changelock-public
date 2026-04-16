@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/denisgrosek/changelock/internal/auth"
 	"github.com/denisgrosek/changelock/internal/httpjson"
 	"github.com/denisgrosek/changelock/internal/metrics"
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 type server struct {
@@ -28,6 +30,8 @@ type server struct {
 	authConfig     auth.Config
 	vulnOps        *vulnOpsRuntime
 	syncRuntime    *syncRuntime
+	signing        *signingRuntime
+	internalToken  string
 }
 
 type ingestResponse struct {
@@ -92,6 +96,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	signingRuntime, err := loadSigningRuntimeFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if syncRuntime != nil {
+		syncRuntime.signing = signingRuntime
+	}
 
 	if *migrateOnly {
 		log.Printf("audit-writer migrations applied using %s backend", backend)
@@ -108,7 +119,7 @@ func main() {
 	log.Printf("audit-writer listening on %s using %s backend", addr, backend)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           newHandlerWithDeps(store, backend, authConfig, vulnOps),
+		Handler:           newHandlerWithDeps(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -126,7 +137,15 @@ func newHandler(store audit.Store, backend string) http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithDeps(store, backend, authConfig, vulnOps)
+	syncRuntime, err := loadSyncRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	signingRuntime, err := loadSigningRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithDeps(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
 }
 
 func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Config) http.Handler {
@@ -138,18 +157,29 @@ func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Confi
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithRuntimes(store, backend, authConfig, vulnOps, syncRuntime)
-}
-
-func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime) http.Handler {
-	syncRuntime, err := loadSyncRuntimeFromEnv()
+	signingRuntime, err := loadSigningRuntimeFromEnv()
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithRuntimes(store, backend, authConfig, vulnOps, syncRuntime)
+	return newHandlerWithRuntimesAndSigning(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
+}
+
+func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime, signingRuntime *signingRuntime) http.Handler {
+	return newHandlerWithRuntimesAndSigning(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
 }
 
 func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime) http.Handler {
+	signingRuntime, err := loadSigningRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithRuntimesAndSigning(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
+}
+
+func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime, signingRuntime *signingRuntime) http.Handler {
+	if syncRuntime != nil {
+		syncRuntime.signing = signingRuntime
+	}
 	srv := server{
 		store:          store,
 		backend:        backend,
@@ -158,6 +188,8 @@ func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.C
 		authConfig:     authConfig,
 		vulnOps:        vulnOps,
 		syncRuntime:    syncRuntime,
+		signing:        signingRuntime,
+		internalToken:  strings.TrimSpace(os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")),
 	}
 
 	mux := http.NewServeMux()
@@ -261,6 +293,12 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
+	principal, err := s.requireIngestPrincipal(r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	r = r.WithContext(auth.WithPrincipal(r.Context(), principal))
 
 	var event audit.Event
 	if err := httpjson.Decode(r, &event); err != nil {
@@ -270,7 +308,7 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 	if event.RequestID == "" {
 		event.RequestID = requestIDFromHeader(r)
 	}
-	clusterID, err := s.resolveInboundClusterID(r)
+	clusterID, err := s.resolveInboundClusterID(r, principal)
 	if err != nil {
 		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
 		return
@@ -444,6 +482,11 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 			httpjson.Write(w, status, map[string]string{"error": err.Error()})
 			return
 		}
+		exception, err = s.signAndPersistException(ctx, exception)
+		if err != nil {
+			httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
 
 		s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionApproved, audit.DecisionAllow, exception, "direct emergency exception created as approved")
 		httpjson.Write(w, http.StatusCreated, exceptionResponse{
@@ -608,6 +651,11 @@ func (s server) approveExceptionHandler(w http.ResponseWriter, r *http.Request, 
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
 	}
+	exception, err = s.signAndPersistException(ctx, exception)
+	if err != nil {
+		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 
 	reason := "exception approved"
 	if normalized := audit.NormalizeExceptionActionRequest(request); normalized.Reason != "" {
@@ -715,6 +763,25 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 		}
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
+	}
+	if result.Exception != nil {
+		verification, err := s.signing.verifyException(ctx, *result.Exception)
+		if err != nil {
+			httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		result.VerificationState = verification.State
+		result.VerificationReason = verification.Reason
+		result.Exception.VerificationState = verification.State
+		result.Exception.VerificationReason = verification.Reason
+		if s.signing.verifyOnRead(signing.PurposeExceptions) && verification.State != signing.StateVerified {
+			result.Valid = false
+			if result.Reason == "" {
+				result.Reason = firstNonEmpty(verification.Reason, "exception evidence verification failed")
+			}
+		}
+	} else {
+		result.VerificationState = signing.StateDisabled
 	}
 
 	httpjson.Write(w, http.StatusOK, result)
@@ -965,6 +1032,9 @@ func (s server) syncStatusHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		status = deriveSyncStatus(status, s.syncRuntime.config, time.Now().UTC())
 	}
+	if s.signing != nil {
+		status.SignerMode = s.signing.mode()
+	}
 	httpjson.Write(w, http.StatusOK, status)
 }
 
@@ -1006,6 +1076,12 @@ func (s server) syncExceptionsHandler(w http.ResponseWriter, r *http.Request) {
 		GeneratedAt: time.Now().UTC(),
 		Exceptions:  filtered,
 	}
+	envelope, err := s.signing.signSyncSnapshot(r.Context(), response)
+	if err != nil {
+		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	response.Signature = envelope
 	w.Header().Set("ETag", etag)
 	httpjson.Write(w, http.StatusOK, response)
 }
@@ -1073,17 +1149,50 @@ func parseExceptionFilter(r *http.Request) (audit.ExceptionFilter, error) {
 	return audit.NormalizeExceptionFilter(filter)
 }
 
-func (s server) resolveInboundClusterID(r *http.Request) (string, error) {
+func (s server) requireIngestPrincipal(r *http.Request) (auth.Principal, error) {
+	if s.authConfig.Mode != auth.ModeDisabled {
+		return s.authConfig.Require(r, auth.RoleService)
+	}
+	if strings.TrimSpace(s.internalToken) == "" {
+		return auth.Principal{}, auth.ErrMissingBearerToken
+	}
+	token, err := bearerTokenFromHeader(r.Header.Get("Authorization"))
+	if err != nil {
+		return auth.Principal{}, err
+	}
+	if subtle.ConstantTimeCompare([]byte(token), []byte(s.internalToken)) != 1 {
+		return auth.Principal{}, auth.ErrInvalidBearerToken
+	}
+	return auth.Principal{
+		Authenticated: true,
+		AuthMode:      auth.ModeDisabled,
+		Subject:       "internal-service",
+		Role:          auth.RoleService,
+		TokenID:       "internal-service",
+		IdentityType:  auth.IdentityTypeService,
+		GlobalScope:   true,
+	}, nil
+}
+
+func bearerTokenFromHeader(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", auth.ErrMissingBearerToken
+	}
+	parts := strings.Fields(value)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
+		return "", auth.ErrMalformedAuthorization
+	}
+	return strings.TrimSpace(parts[1]), nil
+}
+
+func (s server) resolveInboundClusterID(r *http.Request, principal auth.Principal) (string, error) {
 	clusterID := strings.TrimSpace(r.Header.Get(syncClusterHeader))
 	if clusterID == "" {
 		return "", nil
 	}
 	if s.syncRuntime == nil || s.syncRuntime.config.Mode != audit.SyncModeHub {
 		return clusterID, nil
-	}
-	principal, err := s.authConfig.Require(r, auth.RoleService)
-	if err != nil {
-		return "", err
 	}
 	if _, err := s.syncRuntime.authorizeClusterPrincipal(principal, clusterID); err != nil {
 		return "", err

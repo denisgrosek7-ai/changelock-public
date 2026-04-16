@@ -35,6 +35,27 @@ Check:
 - `CHANGELOCK_AUTH_MODE`
 - `CHANGELOCK_AUTH_TOKENS_JSON`
 - `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
+- `deploymentProfile`
+- whether the Helm release is using the intended Kubernetes Secret references
+
+## Sync or signer misconfiguration
+
+Symptoms:
+- `/v1/sync/status` reports `error`
+- exception validation returns `verification_state=failed`
+- spoke cache reload fails after startup
+
+Check:
+- `CHANGELOCK_SYNC_MODE`
+- `CHANGELOCK_SYNC_HUB_URL`
+- `CHANGELOCK_CLUSTER_ID`
+- `CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON`
+- `CHANGELOCK_SIGNER_MODE`
+- `CHANGELOCK_VAULT_ADDR`
+- `CHANGELOCK_VAULT_TRANSIT_KEY`
+- that the referenced Kubernetes Secrets actually contain the expected keys
+
+After correcting the issue, rerun the checks in `docs/operations/go-live-checklist.md`.
 
 ## Verifier or scanner tool missing
 
@@ -47,4 +68,3 @@ Check:
 - `CHANGELOCK_VULNOPS_SCANNER`
 - `CHANGELOCK_VULNOPS_TRIVY_PATH`
 - `CHANGELOCK_VULNOPS_GRYPE_PATH`
-

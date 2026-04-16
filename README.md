@@ -62,10 +62,13 @@ Block Kubernetes deployments unless the image:
   - the manual GitHub `build-sign-attest` workflow runs the real build, push, Trivy, Syft, provenance, and signing path in GitHub Actions
 
 ## Local development
+Local development and `docker-compose.dev.yml` are demo/dev paths. They are intentionally convenient and are not production-safe defaults.
+
 1. Install `Go 1.26+`.
 2. Install `cosign` and make sure it is on `PATH`, or set `CHANGELOCK_COSIGN_BIN`.
 3. Optional: set `CHANGELOCK_AUDIT_FILE` to choose the JSONL audit file path. The default path is `artifacts/audit/changelock-events.jsonl`.
 4. Optional: set `AUDIT_WRITER_URL` or `CHANGELOCK_AUDIT_WRITER_URL` to forward audit events to a remote audit-writer service. If this is set and `CHANGELOCK_AUDIT_FILE` is not set, services forward only to the remote writer.
+   - when services forward to `audit-writer`, they now require `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 5. Optional: set `CHANGELOCK_RUNTIME_FIXTURE` to a YAML fixture file if you want `services/runtime-agent` to read observed workload state without a live cluster.
 6. Optional: install `trivy` or `grype` if you want to use the 7d vulnerability rescan path from `audit-writer`.
 7. Optional: enable vulnerability ops with `CHANGELOCK_VULNOPS_ENABLED=true`. The default local posture keeps rescanning disabled until explicitly turned on.
@@ -73,6 +76,8 @@ Block Kubernetes deployments unless the image:
 9. Start Docker Desktop if you want to build the service containers.
 10. Run `docker compose -f docker-compose.dev.yml build policy-engine attestation-verifier deploy-gate runtime-agent audit-writer`.
 11. Mount `./policies` into the services or set `CHANGELOCK_POLICIES_DIR` when running locally.
+
+`docker-compose.dev.yml` keeps explicit demo defaults for local service-to-service auth. Do not copy those token values into Helm production deployments.
 
 ## Phase 8a developer pre-flight CLI
 
@@ -119,6 +124,8 @@ Example:
   --token viewer-demo-token
 ```
 
+The bearer token shown above is a local static-token example. In production, use a real low-privilege bearer token or enterprise JWT path instead of demo tokens.
+
 Full usage and exit codes:
 - `docs/developer-preflight-cli.md`
 
@@ -143,8 +150,29 @@ Phase 8b adds a practical multi-cluster model without rewriting the enforcement 
 See:
 
 - `docs/cross-cluster-sync.md`
+- `charts/changelock/values.yaml`
 - `deploy/gitops/examples/argocd-applicationset.yaml`
 - `deploy/gitops/examples/flux-kustomization.yaml`
+
+## Phase 8c HSM / KMS-backed control-plane evidence signing
+
+Phase 8c adds provider-backed signing for internal trust-sensitive ChangeLock artifacts:
+
+- approved exception evidence
+- cross-cluster sync snapshots
+
+Implemented provider modes:
+
+- `disabled`
+- `software`
+- `vault-transit`
+
+This does not replace existing keyless image signature and attestation verification. It hardens ChangeLock-controlled evidence paths only.
+
+See:
+
+- `docs/hsm-kms-integration.md`
+- `docs/cross-cluster-sync.md`
 
 ## Phase 7e production packaging and readiness
 
@@ -165,6 +193,16 @@ Preferred production docs:
 
 The raw manifests under `deploy/k8s/` remain useful references, but Helm is now the preferred installation surface.
 
+Production deployment guidance:
+- `charts/changelock/values.yaml`
+  - evaluation/demo defaults
+  - `deploymentProfile=demo`
+- `charts/changelock/values-prod-example.yaml`
+  - production baseline
+  - `deploymentProfile=production`
+- `docs/operations/install.md`
+- `docs/operations/go-live-checklist.md`
+
 The default compose stack focuses on the current Go security services. The legacy `api` service stays behind an optional profile, while the new dashboard UI remains opt-in for local demos:
 - `docker compose -f docker-compose.dev.yml --profile legacy-api up --build`
 - `docker compose -f docker-compose.dev.yml --profile ui up --build`
@@ -175,7 +213,7 @@ Phase 5a adds a persistent audit backend without changing the structured event s
 ### What it adds
 - `services/audit-writer` in `Go`
 - PostgreSQL-backed `audit_events` storage
-- `POST /v1/ingest` for structured event ingestion
+- authenticated `POST /v1/ingest` for structured event ingestion
 - `GET /v1/reports/events` for filtered recent events
 - `GET /v1/reports/summary` for compact security posture stats
 - `GET /v1/reports/denies` and `GET /v1/reports/runtime-drift` for demo-friendly filtered views
@@ -190,6 +228,8 @@ Phase 5a adds a persistent audit backend without changing the structured event s
 - `CHANGELOCK_CORS_ALLOW_ORIGINS`
   - comma-separated allowlist for browser UI origins
   - defaults to local demo origins on `5173` and `3000`
+- `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
+  - required for machine-authenticated ingest and service-to-service audit forwarding
 - `CHANGELOCK_REPORTS_TIMEOUT`
   - per-request timeout for ingest and reports handlers
   - defaults to `5s`
@@ -260,7 +300,7 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 ## Audit reports API
 `services/audit-writer` exposes:
 - `GET /health`
-- `POST /v1/ingest`
+- machine-authenticated `POST /v1/ingest`
 - `POST /v1/exceptions`
 - `POST /v1/exceptions/request`
 - `GET /v1/exceptions`
@@ -521,7 +561,7 @@ ChangeLock keeps the original dev/demo auth path, but now also supports enterpri
 - `/health` stays open
 - `/ready` is exposed on `audit-writer`
 - `/metrics` behavior is unchanged in this phase
-- `POST /v1/ingest` is unchanged in this phase
+- `POST /v1/ingest` now requires machine/service auth and no longer accepts anonymous audit writes
 
 ### Demo token config
 Example non-secret demo token file:

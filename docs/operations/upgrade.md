@@ -26,6 +26,7 @@ kubectl rollout status deployment/changelock-changelock-policy-engine
 kubectl rollout status deployment/changelock-changelock-deploy-gate
 kubectl get validatingwebhookconfiguration
 ```
+6. Run the post-upgrade smoke checks in [go-live-checklist.md](/tmp/changelock-blueprint-readiness/docs/operations/go-live-checklist.md).
 
 ## Recovery from self-blocking admission
 

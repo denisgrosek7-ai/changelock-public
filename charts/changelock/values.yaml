@@ -1,3 +1,8 @@
+# Evaluation/demo defaults only.
+# For real deployments start from charts/changelock/values-prod-example.yaml
+# and set deploymentProfile=production.
+deploymentProfile: demo
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -6,7 +11,8 @@ imagePullSecrets: []
 
 auth:
   mode: disabled
-  createSecret: false
+  # Demo/eval convenience. Production should prefer auth.existingSecret.
+  createSecret: true
   existingSecret: ""
   tokensJson: ""
   tokensJsonKey: CHANGELOCK_AUTH_TOKENS_JSON
@@ -24,6 +30,34 @@ auth:
     audiences: ""
     jwksUrl: ""
     clockSkew: 1m
+
+sync:
+  mode: disabled
+  clusterId: ""
+  hubUrl: ""
+  pollInterval: 30s
+  failMode: last-known-good
+  cacheDir: /var/lib/changelock-sync
+  requireClusterId: true
+  tokenExistingSecret: ""
+  tokenKey: CHANGELOCK_SYNC_TOKEN
+  clusterBindingsJson: ""
+  clusterBindingsExistingSecret: ""
+  clusterBindingsKey: CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON
+
+signer:
+  mode: disabled
+  purposes: exceptions,sync-snapshots
+  keyId: ""
+  algorithm: ""
+  verifyOnRead: true
+  existingSecret: ""
+  softwareSecretKey: CHANGELOCK_SIGNER_SOFTWARE_SECRET
+  vaultTokenKey: CHANGELOCK_VAULT_TOKEN
+  vault:
+    addr: ""
+    transitPath: transit
+    transitKey: ""
 
 postgresql:
   enabled: true

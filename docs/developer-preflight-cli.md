@@ -19,6 +19,7 @@ It does **not** replace the server-side ChangeLock decision path. It is a local 
 - it does not bypass server-side RBAC or tenant enforcement
 - it does not guarantee cluster admission success when local inputs differ from real deploy inputs
 - it does not replace CI or admission webhook enforcement
+- any demo token examples in this document are local static-token examples only and are not production-safe
 
 ## Build and install
 

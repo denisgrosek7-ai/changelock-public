@@ -65,6 +65,7 @@ func TestScanPolicyExceptionHandlesNullScopeFields(t *testing.T) {
 			now.Add(2 * time.Hour),
 			true,
 			now,
+			nil,
 			json.RawMessage(`{}`),
 		},
 	}
@@ -131,6 +132,19 @@ func (r fakePolicyExceptionRow) Scan(dest ...any) error {
 					*d = append((*d)[:0], encoded...)
 				default:
 					return fmt.Errorf("unsupported json raw message source %T", value)
+				}
+			}
+		case *[]byte:
+			if value == nil {
+				*d = nil
+			} else {
+				switch encoded := value.(type) {
+				case []byte:
+					*d = append((*d)[:0], encoded...)
+				case json.RawMessage:
+					*d = append((*d)[:0], encoded...)
+				default:
+					return fmt.Errorf("unsupported byte slice source %T", value)
 				}
 			}
 		default:

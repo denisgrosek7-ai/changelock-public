@@ -13,12 +13,14 @@ Phase 7e makes Helm the preferred production-minded packaging path. The raw mani
 
 ## Default install
 
-The default chart values keep the local posture simple:
+The default chart values are for evaluation/demo posture:
+- `deploymentProfile=demo`
 - bundled PostgreSQL enabled
 - auth disabled
 - deploy-gate webhook disabled
 - network policies disabled
 - UI disabled
+- a release-local internal service token is auto-generated into the chart auth secret when `auth.createSecret=true`
 
 ```bash
 helm install changelock ./charts/changelock -n changelock-system --create-namespace
@@ -27,17 +29,19 @@ helm install changelock ./charts/changelock -n changelock-system --create-namesp
 ## Production-minded install
 
 Recommended production posture:
+- `deploymentProfile=production`
 - external PostgreSQL
-- static-token auth from an existing Kubernetes secret
+- bearer auth from existing Kubernetes secrets
+  - `oidc-jwt` for human/operator access
+  - `service_internal` bearer token for service-to-service and ingest flows
 - deploy-gate TLS secret present
 - webhook enabled
 - prod values example layered on top
 
-Create the auth secret:
+Create the auth secret for OIDC/JWT mode:
 ```bash
 kubectl create secret generic changelock-auth \
-  --from-literal=CHANGELOCK_AUTH_TOKENS_JSON='[{"token":"viewer-demo-token","subject":"demo-viewer","role":"viewer","token_id":"viewer-demo"},{"token":"operator-demo-token","subject":"demo-operator","role":"operator","token_id":"operator-demo"},{"token":"security-admin-demo-token","subject":"demo-admin","role":"security_admin","token_id":"security-admin-demo"},{"token":"service-internal-demo-token","subject":"policy-engine","role":"service_internal","token_id":"service-internal-demo"}]' \
-  --from-literal=CHANGELOCK_INTERNAL_SERVICE_TOKEN='service-internal-demo-token'
+  --from-literal=CHANGELOCK_INTERNAL_SERVICE_TOKEN="$(openssl rand -hex 32)"
 ```
 
 Create the PostgreSQL DSN secret:
@@ -46,12 +50,53 @@ kubectl create secret generic changelock-postgres \
   --from-literal=CHANGELOCK_POSTGRES_DSN='postgres://changelock:REDACTED@postgresql.example.internal:5432/changelock?sslmode=disable'
 ```
 
+Create the hub sync bindings secret when `sync.mode=hub`:
+```bash
+kubectl create secret generic changelock-sync \
+  --from-literal=CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON='{"service-internal-prod":{"clusters":["prod-eu","prod-us"],"tenants":["acme","globex"]}}'
+```
+
+Create the signer secret when `signer.mode=vault-transit`:
+```bash
+kubectl create secret generic changelock-signer \
+  --from-literal=CHANGELOCK_VAULT_TOKEN='REDACTED'
+```
+
 Install with the prod example:
 ```bash
 helm upgrade --install changelock ./charts/changelock \
   -n changelock-system --create-namespace \
   -f ./charts/changelock/values-prod-example.yaml
 ```
+
+Production notes:
+- the prod example expects `auth.existingSecret=changelock-auth`
+- the prod example expects `externalPostgresql.existingSecret=changelock-postgres`
+- the prod example expects `sync.clusterBindingsExistingSecret=changelock-sync` in hub mode
+- the prod example expects `signer.existingSecret=changelock-signer` in `vault-transit` mode
+- do not copy demo tokens into production secrets
+- if you switch to `static-token` auth in production, supply a non-demo `CHANGELOCK_AUTH_TOKENS_JSON` and a distinct internal service token in the auth secret
+
+## Supported deployment modes
+
+- local demo
+  - `deploymentProfile=demo`
+  - `CHANGELOCK_AUTH_MODE=disabled` is acceptable
+- standard production single-cluster
+  - `deploymentProfile=production`
+  - `sync.mode=disabled`
+- production hub
+  - `deploymentProfile=production`
+  - `sync.mode=hub`
+  - cluster bindings secret required when `sync.requireClusterId=true`
+- production spoke
+  - `deploymentProfile=production`
+  - `sync.mode=spoke`
+  - `sync.clusterId`, `sync.hubUrl`, and machine auth token required
+- signer-enabled production
+  - `deploymentProfile=production`
+  - `signer.mode=vault-transit`
+  - signer secret and Vault transit config required
 
 ## Webhook enablement
 
@@ -78,3 +123,5 @@ If you enable it:
   - readiness: `/ready`
 - all other Go services
   - liveness/readiness: `/health`
+
+After the release is healthy, run the post-deploy checks in [go-live-checklist.md](/tmp/changelock-blueprint-readiness/docs/operations/go-live-checklist.md).
