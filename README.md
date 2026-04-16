@@ -74,6 +74,54 @@ Block Kubernetes deployments unless the image:
 10. Run `docker compose -f docker-compose.dev.yml build policy-engine attestation-verifier deploy-gate runtime-agent audit-writer`.
 11. Mount `./policies` into the services or set `CHANGELOCK_POLICIES_DIR` when running locally.
 
+## Phase 8a developer pre-flight CLI
+
+Phase 8a adds `changelock-cli`, a small Go binary for fast local pre-flight checks before push, PR, or deploy.
+
+Implemented commands:
+- `changelock-cli version`
+- `changelock-cli manifest`
+- `changelock-cli image`
+- `changelock-cli scan`
+- `changelock-cli preflight`
+
+What it reuses:
+- local Kyverno policies from `deploy/kyverno`
+- local ChangeLock policy bundles from `policies/`
+- existing `cosign`-backed trust verification logic
+- existing Trivy/Grype scanner integration logic
+- existing read-only ChangeLock API context through `/v1/auth/me` and `/v1/exceptions`
+
+Execution modes:
+- `local-only`
+  - no API URL configured
+- `offline`
+  - local checks only, remote context is explicit `SKIP`
+- `api-assisted`
+  - local checks plus read-only ChangeLock API context
+  - unreachable API produces `ERROR`, not false `PASS`
+
+Build it locally:
+
+```bash
+go build -o ./bin/changelock-cli ./cmd/changelock-cli
+```
+
+Example:
+
+```bash
+./bin/changelock-cli preflight \
+  --file ./deploy/app.yaml \
+  --image ghcr.io/my-org/acme-app@sha256:abcd1234 \
+  --tenant acme \
+  --repository my-org/acme-app \
+  --api-url http://127.0.0.1:8094 \
+  --token viewer-demo-token
+```
+
+Full usage and exit codes:
+- `docs/developer-preflight-cli.md`
+
 ## Phase 7e production packaging and readiness
 
 Phase 7e adds the production-minded packaging layer:
