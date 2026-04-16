@@ -198,6 +198,20 @@ Safe response fields:
 
 The UI should derive access and tenant display from this endpoint instead of guessing locally from the bearer token.
 
+## CLI bearer-token usage
+
+`changelock-cli` can reuse the same bearer-token auth model for optional API-assisted context.
+
+Environment variables:
+
+- `CHANGELOCK_CLI_API_URL`
+- `CHANGELOCK_CLI_TOKEN`
+- `CHANGELOCK_CLI_OFFLINE`
+
+The CLI does not implement browser login, redirect flows, or embedded OIDC UX. It only sends a bearer token to existing ChangeLock API endpoints and therefore remains bound by the same RBAC and tenant-scoping rules enforced server-side.
+
+When the CLI runs with `--offline` or without `CHANGELOCK_CLI_API_URL`, API-assisted context is skipped explicitly. That skip is not equivalent to server approval.
+
 ## Static-token internal service auth
 
 `policy-engine` and `deploy-gate` can send a bearer token to exception validation with:
