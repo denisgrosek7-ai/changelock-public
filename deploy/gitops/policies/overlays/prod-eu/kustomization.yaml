@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      changelock.io/cluster-id: prod-eu
+      changelock.io/policy-bundle-revision: main
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: changelock-policy-bundle-metadata
+    patch: |-
+      - op: replace
+        path: /data/bundle_revision
+        value: main
+      - op: replace
+        path: /data/generated_at
+        value: gitops-overlay-prod-eu
+      - op: replace
+        path: /data/cluster_id
+        value: prod-eu

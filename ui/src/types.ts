@@ -22,6 +22,23 @@ export interface AuthStatus {
   global_scope?: boolean;
 }
 
+export interface SyncStatus {
+  sync_mode?: string;
+  mode: string;
+  cluster_id?: string;
+  hub_url?: string;
+  fail_mode?: string;
+  health: string;
+  current_revision?: string;
+  revision_etag?: string;
+  last_successful_sync_at?: string;
+  last_attempt_at?: string;
+  last_error?: string;
+  cache_present: boolean;
+  stale_after_seconds?: number;
+  summary?: string;
+}
+
 export interface ReasonCount {
   reason: string;
   count: number;
@@ -50,6 +67,7 @@ export interface StoredEvent {
   component: string;
   event_type: string;
   actor?: string;
+  cluster_id?: string;
   tenant_id?: string;
   repo?: string;
   branch?: string;

@@ -2,10 +2,13 @@
 
 ChangeLock stores tenant context primarily on audit events and exception records.
 
+Phase 8b adds cluster context as an additional dimension, not a replacement for tenant scope.
+
 ## Current tenant sources
 
 - audit/report events:
   - `tenant_id`
+  - `cluster_id`
   - `environment`
   - `namespace`
 - exception governance:
@@ -22,6 +25,17 @@ When OIDC/JWT tenant scoping is enabled:
 - explicit cross-tenant `tenant_id` overrides are rejected
 - exception approve/reject/revoke paths verify tenant ownership before mutation
 - digest-backed vulnerability/SBOM reads are allowed only when ChangeLock has workload evidence linking that digest to the caller tenant
+
+## Tenant and cluster interaction
+
+Cluster filters narrow results further. They do not widen tenant visibility.
+
+Rules:
+
+- tenant filters are still enforced server-side first
+- `cluster_id` can be used to narrow reads within the caller's allowed tenant scope
+- central reporting stores both dimensions so hub views can distinguish origin cluster without bypassing tenant controls
+- machine sync auth is cluster-aware, while human access remains role and tenant driven
 
 ## Global admin
 

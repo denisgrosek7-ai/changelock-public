@@ -290,6 +290,25 @@ func (s *MemoryStore) GetException(_ context.Context, exceptionID string) (Polic
 	return exception.WithEffectiveStatus(s.now().UTC()), nil
 }
 
+func (s *MemoryStore) ReplaceApprovedExceptions(_ context.Context, exceptions []SyncedException) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.exceptions = map[string]PolicyException{}
+	s.approvalLogs = nil
+	s.nextExceptionID = 1
+	s.nextApprovalLogID = 1
+
+	now := s.now().UTC()
+	for _, synced := range exceptions {
+		exception := synced.ToPolicyException(now, s.nextExceptionID)
+		s.exceptions[exception.ExceptionID] = exception
+		s.nextExceptionID++
+	}
+
+	return nil
+}
+
 func (s *MemoryStore) ApproveException(_ context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -526,7 +545,7 @@ func (s *MemoryStore) Trends(_ context.Context, filter TrendsFilter) (TrendsResp
 	}
 
 	for _, record := range s.records {
-		if record.ReceivedAt.Before(windowStart) || !matchesAnalyticsEvent(record.Event, filter.TenantID, filter.Environment, filter.Repo, filter.EventType) {
+		if record.ReceivedAt.Before(windowStart) || !matchesAnalyticsEvent(record.Event, filter.ClusterID, filter.TenantID, filter.Environment, filter.Repo, filter.EventType) {
 			continue
 		}
 
@@ -562,6 +581,7 @@ func (s *MemoryStore) Trends(_ context.Context, filter TrendsFilter) (TrendsResp
 		AppliedFilters: map[string]string{
 			"window_days": fmt.Sprint(filter.WindowDays),
 			"granularity": filter.Granularity,
+			"cluster_id":  filter.ClusterID,
 			"tenant_id":   filter.TenantID,
 			"environment": filter.Environment,
 			"repo":        filter.Repo,
@@ -590,7 +610,7 @@ func (s *MemoryStore) TopViolators(_ context.Context, filter TopViolatorsFilter)
 		if record.ReceivedAt.Before(windowStart) || record.Decision != DecisionDeny {
 			continue
 		}
-		if !matchesAnalyticsEvent(record.Event, filter.TenantID, filter.Environment, filter.Repo, "") {
+		if !matchesAnalyticsEvent(record.Event, filter.ClusterID, filter.TenantID, filter.Environment, filter.Repo, "") {
 			continue
 		}
 
@@ -643,6 +663,7 @@ func (s *MemoryStore) TopViolators(_ context.Context, filter TopViolatorsFilter)
 		AppliedFilters: map[string]string{
 			"window_days": filterWindowString(filter.WindowDays),
 			"dimension":   filter.Dimension,
+			"cluster_id":  filter.ClusterID,
 			"tenant_id":   filter.TenantID,
 			"environment": filter.Environment,
 			"repo":        filter.Repo,
@@ -669,7 +690,7 @@ func (s *MemoryStore) DriftStats(_ context.Context, filter DriftStatsFilter) (Dr
 		if record.EventType != EventTypeRuntimeDriftResult || record.ReceivedAt.Before(windowStart) {
 			continue
 		}
-		if !matchesAnalyticsEvent(record.Event, filter.TenantID, filter.Environment, filter.Repo, EventTypeRuntimeDriftResult) {
+		if !matchesAnalyticsEvent(record.Event, filter.ClusterID, filter.TenantID, filter.Environment, filter.Repo, EventTypeRuntimeDriftResult) {
 			continue
 		}
 		if filter.Namespace != "" && record.Namespace != filter.Namespace {
@@ -729,6 +750,7 @@ func (s *MemoryStore) DriftStats(_ context.Context, filter DriftStatsFilter) (Dr
 		MeanTimeToResolveSeconds: mttr,
 		AppliedFilters: map[string]string{
 			"window_days": filterWindowString(filter.WindowDays),
+			"cluster_id":  filter.ClusterID,
 			"tenant_id":   filter.TenantID,
 			"environment": filter.Environment,
 			"repo":        filter.Repo,
@@ -746,6 +768,9 @@ func matchesFilter(event Event, filter EventFilter, includeDecision bool) bool {
 		return false
 	}
 	if filter.Component != "" && event.Component != filter.Component {
+		return false
+	}
+	if filter.ClusterID != "" && event.ClusterID != filter.ClusterID {
 		return false
 	}
 	if filter.Repo != "" && event.Repo != filter.Repo {
@@ -839,7 +864,10 @@ func timePointer(value time.Time) *time.Time {
 	return &value
 }
 
-func matchesAnalyticsEvent(event Event, tenantID, environment, repo, eventType string) bool {
+func matchesAnalyticsEvent(event Event, clusterID, tenantID, environment, repo, eventType string) bool {
+	if clusterID != "" && event.ClusterID != clusterID {
+		return false
+	}
 	if tenantID != "" && event.TenantID != tenantID {
 		return false
 	}

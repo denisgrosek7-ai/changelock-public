@@ -1,0 +1,26 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-signed-images
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: verify-image-signatures
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/my-org/*"
+          mutateDigest: true
+          required: true
+          verifyDigest: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    issuer: "https://token.actions.githubusercontent.com"
+                    subject: "https://github.com/my-org"

@@ -14,6 +14,8 @@
 - invalid auth config at startup
 - OIDC issuer/JWKS/audience mismatch causing sustained `401` or `403`
 - tenant-scoped users unexpectedly seeing empty results
+- spoke sync status becoming `stale` or `error`
+- cluster binding mismatch rejecting `/v1/sync/exceptions` or cluster-tagged ingest
 - scanner tools (`trivy`, `grype`) missing on vuln-ops paths
 
 ## Suggested escalation ownership
@@ -25,6 +27,7 @@
 - security/platform security:
   - OIDC/JWT role mapping
   - tenant model disputes
+  - cluster binding and spoke authorization disputes
   - exception governance or vulnerability decision disputes
 - database/operator owner:
   - backup, restore, migration, and PostgreSQL saturation issues

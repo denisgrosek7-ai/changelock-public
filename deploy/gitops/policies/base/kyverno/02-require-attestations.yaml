@@ -1,0 +1,25 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-slsa-attestation
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: verify-build-provenance
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/my-org/*"
+          attestations:
+            - type: https://slsa.dev/provenance/v1
+              attestors:
+                - count: 1
+                  entries:
+                    - keyless:
+                        issuer: "https://token.actions.githubusercontent.com"
+                        subject: "https://github.com/my-org"

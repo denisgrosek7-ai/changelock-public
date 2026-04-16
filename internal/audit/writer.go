@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -65,7 +66,12 @@ func newDefaultSink() Sink {
 		return NewFileSink(DefaultFilePath())
 	}
 
-	sinks := []Sink{NewHTTPSink(remoteURL, defaultHTTPSinkTimeout())}
+	token := FirstNonEmpty(
+		os.Getenv("CHANGELOCK_SYNC_TOKEN"),
+		os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN"),
+	)
+	clusterID := strings.TrimSpace(os.Getenv("CHANGELOCK_CLUSTER_ID"))
+	sinks := []Sink{NewHTTPSinkWithConfig(remoteURL, defaultHTTPSinkTimeout(), token, clusterID)}
 	if filePath := os.Getenv("CHANGELOCK_AUDIT_FILE"); filePath != "" {
 		sinks = append(sinks, NewFileSink(filePath))
 	}

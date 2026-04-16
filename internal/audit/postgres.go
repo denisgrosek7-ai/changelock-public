@@ -108,14 +108,14 @@ func (s *PostgresStore) Ingest(ctx context.Context, event Event) (StoredEvent, e
 
 	const statement = `
 INSERT INTO audit_events (
-  request_id, component, event_type, tenant_id, actor, repo, branch, environment,
+  request_id, component, event_type, cluster_id, tenant_id, actor, repo, branch, environment,
   namespace, workload, image, digest, decision, drift_result, policy_version,
   reasons, verifier_summary, evidence, raw_event
 )
 VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8,
-  $9, $10, $11, $12, $13, $14, $15,
-  $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb
+  $1, $2, $3, $4, $5, $6, $7, $8, $9,
+  $10, $11, $12, $13, $14, $15, $16,
+  $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb
 )
 RETURNING id, received_at
 `
@@ -125,6 +125,7 @@ RETURNING id, received_at
 		event.RequestID,
 		event.Component,
 		event.EventType,
+		nullableString(event.ClusterID),
 		nullableString(event.TenantID),
 		nullableString(event.Actor),
 		nullableString(event.Repo),
@@ -286,6 +287,7 @@ func buildWhereClause(filter EventFilter, includeDecision bool) (string, []any) 
 	}
 	appendCondition(filter.EventType, "event_type")
 	appendCondition(filter.Component, "component")
+	appendCondition(filter.ClusterID, "cluster_id")
 	appendCondition(filter.Repo, "repo")
 	appendCondition(filter.Environment, "environment")
 	appendCondition(filter.TenantID, "tenant_id")

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: changelock-system
+
+resources:
+  - kyverno/01-require-signed-images.yaml
+  - kyverno/02-require-attestations.yaml
+  - kyverno/03-block-latest-tag.yaml
+  - kyverno/04-require-restricted-securitycontext.yaml
+  - kyverno/05-restrict-serviceaccounts.yaml
+  - kyverno/06-require-digest-pinning.yaml
+  - kyverno/07-break-glass-labels.yaml
+  - policy-bundle-metadata.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: changelock
+      changelock.io/policy-distribution: gitops
