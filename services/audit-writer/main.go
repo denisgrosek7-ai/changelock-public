@@ -59,6 +59,10 @@ type authInfoResponse struct {
 	Subject       string `json:"subject,omitempty"`
 	Role          string `json:"role,omitempty"`
 	TokenID       string `json:"token_id,omitempty"`
+	IdentityType  string `json:"identity_type,omitempty"`
+	Email         string `json:"email,omitempty"`
+	TenantID      string `json:"tenant_id,omitempty"`
+	GlobalScope   bool   `json:"global_scope,omitempty"`
 }
 
 func main() {
@@ -165,10 +169,7 @@ func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Confi
 }
 
 func loadAuthConfigFromEnv() (auth.Config, error) {
-	return auth.ParseConfig(
-		envOrDefault("CHANGELOCK_AUTH_MODE", auth.ModeDisabled),
-		os.Getenv("CHANGELOCK_AUTH_TOKENS_JSON"),
-	)
+	return auth.ParseEnvConfig(os.Getenv)
 }
 
 func newStoreFromEnv(ctx context.Context) (audit.Store, string, error) {
@@ -287,15 +288,24 @@ func (s server) authMeHandler(w http.ResponseWriter, r *http.Request) {
 		Subject:       principal.Subject,
 		Role:          principal.Role,
 		TokenID:       principal.TokenID,
+		IdentityType:  principal.IdentityType,
+		Email:         principal.Email,
+		TenantID:      principal.TenantID,
+		GlobalScope:   principal.GlobalScope,
 	})
 }
 
 func (s server) eventsHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -328,11 +338,16 @@ func (s server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+		principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 		if !ok {
 			return
 		}
 		r = authorizedRequest
+		r, err := applyPrincipalTenantToRequest(principal, r)
+		if err != nil {
+			httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+			return
+		}
 		filter, err := parseExceptionFilter(r)
 		if err != nil {
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -363,6 +378,11 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 		var request audit.ExceptionCreateRequest
 		if err := httpjson.Decode(r, &request); err != nil {
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		request, err := applyPrincipalTenantToExceptionRequest(principal, request)
+		if err != nil {
+			httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
 			return
 		}
 
@@ -409,6 +429,11 @@ func (s server) requestExceptionHandler(w http.ResponseWriter, r *http.Request) 
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	request, err := applyPrincipalTenantToExceptionRequest(principal, request)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
@@ -445,6 +470,19 @@ func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
 
 		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 		defer cancel()
+		existing, err := s.store.GetException(ctx, exceptionID)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, audit.ErrExceptionNotFound) {
+				status = http.StatusNotFound
+			}
+			httpjson.Write(w, status, map[string]string{"error": err.Error()})
+			return
+		}
+		if err := ensureExceptionTenantAccess(principal, existing); err != nil {
+			httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+			return
+		}
 
 		exception, err := s.store.RevokeException(ctx, exceptionID)
 		if err != nil {
@@ -489,6 +527,19 @@ func (s server) approveExceptionHandler(w http.ResponseWriter, r *http.Request, 
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	existing, err := s.store.GetException(ctx, exceptionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrExceptionNotFound) {
+			status = http.StatusNotFound
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := ensureExceptionTenantAccess(principal, existing); err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 
 	exception, err := s.store.ApproveException(ctx, exceptionID, principal.Subject, principal.Role)
 	if err != nil {
@@ -532,6 +583,19 @@ func (s server) rejectExceptionHandler(w http.ResponseWriter, r *http.Request, e
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	existing, err := s.store.GetException(ctx, exceptionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrExceptionNotFound) {
+			status = http.StatusNotFound
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := ensureExceptionTenantAccess(principal, existing); err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 
 	exception, err := s.store.RejectException(ctx, exceptionID, request.Reason, principal.Subject, principal.Role)
 	if err != nil {
@@ -553,7 +617,7 @@ func (s server) rejectExceptionHandler(w http.ResponseWriter, r *http.Request, e
 }
 
 func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleService, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleService, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
@@ -567,6 +631,14 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 	if err := httpjson.Decode(r, &request); err != nil {
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+	if principal.Role != auth.RoleService {
+		updatedRequest, err := applyPrincipalTenantToExceptionValidation(principal, request)
+		if err != nil {
+			httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+			return
+		}
+		request = updatedRequest
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
@@ -588,11 +660,16 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (s server) trendsHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -623,11 +700,16 @@ func (s server) trendsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) topViolatorsHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -658,11 +740,16 @@ func (s server) topViolatorsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) driftStatsHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -693,11 +780,16 @@ func (s server) driftStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) summaryHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -748,11 +840,16 @@ func (s server) runtimeDriftHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) exceptionsReportHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return

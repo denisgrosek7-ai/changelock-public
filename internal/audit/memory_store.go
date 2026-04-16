@@ -279,6 +279,17 @@ func (s *MemoryStore) ListExceptions(_ context.Context, filter ExceptionFilter) 
 	return exceptions, nil
 }
 
+func (s *MemoryStore) GetException(_ context.Context, exceptionID string) (PolicyException, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exception, ok := s.exceptions[strings.TrimSpace(exceptionID)]
+	if !ok {
+		return PolicyException{}, ErrExceptionNotFound
+	}
+	return exception.WithEffectiveStatus(s.now().UTC()), nil
+}
+
 func (s *MemoryStore) ApproveException(_ context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

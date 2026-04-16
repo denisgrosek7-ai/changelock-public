@@ -12,6 +12,18 @@ auth:
   tokensJsonKey: CHANGELOCK_AUTH_TOKENS_JSON
   internalServiceToken: ""
   internalServiceTokenKey: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+  roleClaim: groups
+  tenantClaim: tenant_id
+  emailClaim: email
+  subjectClaim: sub
+  requireTenantScope: false
+  allowGlobalSecurityAdmin: false
+  roleBindingsJson: ""
+  oidc:
+    issuer: ""
+    audiences: ""
+    jwksUrl: ""
+    clockSkew: 1m
 
 postgresql:
   enabled: true
@@ -246,4 +258,3 @@ networkPolicy:
   allowIntraNamespace: true
   allowDeployGateWebhookIngress: true
   allowUIIngress: true
-

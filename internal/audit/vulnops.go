@@ -85,6 +85,7 @@ type SBOMComponentSearchFilter struct {
 	ComponentName string
 	PURL          string
 	ImageDigest   string
+	TenantID      string
 	Limit         int
 }
 
@@ -183,6 +184,7 @@ type VulnerabilityDecisionCreateRequest struct {
 type VulnerabilityDecisionFilter struct {
 	ImageDigest string
 	CVEID       string
+	TenantID    string
 	Active      *bool
 	Limit       int
 }
@@ -212,6 +214,7 @@ type VulnerabilityBlastRadiusFilter struct {
 	CVEID         string
 	ComponentName string
 	PURL          string
+	TenantID      string
 	Limit         int
 }
 
@@ -230,6 +233,7 @@ type VulnerabilityBlastRadiusResponse struct {
 type VulnerabilityTimelineFilter struct {
 	ImageDigest string
 	CVEID       string
+	TenantID    string
 	WindowDays  int
 }
 
@@ -296,6 +300,7 @@ func NormalizeSBOMComponentSearchFilter(filter SBOMComponentSearchFilter) (SBOMC
 	filter.ComponentName = strings.TrimSpace(filter.ComponentName)
 	filter.PURL = strings.TrimSpace(filter.PURL)
 	filter.ImageDigest = strings.TrimSpace(filter.ImageDigest)
+	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	if filter.ComponentName == "" && filter.PURL == "" && filter.ImageDigest == "" {
 		return filter, fmt.Errorf("%w: at least one component search filter is required", ErrInvalidFilter)
 	}
@@ -397,6 +402,7 @@ func NormalizeVulnerabilityDecisionCreateRequest(request VulnerabilityDecisionCr
 func NormalizeVulnerabilityDecisionFilter(filter VulnerabilityDecisionFilter) VulnerabilityDecisionFilter {
 	filter.ImageDigest = strings.TrimSpace(filter.ImageDigest)
 	filter.CVEID = strings.TrimSpace(strings.ToUpper(filter.CVEID))
+	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
@@ -426,6 +432,7 @@ func NormalizeVulnerabilityBlastRadiusFilter(filter VulnerabilityBlastRadiusFilt
 	filter.CVEID = strings.TrimSpace(strings.ToUpper(filter.CVEID))
 	filter.ComponentName = strings.TrimSpace(filter.ComponentName)
 	filter.PURL = strings.TrimSpace(filter.PURL)
+	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	if filter.CVEID == "" && filter.ComponentName == "" && filter.PURL == "" {
 		return filter, fmt.Errorf("%w: at least one blast-radius filter is required", ErrInvalidFilter)
 	}
@@ -441,6 +448,7 @@ func NormalizeVulnerabilityBlastRadiusFilter(filter VulnerabilityBlastRadiusFilt
 func NormalizeVulnerabilityTimelineFilter(filter VulnerabilityTimelineFilter) (VulnerabilityTimelineFilter, error) {
 	filter.ImageDigest = strings.TrimSpace(filter.ImageDigest)
 	filter.CVEID = strings.TrimSpace(strings.ToUpper(filter.CVEID))
+	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	if filter.ImageDigest == "" {
 		return filter, fmt.Errorf("%w: image_digest is required", ErrInvalidFilter)
 	}

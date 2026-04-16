@@ -490,6 +490,14 @@ func (s *PostgresStore) ListExceptions(ctx context.Context, filter ExceptionFilt
 	})
 }
 
+func (s *PostgresStore) GetException(ctx context.Context, exceptionID string) (PolicyException, error) {
+	exception, err := s.loadException(ctx, exceptionID)
+	if err != nil {
+		return PolicyException{}, err
+	}
+	return exception.WithEffectiveStatus(time.Now().UTC()), nil
+}
+
 func (s *PostgresStore) ApproveException(ctx context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error) {
 	exception, err := s.loadException(ctx, exceptionID)
 	if err != nil {

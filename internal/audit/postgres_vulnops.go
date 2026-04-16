@@ -155,6 +155,13 @@ func (s *PostgresStore) SearchSBOMComponents(ctx context.Context, filter SBOMCom
 		args = append(args, "%"+strings.ToLower(filter.PURL)+"%")
 		conditions = append(conditions, fmt.Sprintf("LOWER(purl) LIKE $%d", len(args)))
 	}
+	if filter.TenantID != "" {
+		args = append(args, filter.TenantID)
+		conditions = append(conditions, fmt.Sprintf(`EXISTS (
+  SELECT 1 FROM audit_events ae
+  WHERE ae.digest = sbom_components.image_digest AND ae.tenant_id = $%d
+)`, len(args)))
+	}
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
@@ -325,6 +332,7 @@ func (s *PostgresStore) VulnerabilityBlastRadius(ctx context.Context, filter Vul
 	if filter.CVEID != "" {
 		findings, err := s.ListActiveVulnerabilities(ctx, VulnerabilityActiveFilter{
 			CVEID:             filter.CVEID,
+			TenantID:          filter.TenantID,
 			Limit:             filter.Limit,
 			IncludeSuppressed: true,
 		})
@@ -359,6 +367,7 @@ func (s *PostgresStore) VulnerabilityBlastRadius(ctx context.Context, filter Vul
 		components, err := s.SearchSBOMComponents(ctx, SBOMComponentSearchFilter{
 			ComponentName: filter.ComponentName,
 			PURL:          filter.PURL,
+			TenantID:      filter.TenantID,
 			Limit:         filter.Limit,
 		})
 		if err != nil {
@@ -383,6 +392,9 @@ func (s *PostgresStore) VulnerabilityBlastRadius(ctx context.Context, filter Vul
 		if err != nil {
 			return VulnerabilityBlastRadiusResponse{}, err
 		}
+		if filter.TenantID != "" {
+			workloads = filterWorkloadsByTenant(workloads, filter.TenantID)
+		}
 		item.Workloads = workloads
 	}
 
@@ -400,6 +412,7 @@ func (s *PostgresStore) VulnerabilityBlastRadius(ctx context.Context, filter Vul
 			"cve_id":         filter.CVEID,
 			"component_name": filter.ComponentName,
 			"purl":           filter.PURL,
+			"tenant_id":      filter.TenantID,
 		},
 	}, nil
 }
@@ -409,7 +422,7 @@ func (s *PostgresStore) VulnerabilityTimeline(ctx context.Context, filter Vulner
 	if err != nil {
 		return VulnerabilityTimelineResponse{}, err
 	}
-	rows, err := s.pool.Query(ctx, `
+	query := `
 SELECT
   f.image_digest,
   f.cve_id,
@@ -444,8 +457,20 @@ LEFT JOIN LATERAL (
 WHERE f.image_digest = $1
   AND f.cve_id = $2
   AND f.last_seen_at >= now() - ($3 * interval '1 day')
+`
+	args := []any{filter.ImageDigest, filter.CVEID, filter.WindowDays}
+	if filter.TenantID != "" {
+		args = append(args, filter.TenantID)
+		query += fmt.Sprintf(`
+  AND EXISTS (
+    SELECT 1 FROM audit_events ae
+    WHERE ae.digest = f.image_digest AND ae.tenant_id = $%d
+  )`, len(args))
+	}
+	query += `
 ORDER BY f.first_seen_at ASC
-`, filter.ImageDigest, filter.CVEID, filter.WindowDays)
+`
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return VulnerabilityTimelineResponse{}, err
 	}
@@ -467,6 +492,7 @@ ORDER BY f.first_seen_at ASC
 		AppliedFilters: map[string]string{
 			"image_digest": filter.ImageDigest,
 			"cve_id":       filter.CVEID,
+			"tenant_id":    filter.TenantID,
 			"window_days":  fmt.Sprint(filter.WindowDays),
 		},
 	}, nil
@@ -489,6 +515,13 @@ func (s *PostgresStore) ListVulnerabilityDecisions(ctx context.Context, filter V
 	if filter.Active != nil {
 		appendCondition(*filter.Active, "active =")
 	}
+	if filter.TenantID != "" {
+		args = append(args, filter.TenantID)
+		conditions = append(conditions, fmt.Sprintf(`EXISTS (
+  SELECT 1 FROM audit_events ae
+  WHERE ae.digest = vulnerability_decisions.image_digest AND ae.tenant_id = $%d
+)`, len(args)))
+	}
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
@@ -504,6 +537,26 @@ LIMIT $`+fmt.Sprint(len(args)), args...)
 	}
 	defer rows.Close()
 	return pgx.CollectRows(rows, scanVulnerabilityDecision)
+}
+
+func (s *PostgresStore) GetVulnerabilityDecision(ctx context.Context, decisionID int64) (VulnerabilityDecision, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT id, image_digest, cve_id, decision, justification, decided_by, expires_at, active, metadata, created_at, updated_at
+FROM vulnerability_decisions
+WHERE id = $1
+`, decisionID)
+	if err != nil {
+		return VulnerabilityDecision{}, err
+	}
+	defer rows.Close()
+	decision, err := pgx.CollectOneRow(rows, scanVulnerabilityDecision)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return VulnerabilityDecision{}, ErrExceptionNotFound
+		}
+		return VulnerabilityDecision{}, err
+	}
+	return decision, nil
 }
 
 func (s *PostgresStore) CreateVulnerabilityDecision(ctx context.Context, request VulnerabilityDecisionCreateRequest, decidedBy string) (VulnerabilityDecision, error) {
@@ -618,6 +671,14 @@ LIMIT $2
 		return nil, rows.Err()
 	}
 	return results, nil
+}
+
+func (s *PostgresStore) LookupDigestScopes(ctx context.Context, imageDigest string, limit int) ([]ActiveWorkloadRef, error) {
+	imageDigest = strings.TrimSpace(imageDigest)
+	if imageDigest == "" {
+		return nil, fmt.Errorf("%w: image_digest is required", ErrInvalidFilter)
+	}
+	return s.lookupWorkloadsForDigest(ctx, imageDigest, limit)
 }
 
 func (s *PostgresStore) lookupFindingInTx(ctx context.Context, tx pgx.Tx, findingKey string) (VulnerabilityFinding, error) {
@@ -741,6 +802,20 @@ WHERE digest = $1
 		return nullableStringValue(image)
 	}
 	return ""
+}
+
+func filterWorkloadsByTenant(workloads []ActiveWorkloadRef, tenantID string) []ActiveWorkloadRef {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return workloads
+	}
+	filtered := make([]ActiveWorkloadRef, 0, len(workloads))
+	for _, workload := range workloads {
+		if strings.TrimSpace(workload.TenantID) == tenantID {
+			filtered = append(filtered, workload)
+		}
+	}
+	return filtered
 }
 
 func scanSBOMComponent(row pgx.CollectableRow) (SBOMComponent, error) {

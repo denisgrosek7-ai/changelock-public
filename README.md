@@ -432,13 +432,15 @@ Revoke an exception:
 curl -sS -X DELETE http://127.0.0.1:8094/v1/exceptions/EX-2026-001
 ```
 
-## Phase 7a auth and RBAC
-Phase 7a adds minimal bearer-token auth and explicit RBAC for sensitive reports and exception paths without introducing sessions or external identity providers.
+## Phase 7a / 7e auth, RBAC, and enterprise identity
+ChangeLock keeps the original dev/demo auth path, but now also supports enterprise bearer validation with explicit tenant scoping.
 
 - auth modes:
   - `CHANGELOCK_AUTH_MODE=disabled`
   - `CHANGELOCK_AUTH_MODE=static-token`
+-  `CHANGELOCK_AUTH_MODE=oidc-jwt`
 - static-token mode reads `CHANGELOCK_AUTH_TOKENS_JSON`
+- oidc-jwt mode validates issuer + audience + JWKS and maps claims/groups into ChangeLock roles explicitly
 - internal exception validation can send `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 - the dashboard can send `VITE_API_TOKEN`
 - the Helm-packaged UI can also inject a runtime `config.js`, but embedding a browser-visible token should stay demo-only or low-privilege
@@ -488,6 +490,32 @@ printf 'VITE_API_TOKEN=viewer-demo-token\n' >> .env.local
   - can call `POST /v1/exceptions/validate`
   - cannot request, approve, reject, or revoke exceptions
   - is not intended as a normal dashboard role
+
+### Enterprise OIDC/JWT example
+```bash
+export CHANGELOCK_AUTH_MODE=oidc-jwt
+export CHANGELOCK_OIDC_ISSUER=https://issuer.example.com
+export CHANGELOCK_OIDC_AUDIENCES=changelock-ui
+export CHANGELOCK_OIDC_JWKS_URL=https://issuer.example.com/.well-known/jwks.json
+export CHANGELOCK_AUTH_ROLE_CLAIM=groups
+export CHANGELOCK_AUTH_TENANT_CLAIM=tenant_id
+export CHANGELOCK_AUTH_REQUIRE_TENANT_SCOPE=true
+export CHANGELOCK_AUTH_ALLOW_GLOBAL_SECURITY_ADMIN=true
+export CHANGELOCK_AUTH_ROLE_BINDINGS_JSON='{"viewer":["changelock-viewers"],"operator":["changelock-operators"],"security_admin":["changelock-security-admins"],"service_internal":["changelock-services"]}'
+```
+
+Current OIDC behavior:
+- valid JWTs without an explicit ChangeLock role mapping are denied by default
+- `oidc-jwt` mode never falls back to static-token auth
+- tenant-scoped callers are pinned server-side to their tenant across reports, exceptions, analytics, and vulnerability views
+- `service_internal` stays machine-only and is not a dashboard role
+
+See:
+- `docs/auth-rbac.md`
+- `docs/operations/support.md`
+- `docs/operations/sla-slo.md`
+- `docs/operations/escalation.md`
+- `docs/operations/tenant-model.md`
 
 ### Protected routes
 - `GET /v1/auth/me`
