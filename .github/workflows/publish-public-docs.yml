@@ -1,0 +1,55 @@
+name: publish-public-docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - public-docs/**
+      - scripts/export_public_repo.sh
+      - .github/workflows/publish-public-docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out private repo
+        uses: actions/checkout@v4
+
+      - name: Verify publish token is configured
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.CHANGELOCK_PUBLIC_REPO_TOKEN }}
+        run: |
+          if [ -z "${PUBLIC_REPO_TOKEN}" ]; then
+            echo "CHANGELOCK_PUBLIC_REPO_TOKEN is not configured." >&2
+            echo "Create a fine-grained GitHub token with contents:write access to denisgrosek7-ai/changelock-public and store it as a private repo secret." >&2
+            exit 1
+          fi
+
+      - name: Clone public docs repo
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.CHANGELOCK_PUBLIC_REPO_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/denisgrosek7-ai/changelock-public.git" "${RUNNER_TEMP}/changelock-public"
+
+      - name: Export docs-only public content
+        run: |
+          chmod +x ./scripts/export_public_repo.sh
+          ./scripts/export_public_repo.sh "${RUNNER_TEMP}/changelock-public"
+
+      - name: Commit and push docs sync
+        working-directory: ${{ runner.temp }}/changelock-public
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No public docs changes to publish."
+            exit 0
+          fi
+          git commit -m "Sync public docs from private repo"
+          git push origin HEAD:main

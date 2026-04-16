@@ -1,77 +1,90 @@
-# GitHub Publish Checklist
+# GitHub Public Publish Flow
 
-Use this checklist before the first public GitHub push.
+ChangeLock now uses a split repository model:
 
-## 1. Replace example ownership and namespace placeholders
+- private repo:
+  - full implementation
+  - source of truth
+- public repo:
+  - docs-only buyer-facing material
 
-These placeholders are intentional examples and should be updated before treating the repo as production-ready:
+You should push code only to the private repository.
 
-- `.github/CODEOWNERS`
-- `policies/global/artifact-policy.yaml`
-- `policies/tenants/acme/*`
-- `deploy/k8s/*` image references that still use `ghcr.io/my-org/...`
-- buyer-demo placeholders such as `my-org/acme-app`
+## Source of truth for public content
 
-Keeping them is acceptable for a public technical POC, but they should be presented as examples, not live production values.
+Public-facing files now live under:
 
-The `build-sign-attest` GitHub Actions workflow no longer hardcodes `my-org/acme-app`. It derives the GHCR namespace from the repository owner and is intentionally manual-only so a public POC repo does not create accidental `production` deployments or broken package pushes on every `main` commit.
+- `public-docs/`
 
-## 2. Decide what stays demo-only
+That directory is the only content exported to the public GitHub repository.
 
-Current local demo paths intentionally include:
+It intentionally contains:
 
-- fixture-backed verifier scenarios for deterministic `kind` demos
-- local Postgres defaults for `docker-compose.dev.yml`
-- local CORS defaults for `localhost` and `127.0.0.1`
-- a manual `build-sign-attest` workflow that is intended for explicit image publishing, signing, and attestation runs
+- `README.md`
+- `LICENSE`
+- public conceptual docs
 
-These are public-safe, but should stay clearly labeled as demo or local-dev defaults.
+It intentionally does **not** contain:
 
-## 3. Confirm repo hygiene
+- backend code
+- UI code
+- Helm charts
+- deploy manifests
+- tests
+- scripts other than the private export helper
 
-Before first push, verify:
+## Automatic publish workflow
 
-- `ui/node_modules/` is not committed
-- `ui/dist/` is not committed
-- no `.env.local` or private `.env.*` files are present
-- no generated certs, keys, or temp artifacts are included
-- no screenshots or local desktop captures are included
+The private repository now contains:
 
-## 4. Validate the publish-ready path
+- `.github/workflows/publish-public-docs.yml`
+- `scripts/export_public_repo.sh`
 
-Run:
+Behavior:
+
+1. you push changes to the private repo
+2. if the push includes changes under `public-docs/`, the workflow runs on private `main`
+3. the workflow exports only `public-docs/` content
+4. it pushes that docs-only result to:
+   - `denisgrosek7-ai/changelock-public`
+
+This means daily work happens only in the private repo.
+
+## One-time setup required
+
+GitHub Actions in one repository cannot automatically push to another repository without explicit credentials.
+
+Create a fine-grained GitHub token with:
+
+- repository access:
+  - `denisgrosek7-ai/changelock-public`
+- permission:
+  - `Contents: Read and write`
+
+Store it as a private repo secret in `changelock-privat`:
+
+- secret name:
+  - `CHANGELOCK_PUBLIC_REPO_TOKEN`
+
+Without that secret, the publish workflow will fail closed and the public repo will not be updated.
+
+## Local dry-run of the export
+
+You can preview exactly what would be published:
 
 ```bash
-go test ./...
-cd ui && npm run build
-cd ..
-docker compose -f docker-compose.dev.yml up --build -d
+chmod +x scripts/export_public_repo.sh
+./scripts/export_public_repo.sh /tmp/changelock-public-preview
 ```
 
-Optional local observability:
+The preview directory should contain only the docs-only public structure.
 
-```bash
-docker compose -f docker-compose.dev.yml --profile observability up -d prometheus
-```
+## Operational rule
 
-## 5. Suggested first public repo story
+Treat `public-docs/` as the buyer-facing/public surface.
 
-The public GitHub repo should present ChangeLock as:
+If something should be public:
+- edit it under `public-docs/`
 
-- a Kubernetes delivery security control plane
-- a real Go technical POC
-- with real artifact verification and audit evidence
-- with a local dashboard and `kind` demo
-- where some artifact scenarios remain demo-assisted for determinism
-
-## 6. First upload sequence
-
-When you are ready:
-
-1. `git init`
-2. `git add .`
-3. review `git status`
-4. `git commit -m "Initial public POC release"`
-5. create GitHub repo
-6. add `origin`
-7. push the default branch
+If something should remain private:
+- keep it outside `public-docs/`
