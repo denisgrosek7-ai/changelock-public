@@ -136,6 +136,9 @@ func (s *MemoryStore) SearchSBOMComponents(_ context.Context, filter SBOMCompone
 		if filter.ImageDigest != "" && component.ImageDigest != filter.ImageDigest {
 			continue
 		}
+		if !matchesDigestScopeFilters(s.workloadRefsForDigestLocked(component.ImageDigest), filter.TenantID, "") {
+			continue
+		}
 		if nameNeedle != "" && !strings.Contains(strings.ToLower(component.ComponentName), nameNeedle) {
 			continue
 		}
@@ -318,13 +321,17 @@ func (s *MemoryStore) VulnerabilityBlastRadius(_ context.Context, filter Vulnera
 
 	digestMap := map[string]*VulnerabilityBlastRadiusItem{}
 	addDigest := func(imageDigest, imageRef string, finding *VulnerabilityFinding) {
+		workloads := s.workloadRefsForDigestLocked(imageDigest)
+		if !matchesDigestScopeFilters(workloads, filter.TenantID, "") {
+			return
+		}
 		item := digestMap[imageDigest]
 		if item == nil {
 			item = &VulnerabilityBlastRadiusItem{
 				ImageDigest: imageDigest,
 				ImageRef:    imageRef,
 				Findings:    []VulnerabilityFinding{},
-				Workloads:   s.workloadRefsForDigestLocked(imageDigest),
+				Workloads:   workloads,
 			}
 			digestMap[imageDigest] = item
 		}
@@ -399,6 +406,9 @@ func (s *MemoryStore) VulnerabilityTimeline(_ context.Context, filter Vulnerabil
 		if finding.ImageDigest != filter.ImageDigest || finding.CVEID != filter.CVEID {
 			continue
 		}
+		if !matchesDigestScopeFilters(s.workloadRefsForDigestLocked(finding.ImageDigest), filter.TenantID, "") {
+			continue
+		}
 		if finding.LastSeenAt.Before(windowStart) {
 			continue
 		}
@@ -445,6 +455,9 @@ func (s *MemoryStore) ListVulnerabilityDecisions(_ context.Context, filter Vulne
 		if filter.Active != nil && decision.Active != *filter.Active {
 			continue
 		}
+		if !matchesDigestScopeFilters(s.workloadRefsForDigestLocked(decision.ImageDigest), filter.TenantID, "") {
+			continue
+		}
 		decisions = append(decisions, cloneVulnerabilityDecision(decision))
 	}
 	sort.Slice(decisions, func(i, j int) bool { return decisions[i].CreatedAt.After(decisions[j].CreatedAt) })
@@ -452,6 +465,17 @@ func (s *MemoryStore) ListVulnerabilityDecisions(_ context.Context, filter Vulne
 		decisions = decisions[:filter.Limit]
 	}
 	return decisions, nil
+}
+
+func (s *MemoryStore) GetVulnerabilityDecision(_ context.Context, decisionID int64) (VulnerabilityDecision, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	decision, ok := s.decisions[decisionID]
+	if !ok {
+		return VulnerabilityDecision{}, ErrExceptionNotFound
+	}
+	return cloneVulnerabilityDecision(decision), nil
 }
 
 func (s *MemoryStore) CreateVulnerabilityDecision(_ context.Context, request VulnerabilityDecisionCreateRequest, decidedBy string) (VulnerabilityDecision, error) {
@@ -555,6 +579,17 @@ func (s *MemoryStore) ListActiveDigests(_ context.Context, windowDays int, limit
 		results = results[:limit]
 	}
 	return results, nil
+}
+
+func (s *MemoryStore) LookupDigestScopes(_ context.Context, imageDigest string, limit int) ([]ActiveWorkloadRef, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	workloads := s.workloadRefsForDigestLocked(strings.TrimSpace(imageDigest))
+	if limit > 0 && len(workloads) > limit {
+		workloads = workloads[:limit]
+	}
+	return workloads, nil
 }
 
 func (s *MemoryStore) currentDecisionLocked(imageDigest, cveID string, now time.Time) *VulnerabilityDecision {

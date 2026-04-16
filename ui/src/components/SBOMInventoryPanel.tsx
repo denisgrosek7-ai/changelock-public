@@ -3,7 +3,11 @@ import { useState } from "react";
 import { getSBOMImage, searchSBOMComponents } from "../api";
 import type { SBOMComponent, SBOMImageResponse } from "../types";
 
-export function SBOMInventoryPanel() {
+type Props = {
+  tenantID?: string;
+};
+
+export function SBOMInventoryPanel({ tenantID }: Props) {
   const [componentName, setComponentName] = useState("");
   const [purl, setPURL] = useState("");
   const [imageDigest, setImageDigest] = useState("");
@@ -15,7 +19,7 @@ export function SBOMInventoryPanel() {
 
   async function loadImage(digest: string) {
     setSelectedDigest(digest);
-    setSelectedImage(await getSBOMImage(digest, 200));
+    setSelectedImage(await getSBOMImage(digest, 200, tenantID));
   }
 
   async function handleSearch() {
@@ -26,6 +30,7 @@ export function SBOMInventoryPanel() {
         component_name: componentName || undefined,
         purl: purl || undefined,
         image_digest: imageDigest || undefined,
+        tenant_id: tenantID || undefined,
         limit: "100",
       });
       setResults(response.components);

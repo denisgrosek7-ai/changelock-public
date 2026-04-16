@@ -12,11 +12,15 @@ import (
 const (
 	ModeDisabled    = "disabled"
 	ModeStaticToken = "static-token"
+	ModeOIDCJWT     = "oidc-jwt"
 
 	RoleViewer        = "viewer"
 	RoleOperator      = "operator"
 	RoleSecurityAdmin = "security_admin"
 	RoleService       = "service_internal"
+
+	IdentityTypeHuman   = "human"
+	IdentityTypeService = "service"
 )
 
 type TokenConfig struct {
@@ -29,6 +33,7 @@ type TokenConfig struct {
 type Config struct {
 	Mode   string
 	tokens []TokenConfig
+	oidc   *oidcVerifier
 }
 
 type Principal struct {
@@ -37,6 +42,10 @@ type Principal struct {
 	Subject       string `json:"subject,omitempty"`
 	Role          string `json:"role,omitempty"`
 	TokenID       string `json:"token_id,omitempty"`
+	IdentityType  string `json:"identity_type,omitempty"`
+	Email         string `json:"email,omitempty"`
+	TenantID      string `json:"tenant_id,omitempty"`
+	GlobalScope   bool   `json:"global_scope,omitempty"`
 }
 
 type AccessError struct {
@@ -52,6 +61,8 @@ var (
 	ErrMissingBearerToken      = &AccessError{Status: http.StatusUnauthorized, Message: "bearer token required"}
 	ErrMalformedAuthorization  = &AccessError{Status: http.StatusUnauthorized, Message: "malformed authorization header"}
 	ErrInvalidBearerToken      = &AccessError{Status: http.StatusUnauthorized, Message: "invalid bearer token"}
+	ErrNoMappedRole            = &AccessError{Status: http.StatusForbidden, Message: "no ChangeLock role mapping for token"}
+	ErrTenantScopeRequired     = &AccessError{Status: http.StatusForbidden, Message: "tenant claim is required for this token"}
 	ErrInsufficientPermissions = &AccessError{Status: http.StatusForbidden, Message: "insufficient role"}
 )
 
@@ -128,7 +139,7 @@ func ParseConfig(mode string, rawTokens string) (Config, error) {
 }
 
 func (c Config) IsEnabled() bool {
-	return c.Mode == ModeStaticToken
+	return c.Mode != ModeDisabled
 }
 
 func (c Config) Self() Principal {
@@ -139,6 +150,8 @@ func (c Config) Self() Principal {
 			Subject:       "auth-disabled",
 			Role:          RoleSecurityAdmin,
 			TokenID:       "disabled-mode",
+			IdentityType:  IdentityTypeHuman,
+			GlobalScope:   true,
 		}
 	}
 	return Principal{
@@ -157,18 +170,37 @@ func (c Config) AuthenticateRequest(r *http.Request) (Principal, error) {
 		return Principal{}, err
 	}
 
-	entry, ok := c.lookupToken(token)
-	if !ok {
+	switch c.Mode {
+	case ModeStaticToken:
+		entry, ok := c.lookupToken(token)
+		if !ok {
+			return Principal{}, ErrInvalidBearerToken
+		}
+
+		identityType := IdentityTypeHuman
+		globalScope := false
+		if entry.Role == RoleService {
+			identityType = IdentityTypeService
+			globalScope = true
+		}
+
+		return Principal{
+			Authenticated: true,
+			AuthMode:      c.Mode,
+			Subject:       entry.Subject,
+			Role:          entry.Role,
+			TokenID:       entry.TokenID,
+			IdentityType:  identityType,
+			GlobalScope:   globalScope,
+		}, nil
+	case ModeOIDCJWT:
+		if c.oidc == nil {
+			return Principal{}, ErrInvalidBearerToken
+		}
+		return c.oidc.authenticate(r.Context(), token)
+	default:
 		return Principal{}, ErrInvalidBearerToken
 	}
-
-	return Principal{
-		Authenticated: true,
-		AuthMode:      c.Mode,
-		Subject:       entry.Subject,
-		Role:          entry.Role,
-		TokenID:       entry.TokenID,
-	}, nil
 }
 
 func (c Config) Require(r *http.Request, allowedRoles ...string) (Principal, error) {

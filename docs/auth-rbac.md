@@ -1,17 +1,18 @@
-# Phase 7a auth and RBAC
+# Auth, RBAC, and Tenant Scope
 
-Phase 7a adds a small bearer-token auth layer for sensitive report and exception surfaces without introducing sessions or external identity providers. Phase 7b/7c reuses the same token model and RBAC layer for analytics and exception approval governance. Phase 7d extends the same RBAC model to SBOM inventory, vulnerability triage, VEX-lite decisions, and manual rescans.
+ChangeLock now supports two production-usable bearer-token backends plus the original local bypass mode:
 
-## Auth modes
 - `CHANGELOCK_AUTH_MODE=disabled`
-  - default local/dev mode
-  - protected routes remain reachable without a token
-  - `/v1/auth/me` reports `auth_mode=disabled`
+  - local/dev only
+  - every protected route behaves as `security_admin`
 - `CHANGELOCK_AUTH_MODE=static-token`
-  - requires `CHANGELOCK_AUTH_TOKENS_JSON`
-  - uses `Authorization: Bearer <token>`
+  - explicit demo/dev bearer tokens from `CHANGELOCK_AUTH_TOKENS_JSON`
+- `CHANGELOCK_AUTH_MODE=oidc-jwt`
+  - validates signed JWT bearer tokens against issuer, audience, and JWKS settings
+  - maps claims/groups into ChangeLock roles explicitly
+  - denies valid JWTs that do not map to a ChangeLock role
 
-## Static token config
+## Static token mode
 
 Example `CHANGELOCK_AUTH_TOKENS_JSON`:
 
@@ -24,23 +25,105 @@ Example `CHANGELOCK_AUTH_TOKENS_JSON`:
 ]
 ```
 
-Validation is fail-fast on startup for:
+Fail-fast validation:
+
 - unsupported auth mode
-- invalid JSON
+- invalid token JSON
 - duplicate token
 - duplicate `token_id`
-- unknown role
+- unsupported role
+
+## OIDC/JWT mode
+
+Required settings:
+
+- `CHANGELOCK_OIDC_ISSUER`
+- `CHANGELOCK_OIDC_AUDIENCES`
+- `CHANGELOCK_OIDC_JWKS_URL`
+- `CHANGELOCK_AUTH_ROLE_BINDINGS_JSON`
+
+Supported optional settings:
+
+- `CHANGELOCK_AUTH_ROLE_CLAIM`
+  - default `groups`
+- `CHANGELOCK_AUTH_SUBJECT_CLAIM`
+  - default `sub`
+- `CHANGELOCK_AUTH_EMAIL_CLAIM`
+  - default `email`
+- `CHANGELOCK_AUTH_TENANT_CLAIM`
+  - required when tenant scoping is enforced
+- `CHANGELOCK_OIDC_CLOCK_SKEW`
+  - default `1m`
+- `CHANGELOCK_AUTH_REQUIRE_TENANT_SCOPE`
+  - default `false`
+- `CHANGELOCK_AUTH_ALLOW_GLOBAL_SECURITY_ADMIN`
+  - default `false`
+
+Example:
+
+```bash
+export CHANGELOCK_AUTH_MODE=oidc-jwt
+export CHANGELOCK_OIDC_ISSUER=https://issuer.example.com
+export CHANGELOCK_OIDC_AUDIENCES=changelock-ui
+export CHANGELOCK_OIDC_JWKS_URL=https://issuer.example.com/.well-known/jwks.json
+export CHANGELOCK_AUTH_ROLE_CLAIM=groups
+export CHANGELOCK_AUTH_SUBJECT_CLAIM=sub
+export CHANGELOCK_AUTH_EMAIL_CLAIM=email
+export CHANGELOCK_AUTH_TENANT_CLAIM=tenant_id
+export CHANGELOCK_AUTH_REQUIRE_TENANT_SCOPE=true
+export CHANGELOCK_AUTH_ALLOW_GLOBAL_SECURITY_ADMIN=true
+export CHANGELOCK_AUTH_ROLE_BINDINGS_JSON='{"viewer":["changelock-viewers"],"operator":["changelock-operators"],"security_admin":["changelock-security-admins"],"service_internal":["changelock-services"]}'
+```
+
+Current JWT validation behavior:
+
+- bearer-token validation only
+- no browser redirects, sessions, or login pages
+- RSA JWKS signing keys only
+- supported JWT algorithms: `RS256`, `RS384`, `RS512`
+- issuer and audience are mandatory
+- `exp` is mandatory
+- `nbf` and `iat` are honored when present
+- JWKS are cached in-process for 5 minutes and refreshed on cache miss/staleness
+- invalid JWTs fail closed with `401`
+- valid JWTs without explicit ChangeLock role mapping fail closed with `403`
+- `oidc-jwt` mode never falls back to static tokens
+
+## Role mapping
+
+ChangeLock roles remain:
+
+- `viewer`
+- `operator`
+- `security_admin`
+- `service_internal`
+
+`CHANGELOCK_AUTH_ROLE_BINDINGS_JSON` maps claim values into those roles.
+
+Example:
+
+```json
+{
+  "viewer": ["changelock-viewers"],
+  "operator": ["changelock-operators"],
+  "security_admin": ["changelock-security-admins"],
+  "service_internal": ["changelock-services"]
+}
+```
+
+Rules:
+
+- the same binding value cannot map to multiple ChangeLock roles
+- multiple human-role matches collapse deterministically to the highest privilege:
+  - `security_admin` > `operator` > `viewer`
+- `service_internal` is separate from human roles
+- a token that matches `service_internal` and a human role at the same time is denied
 
 ## RBAC matrix
 
 Protected routes:
-- `POST /v1/exceptions` -> `security_admin`
-- `POST /v1/exceptions/request` -> `operator | security_admin`
-- `POST /v1/exceptions/{exception_id}/approve` -> `security_admin`
-- `POST /v1/exceptions/{exception_id}/reject` -> `security_admin`
-- `DELETE /v1/exceptions/{exception_id}` -> `security_admin`
-- `GET /v1/exceptions` -> `viewer | operator | security_admin`
-- `POST /v1/exceptions/validate` -> `service_internal | security_admin`
+
+- `GET /v1/auth/me` -> `viewer | operator | security_admin`
 - `GET /v1/reports/events` -> `viewer | operator | security_admin`
 - `GET /v1/reports/summary` -> `viewer | operator | security_admin`
 - `GET /v1/reports/denies` -> `viewer | operator | security_admin`
@@ -49,6 +132,13 @@ Protected routes:
 - `GET /v1/analytics/trends` -> `viewer | operator | security_admin`
 - `GET /v1/analytics/top-violators` -> `viewer | operator | security_admin`
 - `GET /v1/analytics/drift-stats` -> `viewer | operator | security_admin`
+- `GET /v1/exceptions` -> `viewer | operator | security_admin`
+- `POST /v1/exceptions/request` -> `operator | security_admin`
+- `POST /v1/exceptions` -> `security_admin`
+- `POST /v1/exceptions/{exception_id}/approve` -> `security_admin`
+- `POST /v1/exceptions/{exception_id}/reject` -> `security_admin`
+- `DELETE /v1/exceptions/{exception_id}` -> `security_admin`
+- `POST /v1/exceptions/validate` -> `service_internal | security_admin`
 - `POST /v1/sbom/ingest` -> `security_admin | service_internal`
 - `GET /v1/sbom/images/{image_digest}` -> `viewer | operator | security_admin`
 - `GET /v1/sbom/components/search` -> `viewer | operator | security_admin`
@@ -59,74 +149,76 @@ Protected routes:
 - `POST /v1/vulnerabilities/decisions` -> `security_admin`
 - `POST /v1/vulnerabilities/decisions/{id}/deactivate` -> `security_admin`
 - `POST /v1/vulnerabilities/rescan` -> `security_admin | service_internal`
-- `GET /v1/auth/me` -> `viewer | operator | security_admin`
 
-Unprotected routes in this phase:
+Still unprotected:
+
 - `GET /health`
-- `/metrics` unchanged
-- `POST /v1/ingest` unchanged
+- `/metrics`
+- `POST /v1/ingest`
 
-## Internal service auth
+## Tenant scoping
 
-`policy-engine` and `deploy-gate` can send a bearer token to the exception validate endpoint with:
+Tenant scoping is enforced server-side, not only in the dashboard.
+
+When `CHANGELOCK_AUTH_REQUIRE_TENANT_SCOPE=true`:
+
+- human JWT callers must provide a valid tenant claim through `CHANGELOCK_AUTH_TENANT_CLAIM`
+- tenant-scoped callers are pinned to that tenant
+- requests that try to override `tenant_id` to another tenant are rejected
+- writes against tenant-owned exception records are checked before mutation
+- report, analytics, exception, vulnerability, and SBOM inventory reads inject tenant scope automatically when the query omits `tenant_id`
+- tenant-scoped reads for digest/CVE surfaces are filtered by workload/digest associations already stored in ChangeLock
+
+Global admin behavior:
+
+- only `security_admin` can be global without a tenant claim
+- this requires `CHANGELOCK_AUTH_ALLOW_GLOBAL_SECURITY_ADMIN=true`
+- otherwise a missing tenant claim is rejected
+
+`service_internal` behavior:
+
+- intended for policy-engine, deploy-gate, and bounded automation
+- not a normal human dashboard role
+- `/v1/auth/me` rejects it for UI use
+- remains distinguishable from human identities in auth context and audit surfaces
+
+## `/v1/auth/me`
+
+Safe response fields:
+
+- `authenticated`
+- `auth_mode`
+- `subject`
+- `role`
+- `token_id`
+- `identity_type`
+- `email`
+- `tenant_id`
+- `global_scope`
+
+The UI should derive access and tenant display from this endpoint instead of guessing locally from the bearer token.
+
+## Static-token internal service auth
+
+`policy-engine` and `deploy-gate` can send a bearer token to exception validation with:
 
 - `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 
-When `CHANGELOCK_AUTH_MODE=static-token`, configure the matching `service_internal` token in both the caller and `audit-writer`.
+When `CHANGELOCK_AUTH_MODE=static-token`, the token must exactly match the `token` field of a `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`.
 
-The value of `CHANGELOCK_INTERNAL_SERVICE_TOKEN` must exactly match the `token` field of a `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`. In `static-token` mode, `policy-engine` and `deploy-gate` now fail fast on startup if exception validation is configured but the internal service token is missing.
+## Packaging notes
 
-## UI
+The Helm chart now exposes OIDC/JWT settings through `charts/changelock/values.yaml`:
 
-The dashboard can send a bearer token when configured with:
-
-- `VITE_API_TOKEN`
-
-Recommended browser/dashboard token:
-- use a `viewer` token for read-only dashboards
-- use an `operator` token when you want request-only exception workflow access from the UI
-- reserve `security_admin` tokens for approvals, revokes, vulnerability decisions, rescans, and direct emergency create flows
-
-## Exception governance
-
-The approval-aware lifecycle introduced in 7c uses the existing RBAC model:
-
-- `viewer`
-  - read analytics, reports, and exception lists
-  - cannot request, approve, reject, or revoke
-- `operator`
-  - read analytics, reports, and exception lists
-  - can create `PENDING` requests through `POST /v1/exceptions/request`
-  - cannot approve, reject, or revoke
-- `security_admin`
-  - full read access
-  - can request
-  - can directly create already `APPROVED` emergency exceptions with `POST /v1/exceptions`
-  - can approve, reject, and revoke
-- `service_internal`
-  - validate only
-  - no human approval permissions
-
-## Vulnerability operations
-
-Phase 7d keeps the same separation between human and service roles:
-
-- `viewer`
-  - read SBOM inventory, active vulnerabilities, blast radius, and timelines
-  - no write actions
-- `operator`
-  - same read access as `viewer`
-  - still no vulnerability decision or rescan write access
-- `security_admin`
-  - full read access
-  - can ingest SBOMs, record or deactivate VEX-lite decisions, and trigger manual rescans
-- `service_internal`
-  - may call internal write paths used for automation, specifically SBOM ingest and rescan
-  - does not gain human dashboard or decision-management privileges
-
-## Future path
-
-This phase intentionally stops at static bearer tokens. A later phase can replace the backend verifier with:
-- OIDC/JWT bearer validation
-- IdP role/group mapping
-- stronger service-to-service auth
+- `auth.mode`
+- `auth.roleClaim`
+- `auth.tenantClaim`
+- `auth.emailClaim`
+- `auth.subjectClaim`
+- `auth.requireTenantScope`
+- `auth.allowGlobalSecurityAdmin`
+- `auth.roleBindingsJson`
+- `auth.oidc.issuer`
+- `auth.oidc.audiences`
+- `auth.oidc.jwksUrl`
+- `auth.oidc.clockSkew`

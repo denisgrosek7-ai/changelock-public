@@ -141,14 +141,15 @@ export default function App() {
         }
 
         if (authResult.status === "fulfilled") {
+          const scopedTenantID = authResult.value.tenant_id || filters.tenant_id;
           const baseFilters = {
-            tenant_id: filters.tenant_id,
+            tenant_id: scopedTenantID,
             environment: filters.environment,
             repo: filters.repo,
           };
 
           const promises: Array<Promise<void>> = [
-            getSummary({ environment: filters.environment, tenant_id: filters.tenant_id }).then(setSummary),
+            getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
           ];
 
           if (activeTab === "analytics") {
@@ -198,7 +199,7 @@ export default function App() {
             setPendingExceptions([]);
           } else {
             promises.push(
-              getEvents(activeTab, filters).then((response) => {
+              getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
                 setEvents(response.events);
                 setSelectedEvent((current) => response.events.find((event) => event.id === current?.id) || response.events[0] || null);
               }),
@@ -246,6 +247,7 @@ export default function App() {
 
   const activeTabMeta = tabs.find((tab) => tab.key === activeTab) || tabs[0];
   const role = authStatus?.role;
+  const enforcedTenantID = authStatus?.tenant_id || "";
   const canRequest = role === "operator" || role === "security_admin";
   const canApprove = role === "security_admin";
 
@@ -301,7 +303,7 @@ export default function App() {
             <strong>{authStatus?.role || authStatus?.auth_mode || "unknown"}</strong>
             <small>
               {authStatus?.subject
-                ? `${authStatus.subject}${authStatus.token_id ? ` (${authStatus.token_id})` : ""}`
+                ? `${authStatus.email || authStatus.subject}${authStatus.tenant_id ? ` · tenant ${authStatus.tenant_id}` : authStatus?.global_scope ? " · global scope" : ""}${authStatus.token_id ? ` (${authStatus.token_id})` : ""}`
                 : apiTokenConfigured()
                   ? "Token configured"
                   : "No token configured"}
@@ -359,9 +361,10 @@ export default function App() {
         <Filters
           filters={filters}
           tab={activeTab}
+          enforcedTenantID={enforcedTenantID || undefined}
           onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
           onRefresh={() => setRefreshIndex((value) => value + 1)}
-          onReset={() => setFilters(initialFilters)}
+          onReset={() => setFilters({ ...initialFilters, tenant_id: enforcedTenantID })}
         />
       ) : null}
 
@@ -385,7 +388,7 @@ export default function App() {
           </section>
 
           <section className="analytics-grid">
-            <ExceptionRequestForm enabled={canRequest} submitting={requestSubmitting} onSubmit={handleRequestException} />
+            <ExceptionRequestForm enabled={canRequest} submitting={requestSubmitting} enforcedTenantID={enforcedTenantID || undefined} onSubmit={handleRequestException} />
             <PendingExceptionsPanel
               pending={pendingExceptions}
               canApprove={canApprove}
@@ -410,9 +413,9 @@ export default function App() {
         </>
       ) : null}
 
-      {activeTab === "inventory" ? <SBOMInventoryPanel /> : null}
+      {activeTab === "inventory" ? <SBOMInventoryPanel tenantID={enforcedTenantID || undefined} /> : null}
 
-      {activeTab === "vulnerabilities" ? <VulnerabilityOpsPanel role={role} /> : null}
+      {activeTab === "vulnerabilities" ? <VulnerabilityOpsPanel role={role} tenantID={enforcedTenantID || undefined} /> : null}
 
       {activeTab !== "analytics" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
         <section className="content-grid">

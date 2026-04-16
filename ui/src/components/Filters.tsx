@@ -3,12 +3,13 @@ import type { EventFilters, TabKey } from "../types";
 type Props = {
   filters: EventFilters;
   tab: TabKey;
+  enforcedTenantID?: string;
   onChange: (name: keyof EventFilters, value: string) => void;
   onRefresh: () => void;
   onReset: () => void;
 };
 
-export function Filters({ filters, tab, onChange, onRefresh, onReset }: Props) {
+export function Filters({ filters, tab, enforcedTenantID, onChange, onRefresh, onReset }: Props) {
   const isEventTab = tab === "overview" || tab === "events" || tab === "denies" || tab === "runtime";
 
   return (
@@ -58,9 +59,10 @@ export function Filters({ filters, tab, onChange, onRefresh, onReset }: Props) {
         <label>
           <span>Tenant</span>
           <input
-            value={filters.tenant_id}
+            value={enforcedTenantID || filters.tenant_id}
             onChange={(event) => onChange("tenant_id", event.target.value)}
             placeholder="acme"
+            disabled={Boolean(enforcedTenantID)}
           />
         </label>
 

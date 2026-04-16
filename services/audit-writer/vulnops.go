@@ -270,7 +270,7 @@ func (v *vulnOpsRuntime) writeDriftAuditEvent(
 }
 
 func (s server) sbomIngestHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleSecurityAdmin, auth.RoleService)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleSecurityAdmin, auth.RoleService)
 	if !ok {
 		return
 	}
@@ -291,6 +291,10 @@ func (s server) sbomIngestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	if err := ensureDigestTenantAccess(ctx, s.store, principal, request.ImageDigest); err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 
 	result, err := s.store.IngestSBOM(ctx, request)
 	if err != nil {
@@ -307,11 +311,16 @@ func (s server) sbomIngestHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) sbomImageHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -326,6 +335,10 @@ func (s server) sbomImageHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	if err := ensureDigestTenantAccess(ctx, s.store, principal, imageDigest); err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 
 	result, err := s.store.GetSBOMImage(ctx, imageDigest, limit)
 	if err != nil {
@@ -345,11 +358,16 @@ func (s server) sbomImageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) sbomComponentsSearchHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -359,6 +377,7 @@ func (s server) sbomComponentsSearchHandler(w http.ResponseWriter, r *http.Reque
 		ComponentName: r.URL.Query().Get("component_name"),
 		PURL:          r.URL.Query().Get("purl"),
 		ImageDigest:   r.URL.Query().Get("image_digest"),
+		TenantID:      r.URL.Query().Get("tenant_id"),
 		Limit:         parseIntOrDefault(r.URL.Query().Get("limit"), 50),
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
@@ -379,11 +398,16 @@ func (s server) sbomComponentsSearchHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (s server) activeVulnerabilitiesHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -410,11 +434,16 @@ func (s server) activeVulnerabilitiesHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (s server) vulnerabilityBlastRadiusHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -443,11 +472,16 @@ func (s server) vulnerabilityBlastRadiusHandler(w http.ResponseWriter, r *http.R
 }
 
 func (s server) vulnerabilityTimelineHandler(w http.ResponseWriter, r *http.Request) {
-	_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
 	}
 	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 	if r.Method != http.MethodGet {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -478,11 +512,16 @@ func (s server) vulnerabilityTimelineHandler(w http.ResponseWriter, r *http.Requ
 func (s server) vulnerabilityDecisionsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		_, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+		principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 		if !ok {
 			return
 		}
 		r = authorizedRequest
+		r, err := applyPrincipalTenantToRequest(principal, r)
+		if err != nil {
+			httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+			return
+		}
 		filter, err := parseVulnerabilityDecisionFilter(r)
 		if err != nil {
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -513,6 +552,10 @@ func (s server) vulnerabilityDecisionsHandler(w http.ResponseWriter, r *http.Req
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 		defer cancel()
+		if err := ensureDigestTenantAccess(ctx, s.store, principal, request.ImageDigest); err != nil {
+			httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+			return
+		}
 		decision, err := s.store.CreateVulnerabilityDecision(ctx, request, principal.Subject)
 		if err != nil {
 			status := http.StatusInternalServerError
@@ -554,7 +597,20 @@ func (s server) vulnerabilityDecisionByIDHandler(w http.ResponseWriter, r *http.
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
-	decision, err := s.store.DeactivateVulnerabilityDecision(ctx, decisionID)
+	decision, err := s.store.GetVulnerabilityDecision(ctx, decisionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrExceptionNotFound) {
+			status = http.StatusNotFound
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := ensureDigestTenantAccess(ctx, s.store, principal, decision.ImageDigest); err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	decision, err = s.store.DeactivateVulnerabilityDecision(ctx, decisionID)
 	if err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -591,8 +647,16 @@ func (s server) vulnerabilityRescanHandler(w http.ResponseWriter, r *http.Reques
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	if tenantScoped(principal) && strings.TrimSpace(request.ImageDigest) == "" {
+		httpjson.Write(w, auth.StatusCode(errTenantScopeViolation), map[string]string{"error": errTenantScopeViolation.Error()})
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
+	if err := ensureDigestTenantAccess(ctx, s.store, principal, request.ImageDigest); err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
 
 	response, err := s.vulnOps.rescan(ctx, s.store, principal.Subject, audit.VulnerabilityScanModeManual, requestIDFromHeader(r), request)
 	if err != nil {
@@ -634,6 +698,7 @@ func parseVulnerabilityBlastRadiusFilter(r *http.Request) (audit.VulnerabilityBl
 		CVEID:         r.URL.Query().Get("cve_id"),
 		ComponentName: r.URL.Query().Get("component_name"),
 		PURL:          r.URL.Query().Get("purl"),
+		TenantID:      r.URL.Query().Get("tenant_id"),
 		Limit:         parseIntOrDefault(r.URL.Query().Get("limit"), 50),
 	})
 }
@@ -642,6 +707,7 @@ func parseVulnerabilityTimelineFilter(r *http.Request) (audit.VulnerabilityTimel
 	return audit.NormalizeVulnerabilityTimelineFilter(audit.VulnerabilityTimelineFilter{
 		ImageDigest: r.URL.Query().Get("image_digest"),
 		CVEID:       r.URL.Query().Get("cve_id"),
+		TenantID:    r.URL.Query().Get("tenant_id"),
 		WindowDays:  parseIntOrDefault(r.URL.Query().Get("window_days"), 30),
 	})
 }
@@ -650,6 +716,7 @@ func parseVulnerabilityDecisionFilter(r *http.Request) (audit.VulnerabilityDecis
 	filter := audit.VulnerabilityDecisionFilter{
 		ImageDigest: r.URL.Query().Get("image_digest"),
 		CVEID:       r.URL.Query().Get("cve_id"),
+		TenantID:    r.URL.Query().Get("tenant_id"),
 		Limit:       parseIntOrDefault(r.URL.Query().Get("limit"), 50),
 	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("active")); raw != "" {

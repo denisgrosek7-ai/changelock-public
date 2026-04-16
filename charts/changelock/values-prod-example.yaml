@@ -1,7 +1,19 @@
 auth:
-  mode: static-token
+  mode: oidc-jwt
   createSecret: false
   existingSecret: changelock-auth
+  roleClaim: groups
+  tenantClaim: tenant_id
+  emailClaim: email
+  subjectClaim: sub
+  requireTenantScope: true
+  allowGlobalSecurityAdmin: true
+  roleBindingsJson: '{"viewer":["changelock-viewers"],"operator":["changelock-operators"],"security_admin":["changelock-security-admins"],"service_internal":["changelock-services"]}'
+  oidc:
+    issuer: https://issuer.example.com
+    audiences: changelock-ui
+    jwksUrl: https://issuer.example.com/.well-known/jwks.json
+    clockSkew: 1m
 
 postgresql:
   enabled: false
@@ -97,4 +109,3 @@ ui:
 
 networkPolicy:
   enabled: true
-

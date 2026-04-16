@@ -659,12 +659,29 @@ function parseVulnerabilityRescanResponse(value: unknown): VulnerabilityRescanRe
   };
 }
 
+function parseAuthStatus(value: unknown): AuthStatus {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid auth status.");
+  }
+  return {
+    authenticated: readBoolean(value.authenticated, "authenticated"),
+    auth_mode: readString(value.auth_mode, "auth_mode"),
+    subject: readOptionalString(value.subject, "subject"),
+    role: readOptionalString(value.role, "role"),
+    token_id: readOptionalString(value.token_id, "token_id"),
+    identity_type: readOptionalString(value.identity_type, "identity_type"),
+    email: readOptionalString(value.email, "email"),
+    tenant_id: readOptionalString(value.tenant_id, "tenant_id"),
+    global_scope: value.global_scope === undefined ? undefined : readBoolean(value.global_scope, "global_scope"),
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
 
 export async function getAuthStatus() {
-  return fetchJSON<AuthStatus>("/v1/auth/me");
+  return parseAuthStatus(await fetchJSON<unknown>("/v1/auth/me"));
 }
 
 export async function getSummary(filters: Pick<EventFilters, "environment" | "tenant_id">) {
@@ -778,15 +795,16 @@ export async function searchSBOMComponents(filters: {
   component_name?: string;
   purl?: string;
   image_digest?: string;
+  tenant_id?: string;
   limit?: string;
 }) {
   return parseSBOMComponentsResponse(await fetchJSON<unknown>("/v1/sbom/components/search", { params: filters }));
 }
 
-export async function getSBOMImage(imageDigest: string, limit = 100) {
+export async function getSBOMImage(imageDigest: string, limit = 100, tenantID?: string) {
   return parseSBOMImageResponse(
     await fetchJSON<unknown>(`/v1/sbom/images/${encodeURIComponent(imageDigest)}`, {
-      params: { limit: String(limit) },
+      params: { limit: String(limit), tenant_id: tenantID },
     }),
   );
 }
@@ -808,6 +826,7 @@ export async function getVulnerabilityBlastRadius(filters: {
   cve_id?: string;
   component_name?: string;
   purl?: string;
+  tenant_id?: string;
   limit?: string;
 }) {
   return parseVulnerabilityBlastRadiusResponse(await fetchJSON<unknown>("/v1/vulnerabilities/blast-radius", { params: filters }));
@@ -816,6 +835,7 @@ export async function getVulnerabilityBlastRadius(filters: {
 export async function getVulnerabilityTimeline(filters: {
   image_digest: string;
   cve_id: string;
+  tenant_id?: string;
   window_days?: string;
 }) {
   return parseVulnerabilityTimelineResponse(await fetchJSON<unknown>("/v1/vulnerabilities/timeline", { params: filters }));
@@ -824,6 +844,7 @@ export async function getVulnerabilityTimeline(filters: {
 export async function getVulnerabilityDecisions(filters: {
   image_digest?: string;
   cve_id?: string;
+  tenant_id?: string;
   active?: string;
   limit?: string;
 }) {

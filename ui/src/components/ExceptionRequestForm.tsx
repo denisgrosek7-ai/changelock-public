@@ -5,6 +5,7 @@ import type { ExceptionRequestInput } from "../types";
 type Props = {
   enabled: boolean;
   submitting: boolean;
+  enforcedTenantID?: string;
   onSubmit: (input: ExceptionRequestInput) => Promise<void>;
 };
 
@@ -22,7 +23,7 @@ const initialState: ExceptionRequestInput = {
   ttl_hours: 2,
 };
 
-export function ExceptionRequestForm({ enabled, submitting, onSubmit }: Props) {
+export function ExceptionRequestForm({ enabled, submitting, enforcedTenantID, onSubmit }: Props) {
   const [form, setForm] = useState<ExceptionRequestInput>(initialState);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,9 +36,10 @@ export function ExceptionRequestForm({ enabled, submitting, onSubmit }: Props) {
       setError(null);
       await onSubmit({
         ...form,
+        tenant_id: enforcedTenantID || form.tenant_id,
         ttl_hours: form.ttl_hours ? Number(form.ttl_hours) : undefined,
       });
-      setForm(initialState);
+      setForm({ ...initialState, tenant_id: enforcedTenantID || "" });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Request failed.");
     }
@@ -73,7 +75,11 @@ export function ExceptionRequestForm({ enabled, submitting, onSubmit }: Props) {
         </label>
         <label>
           <span>Tenant</span>
-          <input value={form.tenant_id || ""} onChange={(event) => setForm((current) => ({ ...current, tenant_id: event.target.value }))} disabled={!enabled || submitting} />
+          <input
+            value={enforcedTenantID || form.tenant_id || ""}
+            onChange={(event) => setForm((current) => ({ ...current, tenant_id: event.target.value }))}
+            disabled={!enabled || submitting || Boolean(enforcedTenantID)}
+          />
         </label>
         <label>
           <span>Environment</span>

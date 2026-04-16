@@ -143,6 +143,36 @@ spec:
                   name: {{ include "changelock.authSecretName" . }}
                   key: {{ .Values.auth.tokensJsonKey }}
             {{- end }}
+            - name: CHANGELOCK_AUTH_ROLE_CLAIM
+              value: {{ .Values.auth.roleClaim | quote }}
+            - name: CHANGELOCK_AUTH_TENANT_CLAIM
+              value: {{ .Values.auth.tenantClaim | quote }}
+            - name: CHANGELOCK_AUTH_EMAIL_CLAIM
+              value: {{ .Values.auth.emailClaim | quote }}
+            - name: CHANGELOCK_AUTH_SUBJECT_CLAIM
+              value: {{ .Values.auth.subjectClaim | quote }}
+            - name: CHANGELOCK_AUTH_REQUIRE_TENANT_SCOPE
+              value: {{ .Values.auth.requireTenantScope | quote }}
+            - name: CHANGELOCK_AUTH_ALLOW_GLOBAL_SECURITY_ADMIN
+              value: {{ .Values.auth.allowGlobalSecurityAdmin | quote }}
+            {{- if .Values.auth.roleBindingsJson }}
+            - name: CHANGELOCK_AUTH_ROLE_BINDINGS_JSON
+              value: {{ .Values.auth.roleBindingsJson | quote }}
+            {{- end }}
+            {{- if .Values.auth.oidc.issuer }}
+            - name: CHANGELOCK_OIDC_ISSUER
+              value: {{ .Values.auth.oidc.issuer | quote }}
+            {{- end }}
+            {{- if .Values.auth.oidc.audiences }}
+            - name: CHANGELOCK_OIDC_AUDIENCES
+              value: {{ .Values.auth.oidc.audiences | quote }}
+            {{- end }}
+            {{- if .Values.auth.oidc.jwksUrl }}
+            - name: CHANGELOCK_OIDC_JWKS_URL
+              value: {{ .Values.auth.oidc.jwksUrl | quote }}
+            {{- end }}
+            - name: CHANGELOCK_OIDC_CLOCK_SKEW
+              value: {{ .Values.auth.oidc.clockSkew | quote }}
             {{- range $name, $value := .Values.auditWriter.env }}
             - name: {{ $name }}
               value: {{ $value | quote }}
@@ -614,4 +644,3 @@ spec:
               readOnly: true
 {{- end }}
 {{- end }}
-

@@ -16,6 +16,10 @@ export interface AuthStatus {
   subject?: string;
   role?: string;
   token_id?: string;
+  identity_type?: string;
+  email?: string;
+  tenant_id?: string;
+  global_scope?: boolean;
 }
 
 export interface ReasonCount {
