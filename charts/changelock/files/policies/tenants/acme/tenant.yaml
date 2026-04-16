@@ -1,0 +1,16 @@
+apiVersion: changelock.io/v1alpha1
+kind: Tenant
+metadata:
+  name: acme
+spec:
+  repositories:
+    - my-org/acme-app
+  environments:
+    - dev
+    - staging
+    - prod
+  namespaces:
+    - acme-dev
+    - acme-staging
+    - acme-prod
+

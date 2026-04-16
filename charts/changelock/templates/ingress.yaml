@@ -1,0 +1,36 @@
+{{- if and .Values.ui.enabled .Values.ui.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "ui") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+  {{- with .Values.ui.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ui.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    {{- range .Values.ui.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          {{- $isAPI := eq .path "/api" }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ if $isAPI }}{{ include "changelock.componentFullname" (dict "root" $ "component" "audit-writer") }}{{ else }}{{ include "changelock.componentFullname" (dict "root" $ "component" "ui") }}{{ end }}
+                port:
+                  number: {{ if $isAPI }}{{ $.Values.auditWriter.service.port }}{{ else }}{{ $.Values.ui.service.port }}{{ end }}
+          {{- end }}
+    {{- end }}
+  {{- with .Values.ui.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

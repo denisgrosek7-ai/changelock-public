@@ -27,8 +27,10 @@ import { ExceptionRequestForm } from "./components/ExceptionRequestForm";
 import { Filters } from "./components/Filters";
 import { HealthBadge } from "./components/HealthBadge";
 import { PendingExceptionsPanel } from "./components/PendingExceptionsPanel";
+import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
 import { SummaryCards } from "./components/SummaryCards";
 import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
+import { VulnerabilityOpsPanel } from "./components/VulnerabilityOpsPanel";
 import type {
   AuditHealth,
   AuthStatus,
@@ -60,6 +62,8 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "runtime", label: "Runtime Drift", description: "Runtime scans and drift findings." },
   { key: "analytics", label: "Analytics", description: "Trends, violators, and drift statistics." },
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
+  { key: "inventory", label: "SBOM Inventory", description: "Search stored SBOM components by digest, package, or PURL." },
+  { key: "vulnerabilities", label: "Vulnerability Ops", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
 ];
 
 function isHumanRole(role?: string) {
@@ -184,6 +188,14 @@ export default function App() {
                 limit: filters.limit,
               }).then((response) => setPendingExceptions(response.exceptions)),
             );
+          } else if (activeTab === "inventory" || activeTab === "vulnerabilities") {
+            setEvents([]);
+            setSelectedEvent(null);
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setPendingExceptions([]);
           } else {
             promises.push(
               getEvents(activeTab, filters).then((response) => {
@@ -343,13 +355,15 @@ export default function App() {
         </button>
       </section>
 
-      <Filters
-        filters={filters}
-        tab={activeTab}
-        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
-        onRefresh={() => setRefreshIndex((value) => value + 1)}
-        onReset={() => setFilters(initialFilters)}
-      />
+      {activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
+        <Filters
+          filters={filters}
+          tab={activeTab}
+          onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+          onRefresh={() => setRefreshIndex((value) => value + 1)}
+          onReset={() => setFilters(initialFilters)}
+        />
+      ) : null}
 
       {activeTab === "analytics" ? (
         <section className="analytics-grid">
@@ -396,7 +410,11 @@ export default function App() {
         </>
       ) : null}
 
-      {activeTab !== "analytics" && activeTab !== "exceptions" ? (
+      {activeTab === "inventory" ? <SBOMInventoryPanel /> : null}
+
+      {activeTab === "vulnerabilities" ? <VulnerabilityOpsPanel role={role} /> : null}
+
+      {activeTab !== "analytics" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
         <section className="content-grid">
           <EventsTable
             events={events}

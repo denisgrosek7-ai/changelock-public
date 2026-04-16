@@ -3,7 +3,7 @@
 ChangeLock is a vendor-neutral security control plane for Kubernetes delivery paths. It combines policy, cryptographic artifact verification, admission control, runtime drift checks, audit evidence, and a local dashboard so operators can explain exactly why a workload was allowed or denied.
 
 ## What works today
-ChangeLock is currently a sales-ready technical POC with a real Go control plane, real `cosign` verification, PostgreSQL-backed audit evidence, approval-aware break-glass governance, minimal bearer-token RBAC on sensitive API surfaces, operational analytics, a local buyer-demo dashboard, and a reproducible `kind` admission demo that exercises both allow and deny paths.
+ChangeLock is currently a sales-ready technical POC with a real Go control plane, real `cosign` verification, PostgreSQL-backed audit evidence, approval-aware break-glass governance, minimal bearer-token RBAC on sensitive API surfaces, operational analytics, searchable SBOM and vulnerability operations, a local buyer-demo dashboard, and a reproducible `kind` admission demo that exercises both allow and deny paths.
 
 ## MVP objective
 Block Kubernetes deployments unless the image:
@@ -19,7 +19,7 @@ Block Kubernetes deployments unless the image:
 - `services/attestation-verifier`: verifies GitHub attestations and Cosign signatures
 - `services/deploy-gate`: admission decision service for Kubernetes
 - `services/runtime-agent`: runtime drift detector
-- `services/audit-writer`: evidence writer, reports API, analytics API, and exception governance source of truth
+- `services/audit-writer`: evidence writer, reports API, analytics API, exception governance source of truth, and vulnerability operations API
 - `connectors/github-webhook`: ingests SCM events
 - `deploy/kyverno`: cluster-side enforcement policies
 - `policies/`: global and tenant-specific rules
@@ -33,7 +33,7 @@ Block Kubernetes deployments unless the image:
 - `internal/audit` writes structured security events and can now forward them to a persistent `audit-writer` backend.
 - `services/runtime-agent` compares approved workload state against observed runtime state and emits structured drift findings for image, config, and security-context changes.
 - `services/audit-writer` is now a Go service with PostgreSQL-backed persistence plus queryable reports endpoints.
-- `ui/` now contains a small local dashboard for summary, deny review, runtime drift, and raw event inspection.
+- `ui/` now contains a small local dashboard for summary, deny review, runtime drift, analytics, approvals, SBOM inventory, and vulnerability triage.
 - `deploy/k8s` now includes a local `kind` admission-webhook path with TLS bootstrap and `ValidatingWebhookConfiguration`.
 - `tests/e2e/manifests` contains buyer-demo friendly allow and deny scenarios that can be exercised with Kubernetes server-side dry-run.
 - `tests` cover both allowed and denied flows for policy evaluation and Kubernetes admission.
@@ -67,10 +67,31 @@ Block Kubernetes deployments unless the image:
 3. Optional: set `CHANGELOCK_AUDIT_FILE` to choose the JSONL audit file path. The default path is `artifacts/audit/changelock-events.jsonl`.
 4. Optional: set `AUDIT_WRITER_URL` or `CHANGELOCK_AUDIT_WRITER_URL` to forward audit events to a remote audit-writer service. If this is set and `CHANGELOCK_AUDIT_FILE` is not set, services forward only to the remote writer.
 5. Optional: set `CHANGELOCK_RUNTIME_FIXTURE` to a YAML fixture file if you want `services/runtime-agent` to read observed workload state without a live cluster.
-6. Run `go test ./...`.
-7. Start Docker Desktop if you want to build the service containers.
-8. Run `docker compose -f docker-compose.dev.yml build policy-engine attestation-verifier deploy-gate runtime-agent audit-writer`.
-9. Mount `./policies` into the services or set `CHANGELOCK_POLICIES_DIR` when running locally.
+6. Optional: install `trivy` or `grype` if you want to use the 7d vulnerability rescan path from `audit-writer`.
+7. Optional: enable vulnerability ops with `CHANGELOCK_VULNOPS_ENABLED=true`. The default local posture keeps rescanning disabled until explicitly turned on.
+8. Run `go test ./...`.
+9. Start Docker Desktop if you want to build the service containers.
+10. Run `docker compose -f docker-compose.dev.yml build policy-engine attestation-verifier deploy-gate runtime-agent audit-writer`.
+11. Mount `./policies` into the services or set `CHANGELOCK_POLICIES_DIR` when running locally.
+
+## Phase 7e production packaging and readiness
+
+Phase 7e adds the production-minded packaging layer:
+- Helm chart packaging under [charts/changelock](/Users/denisgrosek/Downloads/changelock-blueprint/charts/changelock/Chart.yaml)
+- HA knobs for the critical path services
+- PDB and anti-affinity options
+- health/readiness operationalization, including `audit-writer /ready`
+- backup and restore helper scripts
+- day-2 operations docs for install, upgrade, troubleshooting, and sizing
+
+Preferred production docs:
+- [docs/operations/install.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/install.md)
+- [docs/operations/upgrade.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/upgrade.md)
+- [docs/operations/backup-restore.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/backup-restore.md)
+- [docs/operations/troubleshooting.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/troubleshooting.md)
+- [docs/operations/sizing.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/sizing.md)
+
+The raw manifests under `deploy/k8s/` remain useful references, but Helm is now the preferred installation surface.
 
 The default compose stack focuses on the current Go security services. The legacy `api` service stays behind an optional profile, while the new dashboard UI remains opt-in for local demos:
 - `docker compose -f docker-compose.dev.yml --profile legacy-api up --build`
@@ -183,6 +204,16 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `GET /v1/analytics/trends`
 - `GET /v1/analytics/top-violators`
 - `GET /v1/analytics/drift-stats`
+- `POST /v1/sbom/ingest`
+- `GET /v1/sbom/images/{image_digest}`
+- `GET /v1/sbom/components/search`
+- `GET /v1/vulnerabilities/active`
+- `GET /v1/vulnerabilities/blast-radius`
+- `GET /v1/vulnerabilities/timeline`
+- `GET /v1/vulnerabilities/decisions`
+- `POST /v1/vulnerabilities/decisions`
+- `POST /v1/vulnerabilities/decisions/{id}/deactivate`
+- `POST /v1/vulnerabilities/rescan`
 
 ### Example queries
 - `curl -sS http://127.0.0.1:8094/v1/reports/events?limit=20`
@@ -190,6 +221,8 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `curl -sS http://127.0.0.1:8094/v1/reports/summary`
 - `curl -sS http://127.0.0.1:8094/v1/reports/runtime-drift`
 - `curl -sS http://127.0.0.1:8094/v1/reports/exceptions`
+- `curl -sS "http://127.0.0.1:8094/v1/sbom/components/search?component_name=openssl"`
+- `curl -sS "http://127.0.0.1:8094/v1/vulnerabilities/active?severity=HIGH"`
 
 The reports API now backs the local read-only dashboard in `ui/`.
 
@@ -210,6 +243,8 @@ Phase 5b adds a small buyer-demo friendly dashboard on top of the live audit-wri
 - `VITE_API_BASE_URL`
   - defaults to `/api`
   - for local `vite` development this is proxied to `http://127.0.0.1:8094`
+- optional runtime override via `window.__CHANGELOCK_CONFIG__`
+  - used by the Helm-packaged UI to provide `/api` and timeout settings at deploy time
 - `VITE_PROXY_TARGET`
   - defaults to `http://127.0.0.1:8094`
 - `VITE_API_TIMEOUT_MS`
@@ -406,7 +441,9 @@ Phase 7a adds minimal bearer-token auth and explicit RBAC for sensitive reports 
 - static-token mode reads `CHANGELOCK_AUTH_TOKENS_JSON`
 - internal exception validation can send `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 - the dashboard can send `VITE_API_TOKEN`
+- the Helm-packaged UI can also inject a runtime `config.js`, but embedding a browser-visible token should stay demo-only or low-privilege
 - `/health` stays open
+- `/ready` is exposed on `audit-writer`
 - `/metrics` behavior is unchanged in this phase
 - `POST /v1/ingest` is unchanged in this phase
 
@@ -587,6 +624,93 @@ The dashboard now exposes:
 - analytics panels for trends, top violators, and drift stats
 - a pending exception queue
 - request/approve/reject actions gated by RBAC
+
+## Phase 7d vulnerability operations and SBOM surfacing
+Phase 7d builds an operational vulnerability layer on top of the earlier 6b supply-chain evidence. The build-time gate still matters, but ChangeLock now also stores searchable SBOM inventory, keeps vulnerability findings over time, and lets security record VEX-lite triage decisions without turning newly discovered runtime CVEs into automatic destructive enforcement.
+
+### What it adds
+- searchable SBOM ingestion and flattened component inventory:
+  - `POST /v1/sbom/ingest`
+  - `GET /v1/sbom/images/{image_digest}`
+  - `GET /v1/sbom/components/search`
+- stored scan runs and active vulnerability findings:
+  - `GET /v1/vulnerabilities/active`
+  - `GET /v1/vulnerabilities/blast-radius`
+  - `GET /v1/vulnerabilities/timeline`
+- VEX-lite decision lifecycle:
+  - `GET /v1/vulnerabilities/decisions`
+  - `POST /v1/vulnerabilities/decisions`
+  - `POST /v1/vulnerabilities/decisions/{id}/deactivate`
+- manual or periodic rescan path:
+  - `POST /v1/vulnerabilities/rescan`
+- new audit event types:
+  - `vulnerability_scan_result`
+  - `vulnerability_drift_detected`
+  - `vulnerability_decision_recorded`
+  - `vulnerability_decision_deactivated`
+
+### Scanner and ingest model
+- SBOM ingestion is owned by `audit-writer` and stores both the raw SBOM document and flattened component rows.
+- Supported SBOM formats:
+  - `spdx-json`
+  - `cyclonedx-json`
+- Continuous rescanning is implemented inside `audit-writer` as a small background worker, disabled by default.
+- The current CLI adapter supports:
+  - `trivy`
+  - `grype`
+- Vulnerability drift is alert-first:
+  - new findings on an already-running digest emit audit events and appear in the UI
+  - this phase does **not** automatically delete pods or turn late CVE discovery into destructive runtime enforcement
+
+### VEX-lite decisions
+- `NOT_AFFECTED`
+  - suppresses default surfacing for that exact digest + CVE
+- `ACCEPTED_RISK`
+  - keeps the finding visible but marks it as acknowledged
+- `FIX_REQUIRED`
+  - makes remediation intent explicit
+- `UNDER_INVESTIGATION`
+  - records that triage is still open
+
+These rows are practical ChangeLock decision records, not a full formal VEX document. The schema is meant to keep formal VEX import/export possible later without overbuilding that ecosystem now.
+
+### Local demo example
+Start the stack with vulnerability rescanning enabled:
+```bash
+export CHANGELOCK_VULNOPS_ENABLED=true
+export CHANGELOCK_VULNOPS_SCANNER=trivy
+docker compose -f docker-compose.dev.yml up --build -d
+```
+
+Search inventory:
+```bash
+curl -sS "http://127.0.0.1:8094/v1/sbom/components/search?component_name=openssl" \
+  -H 'Authorization: Bearer viewer-demo-token'
+```
+
+Trigger a rescan:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/vulnerabilities/rescan \
+  -H 'Authorization: Bearer security-admin-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{"image_digest":"sha256:..."}'
+```
+
+Record a VEX-lite decision:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/vulnerabilities/decisions \
+  -H 'Authorization: Bearer security-admin-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "image_digest":"sha256:...",
+    "cve_id":"CVE-2026-1234",
+    "decision":"NOT_AFFECTED",
+    "justification":"component is present but not reachable in the running execution path",
+    "ttl_hours":24
+  }'
+```
+
+See [docs/vulnerability-ops.md](docs/vulnerability-ops.md) for the storage model, RBAC posture, scanner configuration, and local validation notes.
 - status-aware exception evidence in event details
 
 ### Optional local Prometheus
@@ -647,7 +771,8 @@ The local bootstrap applies these by default in `demo` mode. The stricter image-
 - richer alerts and production observability integrations
 - stronger auth backends such as OIDC/JWT validation
 - signed exception tokens and stronger service-to-service auth
-- deeper analytics, anomaly detection, and vulnerability operations
+- deeper analytics and anomaly detection
+- richer vulnerability operations and formal VEX import/export
 
 ## GitHub publish readiness
 This repository is now structured for a public technical POC upload. Use [docs/github-publish.md](docs/github-publish.md) to review example placeholders, local-only defaults, manual GitHub Actions flows, and the exact first-upload sequence.

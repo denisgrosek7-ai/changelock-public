@@ -25,6 +25,7 @@ type server struct {
 	allowedOrigins map[string]struct{}
 	requestTimeout time.Duration
 	authConfig     auth.Config
+	vulnOps        *vulnOpsRuntime
 }
 
 type ingestResponse struct {
@@ -77,17 +78,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	vulnOps, err := loadVulnOpsRuntimeFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if *migrateOnly {
 		log.Printf("audit-writer migrations applied using %s backend", backend)
 		return
+	}
+	if vulnOps != nil {
+		vulnOps.start(context.Background(), store)
 	}
 
 	addr := ":" + envOrDefault("PORT", "8094")
 	log.Printf("audit-writer listening on %s using %s backend", addr, backend)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           newHandlerWithAuth(store, backend, authConfig),
+		Handler:           newHandlerWithDeps(store, backend, authConfig, vulnOps),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -101,23 +109,40 @@ func newHandler(store audit.Store, backend string) http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithAuth(store, backend, authConfig)
+	vulnOps, err := loadVulnOpsRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithDeps(store, backend, authConfig, vulnOps)
 }
 
 func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Config) http.Handler {
+	vulnOps, err := loadVulnOpsRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithDeps(store, backend, authConfig, vulnOps)
+}
+
+func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime) http.Handler {
 	srv := server{
 		store:          store,
 		backend:        backend,
 		allowedOrigins: allowedOriginsFromEnv(),
 		requestTimeout: envDurationOrDefault("CHANGELOCK_REPORTS_TIMEOUT", 5*time.Second),
 		authConfig:     authConfig,
+		vulnOps:        vulnOps,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.healthHandler)
+	mux.HandleFunc("/ready", srv.readyHandler)
 	mux.Handle("/metrics", metrics.Handler())
 	mux.HandleFunc("/v1/ingest", srv.ingestHandler)
 	mux.HandleFunc("/v1/auth/me", srv.authMeHandler)
+	mux.HandleFunc("/v1/sbom/ingest", srv.sbomIngestHandler)
+	mux.HandleFunc("/v1/sbom/images/", srv.sbomImageHandler)
+	mux.HandleFunc("/v1/sbom/components/search", srv.sbomComponentsSearchHandler)
 	mux.HandleFunc("/v1/exceptions", srv.exceptionsHandler)
 	mux.HandleFunc("/v1/exceptions/request", srv.requestExceptionHandler)
 	mux.HandleFunc("/v1/exceptions/", srv.exceptionByIDHandler)
@@ -125,6 +150,12 @@ func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Confi
 	mux.HandleFunc("/v1/analytics/trends", srv.trendsHandler)
 	mux.HandleFunc("/v1/analytics/top-violators", srv.topViolatorsHandler)
 	mux.HandleFunc("/v1/analytics/drift-stats", srv.driftStatsHandler)
+	mux.HandleFunc("/v1/vulnerabilities/active", srv.activeVulnerabilitiesHandler)
+	mux.HandleFunc("/v1/vulnerabilities/blast-radius", srv.vulnerabilityBlastRadiusHandler)
+	mux.HandleFunc("/v1/vulnerabilities/timeline", srv.vulnerabilityTimelineHandler)
+	mux.HandleFunc("/v1/vulnerabilities/rescan", srv.vulnerabilityRescanHandler)
+	mux.HandleFunc("/v1/vulnerabilities/decisions", srv.vulnerabilityDecisionsHandler)
+	mux.HandleFunc("/v1/vulnerabilities/decisions/", srv.vulnerabilityDecisionByIDHandler)
 	mux.HandleFunc("/v1/reports/events", srv.eventsHandler)
 	mux.HandleFunc("/v1/reports/summary", srv.summaryHandler)
 	mux.HandleFunc("/v1/reports/denies", srv.deniesHandler)
@@ -175,6 +206,13 @@ func newPostgresStore(ctx context.Context, dsn string) (audit.Store, string, err
 }
 
 func (s server) healthHandler(w http.ResponseWriter, _ *http.Request) {
+	httpjson.Write(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"backend": s.backend,
+	})
+}
+
+func (s server) readyHandler(w http.ResponseWriter, _ *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -960,7 +998,7 @@ func (s server) wrap(next http.Handler) http.Handler {
 
 func (s server) applySecurityHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/v1/") {
+	if r.URL.Path == "/health" || r.URL.Path == "/ready" || strings.HasPrefix(r.URL.Path, "/v1/") {
 		w.Header().Set("Cache-Control", "no-store, max-age=0")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")

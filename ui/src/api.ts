@@ -1,4 +1,5 @@
 import type {
+  ActiveWorkloadRef,
   AuditHealth,
   AuthStatus,
   DriftStatsResponse,
@@ -8,6 +9,10 @@ import type {
   ExceptionReport,
   ExceptionRequestInput,
   ExceptionsResponse,
+  SBOMComponent,
+  SBOMComponentsResponse,
+  SBOMDocument,
+  SBOMImageResponse,
   PolicyException,
   ReasonCount,
   StoredEvent,
@@ -17,12 +22,35 @@ import type {
   TopViolatorsResponse,
   TrendBucket,
   TrendsResponse,
+  VulnerabilityBlastRadiusItem,
+  VulnerabilityBlastRadiusResponse,
+  VulnerabilityDecision,
+  VulnerabilityDecisionInput,
+  VulnerabilityDecisionsResponse,
+  VulnerabilityFinding,
+  VulnerabilitiesResponse,
+  VulnerabilityRescanResponse,
+  VulnerabilityTimelineEntry,
+  VulnerabilityTimelineResponse,
   VerifierSummary,
 } from "./types";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
-const API_TOKEN = (import.meta.env.VITE_API_TOKEN || "").trim();
-const API_TIMEOUT_MS = Number.parseInt(import.meta.env.VITE_API_TIMEOUT_MS || "8000", 10);
+type RuntimeConfig = {
+  apiBaseUrl?: string;
+  apiToken?: string;
+  apiTimeoutMs?: string | number;
+};
+
+declare global {
+  interface Window {
+    __CHANGELOCK_CONFIG__?: RuntimeConfig;
+  }
+}
+
+const runtimeConfig = window.__CHANGELOCK_CONFIG__ || {};
+const API_BASE_URL = (runtimeConfig.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+const API_TOKEN = String(runtimeConfig.apiToken || import.meta.env.VITE_API_TOKEN || "").trim();
+const API_TIMEOUT_MS = Number.parseInt(String(runtimeConfig.apiTimeoutMs || import.meta.env.VITE_API_TIMEOUT_MS || "8000"), 10);
 
 export class APIError extends Error {
   status: number;
@@ -428,6 +456,209 @@ function parseDriftStatsResponse(value: unknown): DriftStatsResponse {
   };
 }
 
+function parseSBOMDocument(value: unknown): SBOMDocument {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid sbom document.");
+  }
+  return {
+    id: readNumber(value.id, "document.id"),
+    image_digest: readString(value.image_digest, "document.image_digest"),
+    image_ref: readOptionalString(value.image_ref, "document.image_ref"),
+    sbom_format: readString(value.sbom_format, "document.sbom_format"),
+    source_ref: readOptionalString(value.source_ref, "document.source_ref"),
+    sbom_hash: readOptionalString(value.sbom_hash, "document.sbom_hash"),
+    created_at: readString(value.created_at, "document.created_at"),
+  };
+}
+
+function parseSBOMComponent(value: unknown): SBOMComponent {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid sbom component.");
+  }
+  return {
+    id: readNumber(value.id, "components[].id"),
+    image_digest: readString(value.image_digest, "components[].image_digest"),
+    component_name: readString(value.component_name, "components[].component_name"),
+    component_version: readOptionalString(value.component_version, "components[].component_version"),
+    component_type: readOptionalString(value.component_type, "components[].component_type"),
+    license: readOptionalString(value.license, "components[].license"),
+    purl: readOptionalString(value.purl, "components[].purl"),
+    metadata: readOptionalRecord(value.metadata, "components[].metadata"),
+    created_at: readString(value.created_at, "components[].created_at"),
+  };
+}
+
+function parseSBOMImageResponse(value: unknown): SBOMImageResponse {
+  if (!isRecord(value) || !Array.isArray(value.components)) {
+    throw new Error("Audit API returned invalid sbom image response.");
+  }
+  return {
+    document: parseSBOMDocument(value.document),
+    component_count: readNumber(value.component_count, "component_count"),
+    components: value.components.map(parseSBOMComponent),
+  };
+}
+
+function parseSBOMComponentsResponse(value: unknown): SBOMComponentsResponse {
+  if (!isRecord(value) || !Array.isArray(value.components)) {
+    throw new Error("Audit API returned invalid sbom components response.");
+  }
+  return {
+    components: value.components.map(parseSBOMComponent),
+  };
+}
+
+function parseVulnerabilityDecision(value: unknown): VulnerabilityDecision {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vulnerability decision.");
+  }
+  return {
+    id: readNumber(value.id, "decision.id"),
+    image_digest: readString(value.image_digest, "decision.image_digest"),
+    cve_id: readString(value.cve_id, "decision.cve_id"),
+    decision: readString(value.decision, "decision.decision") as VulnerabilityDecision["decision"],
+    justification: readString(value.justification, "decision.justification"),
+    decided_by: readString(value.decided_by, "decision.decided_by"),
+    expires_at: readOptionalString(value.expires_at, "decision.expires_at"),
+    active: readBoolean(value.active, "decision.active"),
+    metadata: readOptionalRecord(value.metadata, "decision.metadata"),
+    created_at: readString(value.created_at, "decision.created_at"),
+    updated_at: readString(value.updated_at, "decision.updated_at"),
+  };
+}
+
+function parseVulnerabilityFinding(value: unknown): VulnerabilityFinding {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vulnerability finding.");
+  }
+  return {
+    id: readNumber(value.id, "findings[].id"),
+    image_digest: readString(value.image_digest, "findings[].image_digest"),
+    image_ref: readOptionalString(value.image_ref, "findings[].image_ref"),
+    scan_run_id: readNumber(value.scan_run_id, "findings[].scan_run_id"),
+    cve_id: readString(value.cve_id, "findings[].cve_id"),
+    severity: readOptionalString(value.severity, "findings[].severity"),
+    package_name: readOptionalString(value.package_name, "findings[].package_name"),
+    package_version: readOptionalString(value.package_version, "findings[].package_version"),
+    fixed_version: readOptionalString(value.fixed_version, "findings[].fixed_version"),
+    purl: readOptionalString(value.purl, "findings[].purl"),
+    status: readString(value.status, "findings[].status") as VulnerabilityFinding["status"],
+    title: readOptionalString(value.title, "findings[].title"),
+    description: readOptionalString(value.description, "findings[].description"),
+    source: readOptionalString(value.source, "findings[].source"),
+    metadata: readOptionalRecord(value.metadata, "findings[].metadata"),
+    first_seen_at: readString(value.first_seen_at, "findings[].first_seen_at"),
+    last_seen_at: readString(value.last_seen_at, "findings[].last_seen_at"),
+    decision: value.decision ? parseVulnerabilityDecision(value.decision) : undefined,
+  };
+}
+
+function parseActiveWorkload(value: unknown): ActiveWorkloadRef {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid workload reference.");
+  }
+  return {
+    tenant_id: readOptionalString(value.tenant_id, "workloads[].tenant_id"),
+    environment: readOptionalString(value.environment, "workloads[].environment"),
+    namespace: readOptionalString(value.namespace, "workloads[].namespace"),
+    workload: readOptionalString(value.workload, "workloads[].workload"),
+    repo: readOptionalString(value.repo, "workloads[].repo"),
+    image: readOptionalString(value.image, "workloads[].image"),
+    digest: readOptionalString(value.digest, "workloads[].digest"),
+  };
+}
+
+function parseVulnerabilitiesResponse(value: unknown): VulnerabilitiesResponse {
+  if (!isRecord(value) || !Array.isArray(value.findings)) {
+    throw new Error("Audit API returned invalid vulnerabilities response.");
+  }
+  return {
+    findings: value.findings.map(parseVulnerabilityFinding),
+  };
+}
+
+function parseBlastRadiusItem(value: unknown): VulnerabilityBlastRadiusItem {
+  if (!isRecord(value) || !Array.isArray(value.findings) || !Array.isArray(value.workloads)) {
+    throw new Error("Audit API returned invalid blast-radius item.");
+  }
+  return {
+    image_digest: readString(value.image_digest, "items[].image_digest"),
+    image_ref: readOptionalString(value.image_ref, "items[].image_ref"),
+    findings: value.findings.map(parseVulnerabilityFinding),
+    workloads: value.workloads.map(parseActiveWorkload),
+  };
+}
+
+function parseVulnerabilityBlastRadiusResponse(value: unknown): VulnerabilityBlastRadiusResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid blast-radius response.");
+  }
+  return {
+    items: value.items.map(parseBlastRadiusItem),
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
+function parseTimelineEntry(value: unknown): VulnerabilityTimelineEntry {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid timeline entry.");
+  }
+  return {
+    image_digest: readString(value.image_digest, "items[].image_digest"),
+    cve_id: readString(value.cve_id, "items[].cve_id"),
+    package_name: readOptionalString(value.package_name, "items[].package_name"),
+    package_version: readOptionalString(value.package_version, "items[].package_version"),
+    severity: readOptionalString(value.severity, "items[].severity"),
+    status: readString(value.status, "items[].status") as VulnerabilityTimelineEntry["status"],
+    first_seen_at: readString(value.first_seen_at, "items[].first_seen_at"),
+    last_seen_at: readString(value.last_seen_at, "items[].last_seen_at"),
+    decision: value.decision ? parseVulnerabilityDecision(value.decision) : undefined,
+  };
+}
+
+function parseVulnerabilityTimelineResponse(value: unknown): VulnerabilityTimelineResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid vulnerability timeline response.");
+  }
+  return {
+    items: value.items.map(parseTimelineEntry),
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
+function parseVulnerabilityDecisionsResponse(value: unknown): VulnerabilityDecisionsResponse {
+  if (!isRecord(value) || !Array.isArray(value.decisions)) {
+    throw new Error("Audit API returned invalid vulnerability decisions response.");
+  }
+  return {
+    decisions: value.decisions.map(parseVulnerabilityDecision),
+  };
+}
+
+function parseVulnerabilityDecisionActionResponse(value: unknown): { status: string; decision: VulnerabilityDecision } {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vulnerability decision action response.");
+  }
+  return {
+    status: readString(value.status, "status"),
+    decision: parseVulnerabilityDecision(value.decision),
+  };
+}
+
+function parseVulnerabilityRescanResponse(value: unknown): VulnerabilityRescanResponse {
+  if (!isRecord(value) || !Array.isArray(value.scanned_digests)) {
+    throw new Error("Audit API returned invalid vulnerability rescan response.");
+  }
+  if (!value.scanned_digests.every((item) => typeof item === "string")) {
+    throw new Error("Audit API returned invalid scanned_digests.");
+  }
+  return {
+    status: readString(value.status, "status"),
+    scanned_digests: value.scanned_digests,
+    scan_runs: readNumber(value.scan_runs, "scan_runs"),
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
@@ -541,6 +772,88 @@ export async function getDriftStats(filters: {
   repo?: string;
 }) {
   return parseDriftStatsResponse(await fetchJSON<unknown>("/v1/analytics/drift-stats", { params: filters }));
+}
+
+export async function searchSBOMComponents(filters: {
+  component_name?: string;
+  purl?: string;
+  image_digest?: string;
+  limit?: string;
+}) {
+  return parseSBOMComponentsResponse(await fetchJSON<unknown>("/v1/sbom/components/search", { params: filters }));
+}
+
+export async function getSBOMImage(imageDigest: string, limit = 100) {
+  return parseSBOMImageResponse(
+    await fetchJSON<unknown>(`/v1/sbom/images/${encodeURIComponent(imageDigest)}`, {
+      params: { limit: String(limit) },
+    }),
+  );
+}
+
+export async function getActiveVulnerabilities(filters: {
+  severity?: string;
+  cve_id?: string;
+  image_digest?: string;
+  component_name?: string;
+  tenant_id?: string;
+  environment?: string;
+  include_suppressed?: string;
+  limit?: string;
+}) {
+  return parseVulnerabilitiesResponse(await fetchJSON<unknown>("/v1/vulnerabilities/active", { params: filters }));
+}
+
+export async function getVulnerabilityBlastRadius(filters: {
+  cve_id?: string;
+  component_name?: string;
+  purl?: string;
+  limit?: string;
+}) {
+  return parseVulnerabilityBlastRadiusResponse(await fetchJSON<unknown>("/v1/vulnerabilities/blast-radius", { params: filters }));
+}
+
+export async function getVulnerabilityTimeline(filters: {
+  image_digest: string;
+  cve_id: string;
+  window_days?: string;
+}) {
+  return parseVulnerabilityTimelineResponse(await fetchJSON<unknown>("/v1/vulnerabilities/timeline", { params: filters }));
+}
+
+export async function getVulnerabilityDecisions(filters: {
+  image_digest?: string;
+  cve_id?: string;
+  active?: string;
+  limit?: string;
+}) {
+  return parseVulnerabilityDecisionsResponse(await fetchJSON<unknown>("/v1/vulnerabilities/decisions", { params: filters }));
+}
+
+export async function createVulnerabilityDecision(input: VulnerabilityDecisionInput) {
+  return parseVulnerabilityDecisionActionResponse(
+    await fetchJSON<unknown>("/v1/vulnerabilities/decisions", {
+      method: "POST",
+      body: input,
+    }),
+  );
+}
+
+export async function deactivateVulnerabilityDecision(decisionID: number) {
+  return parseVulnerabilityDecisionActionResponse(
+    await fetchJSON<unknown>(`/v1/vulnerabilities/decisions/${decisionID}/deactivate`, {
+      method: "POST",
+    }),
+  );
+}
+
+export async function rescanVulnerabilities(input?: { image_digest?: string; image_ref?: string }) {
+  return parseVulnerabilityRescanResponse(
+    await fetchJSON<unknown>("/v1/vulnerabilities/rescan", {
+      method: "POST",
+      body: input || {},
+    }),
+  );
 }
 
 export function apiBaseURL() {

@@ -11,24 +11,44 @@ import (
 )
 
 type MemoryStore struct {
-	mu                sync.Mutex
-	records           []StoredEvent
-	exceptions        map[string]PolicyException
-	approvalLogs      []ApprovalLog
-	nextID            int64
-	nextExceptionID   int64
-	nextApprovalLogID int64
-	now               func() time.Time
+	mu                  sync.Mutex
+	records             []StoredEvent
+	exceptions          map[string]PolicyException
+	approvalLogs        []ApprovalLog
+	sbomDocuments       map[string]SBOMDocument
+	sbomComponents      []SBOMComponent
+	scanRuns            []VulnerabilityScanRun
+	findings            map[string]VulnerabilityFinding
+	decisions           map[int64]VulnerabilityDecision
+	nextID              int64
+	nextExceptionID     int64
+	nextApprovalLogID   int64
+	nextSBOMDocumentID  int64
+	nextSBOMComponentID int64
+	nextScanRunID       int64
+	nextFindingID       int64
+	nextDecisionID      int64
+	now                 func() time.Time
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		exceptions:        map[string]PolicyException{},
-		approvalLogs:      []ApprovalLog{},
-		nextID:            1,
-		nextExceptionID:   1,
-		nextApprovalLogID: 1,
-		now:               time.Now,
+		exceptions:          map[string]PolicyException{},
+		approvalLogs:        []ApprovalLog{},
+		sbomDocuments:       map[string]SBOMDocument{},
+		sbomComponents:      []SBOMComponent{},
+		scanRuns:            []VulnerabilityScanRun{},
+		findings:            map[string]VulnerabilityFinding{},
+		decisions:           map[int64]VulnerabilityDecision{},
+		nextID:              1,
+		nextExceptionID:     1,
+		nextApprovalLogID:   1,
+		nextSBOMDocumentID:  1,
+		nextSBOMComponentID: 1,
+		nextScanRunID:       1,
+		nextFindingID:       1,
+		nextDecisionID:      1,
+		now:                 time.Now,
 	}
 }
 

@@ -1,0 +1,11 @@
+environments:
+  dev:
+    requireApprovals: 1
+  staging:
+    requireApprovals: 1
+  prod:
+    requireApprovals: 2
+    requireSecurityApproval: true
+    allowedDeployWindows:
+      - "Mon-Fri 08:00-18:00 UTC"
+

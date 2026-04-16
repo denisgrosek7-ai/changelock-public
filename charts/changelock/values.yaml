@@ -1,0 +1,249 @@
+nameOverride: ""
+fullnameOverride: ""
+
+commonLabels: {}
+imagePullSecrets: []
+
+auth:
+  mode: disabled
+  createSecret: false
+  existingSecret: ""
+  tokensJson: ""
+  tokensJsonKey: CHANGELOCK_AUTH_TOKENS_JSON
+  internalServiceToken: ""
+  internalServiceTokenKey: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 17-alpine
+    pullPolicy: IfNotPresent
+  auth:
+    database: changelock
+    username: changelock
+    password: changelock
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  securityContext:
+    fsGroup: 999
+
+externalPostgresql:
+  existingSecret: ""
+  dsn: ""
+  dsnKey: CHANGELOCK_POSTGRES_DSN
+
+auditWriter:
+  enabled: true
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-audit-writer
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8094
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  antiAffinity: none
+  priorityClassName: ""
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  env:
+    CHANGELOCK_REPORTS_TIMEOUT: 5s
+    CHANGELOCK_SBOM_INGEST_ENABLED: "true"
+    CHANGELOCK_VULNOPS_ENABLED: "false"
+    CHANGELOCK_VULNOPS_SCAN_INTERVAL: 6h
+    CHANGELOCK_VULNOPS_SCANNER: trivy
+    CHANGELOCK_VULNOPS_TRIVY_PATH: trivy
+    CHANGELOCK_VULNOPS_GRYPE_PATH: grype
+    CHANGELOCK_CORS_ALLOW_ORIGINS: https://dashboard.example.com
+  nodeSelector: {}
+  tolerations: []
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+
+policyEngine:
+  enabled: true
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-policy-engine
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8090
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  antiAffinity: none
+  priorityClassName: ""
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+
+attestationVerifier:
+  enabled: true
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-attestation-verifier
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8091
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  antiAffinity: none
+  priorityClassName: ""
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+
+deployGate:
+  enabled: true
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-deploy-gate
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8092
+  tls:
+    enabled: false
+    secretName: ""
+  webhook:
+    enabled: false
+    name: pods.changelock.io
+    caBundle: ""
+    timeoutSeconds: 5
+    namespaceSelectorLabelKey: changelock.io/enforce
+    namespaceSelectorLabelValue: enabled
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  antiAffinity: none
+  priorityClassName: ""
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+
+runtimeAgent:
+  enabled: true
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-runtime-agent
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8093
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  antiAffinity: none
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+
+ui:
+  enabled: false
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  antiAffinity: none
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  serviceAccount:
+    create: true
+    name: ""
+    automountServiceAccountToken: false
+  runtimeConfig:
+    apiBaseUrl: /api
+    apiToken: ""
+    apiTimeoutMs: "8000"
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: changelock.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+          - path: /api
+            pathType: Prefix
+    tls: []
+
+networkPolicy:
+  enabled: false
+  allowIntraNamespace: true
+  allowDeployGateWebhookIngress: true
+  allowUIIngress: true
+

@@ -20,7 +20,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -395,6 +396,23 @@ pre {
   color: #b42318;
 }
 
+.badge--critical,
+.badge--high {
+  background: rgba(180, 35, 24, 0.12);
+  color: #b42318;
+}
+
+.badge--medium {
+  background: rgba(180, 120, 24, 0.14);
+  color: #9a5a00;
+}
+
+.badge--low,
+.badge--unknown {
+  background: rgba(18, 32, 47, 0.08);
+  color: #203145;
+}
+
 .truncate {
   display: inline-block;
   max-width: 240px;
@@ -473,6 +491,54 @@ pre {
   margin: 12px 0 0;
 }
 
+.details-copy {
+  color: #56697b;
+  margin: 12px 0 0;
+}
+
+.details-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.details-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.details-form-grid span {
+  font-size: 13px;
+  color: #5d7183;
+}
+
+.details-form-grid input,
+.details-form-grid select,
+.details-form-grid textarea {
+  width: 100%;
+  border: 1px solid rgba(18, 32, 47, 0.14);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.details-form-grid textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.details-form-grid__wide {
+  grid-column: span 2;
+}
+
+.details-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -510,6 +576,11 @@ pre {
   color: #203145;
 }
 
+.chip--muted {
+  background: rgba(18, 32, 47, 0.05);
+  color: #5d7183;
+}
+
 .analytics-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -519,6 +590,33 @@ pre {
 
 .analytics-panel {
   padding: 18px;
+}
+
+.inventory-filters {
+  align-items: stretch;
+}
+
+.inventory-component-list li,
+.analytics-list li,
+.exception-queue-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(18, 32, 47, 0.08);
+}
+
+.inventory-component-list li:last-child,
+.analytics-list li:last-child,
+.exception-queue-item:last-child {
+  border-bottom: 0;
+}
+
+.inventory-component-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .analytics-list {

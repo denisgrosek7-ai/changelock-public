@@ -1,6 +1,8 @@
 export type Decision = "ALLOW" | "DENY" | "ERROR";
 export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED";
-export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "exceptions";
+export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
+export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
+export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "exceptions" | "inventory" | "vulnerabilities";
 
 export interface AuditHealth {
   status: string;
@@ -192,4 +194,132 @@ export interface DriftStatsResponse {
   top_drifted_workloads: DriftWorkloadCount[];
   mean_time_to_resolve_seconds?: number | null;
   applied_filters: Record<string, string>;
+}
+
+export interface SBOMDocument {
+  id: number;
+  image_digest: string;
+  image_ref?: string;
+  sbom_format: string;
+  source_ref?: string;
+  sbom_hash?: string;
+  created_at: string;
+}
+
+export interface SBOMComponent {
+  id: number;
+  image_digest: string;
+  component_name: string;
+  component_version?: string;
+  component_type?: string;
+  license?: string;
+  purl?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SBOMImageResponse {
+  document: SBOMDocument;
+  component_count: number;
+  components: SBOMComponent[];
+}
+
+export interface SBOMComponentsResponse {
+  components: SBOMComponent[];
+}
+
+export interface ActiveWorkloadRef {
+  tenant_id?: string;
+  environment?: string;
+  namespace?: string;
+  workload?: string;
+  repo?: string;
+  image?: string;
+  digest?: string;
+}
+
+export interface VulnerabilityDecision {
+  id: number;
+  image_digest: string;
+  cve_id: string;
+  decision: VulnerabilityDecisionValue;
+  justification: string;
+  decided_by: string;
+  expires_at?: string;
+  active: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VulnerabilityFinding {
+  id: number;
+  image_digest: string;
+  image_ref?: string;
+  scan_run_id: number;
+  cve_id: string;
+  severity?: string;
+  package_name?: string;
+  package_version?: string;
+  fixed_version?: string;
+  purl?: string;
+  status: VulnerabilityStatus;
+  title?: string;
+  description?: string;
+  source?: string;
+  metadata?: Record<string, unknown>;
+  first_seen_at: string;
+  last_seen_at: string;
+  decision?: VulnerabilityDecision;
+}
+
+export interface VulnerabilitiesResponse {
+  findings: VulnerabilityFinding[];
+}
+
+export interface VulnerabilityBlastRadiusItem {
+  image_digest: string;
+  image_ref?: string;
+  findings: VulnerabilityFinding[];
+  workloads: ActiveWorkloadRef[];
+}
+
+export interface VulnerabilityBlastRadiusResponse {
+  items: VulnerabilityBlastRadiusItem[];
+  applied_filters: Record<string, string>;
+}
+
+export interface VulnerabilityTimelineEntry {
+  image_digest: string;
+  cve_id: string;
+  package_name?: string;
+  package_version?: string;
+  severity?: string;
+  status: VulnerabilityStatus;
+  first_seen_at: string;
+  last_seen_at: string;
+  decision?: VulnerabilityDecision;
+}
+
+export interface VulnerabilityTimelineResponse {
+  items: VulnerabilityTimelineEntry[];
+  applied_filters: Record<string, string>;
+}
+
+export interface VulnerabilityDecisionsResponse {
+  decisions: VulnerabilityDecision[];
+}
+
+export interface VulnerabilityDecisionInput {
+  image_digest: string;
+  cve_id: string;
+  decision: VulnerabilityDecisionValue;
+  justification: string;
+  ttl_hours?: number;
+}
+
+export interface VulnerabilityRescanResponse {
+  status: string;
+  scanned_digests: string[];
+  scan_runs: number;
 }

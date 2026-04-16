@@ -14,8 +14,16 @@ import (
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
+	internalvulnops "github.com/denisgrosek/changelock/internal/vulnops"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestMain(m *testing.M) {
+	_ = os.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeDisabled)
+	_ = os.Unsetenv("CHANGELOCK_AUTH_TOKENS_JSON")
+	_ = os.Unsetenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")
+	os.Exit(m.Run())
+}
 
 func testAuthTokensJSON() string {
 	return `[
@@ -110,6 +118,24 @@ func TestIngestRejectsInvalidEvent(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHealthAndReadyExposeProcessVsStoreState(t *testing.T) {
+	handler := newHandler(audit.NewMemoryStore(), "memory")
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	healthRec := httptest.NewRecorder()
+	handler.ServeHTTP(healthRec, healthReq)
+	if healthRec.Code != http.StatusOK {
+		t.Fatalf("expected health 200, got %d: %s", healthRec.Code, healthRec.Body.String())
+	}
+
+	readyReq := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	readyRec := httptest.NewRecorder()
+	handler.ServeHTTP(readyRec, readyReq)
+	if readyRec.Code != http.StatusOK {
+		t.Fatalf("expected ready 200, got %d: %s", readyRec.Code, readyRec.Body.String())
 	}
 }
 
@@ -287,6 +313,9 @@ func TestRuntimeDriftEndpointFiltersEventType(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/reports/runtime-drift?tenant_id=acme", nil)
 	rec := httptest.NewRecorder()
 	newHandler(store, "memory").ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
 
 	var response eventsResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
@@ -997,4 +1026,232 @@ func TestLoadAuthConfigFromEnvRejectsInvalidConfig(t *testing.T) {
 	if _, err := loadAuthConfigFromEnv(); err == nil {
 		t.Fatal("expected duplicate token_id error")
 	}
+}
+
+func TestViewerCanReadSBOMAndVulnerabilityViewsButCannotMutate(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	if _, err := store.IngestSBOM(t.Context(), audit.SBOMIngestRequest{
+		ImageDigest: "sha256:viewer-sbom",
+		ImageRef:    "ghcr.io/example/viewer:1.0.0",
+		SBOMFormat:  audit.SBOMFormatSPDXJSON,
+		SBOM: []byte(`{
+		  "packages": [{"name":"openssl","versionInfo":"3.0.14-r0","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:apk/alpine/openssl@3.0.14-r0"}]}]
+		}`),
+	}); err != nil {
+		t.Fatalf("IngestSBOM() error = %v", err)
+	}
+	if _, err := store.RecordVulnerabilityScan(t.Context(), audit.VulnerabilityScanRequest{
+		ImageDigest: "sha256:viewer-sbom",
+		ImageRef:    "ghcr.io/example/viewer:1.0.0",
+		Scanner:     "trivy",
+		StartedAt:   time.Now().UTC(),
+		CompletedAt: ptrTimeMain(time.Now().UTC()),
+		Status:      audit.VulnerabilityScanStatusCompleted,
+		Findings: []audit.VulnerabilityFindingInput{{
+			CVEID:          "CVE-2026-4444",
+			Severity:       "HIGH",
+			PackageName:    "openssl",
+			PackageVersion: "3.0.14-r0",
+		}},
+	}); err != nil {
+		t.Fatalf("RecordVulnerabilityScan() error = %v", err)
+	}
+	handler := newHandler(store, "memory")
+
+	for _, path := range []string{
+		"/v1/sbom/components/search?component_name=openssl",
+		"/v1/vulnerabilities/active?component_name=openssl",
+		"/v1/vulnerabilities/blast-radius?cve_id=CVE-2026-4444",
+		"/v1/vulnerabilities/timeline?image_digest=sha256:viewer-sbom&cve_id=CVE-2026-4444",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for %s, got %d: %s", path, rec.Code, rec.Body.String())
+		}
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/vulnerabilities/decisions", bytes.NewBufferString(`{
+	  "image_digest":"sha256:viewer-sbom",
+	  "cve_id":"CVE-2026-4444",
+	  "decision":"NOT_AFFECTED",
+	  "justification":"viewer should not mutate"
+	}`))
+	createReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+}
+
+func TestSecurityAdminCanIngestSBOMAndManageVulnerabilityDecisions(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	ingestReq := httptest.NewRequest(http.MethodPost, "/v1/sbom/ingest", bytes.NewBufferString(`{
+	  "image_digest":"sha256:sbom-admin",
+	  "image_ref":"ghcr.io/example/admin:1.0.0",
+	  "sbom_format":"spdx-json",
+	  "sbom":{"packages":[{"name":"openssl","versionInfo":"3.0.14-r0"}]}
+	}`))
+	ingestReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	ingestReq.Header.Set("Content-Type", "application/json")
+	ingestRec := httptest.NewRecorder()
+	handler.ServeHTTP(ingestRec, ingestReq)
+	if ingestRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", ingestRec.Code, ingestRec.Body.String())
+	}
+
+	if _, err := store.RecordVulnerabilityScan(t.Context(), audit.VulnerabilityScanRequest{
+		ImageDigest: "sha256:sbom-admin",
+		ImageRef:    "ghcr.io/example/admin:1.0.0",
+		Scanner:     "trivy",
+		StartedAt:   time.Now().UTC(),
+		CompletedAt: ptrTimeMain(time.Now().UTC()),
+		Status:      audit.VulnerabilityScanStatusCompleted,
+		Findings: []audit.VulnerabilityFindingInput{{
+			CVEID:          "CVE-2026-5555",
+			Severity:       "MEDIUM",
+			PackageName:    "openssl",
+			PackageVersion: "3.0.14-r0",
+		}},
+	}); err != nil {
+		t.Fatalf("RecordVulnerabilityScan() error = %v", err)
+	}
+
+	createDecisionReq := httptest.NewRequest(http.MethodPost, "/v1/vulnerabilities/decisions", bytes.NewBufferString(`{
+	  "image_digest":"sha256:sbom-admin",
+	  "cve_id":"CVE-2026-5555",
+	  "decision":"ACCEPTED_RISK",
+	  "justification":"accepted for maintenance window",
+	  "ttl_hours":2
+	}`))
+	createDecisionReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	createDecisionReq.Header.Set("Content-Type", "application/json")
+	createDecisionRec := httptest.NewRecorder()
+	handler.ServeHTTP(createDecisionRec, createDecisionReq)
+	if createDecisionRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createDecisionRec.Code, createDecisionRec.Body.String())
+	}
+
+	var created vulnerabilityDecisionActionResponse
+	if err := json.NewDecoder(createDecisionRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode decision response: %v", err)
+	}
+	if created.Decision.Decision != audit.VulnerabilityDecisionAcceptedRisk {
+		t.Fatalf("unexpected decision %#v", created)
+	}
+
+	deactivateReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/v1/vulnerabilities/decisions/%d/deactivate", created.Decision.ID), nil)
+	deactivateReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	deactivateRec := httptest.NewRecorder()
+	handler.ServeHTTP(deactivateRec, deactivateReq)
+	if deactivateRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", deactivateRec.Code, deactivateRec.Body.String())
+	}
+}
+
+func TestServiceInternalCanTriggerRescanButCannotWriteHumanDecisionRoutes(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		Component:   "runtime-agent",
+		EventType:   audit.EventTypeRuntimeDriftResult,
+		Decision:    audit.DecisionAllow,
+		TenantID:    "acme",
+		Environment: "prod",
+		Namespace:   "acme-prod",
+		Workload:    "checkout",
+		Repo:        "my-org/checkout",
+		Image:       "ghcr.io/example/checkout:1.0.0",
+		Digest:      "sha256:rescan1",
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+
+	authConfig, err := auth.ParseConfig(auth.ModeStaticToken, testAuthTokensJSON())
+	if err != nil {
+		t.Fatalf("ParseConfig() error = %v", err)
+	}
+	handler := newHandlerWithDeps(store, "memory", authConfig, &vulnOpsRuntime{
+		config: internalvulnops.Config{
+			Enabled:           true,
+			SBOMIngestEnabled: true,
+			ScanInterval:      time.Hour,
+			Scanner:           internalvulnops.ScannerTrivy,
+		},
+		scanner: fakeScanner{
+			result: internalvulnops.Result{
+				ImageDigest: "sha256:rescan1",
+				ImageRef:    "ghcr.io/example/checkout:1.0.0",
+				Scanner:     internalvulnops.ScannerTrivy,
+				StartedAt:   time.Now().UTC(),
+				CompletedAt: time.Now().UTC(),
+				Status:      audit.VulnerabilityScanStatusCompleted,
+				Summary:     []byte(`{"critical":1,"high":0,"medium":0,"low":0,"unknown":0,"total":1}`),
+				Findings: []audit.VulnerabilityFindingInput{{
+					CVEID:          "CVE-2026-7777",
+					Severity:       "CRITICAL",
+					PackageName:    "glibc",
+					PackageVersion: "2.39-r0",
+				}},
+			},
+		},
+	})
+
+	rescanReq := httptest.NewRequest(http.MethodPost, "/v1/vulnerabilities/rescan", bytes.NewBufferString(`{"image_digest":"sha256:rescan1"}`))
+	rescanReq.Header.Set("Authorization", "Bearer service-internal-demo-token")
+	rescanReq.Header.Set("Content-Type", "application/json")
+	rescanRec := httptest.NewRecorder()
+	handler.ServeHTTP(rescanRec, rescanReq)
+	if rescanRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rescanRec.Code, rescanRec.Body.String())
+	}
+
+	findings, err := store.ListActiveVulnerabilities(t.Context(), audit.VulnerabilityActiveFilter{ImageDigest: "sha256:rescan1", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListActiveVulnerabilities() error = %v", err)
+	}
+	if len(findings) != 1 || findings[0].CVEID != "CVE-2026-7777" {
+		t.Fatalf("unexpected findings after rescan %#v", findings)
+	}
+
+	decisionReq := httptest.NewRequest(http.MethodPost, "/v1/vulnerabilities/decisions", bytes.NewBufferString(`{
+	  "image_digest":"sha256:rescan1",
+	  "cve_id":"CVE-2026-7777",
+	  "decision":"FIX_REQUIRED",
+	  "justification":"service should not write decisions"
+	}`))
+	decisionReq.Header.Set("Authorization", "Bearer service-internal-demo-token")
+	decisionReq.Header.Set("Content-Type", "application/json")
+	decisionRec := httptest.NewRecorder()
+	handler.ServeHTTP(decisionRec, decisionReq)
+	if decisionRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", decisionRec.Code, decisionRec.Body.String())
+	}
+}
+
+type fakeScanner struct {
+	result internalvulnops.Result
+	err    error
+}
+
+func (s fakeScanner) ScanDigest(_ context.Context, _ audit.ActiveDigestRef) (internalvulnops.Result, error) {
+	return s.result, s.err
+}
+
+func ptrTimeMain(value time.Time) *time.Time {
+	return &value
 }
