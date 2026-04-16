@@ -27,11 +27,13 @@ Use this as operator guidance, not a contractual support promise.
 - static-token auth for dev/demo
 - OIDC/JWT bearer validation for enterprise deployments
 - tenant-scoped report and governance reads/writes enforced by the audit-writer API
+- hub-and-spoke cross-cluster sync with GitOps policy rollout, pull-based approved exception sync, and cluster-tagged central audit ingest
 
 ## Out of scope for current platform support
 
 - browser login/session UX
-- cross-cluster sync
+- real-time websocket or gRPC sync
+- active-active multi-hub consensus
 - HSM/KMS-backed key custody
 - Vault-native secret rotation
 - async export pipelines

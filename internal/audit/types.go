@@ -25,6 +25,7 @@ type Event struct {
 	Component                string           `json:"component"`
 	EventType                string           `json:"event_type"`
 	Actor                    string           `json:"actor,omitempty"`
+	ClusterID                string           `json:"cluster_id,omitempty"`
 	TenantID                 string           `json:"tenant_id,omitempty"`
 	Repo                     string           `json:"repo,omitempty"`
 	Branch                   string           `json:"branch,omitempty"`

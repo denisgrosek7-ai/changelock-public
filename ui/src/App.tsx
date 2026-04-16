@@ -12,6 +12,7 @@ import {
   getExceptions,
   getHealth,
   getSummary,
+  getSyncStatus,
   getTopViolators,
   getTrends,
   rejectException,
@@ -41,6 +42,7 @@ import type {
   PolicyException,
   StoredEvent,
   Summary,
+  SyncStatus,
   TabKey,
   TopViolatorsResponse,
   TrendsResponse,
@@ -78,6 +80,7 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState<StoredEvent | null>(null);
   const [health, setHealth] = useState<AuditHealth | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [topViolators, setTopViolators] = useState<TopViolatorsResponse | null>(null);
   const [driftStats, setDriftStats] = useState<DriftStatsResponse | null>(null);
@@ -118,6 +121,7 @@ export default function App() {
         if (authResult.status === "fulfilled") {
           setAuthStatus(authResult.value);
         } else {
+          setSyncStatus(null);
           setSummary(null);
           setEvents([]);
           setSelectedEvent(null);
@@ -151,6 +155,11 @@ export default function App() {
           const promises: Array<Promise<void>> = [
             getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
           ];
+          if (isHumanRole(authResult.value.role)) {
+            promises.push(getSyncStatus().then(setSyncStatus));
+          } else {
+            setSyncStatus(null);
+          }
 
           if (activeTab === "analytics") {
             promises.push(
@@ -307,6 +316,15 @@ export default function App() {
                 : apiTokenConfigured()
                   ? "Token configured"
                   : "No token configured"}
+            </small>
+          </div>
+          <div className="panel health-panel">
+            <span className="summary-label">Cross-Cluster Sync</span>
+            <strong>{syncStatus ? `${syncStatus.mode} · ${syncStatus.health}` : "unavailable"}</strong>
+            <small>
+              {syncStatus
+                ? `${syncStatus.cluster_id ? `${syncStatus.cluster_id} · ` : ""}${syncStatus.current_revision ? `rev ${syncStatus.current_revision.slice(0, 12)}` : "no revision"}${syncStatus.fail_mode ? ` · ${syncStatus.fail_mode}` : ""}${syncStatus.summary ? ` · ${syncStatus.summary}` : ""}`
+                : "No sync status loaded"}
             </small>
           </div>
         </div>

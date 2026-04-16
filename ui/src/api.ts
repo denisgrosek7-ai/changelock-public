@@ -17,6 +17,7 @@ import type {
   ReasonCount,
   StoredEvent,
   Summary,
+  SyncStatus,
   TabKey,
   TopViolator,
   TopViolatorsResponse,
@@ -239,6 +240,7 @@ function parseStoredEvent(value: unknown): StoredEvent {
     component: readString(value.component, "events[].component"),
     event_type: readString(value.event_type, "events[].event_type"),
     actor: readOptionalString(value.actor, "events[].actor"),
+    cluster_id: readOptionalString(value.cluster_id, "events[].cluster_id"),
     tenant_id: readOptionalString(value.tenant_id, "events[].tenant_id"),
     repo: readOptionalString(value.repo, "events[].repo"),
     branch: readOptionalString(value.branch, "events[].branch"),
@@ -676,12 +678,39 @@ function parseAuthStatus(value: unknown): AuthStatus {
   };
 }
 
+function parseSyncStatus(value: unknown): SyncStatus {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid sync status.");
+  }
+  return {
+    sync_mode: readOptionalString(value.sync_mode, "sync_mode"),
+    mode: readString(value.mode, "mode"),
+    cluster_id: readOptionalString(value.cluster_id, "cluster_id"),
+    hub_url: readOptionalString(value.hub_url, "hub_url"),
+    fail_mode: readOptionalString(value.fail_mode, "fail_mode"),
+    health: readString(value.health, "health"),
+    current_revision: readOptionalString(value.current_revision, "current_revision"),
+    revision_etag: readOptionalString(value.revision_etag, "revision_etag"),
+    last_successful_sync_at: readOptionalString(value.last_successful_sync_at, "last_successful_sync_at"),
+    last_attempt_at: readOptionalString(value.last_attempt_at, "last_attempt_at"),
+    last_error: readOptionalString(value.last_error, "last_error"),
+    cache_present: readBoolean(value.cache_present, "cache_present"),
+    stale_after_seconds:
+      value.stale_after_seconds === undefined ? undefined : readNumber(value.stale_after_seconds, "stale_after_seconds"),
+    summary: readOptionalString(value.summary, "summary"),
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
 
 export async function getAuthStatus() {
   return parseAuthStatus(await fetchJSON<unknown>("/v1/auth/me"));
+}
+
+export async function getSyncStatus() {
+  return parseSyncStatus(await fetchJSON<unknown>("/v1/sync/status"));
 }
 
 export async function getSummary(filters: Pick<EventFilters, "environment" | "tenant_id">) {

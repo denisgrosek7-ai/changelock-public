@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: changelock-policy-bundle-metadata
+data:
+  distribution_mode: gitops
+  bundle_revision: git-managed
+  generated_at: git-commit-time
+  cluster_id: unset

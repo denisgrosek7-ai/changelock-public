@@ -1,0 +1,25 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-restricted-securitycontext
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-restricted-security-context
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+      validate:
+        message: "Containers must run as non-root, drop all capabilities, and use readOnlyRootFilesystem."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  readOnlyRootFilesystem: true
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                      - "ALL"

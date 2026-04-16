@@ -10,6 +10,7 @@ import (
 type TrendsFilter struct {
 	WindowDays  int
 	Granularity string
+	ClusterID   string
 	TenantID    string
 	Environment string
 	Repo        string
@@ -33,6 +34,7 @@ type TopViolatorsFilter struct {
 	WindowDays  int
 	Limit       int
 	Dimension   string
+	ClusterID   string
 	TenantID    string
 	Environment string
 	Repo        string
@@ -51,6 +53,7 @@ type TopViolatorsResponse struct {
 
 type DriftStatsFilter struct {
 	WindowDays  int
+	ClusterID   string
 	TenantID    string
 	Environment string
 	Repo        string
@@ -87,6 +90,7 @@ type AnalyticsStore interface {
 
 func NormalizeTrendsFilter(filter TrendsFilter) (TrendsFilter, error) {
 	filter.Granularity = strings.ToLower(strings.TrimSpace(filter.Granularity))
+	filter.ClusterID = strings.TrimSpace(filter.ClusterID)
 	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	filter.Environment = strings.TrimSpace(filter.Environment)
 	filter.Repo = strings.TrimSpace(filter.Repo)
@@ -110,6 +114,7 @@ func NormalizeTrendsFilter(filter TrendsFilter) (TrendsFilter, error) {
 }
 
 func NormalizeTopViolatorsFilter(filter TopViolatorsFilter) (TopViolatorsFilter, error) {
+	filter.ClusterID = strings.TrimSpace(filter.ClusterID)
 	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	filter.Environment = strings.TrimSpace(filter.Environment)
 	filter.Repo = strings.TrimSpace(filter.Repo)
@@ -139,6 +144,7 @@ func NormalizeTopViolatorsFilter(filter TopViolatorsFilter) (TopViolatorsFilter,
 }
 
 func NormalizeDriftStatsFilter(filter DriftStatsFilter) (DriftStatsFilter, error) {
+	filter.ClusterID = strings.TrimSpace(filter.ClusterID)
 	filter.TenantID = strings.TrimSpace(filter.TenantID)
 	filter.Environment = strings.TrimSpace(filter.Environment)
 	filter.Repo = strings.TrimSpace(filter.Repo)

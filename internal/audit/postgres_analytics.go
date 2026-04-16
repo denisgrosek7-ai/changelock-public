@@ -50,6 +50,7 @@ func (s *PostgresStore) Trends(ctx context.Context, filter TrendsFilter) (Trends
 		AppliedFilters: map[string]string{
 			"window_days": filterWindowString(filter.WindowDays),
 			"granularity": filter.Granularity,
+			"cluster_id":  filter.ClusterID,
 			"tenant_id":   filter.TenantID,
 			"environment": filter.Environment,
 			"repo":        filter.Repo,
@@ -101,6 +102,7 @@ func (s *PostgresStore) TopViolators(ctx context.Context, filter TopViolatorsFil
 		AppliedFilters: map[string]string{
 			"window_days": filterWindowString(filter.WindowDays),
 			"dimension":   filter.Dimension,
+			"cluster_id":  filter.ClusterID,
 			"tenant_id":   filter.TenantID,
 			"environment": filter.Environment,
 			"repo":        filter.Repo,
@@ -188,6 +190,7 @@ func (s *PostgresStore) DriftStats(ctx context.Context, filter DriftStatsFilter)
 		MeanTimeToResolveSeconds: mttr,
 		AppliedFilters: map[string]string{
 			"window_days": filterWindowString(filter.WindowDays),
+			"cluster_id":  filter.ClusterID,
 			"tenant_id":   filter.TenantID,
 			"environment": filter.Environment,
 			"repo":        filter.Repo,
@@ -209,6 +212,10 @@ FROM audit_events
 WHERE received_at >= $2
 `
 
+	if filter.ClusterID != "" {
+		args = append(args, filter.ClusterID)
+		query += fmt.Sprintf(" AND cluster_id = $%d", len(args))
+	}
 	if filter.TenantID != "" {
 		args = append(args, filter.TenantID)
 		query += fmt.Sprintf(" AND tenant_id = $%d", len(args))
@@ -239,6 +246,10 @@ FROM audit_events
 WHERE decision = 'DENY'
   AND received_at >= $1
 `
+	if filter.ClusterID != "" {
+		args = append(args, filter.ClusterID)
+		query += fmt.Sprintf(" AND cluster_id = $%d", len(args))
+	}
 	if filter.TenantID != "" {
 		args = append(args, filter.TenantID)
 		query += fmt.Sprintf(" AND tenant_id = $%d", len(args))
@@ -268,6 +279,10 @@ WHERE decision = 'DENY'
   AND received_at >= $1
   AND COALESCE(NULLIF(` + column + `, ''), 'unknown') = $2
 `
+	if filter.ClusterID != "" {
+		args = append(args, filter.ClusterID)
+		query += fmt.Sprintf(" AND cluster_id = $%d", len(args))
+	}
 	if filter.TenantID != "" {
 		args = append(args, filter.TenantID)
 		query += fmt.Sprintf(" AND tenant_id = $%d", len(args))
@@ -308,6 +323,10 @@ FROM audit_events
 WHERE received_at >= $1
   AND event_type = $2
 `
+	if filter.ClusterID != "" {
+		args = append(args, filter.ClusterID)
+		query += fmt.Sprintf(" AND cluster_id = $%d", len(args))
+	}
 	if filter.TenantID != "" {
 		args = append(args, filter.TenantID)
 		query += fmt.Sprintf(" AND tenant_id = $%d", len(args))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -26,6 +27,7 @@ type server struct {
 	requestTimeout time.Duration
 	authConfig     auth.Config
 	vulnOps        *vulnOpsRuntime
+	syncRuntime    *syncRuntime
 }
 
 type ingestResponse struct {
@@ -86,6 +88,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	syncRuntime, err := loadSyncRuntimeFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if *migrateOnly {
 		log.Printf("audit-writer migrations applied using %s backend", backend)
@@ -93,6 +99,9 @@ func main() {
 	}
 	if vulnOps != nil {
 		vulnOps.start(context.Background(), store)
+	}
+	if syncRuntime != nil {
+		syncRuntime.start(context.Background(), store)
 	}
 
 	addr := ":" + envOrDefault("PORT", "8094")
@@ -125,10 +134,22 @@ func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Confi
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithDeps(store, backend, authConfig, vulnOps)
+	syncRuntime, err := loadSyncRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithRuntimes(store, backend, authConfig, vulnOps, syncRuntime)
 }
 
 func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime) http.Handler {
+	syncRuntime, err := loadSyncRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithRuntimes(store, backend, authConfig, vulnOps, syncRuntime)
+}
+
+func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime) http.Handler {
 	srv := server{
 		store:          store,
 		backend:        backend,
@@ -136,11 +157,14 @@ func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Confi
 		requestTimeout: envDurationOrDefault("CHANGELOCK_REPORTS_TIMEOUT", 5*time.Second),
 		authConfig:     authConfig,
 		vulnOps:        vulnOps,
+		syncRuntime:    syncRuntime,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.healthHandler)
 	mux.HandleFunc("/ready", srv.readyHandler)
+	mux.HandleFunc("/v1/sync/status", srv.syncStatusHandler)
+	mux.HandleFunc("/v1/sync/exceptions", srv.syncExceptionsHandler)
 	mux.Handle("/metrics", metrics.Handler())
 	mux.HandleFunc("/v1/ingest", srv.ingestHandler)
 	mux.HandleFunc("/v1/auth/me", srv.authMeHandler)
@@ -246,6 +270,16 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 	if event.RequestID == "" {
 		event.RequestID = requestIDFromHeader(r)
 	}
+	clusterID, err := s.resolveInboundClusterID(r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	if clusterID != "" {
+		event.ClusterID = clusterID
+	} else if s.syncRuntime != nil && s.syncRuntime.config.Mode == audit.SyncModeSpoke && strings.TrimSpace(event.ClusterID) == "" {
+		event.ClusterID = s.syncRuntime.config.ClusterID
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
@@ -263,6 +297,9 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metrics.IncAuditStoreWriteSuccess("audit-writer", s.backend)
+	if err := s.syncRuntime.forwardEvent(ctx, event); err != nil {
+		log.Printf("audit-writer sync forward failed: %v", err)
+	}
 
 	httpjson.Write(w, http.StatusCreated, ingestResponse{
 		Status:     "stored",
@@ -371,6 +408,10 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 
 		httpjson.Write(w, http.StatusOK, exceptionsResponse{Exceptions: exceptions})
 	case http.MethodPost:
+		if reason := s.exceptionMutationBlockedReason(); reason != "" {
+			httpjson.Write(w, http.StatusConflict, map[string]string{"error": reason})
+			return
+		}
 		principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
 		if !ok {
 			return
@@ -415,6 +456,10 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) requestExceptionHandler(w http.ResponseWriter, r *http.Request) {
+	if reason := s.exceptionMutationBlockedReason(); reason != "" {
+		httpjson.Write(w, http.StatusConflict, map[string]string{"error": reason})
+		return
+	}
 	principal, r, ok := s.authorize(w, r, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return
@@ -463,6 +508,10 @@ func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case action == "" && r.Method == http.MethodDelete:
+		if reason := s.exceptionMutationBlockedReason(); reason != "" {
+			httpjson.Write(w, http.StatusConflict, map[string]string{"error": reason})
+			return
+		}
 		principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
 		if !ok {
 			return
@@ -514,6 +563,10 @@ func (s server) exceptionByIDHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s server) approveExceptionHandler(w http.ResponseWriter, r *http.Request, exceptionID string) {
+	if reason := s.exceptionMutationBlockedReason(); reason != "" {
+		httpjson.Write(w, http.StatusConflict, map[string]string{"error": reason})
+		return
+	}
 	principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
 	if !ok {
 		return
@@ -565,6 +618,10 @@ func (s server) approveExceptionHandler(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s server) rejectExceptionHandler(w http.ResponseWriter, r *http.Request, exceptionID string) {
+	if reason := s.exceptionMutationBlockedReason(); reason != "" {
+		httpjson.Write(w, http.StatusConflict, map[string]string{"error": reason})
+		return
+	}
 	principal, r, ok := s.authorize(w, r, auth.RoleSecurityAdmin)
 	if !ok {
 		return
@@ -643,6 +700,10 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	if reason := s.exceptionValidationBlockedReason(); reason != "" {
+		httpjson.Write(w, http.StatusOK, audit.ExceptionValidationResult{Valid: false, Reason: reason})
+		return
+	}
 
 	result, err := s.store.ValidateException(ctx, request)
 	if err != nil {
@@ -879,6 +940,76 @@ func (s server) exceptionsReportHandler(w http.ResponseWriter, r *http.Request) 
 	httpjson.Write(w, http.StatusOK, report)
 }
 
+func (s server) syncStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if _, _, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin); !ok {
+		return
+	}
+
+	status := deriveSyncStatus(audit.SyncStatus{
+		SyncMode: audit.SyncModeDisabled,
+		Mode:     audit.SyncModeDisabled,
+		Health:   audit.SyncHealthDisabled,
+	}, syncConfig{}, time.Now().UTC())
+	if s.syncRuntime != nil {
+		status = s.syncRuntime.statusSnapshot()
+		if s.syncRuntime.config.Mode == audit.SyncModeHub {
+			revision, err := s.currentHubExceptionRevision(r.Context())
+			if err == nil {
+				status.CurrentRevision = revision
+				status.RevisionETag = quotedETag(revision)
+			}
+		}
+		status = deriveSyncStatus(status, s.syncRuntime.config, time.Now().UTC())
+	}
+	httpjson.Write(w, http.StatusOK, status)
+}
+
+func (s server) syncExceptionsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if s.syncRuntime == nil || s.syncRuntime.config.Mode != audit.SyncModeHub {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "sync hub endpoint is disabled"})
+		return
+	}
+	principal, _, ok := s.authorize(w, r, auth.RoleService)
+	if !ok {
+		return
+	}
+	clusterID := strings.TrimSpace(r.Header.Get(syncClusterHeader))
+	binding, err := s.syncRuntime.authorizeClusterPrincipal(principal, clusterID)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+
+	filtered, revision, err := s.currentHubSyncedExceptions(r.Context(), binding)
+	if err != nil {
+		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	etag := fmt.Sprintf("%q", revision)
+	if strings.TrimSpace(r.Header.Get("If-None-Match")) == etag {
+		w.Header().Set("ETag", etag)
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	response := audit.ExceptionSyncSnapshot{
+		ClusterID:   clusterID,
+		Revision:    revision,
+		GeneratedAt: time.Now().UTC(),
+		Exceptions:  filtered,
+	}
+	w.Header().Set("ETag", etag)
+	httpjson.Write(w, http.StatusOK, response)
+}
+
 func (s server) authorize(w http.ResponseWriter, r *http.Request, roles ...string) (auth.Principal, *http.Request, bool) {
 	principal, err := s.authConfig.Require(r, roles...)
 	if err != nil {
@@ -895,6 +1026,7 @@ func parseFilter(r *http.Request) (audit.EventFilter, error) {
 		Decision:    query.Get("decision"),
 		EventType:   query.Get("event_type"),
 		Component:   query.Get("component"),
+		ClusterID:   query.Get("cluster_id"),
 		Repo:        query.Get("repo"),
 		Environment: query.Get("environment"),
 		TenantID:    query.Get("tenant_id"),
@@ -941,11 +1073,94 @@ func parseExceptionFilter(r *http.Request) (audit.ExceptionFilter, error) {
 	return audit.NormalizeExceptionFilter(filter)
 }
 
+func (s server) resolveInboundClusterID(r *http.Request) (string, error) {
+	clusterID := strings.TrimSpace(r.Header.Get(syncClusterHeader))
+	if clusterID == "" {
+		return "", nil
+	}
+	if s.syncRuntime == nil || s.syncRuntime.config.Mode != audit.SyncModeHub {
+		return clusterID, nil
+	}
+	principal, err := s.authConfig.Require(r, auth.RoleService)
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.syncRuntime.authorizeClusterPrincipal(principal, clusterID); err != nil {
+		return "", err
+	}
+	return clusterID, nil
+}
+
+func (s server) exceptionMutationBlockedReason() string {
+	if s.syncRuntime == nil {
+		return ""
+	}
+	return s.syncRuntime.mutationBlockedReason()
+}
+
+func (s server) exceptionValidationBlockedReason() string {
+	if s.syncRuntime == nil {
+		return ""
+	}
+	return s.syncRuntime.exceptionValidationBlockReason()
+}
+
+func (s server) currentHubSyncedExceptions(ctx context.Context, binding clusterBinding) ([]audit.SyncedException, string, error) {
+	filter := audit.ExceptionFilter{
+		Status: audit.ExceptionStatusApproved,
+		Limit:  500,
+	}
+	var exceptions []audit.PolicyException
+	if len(binding.Tenants) == 0 {
+		listed, err := s.store.ListExceptions(ctx, filter)
+		if err != nil {
+			return nil, "", err
+		}
+		exceptions = listed
+	} else {
+		byID := map[string]audit.PolicyException{}
+		for _, tenantID := range binding.Tenants {
+			filter.TenantID = tenantID
+			listed, err := s.store.ListExceptions(ctx, filter)
+			if err != nil {
+				return nil, "", err
+			}
+			for _, exception := range listed {
+				byID[exception.ExceptionID] = exception
+			}
+		}
+		exceptions = make([]audit.PolicyException, 0, len(byID))
+		for _, exception := range byID {
+			exceptions = append(exceptions, exception)
+		}
+	}
+
+	filtered := filterSyncedExceptionsForBinding(exceptions, binding)
+	revision := audit.ComputeExceptionSyncRevision(filtered)
+	return filtered, revision, nil
+}
+
+func (s server) currentHubExceptionRevision(ctx context.Context) (string, error) {
+	exceptions, err := s.store.ListExceptions(ctx, audit.ExceptionFilter{
+		Status: audit.ExceptionStatusApproved,
+		Limit:  500,
+	})
+	if err != nil {
+		return "", err
+	}
+	synced := make([]audit.SyncedException, 0, len(exceptions))
+	for _, exception := range exceptions {
+		synced = append(synced, audit.SyncedExceptionFromPolicyException(exception))
+	}
+	return audit.ComputeExceptionSyncRevision(synced), nil
+}
+
 func parseTrendsFilter(r *http.Request) (audit.TrendsFilter, error) {
 	query := r.URL.Query()
 	filter := audit.TrendsFilter{
 		WindowDays:  30,
 		Granularity: query.Get("granularity"),
+		ClusterID:   query.Get("cluster_id"),
 		TenantID:    query.Get("tenant_id"),
 		Environment: query.Get("environment"),
 		Repo:        query.Get("repo"),
@@ -967,6 +1182,7 @@ func parseTopViolatorsFilter(r *http.Request) (audit.TopViolatorsFilter, error) 
 		WindowDays:  30,
 		Limit:       5,
 		Dimension:   query.Get("dimension"),
+		ClusterID:   query.Get("cluster_id"),
 		TenantID:    query.Get("tenant_id"),
 		Environment: query.Get("environment"),
 		Repo:        query.Get("repo"),
@@ -992,6 +1208,7 @@ func parseDriftStatsFilter(r *http.Request) (audit.DriftStatsFilter, error) {
 	query := r.URL.Query()
 	filter := audit.DriftStatsFilter{
 		WindowDays:  30,
+		ClusterID:   query.Get("cluster_id"),
 		TenantID:    query.Get("tenant_id"),
 		Environment: query.Get("environment"),
 		Repo:        query.Get("repo"),

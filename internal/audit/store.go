@@ -59,6 +59,7 @@ type EventFilter struct {
 	Decision    string
 	EventType   string
 	Component   string
+	ClusterID   string
 	Repo        string
 	Environment string
 	TenantID    string
@@ -121,6 +122,7 @@ func NormalizeFilter(filter EventFilter) (EventFilter, error) {
 	filter.Decision = strings.TrimSpace(filter.Decision)
 	filter.EventType = strings.TrimSpace(filter.EventType)
 	filter.Component = strings.TrimSpace(filter.Component)
+	filter.ClusterID = strings.TrimSpace(filter.ClusterID)
 	filter.Repo = strings.TrimSpace(filter.Repo)
 	filter.Environment = strings.TrimSpace(filter.Environment)
 	filter.TenantID = strings.TrimSpace(filter.TenantID)

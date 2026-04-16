@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: changelock-policy-rollout
+  namespace: argocd
+spec:
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            changelock.io/enabled: "true"
+  template:
+    metadata:
+      name: changelock-policies-{{name}}
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/example/changelock-blueprint.git
+        targetRevision: main
+        path: deploy/gitops/policies/overlays/{{metadata.labels.changelock-policy-overlay}}
+      destination:
+        server: "{{server}}"
+        namespace: changelock-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

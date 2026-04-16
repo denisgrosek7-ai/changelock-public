@@ -129,6 +129,8 @@ Protected routes:
 - `GET /v1/reports/denies` -> `viewer | operator | security_admin`
 - `GET /v1/reports/runtime-drift` -> `viewer | operator | security_admin`
 - `GET /v1/reports/exceptions` -> `viewer | operator | security_admin`
+- `GET /v1/sync/status` -> `viewer | operator | security_admin`
+- `GET /v1/sync/exceptions` -> `service_internal`
 - `GET /v1/analytics/trends` -> `viewer | operator | security_admin`
 - `GET /v1/analytics/top-violators` -> `viewer | operator | security_admin`
 - `GET /v1/analytics/drift-stats` -> `viewer | operator | security_admin`
@@ -219,6 +221,26 @@ When the CLI runs with `--offline` or without `CHANGELOCK_CLI_API_URL`, API-assi
 - `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 
 When `CHANGELOCK_AUTH_MODE=static-token`, the token must exactly match the `token` field of a `service_internal` entry inside `CHANGELOCK_AUTH_TOKENS_JSON`.
+
+## Cross-cluster machine auth
+
+Phase 8b reuses `service_internal` bearer auth for spoke-to-hub sync.
+
+Additional settings:
+
+- `CHANGELOCK_SYNC_MODE`
+- `CHANGELOCK_CLUSTER_ID`
+- `CHANGELOCK_SYNC_HUB_URL`
+- `CHANGELOCK_SYNC_TOKEN`
+- `CHANGELOCK_SYNC_REQUIRE_CLUSTER_ID`
+- `CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON`
+
+Rules:
+
+- spoke sync requests must send `X-Changelock-Cluster-Id`
+- hub mode can require explicit cluster bindings
+- the hub authorizes the machine principal against cluster bindings before returning approved exception snapshots or accepting cluster-attributed sync traffic
+- cluster sync auth stays machine-oriented and separate from human UI/admin access
 
 ## Packaging notes
 

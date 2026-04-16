@@ -122,6 +122,30 @@ Example:
 Full usage and exit codes:
 - `docs/developer-preflight-cli.md`
 
+## Phase 8b cross-cluster sync
+
+Phase 8b adds a practical multi-cluster model without rewriting the enforcement plane:
+
+- GitOps-first policy rollout under `deploy/gitops/policies`
+- pull-based approved exception sync from hub to spokes
+- explicit cluster identity via `X-Changelock-Cluster-Id` plus `service_internal` auth
+- central audit ingest tagged with `cluster_id`
+- spoke fail modes:
+  - `last-known-good`
+  - `deny`
+- read-only sync status surface at `GET /v1/sync/status`
+- explicit sync health states:
+  - `disabled`
+  - `healthy`
+  - `stale`
+  - `error`
+
+See:
+
+- `docs/cross-cluster-sync.md`
+- `deploy/gitops/examples/argocd-applicationset.yaml`
+- `deploy/gitops/examples/flux-kustomization.yaml`
+
 ## Phase 7e production packaging and readiness
 
 Phase 7e adds the production-minded packaging layer:
@@ -249,6 +273,8 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `GET /v1/reports/denies`
 - `GET /v1/reports/runtime-drift`
 - `GET /v1/reports/exceptions`
+- `GET /v1/sync/status`
+- `GET /v1/sync/exceptions`
 - `GET /v1/analytics/trends`
 - `GET /v1/analytics/top-violators`
 - `GET /v1/analytics/drift-stats`
