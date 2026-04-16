@@ -105,3 +105,52 @@ After incident resolution:
 - deployment object and namespace
 - runtime digest and drift findings
 - exception_id, exception_type, approver, ticket_id, expiry, and usage events when break-glass was used
+
+## Vulnerability triage
+
+When a running digest later becomes vulnerable:
+- treat it as alert/triage by default, not automatic runtime enforcement
+- identify the exact digest and blast radius first
+- confirm whether the issue is exploitable in the shipped execution path
+- record a VEX-lite decision if the finding is not affected or accepted risk
+- otherwise track remediation as `FIX_REQUIRED`
+
+Inventory query example:
+```bash
+curl -sS "http://127.0.0.1:8094/v1/sbom/components/search?component_name=openssl" \
+  -H 'Authorization: Bearer viewer-demo-token'
+```
+
+Active findings example:
+```bash
+curl -sS "http://127.0.0.1:8094/v1/vulnerabilities/active?severity=HIGH" \
+  -H 'Authorization: Bearer viewer-demo-token'
+```
+
+Blast radius example:
+```bash
+curl -sS "http://127.0.0.1:8094/v1/vulnerabilities/blast-radius?cve_id=CVE-2026-1234" \
+  -H 'Authorization: Bearer viewer-demo-token'
+```
+
+Record a VEX-lite decision:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/vulnerabilities/decisions \
+  -H 'Authorization: Bearer security-admin-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "image_digest":"sha256:...",
+    "cve_id":"CVE-2026-1234",
+    "decision":"UNDER_INVESTIGATION",
+    "justification":"triage started while exploitability is being validated",
+    "ttl_hours":24
+  }'
+```
+
+Trigger a manual rescan:
+```bash
+curl -sS -X POST http://127.0.0.1:8094/v1/vulnerabilities/rescan \
+  -H 'Authorization: Bearer security-admin-demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{"image_digest":"sha256:..."}'
+```

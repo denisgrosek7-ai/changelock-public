@@ -1,0 +1,36 @@
+{{- if .Values.deployGate.webhook.enabled }}
+{{- if not .Values.deployGate.tls.enabled }}
+{{- fail "deployGate.webhook.enabled requires deployGate.tls.enabled=true" }}
+{{- end }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "deploy-gate") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+webhooks:
+  - name: {{ .Values.deployGate.webhook.name }}
+    admissionReviewVersions:
+      - v1
+    sideEffects: None
+    failurePolicy: Fail
+    matchPolicy: Equivalent
+    timeoutSeconds: {{ .Values.deployGate.webhook.timeoutSeconds }}
+    namespaceSelector:
+      matchLabels:
+        {{ .Values.deployGate.webhook.namespaceSelectorLabelKey }}: {{ .Values.deployGate.webhook.namespaceSelectorLabelValue | quote }}
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "changelock.componentFullname" (dict "root" . "component" "deploy-gate") }}
+        path: /admission/review
+        port: 443
+      caBundle: {{ required "deployGate.webhook.caBundle is required when deployGate.webhook.enabled=true" .Values.deployGate.webhook.caBundle | quote }}
+    rules:
+      - operations: [CREATE, UPDATE]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        scope: Namespaced
+{{- end }}
+

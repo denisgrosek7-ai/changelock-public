@@ -1,0 +1,56 @@
+{{- if and .Values.auditWriter.enabled .Values.auditWriter.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.auditWriter.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "changelock.componentLabels" (dict "root" . "component" "audit-writer") | nindent 6 }}
+---
+{{- end }}
+{{- if and .Values.policyEngine.enabled .Values.policyEngine.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "policy-engine") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.policyEngine.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "changelock.componentLabels" (dict "root" . "component" "policy-engine") | nindent 6 }}
+---
+{{- end }}
+{{- if and .Values.deployGate.enabled .Values.deployGate.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "deploy-gate") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.deployGate.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "changelock.componentLabels" (dict "root" . "component" "deploy-gate") | nindent 6 }}
+---
+{{- end }}
+{{- if and .Values.attestationVerifier.enabled .Values.attestationVerifier.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "attestation-verifier") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.attestationVerifier.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "changelock.componentLabels" (dict "root" . "component" "attestation-verifier") | nindent 6 }}
+{{- end }}
+

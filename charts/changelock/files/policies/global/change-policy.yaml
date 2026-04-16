@@ -1,0 +1,22 @@
+apiVersion: changelock.io/v1alpha1
+kind: ChangePolicy
+metadata:
+  name: global-change-policy
+spec:
+  allowedBranches:
+    - main
+    - release/*
+  requireSignedCommits: true
+  requirePullRequest: true
+  minimumApprovals: 2
+  criticalPaths:
+    - ".github/workflows/**"
+    - "deploy/**"
+    - "policies/**"
+    - "services/deploy-gate/**"
+    - "services/policy-engine/**"
+  criticalPathRules:
+    minimumSecurityApprovals: 1
+    requireCodeOwnersApproval: true
+  blockForcePushOnProtectedBranches: true
+

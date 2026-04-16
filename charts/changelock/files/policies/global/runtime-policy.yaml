@@ -1,0 +1,14 @@
+apiVersion: changelock.io/v1alpha1
+kind: RuntimePolicy
+metadata:
+  name: global-runtime-policy
+spec:
+  blockLatestTag: true
+  requireReadOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  allowHostNetwork: false
+  allowHostPID: false
+  allowHostIPC: false
+  requireNonRoot: true
+  maxContainerCapabilities: []
+

@@ -1,4 +1,4 @@
-.PHONY: bootstrap lint test build run-local audit-up audit-run audit-migrate ui-install ui-dev ui-build observability-up metrics-check package kind-up kind-down kind-load-images e2e
+.PHONY: bootstrap lint test build run-local audit-up audit-run audit-migrate ui-install ui-dev ui-build observability-up metrics-check package helm-lint helm-template helm-template-prod helm-package kind-up kind-down kind-load-images e2e
 
 bootstrap:
 	go mod download
@@ -46,6 +46,18 @@ metrics-check:
 
 package:
 	zip -r changelock-skeleton.zip .
+
+helm-lint:
+	helm lint charts/changelock
+
+helm-template:
+	helm template changelock charts/changelock
+
+helm-template-prod:
+	helm template changelock charts/changelock -f charts/changelock/values-prod-example.yaml
+
+helm-package:
+	helm package charts/changelock
 
 kind-load-images:
 	./scripts/load_images_kind.sh

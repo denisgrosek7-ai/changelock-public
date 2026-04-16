@@ -1,0 +1,100 @@
+auth:
+  mode: static-token
+  createSecret: false
+  existingSecret: changelock-auth
+
+postgresql:
+  enabled: false
+
+externalPostgresql:
+  existingSecret: changelock-postgres
+
+auditWriter:
+  replicaCount: 2
+  antiAffinity: required
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  env:
+    CHANGELOCK_REPORTS_TIMEOUT: 5s
+    CHANGELOCK_SBOM_INGEST_ENABLED: "true"
+    CHANGELOCK_VULNOPS_ENABLED: "true"
+    CHANGELOCK_VULNOPS_SCAN_INTERVAL: 6h
+    CHANGELOCK_VULNOPS_SCANNER: trivy
+    CHANGELOCK_VULNOPS_TRIVY_PATH: trivy
+    CHANGELOCK_VULNOPS_GRYPE_PATH: grype
+    CHANGELOCK_CORS_ALLOW_ORIGINS: https://changelock.example.com
+
+policyEngine:
+  replicaCount: 2
+  antiAffinity: required
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+attestationVerifier:
+  replicaCount: 2
+  antiAffinity: soft
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+deployGate:
+  replicaCount: 3
+  antiAffinity: required
+  tls:
+    enabled: true
+    secretName: changelock-deploy-gate-tls
+  webhook:
+    enabled: true
+    caBundle: REPLACE_WITH_BASE64_CA_BUNDLE
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  service:
+    port: 443
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+runtimeAgent:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 150m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ui:
+  enabled: false
+
+networkPolicy:
+  enabled: true
+

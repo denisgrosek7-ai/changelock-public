@@ -1,0 +1,16 @@
+ChangeLock has been installed.
+
+Useful commands:
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl get svc -n {{ .Release.Namespace }}
+
+Health checks:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }} {{ .Values.auditWriter.service.port }}:{{ .Values.auditWriter.service.port }}
+  curl -sS http://127.0.0.1:{{ .Values.auditWriter.service.port }}/health
+  curl -sS http://127.0.0.1:{{ .Values.auditWriter.service.port }}/ready
+
+If you enable deploy-gate.webhook.enabled, make sure:
+  - deployGate.tls.secretName points at a valid TLS secret
+  - deployGate.webhook.caBundle contains the matching CA bundle
+  - only namespaces that should be enforced carry {{ .Values.deployGate.webhook.namespaceSelectorLabelKey }}={{ .Values.deployGate.webhook.namespaceSelectorLabelValue }}
+

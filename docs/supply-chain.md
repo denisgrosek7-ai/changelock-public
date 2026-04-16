@@ -6,6 +6,8 @@ Phase 6b strengthens ChangeLock's software supply chain evidence in three practi
 2. the same workflow generates an SPDX JSON SBOM for that exact digest with Syft and records an SBOM file hash,
 3. policy decisions and audit events now carry a deterministic policy bundle identity plus a decision fingerprint.
 
+Phase 7d builds on that evidence by ingesting searchable SBOM documents into the audit store, flattening component inventory, and continuously rescanning active digests for newly disclosed vulnerabilities. That operational layer is documented separately in [docs/vulnerability-ops.md](docs/vulnerability-ops.md).
+
 ## Vulnerability scanning
 
 `build-sign-attest` now:

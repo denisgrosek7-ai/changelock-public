@@ -1,6 +1,6 @@
 # Phase 7a auth and RBAC
 
-Phase 7a adds a small bearer-token auth layer for sensitive report and exception surfaces without introducing sessions or external identity providers. Phase 7b/7c reuses the same token model and RBAC layer for analytics and exception approval governance.
+Phase 7a adds a small bearer-token auth layer for sensitive report and exception surfaces without introducing sessions or external identity providers. Phase 7b/7c reuses the same token model and RBAC layer for analytics and exception approval governance. Phase 7d extends the same RBAC model to SBOM inventory, vulnerability triage, VEX-lite decisions, and manual rescans.
 
 ## Auth modes
 - `CHANGELOCK_AUTH_MODE=disabled`
@@ -49,6 +49,16 @@ Protected routes:
 - `GET /v1/analytics/trends` -> `viewer | operator | security_admin`
 - `GET /v1/analytics/top-violators` -> `viewer | operator | security_admin`
 - `GET /v1/analytics/drift-stats` -> `viewer | operator | security_admin`
+- `POST /v1/sbom/ingest` -> `security_admin | service_internal`
+- `GET /v1/sbom/images/{image_digest}` -> `viewer | operator | security_admin`
+- `GET /v1/sbom/components/search` -> `viewer | operator | security_admin`
+- `GET /v1/vulnerabilities/active` -> `viewer | operator | security_admin`
+- `GET /v1/vulnerabilities/blast-radius` -> `viewer | operator | security_admin`
+- `GET /v1/vulnerabilities/timeline` -> `viewer | operator | security_admin`
+- `GET /v1/vulnerabilities/decisions` -> `viewer | operator | security_admin`
+- `POST /v1/vulnerabilities/decisions` -> `security_admin`
+- `POST /v1/vulnerabilities/decisions/{id}/deactivate` -> `security_admin`
+- `POST /v1/vulnerabilities/rescan` -> `security_admin | service_internal`
 - `GET /v1/auth/me` -> `viewer | operator | security_admin`
 
 Unprotected routes in this phase:
@@ -75,7 +85,7 @@ The dashboard can send a bearer token when configured with:
 Recommended browser/dashboard token:
 - use a `viewer` token for read-only dashboards
 - use an `operator` token when you want request-only exception workflow access from the UI
-- reserve `security_admin` tokens for approvals, revokes, and direct emergency create flows
+- reserve `security_admin` tokens for approvals, revokes, vulnerability decisions, rescans, and direct emergency create flows
 
 ## Exception governance
 
@@ -96,6 +106,23 @@ The approval-aware lifecycle introduced in 7c uses the existing RBAC model:
 - `service_internal`
   - validate only
   - no human approval permissions
+
+## Vulnerability operations
+
+Phase 7d keeps the same separation between human and service roles:
+
+- `viewer`
+  - read SBOM inventory, active vulnerabilities, blast radius, and timelines
+  - no write actions
+- `operator`
+  - same read access as `viewer`
+  - still no vulnerability decision or rescan write access
+- `security_admin`
+  - full read access
+  - can ingest SBOMs, record or deactivate VEX-lite decisions, and trigger manual rescans
+- `service_internal`
+  - may call internal write paths used for automation, specifically SBOM ingest and rescan
+  - does not gain human dashboard or decision-management privileges
 
 ## Future path
 
