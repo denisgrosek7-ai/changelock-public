@@ -1,6 +1,10 @@
 package verify
 
-import "context"
+import (
+	"context"
+
+	"github.com/denisgrosek/changelock/internal/evidence"
+)
 
 const DefaultPredicateType = "slsaprovenance"
 
@@ -17,6 +21,7 @@ type ArtifactVerificationRequest struct {
 	AllowedOIDCIssuers      []string             `json:"allowedOidcIssuers,omitempty" yaml:"allowedOidcIssuers,omitempty"`
 	PredicateType           string               `json:"predicateType,omitempty" yaml:"predicateType,omitempty"`
 	SupplyChain             *SupplyChainEvidence `json:"supplyChain,omitempty" yaml:"supplyChain,omitempty"`
+	EvidenceBundle          *evidence.Bundle     `json:"evidenceBundle,omitempty" yaml:"evidenceBundle,omitempty"`
 }
 
 type ArtifactVerification struct {
@@ -42,6 +47,9 @@ type VerificationEvidence struct {
 	AttestationSubjectName   string               `json:"attestationSubjectName,omitempty" yaml:"attestationSubjectName,omitempty"`
 	AttestationSubjectDigest string               `json:"attestationSubjectDigest,omitempty" yaml:"attestationSubjectDigest,omitempty"`
 	SupplyChain              *SupplyChainEvidence `json:"supplyChain,omitempty" yaml:"supplyChain,omitempty"`
+	Bundle                   *evidence.Bundle     `json:"bundle,omitempty" yaml:"bundle,omitempty"`
+	TransparencyLogState     string               `json:"transparencyLogState,omitempty" yaml:"transparencyLogState,omitempty"`
+	TransparencyLogReason    string               `json:"transparencyLogReason,omitempty" yaml:"transparencyLogReason,omitempty"`
 }
 
 type SupplyChainEvidence struct {

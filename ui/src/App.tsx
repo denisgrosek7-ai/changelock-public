@@ -11,6 +11,10 @@ import {
   getExceptionReport,
   getExceptions,
   getHealth,
+  getRuntimeActiveStates,
+  getRuntimeClosedLoopStatus,
+  getRuntimeDriftFindings,
+  getRuntimeDriftStatus,
   getSummary,
   getSyncStatus,
   getTopViolators,
@@ -19,6 +23,7 @@ import {
   requestException,
   revokeException,
 } from "./api";
+import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsTrendsPanel } from "./components/AnalyticsTrendsPanel";
 import { BuyerHighlights } from "./components/BuyerHighlights";
 import { DriftStatsPanel } from "./components/DriftStatsPanel";
@@ -28,9 +33,12 @@ import { ExceptionRequestForm } from "./components/ExceptionRequestForm";
 import { Filters } from "./components/Filters";
 import { HealthBadge } from "./components/HealthBadge";
 import { PendingExceptionsPanel } from "./components/PendingExceptionsPanel";
+import { RuntimeDriftPanel } from "./components/RuntimeDriftPanel";
 import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
+import { SigningIdentityPanel } from "./components/SigningIdentityPanel";
 import { SummaryCards } from "./components/SummaryCards";
 import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
+import { TrustScorecardPanel } from "./components/TrustScorecardPanel";
 import { VulnerabilityOpsPanel } from "./components/VulnerabilityOpsPanel";
 import type {
   AuditHealth,
@@ -40,6 +48,10 @@ import type {
   ExceptionReport,
   ExceptionRequestInput,
   PolicyException,
+  RuntimeActiveState,
+  RuntimeClosedLoopStatus,
+  RuntimeDriftFinding,
+  RuntimeDriftStatus,
   StoredEvent,
   Summary,
   SyncStatus,
@@ -66,6 +78,9 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
   { key: "inventory", label: "SBOM Inventory", description: "Search stored SBOM components by digest, package, or PURL." },
   { key: "vulnerabilities", label: "Vulnerability Ops", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
+  { key: "signing", label: "Signing Identities", description: "Authorized signers, observed identities, and workflow drift findings." },
+  { key: "scorecard", label: "Trust Scorecard", description: "Measured hardening grade, audit findings, trust badges, and auditor-ready posture." },
+  { key: "guidance", label: "AI Guidance", description: "Contextual grouping, bounded remediation guidance, VEX draft candidates, and break-glass reminders." },
 ];
 
 function isHumanRole(role?: string) {
@@ -84,6 +99,10 @@ export default function App() {
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [topViolators, setTopViolators] = useState<TopViolatorsResponse | null>(null);
   const [driftStats, setDriftStats] = useState<DriftStatsResponse | null>(null);
+  const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
+  const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
+  const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
+  const [runtimeDriftStatus, setRuntimeDriftStatus] = useState<RuntimeDriftStatus | null>(null);
   const [exceptionReport, setExceptionReport] = useState<ExceptionReport | null>(null);
   const [pendingExceptions, setPendingExceptions] = useState<PolicyException[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +147,10 @@ export default function App() {
           setTrends(null);
           setTopViolators(null);
           setDriftStats(null);
+          setRuntimeActiveStates([]);
+          setRuntimeClosedLoopStatus(null);
+          setRuntimeDriftFindings([]);
+          setRuntimeDriftStatus(null);
           setExceptionReport(null);
           setPendingExceptions([]);
 
@@ -185,6 +208,48 @@ export default function App() {
             );
             setEvents([]);
             setSelectedEvent(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
+          } else if (activeTab === "runtime") {
+            promises.push(
+              getRuntimeDriftFindings({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then((response) => setRuntimeDriftFindings(response.items)),
+            );
+            promises.push(
+              getRuntimeDriftStatus({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then(setRuntimeDriftStatus),
+            );
+            promises.push(
+              getRuntimeActiveStates({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then((response) => setRuntimeActiveStates(response.items)),
+            );
+            promises.push(
+              getRuntimeClosedLoopStatus({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then(setRuntimeClosedLoopStatus),
+            );
+            promises.push(
+              getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
+                setEvents(response.events);
+                setSelectedEvent((current) => response.events.find((event) => event.id === current?.id) || response.events[0] || null);
+              }),
+            );
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setExceptionReport(null);
+            setPendingExceptions([]);
           } else if (activeTab === "exceptions") {
             promises.push(getExceptionReport(baseFilters).then((report) => {
               setExceptionReport(report);
@@ -198,12 +263,16 @@ export default function App() {
                 limit: filters.limit,
               }).then((response) => setPendingExceptions(response.exceptions)),
             );
-          } else if (activeTab === "inventory" || activeTab === "vulnerabilities") {
+          } else if (activeTab === "inventory" || activeTab === "vulnerabilities" || activeTab === "signing" || activeTab === "scorecard" || activeTab === "guidance") {
             setEvents([]);
             setSelectedEvent(null);
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
             setExceptionReport(null);
             setPendingExceptions([]);
           } else {
@@ -216,6 +285,10 @@ export default function App() {
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
             setExceptionReport(null);
             setPendingExceptions([]);
           }
@@ -375,7 +448,7 @@ export default function App() {
         </button>
       </section>
 
-      {activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
+      {activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
         <Filters
           filters={filters}
           tab={activeTab}
@@ -431,11 +504,36 @@ export default function App() {
         </>
       ) : null}
 
+      {activeTab === "runtime" ? (
+        <>
+          <RuntimeDriftPanel
+            findings={runtimeDriftFindings}
+            status={runtimeDriftStatus}
+            activeStates={runtimeActiveStates}
+            closedLoopStatus={runtimeClosedLoopStatus}
+            loading={loading}
+          />
+          <section className="content-grid">
+            <EventsTable
+              events={events}
+              selectedEventID={selectedEvent?.id || null}
+              onSelect={setSelectedEvent}
+              loading={loading}
+              error={error}
+            />
+            <EventDetails event={selectedEvent} />
+          </section>
+        </>
+      ) : null}
+
       {activeTab === "inventory" ? <SBOMInventoryPanel tenantID={enforcedTenantID || undefined} /> : null}
 
       {activeTab === "vulnerabilities" ? <VulnerabilityOpsPanel role={role} tenantID={enforcedTenantID || undefined} /> : null}
+      {activeTab === "signing" ? <SigningIdentityPanel tenantID={enforcedTenantID || undefined} /> : null}
+      {activeTab === "scorecard" ? <TrustScorecardPanel tenantID={enforcedTenantID || undefined} /> : null}
+      {activeTab === "guidance" ? <AIInsightsPanel tenantID={enforcedTenantID || undefined} /> : null}
 
-      {activeTab !== "analytics" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
+      {activeTab !== "analytics" && activeTab !== "runtime" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
         <section className="content-grid">
           <EventsTable
             events={events}

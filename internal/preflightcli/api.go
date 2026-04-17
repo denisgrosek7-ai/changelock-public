@@ -101,6 +101,33 @@ func (c *APIClient) ListExceptions(ctx context.Context, filter audit.ExceptionFi
 	return response.Exceptions, nil
 }
 
+func (c *APIClient) VulnerabilityNet(ctx context.Context, imageDigest, tenantID, environment, severityThreshold string) (audit.VulnerabilityNetResponse, error) {
+	query := url.Values{}
+	if strings.TrimSpace(imageDigest) != "" {
+		query.Set("image_digest", strings.TrimSpace(imageDigest))
+	}
+	if strings.TrimSpace(tenantID) != "" {
+		query.Set("tenant_id", strings.TrimSpace(tenantID))
+	}
+	if strings.TrimSpace(environment) != "" {
+		query.Set("environment", strings.TrimSpace(environment))
+	}
+	if strings.TrimSpace(severityThreshold) != "" {
+		query.Set("severity_threshold", strings.TrimSpace(severityThreshold))
+	}
+	query.Set("limit", "100")
+
+	req, err := c.newRequest(ctx, http.MethodGet, "/v1/vulnerabilities/net?"+query.Encode(), nil)
+	if err != nil {
+		return audit.VulnerabilityNetResponse{}, err
+	}
+	var response audit.VulnerabilityNetResponse
+	if err := c.doJSON(req, &response); err != nil {
+		return audit.VulnerabilityNetResponse{}, err
+	}
+	return response, nil
+}
+
 func (c *APIClient) newRequest(ctx context.Context, method, path string, body []byte) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, nil)
 	if err != nil {

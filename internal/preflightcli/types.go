@@ -44,13 +44,68 @@ type CheckResult struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+type DiagnosticSeverity string
+
+const (
+	DiagnosticSeverityError   DiagnosticSeverity = "error"
+	DiagnosticSeverityWarning DiagnosticSeverity = "warning"
+	DiagnosticSeverityNote    DiagnosticSeverity = "note"
+)
+
+type EvaluationState string
+
+const (
+	EvaluationStatePass    EvaluationState = "pass"
+	EvaluationStateFail    EvaluationState = "fail"
+	EvaluationStateWarn    EvaluationState = "warn"
+	EvaluationStateUnknown EvaluationState = "unknown"
+	EvaluationStateSkipped EvaluationState = "skipped"
+)
+
+type DiagnosticRange struct {
+	StartLine   int `json:"start_line"`
+	StartColumn int `json:"start_column"`
+	EndLine     int `json:"end_line"`
+	EndColumn   int `json:"end_column"`
+}
+
+type Diagnostic struct {
+	CheckID          string             `json:"check_id"`
+	RuleID           string             `json:"rule_id"`
+	Category         string             `json:"category"`
+	Severity         DiagnosticSeverity `json:"severity"`
+	ReasonCode       string             `json:"reason_code"`
+	Message          string             `json:"message"`
+	Summary          string             `json:"summary"`
+	Target           string             `json:"target,omitempty"`
+	TargetFile       string             `json:"target_file,omitempty"`
+	Range            *DiagnosticRange   `json:"range,omitempty"`
+	ResourceIdentity string             `json:"resource_identity,omitempty"`
+	FixHint          string             `json:"fix_hint,omitempty"`
+	DocsRef          string             `json:"docs_ref,omitempty"`
+	Source           string             `json:"source"`
+	Blocking         bool               `json:"blocking"`
+	EvaluationState  EvaluationState    `json:"evaluation_state"`
+}
+
+type DiagnosticSummary struct {
+	Total                   int            `json:"total"`
+	Blocking                int            `json:"blocking"`
+	Advisory                int            `json:"advisory"`
+	CountsBySeverity        map[string]int `json:"counts_by_severity,omitempty"`
+	CountsBySource          map[string]int `json:"counts_by_source,omitempty"`
+	CountsByEvaluationState map[string]int `json:"counts_by_evaluation_state,omitempty"`
+}
+
 type Result struct {
-	Command       string            `json:"command"`
-	Mode          string            `json:"mode"`
-	Inputs        map[string]string `json:"inputs,omitempty"`
-	Checks        []CheckResult     `json:"checks"`
-	OverallResult Status            `json:"overall_result"`
-	ExitCode      int               `json:"exit_code"`
+	Command           string            `json:"command"`
+	Mode              string            `json:"mode"`
+	Inputs            map[string]string `json:"inputs,omitempty"`
+	Checks            []CheckResult     `json:"checks"`
+	Diagnostics       []Diagnostic      `json:"diagnostics,omitempty"`
+	DiagnosticSummary DiagnosticSummary `json:"diagnostic_summary,omitempty"`
+	OverallResult     Status            `json:"overall_result"`
+	ExitCode          int               `json:"exit_code"`
 }
 
 func (r *Result) add(checks ...CheckResult) {
@@ -61,7 +116,7 @@ func finalizeResult(result Result) Result {
 	if len(result.Checks) == 0 {
 		result.OverallResult = StatusError
 		result.ExitCode = ExitExecution
-		return result
+		return attachDiagnostics(result)
 	}
 	hasPass := false
 	for _, check := range result.Checks {
@@ -69,11 +124,11 @@ func finalizeResult(result Result) Result {
 		case StatusError:
 			result.OverallResult = StatusError
 			result.ExitCode = ExitExecution
-			return result
+			return attachDiagnostics(result)
 		case StatusFail:
 			result.OverallResult = StatusFail
 			result.ExitCode = ExitFailed
-			return result
+			return attachDiagnostics(result)
 		case StatusPass:
 			hasPass = true
 		}
@@ -81,11 +136,11 @@ func finalizeResult(result Result) Result {
 	if hasPass {
 		result.OverallResult = StatusPass
 		result.ExitCode = ExitSuccess
-		return result
+		return attachDiagnostics(result)
 	}
 	result.OverallResult = StatusSkip
 	result.ExitCode = ExitExecution
-	return result
+	return attachDiagnostics(result)
 }
 
 func exitCodeForResult(result Result) int {

@@ -263,6 +263,14 @@ spec:
                   name: {{ .Values.signer.existingSecret }}
                   key: {{ .Values.signer.vaultTokenKey }}
             {{- end }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT
+              value: {{ .Values.signingIdentity.enforcement | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_REQUIRE_REKOR
+              value: {{ .Values.signingIdentity.requireRekor | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_QUARANTINE_ON_DRIFT
+              value: {{ .Values.signingIdentity.quarantineOnDrift | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_WORKFLOWS_DIR
+              value: {{ .Values.signingIdentity.workflowsDir | quote }}
             {{- range $name, $value := .Values.auditWriter.env }}
             - name: {{ $name }}
               value: {{ $value | quote }}
@@ -555,6 +563,10 @@ spec:
               value: http://{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}:{{ .Values.auditWriter.service.port }}
             - name: CHANGELOCK_VEX_DEPLOY_MODE
               value: {{ .Values.deployGate.vexDeployMode | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT
+              value: {{ .Values.signingIdentity.enforcement | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_REQUIRE_REKOR
+              value: {{ .Values.signingIdentity.requireRekor | quote }}
             {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
             - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
               valueFrom:
@@ -662,6 +674,42 @@ spec:
               value: {{ .Values.runtimeAgent.service.port | quote }}
             - name: AUDIT_WRITER_URL
               value: http://{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}:{{ .Values.auditWriter.service.port }}
+            - name: CHANGELOCK_SELF_HEALING_MODE
+              value: {{ .Values.runtimeAgent.selfHealing.mode | quote }}
+            - name: CHANGELOCK_SELF_HEALING_MAX_ATTEMPTS
+              value: {{ .Values.runtimeAgent.selfHealing.maxAttempts | quote }}
+            - name: CHANGELOCK_SELF_HEALING_WINDOW
+              value: {{ .Values.runtimeAgent.selfHealing.window | quote }}
+            - name: CHANGELOCK_SELF_HEALING_ALLOWED_KINDS
+              value: {{ .Values.runtimeAgent.selfHealing.allowedKinds | quote }}
+            - name: CHANGELOCK_SELF_HEALING_REQUIRE_SIGNED_DESIRED_STATE
+              value: {{ .Values.runtimeAgent.selfHealing.requireSignedDesiredState | quote }}
+            - name: CHANGELOCK_SELF_HEALING_CRITICAL_ONLY
+              value: {{ .Values.runtimeAgent.selfHealing.criticalOnly | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_RECONCILE_INTERVAL
+              value: {{ .Values.runtimeAgent.closedLoop.reconcileInterval | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_FAIL_MODE
+              value: {{ .Values.runtimeAgent.closedLoop.failMode | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_REQUIRE_SIGNED_DESIRED_STATE
+              value: {{ .Values.runtimeAgent.selfHealing.requireSignedDesiredState | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_VERIFY_DESIRED_STATE_ON_RECONCILE
+              value: {{ .Values.runtimeAgent.closedLoop.verifyDesiredStateOnReconcile | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_PROTECTED_NAMESPACES
+              value: {{ .Values.runtimeAgent.closedLoop.protectedNamespaces | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_PROTECTED_WORKLOADS
+              value: {{ .Values.runtimeAgent.closedLoop.protectedWorkloads | quote }}
+            - name: CHANGELOCK_RUNTIME_QUARANTINE_NETWORK_POLICY_ENABLED
+              value: {{ .Values.runtimeAgent.closedLoop.quarantineNetworkPolicyEnabled | quote }}
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_ENABLED
+              value: {{ .Values.runtimeAgent.closedLoop.vexQuarantine.enabled | quote }}
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_SEVERITY
+              value: {{ .Values.runtimeAgent.closedLoop.vexQuarantine.severity | quote }}
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_REQUIRE_NET_ACTIONABLE
+              value: {{ .Values.runtimeAgent.closedLoop.vexQuarantine.requireNetActionable | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT
+              value: {{ .Values.signingIdentity.enforcement | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_QUARANTINE_ON_DRIFT
+              value: {{ .Values.signingIdentity.quarantineOnDrift | quote }}
             {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
             - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
               valueFrom:

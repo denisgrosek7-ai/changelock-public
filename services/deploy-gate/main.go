@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -11,9 +12,11 @@ import (
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
+	"github.com/denisgrosek/changelock/internal/evidence"
 	"github.com/denisgrosek/changelock/internal/httpjson"
 	"github.com/denisgrosek/changelock/internal/metrics"
 	"github.com/denisgrosek/changelock/internal/policy"
+	"github.com/denisgrosek/changelock/internal/signingidentity"
 	"github.com/denisgrosek/changelock/internal/verify"
 )
 
@@ -25,6 +28,7 @@ var artifactVerifier verify.ArtifactVerifier = newArtifactVerifier()
 var auditWriter = audit.NewDefaultWriter()
 var exceptionValidator audit.ExceptionValidator = newExceptionValidator()
 var vulnerabilityEvaluator vulnerabilityNetEvaluator = newVulnerabilityNetEvaluator()
+var signerIdentityEnforcer signerIdentityEvaluator = newSignerIdentityEvaluator()
 
 type admissionReview struct {
 	APIVersion string             `json:"apiVersion,omitempty"`
@@ -99,6 +103,9 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := validateVulnerabilityNetEvaluatorConfig(); err != nil {
+		log.Fatal(err)
+	}
+	if err := validateSignerIdentityEvaluatorConfig(); err != nil {
 		log.Fatal(err)
 	}
 	addr := ":" + envOrDefault("PORT", "8092")
@@ -198,7 +205,12 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 	reasons = append(reasons, evaluateRuntimePolicy(bundle.Runtime.Spec, request.Object)...)
 	var primaryVerification *verify.ArtifactVerification
 	for _, workloadContainer := range append([]container{}, append(request.Object.Spec.InitContainers, request.Object.Spec.Containers...)...) {
-		verification, verifyErr := artifactVerifier.VerifyArtifact(context.Background(), buildVerificationRequest(bundle, annotations, workloadContainer.Image))
+		verificationRequest, requestErr := buildVerificationRequest(bundle, annotations, workloadContainer.Image)
+		if requestErr != nil {
+			reasons = append(reasons, workloadContainer.Name+": "+requestErr.Error())
+			continue
+		}
+		verification, verifyErr := artifactVerifier.VerifyArtifact(context.Background(), verificationRequest)
 		if verifyErr != nil {
 			reasons = append(reasons, workloadContainer.Name+": artifact verifier error: "+verifyErr.Error())
 			continue
@@ -218,6 +230,11 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 			Repo:        firstNonEmpty(verification.VerifiedRepo, repository),
 			Environment: environment,
 		})
+		identityDecision := evaluateSignerIdentity(context.Background(), tenant, environment, verification)
+		if identityDecision != nil && signerIdentityShouldBlock(identityDecision, signerIdentityEnforcer) {
+			artifactDecision.Reasons = append(artifactDecision.Reasons, "signer identity authorization failed: "+firstNonEmpty(identityDecision.ReasonDetail, identityDecision.ReasonCode))
+			artifactDecision.Decision = audit.DecisionDeny
+		}
 		for _, reason := range artifactDecision.Reasons {
 			reasons = append(reasons, workloadContainer.Name+": "+reason)
 		}
@@ -242,6 +259,9 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 			}
 		}
 		summary, evidence := audit.FromArtifactVerification(&verification)
+		if evidence != nil && identityDecision != nil {
+			evidence.SigningIdentity = buildSigningIdentityAuditEvidence(*identityDecision)
+		}
 		writeAuditEvent(context.Background(), audit.Event{
 			RequestID:        requestID,
 			Component:        "deploy-gate",
@@ -314,6 +334,70 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 	}
 }
 
+func evaluateSignerIdentity(ctx context.Context, tenant string, environment string, verification verify.ArtifactVerification) *signingidentity.Decision {
+	if signerIdentityEnforcer == nil || !signerIdentityEnforcer.Enabled() {
+		return nil
+	}
+	request := signingIdentityEvaluateRequest{
+		Issuer:            verification.VerifiedIssuer,
+		SignerIdentity:    verification.VerifiedIdentity,
+		Subject:           verification.VerifiedSubject,
+		Repository:        verification.VerifiedRepo,
+		Workflow:          verification.VerifiedWorkflow,
+		Ref:               verification.VerifiedRef,
+		TenantID:          tenant,
+		Environment:       environment,
+		TransparencyState: verification.Evidence.TransparencyLogState,
+	}
+	if verification.Evidence.Bundle != nil {
+		request.EvidenceAt = firstNonNilTime(verification.Evidence.Bundle.IntegratedTime, verification.Evidence.Bundle.SignedAt)
+	}
+	decision, err := signerIdentityEnforcer.Evaluate(ctx, request)
+	if err != nil {
+		failed := signingidentity.Decision{
+			Authorized:        signingidentity.AuthorizationUnknown,
+			EnforcementMode:   signerIdentityEnforcer.Mode(),
+			ReasonCode:        signingidentity.ReasonUnknown,
+			ReasonDetail:      "signing identity evaluation failed: " + err.Error(),
+			Deny:              signerIdentityEnforcer.Mode() == signingidentity.EnforcementEnforce,
+			TransparencyState: verification.Evidence.TransparencyLogState,
+		}
+		return &failed
+	}
+	return &decision
+}
+
+func signerIdentityShouldBlock(decision *signingidentity.Decision, evaluator signerIdentityEvaluator) bool {
+	if decision == nil || evaluator == nil {
+		return false
+	}
+	return evaluator.Mode() == signingidentity.EnforcementEnforce && decision.Deny
+}
+
+func buildSigningIdentityAuditEvidence(decision signingidentity.Decision) *audit.SigningIdentityEvidence {
+	return &audit.SigningIdentityEvidence{
+		PolicyID:             decision.MatchedPolicyID,
+		PolicyName:           decision.MatchedPolicyName,
+		EnforcementMode:      decision.EnforcementMode,
+		Authorized:           decision.Authorized,
+		ReasonCode:           decision.ReasonCode,
+		ReasonDetail:         decision.ReasonDetail,
+		DistrustedAfter:      decision.DistrustedAfter,
+		TransparencyRequired: decision.TransparencyRequired,
+		TransparencyState:    decision.TransparencyState,
+	}
+}
+
+func firstNonNilTime(values ...*time.Time) *time.Time {
+	for _, value := range values {
+		if value != nil && !value.IsZero() {
+			timestamp := value.UTC()
+			return &timestamp
+		}
+	}
+	return nil
+}
+
 func buildArtifactRequest(tenant string, annotations map[string]string, image string, verification verify.ArtifactVerification) policy.ArtifactEvaluationRequest {
 	repository := annotations["changelock.io/repository"]
 	subject := annotations["changelock.io/subject"]
@@ -338,11 +422,16 @@ func buildArtifactRequest(tenant string, annotations map[string]string, image st
 	}
 }
 
-func buildVerificationRequest(bundle *policy.Bundle, annotations map[string]string, image string) verify.ArtifactVerificationRequest {
+func buildVerificationRequest(bundle *policy.Bundle, annotations map[string]string, image string) (verify.ArtifactVerificationRequest, error) {
 	repository := annotations["changelock.io/repository"]
 	subject := annotations["changelock.io/subject"]
 	if repository == "" && strings.HasPrefix(subject, "repo:") {
 		repository = strings.TrimPrefix(subject, "repo:")
+	}
+
+	evidenceBundle, err := parseEvidenceBundleAnnotation(annotations)
+	if err != nil {
+		return verify.ArtifactVerificationRequest{}, err
 	}
 
 	return verify.ArtifactVerificationRequest{
@@ -352,7 +441,8 @@ func buildVerificationRequest(bundle *policy.Bundle, annotations map[string]stri
 		ExpectedCommitSHA:       annotations["changelock.io/workflow-sha"],
 		AllowedSignerIdentities: bundle.Artifact.Spec.AllowedSignerIdentities,
 		AllowedOIDCIssuers:      allowedOIDCIssuers,
-	}
+		EvidenceBundle:          evidenceBundle,
+	}, nil
 }
 
 func evaluateRuntimePolicy(runtimePolicy policy.RuntimePolicySpec, workload pod) []string {
@@ -497,6 +587,10 @@ func decodeAdmissionReview(r *http.Request, dst *admissionReview) error {
 }
 
 func newArtifactVerifier() verify.ArtifactVerifier {
+	evidenceConfig, err := evidence.LoadConfigFromEnv(os.Getenv)
+	if err != nil {
+		panic(err)
+	}
 	if fixturePath := os.Getenv("CHANGELOCK_VERIFIER_FIXTURE"); fixturePath != "" {
 		verifier, err := verify.NewFixtureVerifier(fixturePath)
 		if err != nil {
@@ -505,5 +599,18 @@ func newArtifactVerifier() verify.ArtifactVerifier {
 			return verifier
 		}
 	}
-	return verify.NewCosignVerifier(envOrDefault("CHANGELOCK_COSIGN_BIN", "cosign"))
+	return verify.NewCosignVerifierWithEvidence(envOrDefault("CHANGELOCK_COSIGN_BIN", "cosign"), evidenceConfig)
+}
+
+func parseEvidenceBundleAnnotation(annotations map[string]string) (*evidence.Bundle, error) {
+	raw := strings.TrimSpace(annotations["changelock.io/evidence-bundle"])
+	if raw == "" {
+		return nil, nil
+	}
+
+	var bundle evidence.Bundle
+	if err := json.Unmarshal([]byte(raw), &bundle); err != nil {
+		return nil, fmt.Errorf("invalid changelock.io/evidence-bundle annotation: %w", err)
+	}
+	return evidence.CloneBundle(&bundle), nil
 }

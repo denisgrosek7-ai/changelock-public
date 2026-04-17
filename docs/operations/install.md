@@ -36,7 +36,9 @@ Recommended production posture:
   - `service_internal` bearer token for service-to-service and ingest flows
 - deploy-gate TLS secret present
 - webhook enabled
+- signer identity monitoring left at `monitor` until allowlists and workflow inputs are verified
 - optional VEX-aware deploy enforcement only when the vulnerability API path is intended to be fail-closed
+- optional runtime closed-loop remediation only after desired-state trust, protected-target lists, and CNI behavior are reviewed
 - prod values example layered on top
 
 Create the auth secret for OIDC/JWT mode:
@@ -79,6 +81,33 @@ Production notes:
 - if you switch to `static-token` auth in production, supply a non-demo `CHANGELOCK_AUTH_TOKENS_JSON` and a distinct internal service token in the auth secret
 - if you enable `deployGate.vexDeployMode=enforce`, make sure `audit-writer` vulnerability/VEX endpoints are reachable from `deploy-gate`
 - if you want VEX-as-code imports, set `auditWriter.env.CHANGELOCK_VEX_IMPORT_DIR` and mount the JSON documents into the `audit-writer` container through your own Helm overlay or manifest customization
+- if you want internal trust scorecards and auditor-ready exports, review:
+  - `auditWriter.env.CHANGELOCK_TRUST_PUBLICATION_MODE`
+  - `auditWriter.env.CHANGELOCK_HARDENING_REVIEW_ENABLED`
+  - `auditWriter.env.CHANGELOCK_HARDENING_REVIEW_STALE_EXCEPTION_DAYS`
+  - `auditWriter.env.CHANGELOCK_SCORECARD_EVENT_LIMIT`
+  - `auditWriter.env.CHANGELOCK_SCORECARD_SEVERITY_THRESHOLD`
+- if you want bounded contextual AI guidance, review:
+  - `auditWriter.env.CHANGELOCK_AI_GUIDANCE_MODE`
+  - `auditWriter.env.CHANGELOCK_AI_GUIDANCE_MAX_ITEMS`
+  - `auditWriter.env.CHANGELOCK_AI_GUIDANCE_INCLUDE_DOC_LINKS`
+  - `auditWriter.env.CHANGELOCK_AI_GUIDANCE_REDACT_SENSITIVE`
+- keep `CHANGELOCK_TRUST_PUBLICATION_MODE=disabled` unless you explicitly want sanitized public-trust preview or export artifacts
+- keep `CHANGELOCK_AI_GUIDANCE_MODE=disabled` until prompt-context boundaries and redaction posture are explicitly reviewed for the target environment
+- if you enable runtime closed-loop mutation, review:
+  - `runtimeAgent.selfHealing.mode`
+  - `runtimeAgent.selfHealing.requireSignedDesiredState`
+  - `runtimeAgent.closedLoop.verifyDesiredStateOnReconcile`
+  - `runtimeAgent.closedLoop.protectedNamespaces`
+  - `runtimeAgent.closedLoop.protectedWorkloads`
+  - `runtimeAgent.closedLoop.quarantineNetworkPolicyEnabled`
+- if you enable signer identity monitoring or enforcement, review:
+  - `signingIdentity.enforcement`
+  - `signingIdentity.requireRekor`
+  - `signingIdentity.quarantineOnDrift`
+  - `signingIdentity.workflowsDir`
+- `signingIdentity.workflowsDir` only provides repository-local workflow drift checks when the `audit-writer` container actually has workflow files mounted there. The chart does not assume a repo checkout in production.
+- treat `quarantineNetworkPolicyEnabled=true` as opt-in. Verify your cluster actually enforces `NetworkPolicy` before relying on it for containment.
 
 ## Supported deployment modes
 
@@ -100,11 +129,27 @@ Production notes:
   - `deploymentProfile=production`
   - `signer.mode=vault-transit`
   - signer secret and Vault transit config required
+- signer-identity-aware production
+  - optional
+  - start with `signingIdentity.enforcement=monitor`
+  - move to `enforce` only after signer policies are recorded and expected workflows are visible
+  - if `signingIdentity.requireRekor=true`, transparency evidence must already be present and verifiable
+- deeper AI guidance aware production
+  - optional
+  - start with `auditWriter.env.CHANGELOCK_AI_GUIDANCE_MODE=disabled`
+  - if enabled, use `local-template`
+  - keep it advisory-only and verify that redaction settings match your internal data-handling posture
 - VEX-aware production
   - optional
   - `deployGate.vexDeployMode=enforce`
   - `audit-writer` vulnerability + VEX APIs must be reachable
   - use canonical VEX statements or imported CSAF/CycloneDX VEX documents
+- runtime closed-loop production
+  - optional
+  - start with `runtimeAgent.selfHealing.mode=alert-only`
+  - enable mutation only for supported workload kinds
+  - keep `runtimeAgent.closedLoop.protectedNamespaces` populated for ChangeLock control-plane namespaces
+  - require signed desired state where your trust posture expects fail-closed remediation
 
 ## Webhook enablement
 
@@ -132,4 +177,4 @@ If you enable it:
 - all other Go services
   - liveness/readiness: `/health`
 
-After the release is healthy, run the post-deploy checks in [go-live-checklist.md](/tmp/changelock-blueprint-readiness/docs/operations/go-live-checklist.md).
+After the release is healthy, run the post-deploy checks in [go-live-checklist.md](go-live-checklist.md).

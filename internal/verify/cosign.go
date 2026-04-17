@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
+
+	"github.com/denisgrosek/changelock/internal/evidence"
 )
 
 type commandOutput struct {
@@ -37,8 +40,10 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (command
 }
 
 type CosignVerifier struct {
-	binary string
-	runner commandRunner
+	binary         string
+	runner         commandRunner
+	evidenceConfig evidence.Config
+	tlogClient     evidence.TLogClient
 }
 
 func NewCosignVerifier(binary string) *CosignVerifier {
@@ -46,9 +51,16 @@ func NewCosignVerifier(binary string) *CosignVerifier {
 		binary = "cosign"
 	}
 	return &CosignVerifier{
-		binary: binary,
-		runner: execRunner{},
+		binary:     binary,
+		runner:     execRunner{},
+		tlogClient: evidence.NewHTTPTLogClient(5 * time.Second),
 	}
+}
+
+func NewCosignVerifierWithEvidence(binary string, cfg evidence.Config) *CosignVerifier {
+	verifier := NewCosignVerifier(binary)
+	verifier.evidenceConfig = cfg
+	return verifier
 }
 
 func (v *CosignVerifier) VerifyArtifact(ctx context.Context, request ArtifactVerificationRequest) (ArtifactVerification, error) {
@@ -73,6 +85,14 @@ func (v *CosignVerifier) VerifyArtifact(ctx context.Context, request ArtifactVer
 		return verification, attestationErr
 	}
 	mergeVerification(&verification, attestationResult)
+
+	state, reason, verifiedAt := evidence.EvaluateBundle(ctx, v.evidenceConfig, request.EvidenceBundle, verification.VerifiedDigest, v.tlogClient, time.Now)
+	verification.Evidence.TransparencyLogState = state
+	verification.Evidence.TransparencyLogReason = reason
+	verification.Evidence.Bundle = evidence.ApplyVerificationResult(request.EvidenceBundle, state, reason, verifiedAt)
+	if shouldEnforceTransparencyEvidence(v.evidenceConfig) && state != evidence.StateVerified {
+		verification.Reasons = append(verification.Reasons, "transparency log evidence verification failed: "+reason)
+	}
 
 	return verification, nil
 }
@@ -184,8 +204,21 @@ func mergeVerification(dst *ArtifactVerification, src ArtifactVerification) {
 		dst.Evidence.AttestationSubjectDigest = src.Evidence.AttestationSubjectDigest
 	}
 	mergeSupplyChainEvidence(&dst.Evidence.SupplyChain, src.Evidence.SupplyChain)
+	if dst.Evidence.Bundle == nil && src.Evidence.Bundle != nil {
+		dst.Evidence.Bundle = evidence.CloneBundle(src.Evidence.Bundle)
+	}
+	if dst.Evidence.TransparencyLogState == "" {
+		dst.Evidence.TransparencyLogState = src.Evidence.TransparencyLogState
+	}
+	if dst.Evidence.TransparencyLogReason == "" {
+		dst.Evidence.TransparencyLogReason = src.Evidence.TransparencyLogReason
+	}
 
 	dst.Reasons = append(dst.Reasons, src.Reasons...)
+}
+
+func shouldEnforceTransparencyEvidence(cfg evidence.Config) bool {
+	return cfg.Mode == evidence.ModeRekorRequired && cfg.VerifyOnDeploy
 }
 
 func mergeSupplyChainEvidence(dst **SupplyChainEvidence, src *SupplyChainEvidence) {

@@ -33,3 +33,19 @@ jobs:
       - name: Build UI
         working-directory: ui
         run: npm run build
+
+  vscode-extension:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Validate extension entrypoint
+        working-directory: tools/vscode-extension
+        run: npm run check
+      - name: Run extension tests
+        working-directory: tools/vscode-extension
+        run: npm test

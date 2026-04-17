@@ -75,6 +75,7 @@ BASE_URL="${CHANGELOCK_BASE_URL:-http://127.0.0.1:8094}"
 RUN_EXCEPTION_FLOW="${CHANGELOCK_RUN_EXCEPTION_FLOW:-false}"
 EXPECT_SYNC_MODE="${CHANGELOCK_EXPECT_SYNC_MODE:-}"
 EXPECT_SIGNER_MODE="${CHANGELOCK_EXPECT_SIGNER_MODE:-}"
+EXPECT_SIGNER_IDENTITY_ENFORCEMENT="${CHANGELOCK_EXPECT_SIGNER_IDENTITY_ENFORCEMENT:-}"
 TENANT_ID="${CHANGELOCK_TENANT_ID:-}"
 ENVIRONMENT_NAME="${CHANGELOCK_ENVIRONMENT:-prod}"
 NAMESPACE_NAME="${CHANGELOCK_NAMESPACE:-changelock-smoke}"
@@ -121,6 +122,19 @@ if [[ -n "$EXPECT_SYNC_MODE" ]]; then
   pass "sync status mode=$EXPECT_SYNC_MODE"
 else
   skip "sync status check not requested"
+fi
+
+if [[ -n "$EXPECT_SIGNER_IDENTITY_ENFORCEMENT" ]]; then
+  signer_url="$BASE_URL/v1/signing-identities/status"
+  if [[ -n "$TENANT_ID" ]]; then
+    signer_url="${signer_url}?tenant_id=${TENANT_ID}"
+  fi
+  status_code="$(api_status GET "$signer_url" "$CHANGELOCK_VIEWER_TOKEN")"
+  assert_status "$status_code" "200" "signing identity status"
+  jq -er --arg mode "$EXPECT_SIGNER_IDENTITY_ENFORCEMENT" '.status.enforcement_mode == $mode' /tmp/changelock-smoke-response.json >/dev/null
+  pass "signing identity enforcement mode=$EXPECT_SIGNER_IDENTITY_ENFORCEMENT"
+else
+  skip "signing identity status check not requested"
 fi
 
 if [[ "$RUN_EXCEPTION_FLOW" != "true" ]]; then

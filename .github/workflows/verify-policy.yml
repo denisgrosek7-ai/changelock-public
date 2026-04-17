@@ -1,12 +1,50 @@
 name: verify-policy
+
 on:
   pull_request:
     paths:
-      - 'policies/**'
-      - 'deploy/kyverno/**'
+      - "policies/**"
+      - "deploy/**/*.yaml"
+      - "deploy/**/*.yml"
+      - "charts/**/*.yaml"
+      - "charts/**/*.yml"
+      - ".github/workflows/**/*.yaml"
+      - ".github/workflows/**/*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  shift-left:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: echo "validate policy schema here"
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - name: Collect changed manifest and policy files
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -E '^(policies/|deploy/|charts/|\.github/workflows/).*\.(yaml|yml)$' || true)"
+          else
+            files="$(git ls-files | grep -E '^(policies/|deploy/|charts/|\.github/workflows/).*\.(yaml|yml)$' || true)"
+          fi
+          {
+            echo "manifest_files<<EOF"
+            printf '%s\n' "${files}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Run ChangeLock shift-left checks
+        uses: ./.github/actions/changelock-shift-left
+        with:
+          manifest-files: ${{ steps.changed.outputs.manifest_files }}
+          fail-on-findings: "false"

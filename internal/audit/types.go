@@ -4,15 +4,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denisgrosek/changelock/internal/evidence"
 	runtimestate "github.com/denisgrosek/changelock/internal/runtime"
 	"github.com/denisgrosek/changelock/internal/verify"
 )
 
 const (
-	EventTypeArtifactVerificationResult = "artifact_verification_result"
-	EventTypeDeployGateDecision         = "deploy_gate_decision"
-	EventTypePolicyDecision             = "policy_decision"
-	EventTypeRuntimeDriftResult         = "runtime_drift_result"
+	EventTypeArtifactVerificationResult      = "artifact_verification_result"
+	EventTypeDeployGateDecision              = "deploy_gate_decision"
+	EventTypePolicyDecision                  = "policy_decision"
+	EventTypeRuntimeDriftResult              = "runtime_drift_result"
+	EventTypeRuntimeDesiredStateRecorded     = "runtime_desired_state_recorded"
+	EventTypeRuntimeActiveStateObserved      = "runtime_active_state_observed"
+	EventTypeDriftDetected                   = "drift_detected"
+	EventTypeDriftRemediationStarted         = "drift_remediation_started"
+	EventTypeDriftRemediationSucceeded       = "drift_remediation_succeeded"
+	EventTypeDriftRemediationFailed          = "drift_remediation_failed"
+	EventTypeDriftQuarantined                = "drift_quarantined"
+	EventTypeSigningIdentityPolicyRecorded   = "signing_identity_policy_recorded"
+	EventTypeSigningIdentityPolicyDistrusted = "signing_identity_policy_distrusted"
+	EventTypeSigningIdentityFinding          = "signing_identity_finding"
 
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
@@ -31,7 +42,9 @@ type Event struct {
 	Branch                   string           `json:"branch,omitempty"`
 	Environment              string           `json:"environment,omitempty"`
 	Namespace                string           `json:"namespace,omitempty"`
+	WorkloadKind             string           `json:"workload_kind,omitempty"`
 	Workload                 string           `json:"workload,omitempty"`
+	ServiceAccount           string           `json:"service_account,omitempty"`
 	Image                    string           `json:"image,omitempty"`
 	Digest                   string           `json:"digest,omitempty"`
 	CVEID                    string           `json:"cve_id,omitempty"`
@@ -39,6 +52,18 @@ type Event struct {
 	Reasons                  []string         `json:"reasons,omitempty"`
 	DriftResult              string           `json:"drift_result,omitempty"`
 	DriftClasses             []string         `json:"drift_classes,omitempty"`
+	DriftSeverity            string           `json:"drift_severity,omitempty"`
+	ReconciliationStatus     string           `json:"reconciliation_status,omitempty"`
+	RemediationMode          string           `json:"remediation_mode,omitempty"`
+	RemediationAttempt       int              `json:"remediation_attempt,omitempty"`
+	Remediable               bool             `json:"remediable,omitempty"`
+	QuarantineReason         string           `json:"quarantine_reason,omitempty"`
+	QuarantineType           string           `json:"quarantine_type,omitempty"`
+	ProtectedTarget          bool             `json:"protected_target,omitempty"`
+	ProtectedReason          string           `json:"protected_reason,omitempty"`
+	DesiredStateSourceRef    string           `json:"desired_state_source_ref,omitempty"`
+	DesiredStateApprovalID   string           `json:"desired_state_approval_id,omitempty"`
+	DesiredStateVerification string           `json:"desired_state_verification_state,omitempty"`
 	VerifierSummary          *VerifierSummary `json:"verifier_summary,omitempty"`
 	PolicyVersion            string           `json:"policy_version,omitempty"`
 	PolicyBundleID           string           `json:"policy_bundle_id,omitempty"`
@@ -67,8 +92,12 @@ type VerifierSummary struct {
 }
 
 type Evidence struct {
-	Artifact *ArtifactEvidence `json:"artifact,omitempty"`
-	Runtime  *RuntimeEvidence  `json:"runtime,omitempty"`
+	Artifact           *ArtifactEvidence        `json:"artifact,omitempty"`
+	Runtime            *RuntimeEvidence         `json:"runtime,omitempty"`
+	Bundle             *evidence.Bundle         `json:"bundle,omitempty"`
+	VerificationState  string                   `json:"verification_state,omitempty"`
+	VerificationReason string                   `json:"verification_reason,omitempty"`
+	SigningIdentity    *SigningIdentityEvidence `json:"signing_identity,omitempty"`
 }
 
 type ArtifactEvidence struct {
@@ -105,14 +134,36 @@ type VulnerabilitySummary struct {
 }
 
 type RuntimeEvidence struct {
+	ClusterID                 string                           `json:"cluster_id,omitempty"`
+	WorkloadKind              string                           `json:"workload_kind,omitempty"`
+	ServiceAccountExpected    string                           `json:"service_account_expected,omitempty"`
+	ServiceAccountObserved    string                           `json:"service_account_observed,omitempty"`
+	ApprovedLabels            map[string]string                `json:"approved_labels,omitempty"`
 	ApprovedDigest            string                           `json:"approved_digest,omitempty"`
 	RunningDigest             string                           `json:"running_digest,omitempty"`
 	ExpectedConfigHash        string                           `json:"expected_config_hash,omitempty"`
 	ActualConfigHash          string                           `json:"actual_config_hash,omitempty"`
+	ApprovedContainers        []RuntimeApprovedContainer       `json:"approved_containers,omitempty"`
 	MissingContainers         []string                         `json:"missing_containers,omitempty"`
 	UnexpectedContainers      []string                         `json:"unexpected_containers,omitempty"`
 	ImageMismatches           []RuntimeImageMismatch           `json:"image_mismatches,omitempty"`
 	SecurityContextMismatches []RuntimeSecurityContextMismatch `json:"security_context_mismatches,omitempty"`
+}
+
+type RuntimeApprovedContainer struct {
+	Name           string                     `json:"name"`
+	Image          string                     `json:"image,omitempty"`
+	ApprovedDigest string                     `json:"approved_digest,omitempty"`
+	Runtime        RuntimeSecurityConstraints `json:"runtime"`
+}
+
+type RuntimeSecurityConstraints struct {
+	RunAsNonRoot             bool `json:"run_as_non_root"`
+	ReadOnlyRootFilesystem   bool `json:"read_only_root_filesystem"`
+	AllowPrivilegeEscalation bool `json:"allow_privilege_escalation"`
+	DropAllCapabilities      bool `json:"drop_all_capabilities"`
+	SeccompRuntimeDefault    bool `json:"seccomp_runtime_default"`
+	DenyPrivileged           bool `json:"deny_privileged"`
 }
 
 type RuntimeImageMismatch struct {
@@ -128,6 +179,27 @@ type RuntimeSecurityContextMismatch struct {
 	Field     string `json:"field,omitempty"`
 	Expected  bool   `json:"expected"`
 	Actual    bool   `json:"actual"`
+}
+
+type SigningIdentityEvidence struct {
+	PolicyID              string     `json:"policy_id,omitempty"`
+	PolicyName            string     `json:"policy_name,omitempty"`
+	ProviderType          string     `json:"provider_type,omitempty"`
+	Issuer                string     `json:"issuer,omitempty"`
+	SignerIdentity        string     `json:"signer_identity,omitempty"`
+	Subject               string     `json:"subject,omitempty"`
+	Repository            string     `json:"repository,omitempty"`
+	Workflow              string     `json:"workflow,omitempty"`
+	Ref                   string     `json:"ref,omitempty"`
+	EnforcementMode       string     `json:"enforcement_mode,omitempty"`
+	Authorized            string     `json:"authorized,omitempty"`
+	ReasonCode            string     `json:"reason_code,omitempty"`
+	ReasonDetail          string     `json:"reason_detail,omitempty"`
+	DistrustedAfter       *time.Time `json:"distrusted_after,omitempty"`
+	WorkflowDriftDetected bool       `json:"workflow_drift_detected,omitempty"`
+	TransparencyRequired  bool       `json:"transparency_required,omitempty"`
+	TransparencyState     string     `json:"transparency_state,omitempty"`
+	TransparencyReason    string     `json:"transparency_reason,omitempty"`
 }
 
 func FromArtifactVerification(result *verify.ArtifactVerification) (*VerifierSummary, *Evidence) {
@@ -178,6 +250,9 @@ func FromArtifactVerification(result *verify.ArtifactVerification) (*VerifierSum
 	}
 
 	evidence := &Evidence{Artifact: artifact}
+	evidence.Bundle = evidencepkgClone(result.Evidence.Bundle)
+	evidence.VerificationState = strings.TrimSpace(result.Evidence.TransparencyLogState)
+	evidence.VerificationReason = strings.TrimSpace(result.Evidence.TransparencyLogReason)
 	if isEmptyArtifactEvidence(*artifact) {
 		evidence.Artifact = nil
 	}
@@ -194,12 +269,16 @@ func FromRuntimeComparison(result *runtimestate.ComparisonResult) *Evidence {
 	}
 
 	runtimeEvidence := &RuntimeEvidence{
-		ApprovedDigest:       result.ApprovedDigest,
-		RunningDigest:        result.RunningDigest,
-		ExpectedConfigHash:   result.Evidence.ConfigExpectation,
-		ActualConfigHash:     result.Evidence.ConfigObserved,
-		MissingContainers:    append([]string(nil), result.Evidence.MissingContainers...),
-		UnexpectedContainers: append([]string(nil), result.Evidence.UnexpectedContainers...),
+		ClusterID:              result.ClusterID,
+		WorkloadKind:           result.WorkloadKind,
+		ServiceAccountExpected: result.Evidence.ServiceAccountExpected,
+		ServiceAccountObserved: result.Evidence.ServiceAccountObserved,
+		ApprovedDigest:         result.ApprovedDigest,
+		RunningDigest:          result.RunningDigest,
+		ExpectedConfigHash:     result.Evidence.ConfigExpectation,
+		ActualConfigHash:       result.Evidence.ConfigObserved,
+		MissingContainers:      append([]string(nil), result.Evidence.MissingContainers...),
+		UnexpectedContainers:   append([]string(nil), result.Evidence.UnexpectedContainers...),
 	}
 
 	for _, mismatch := range result.Evidence.ImageMismatches {
@@ -276,7 +355,12 @@ func FirstNonEmpty(values ...string) string {
 }
 
 func isEmptyEvidence(evidence Evidence) bool {
-	return evidence == Evidence{}
+	return evidence.Artifact == nil &&
+		evidence.Runtime == nil &&
+		evidence.Bundle == nil &&
+		evidence.SigningIdentity == nil &&
+		strings.TrimSpace(evidence.VerificationState) == "" &&
+		strings.TrimSpace(evidence.VerificationReason) == ""
 }
 
 func isEmptyArtifactEvidence(evidence ArtifactEvidence) bool {
@@ -284,12 +368,22 @@ func isEmptyArtifactEvidence(evidence ArtifactEvidence) bool {
 }
 
 func isEmptyRuntimeEvidence(evidence RuntimeEvidence) bool {
-	return evidence.ApprovedDigest == "" &&
+	return evidence.ClusterID == "" &&
+		evidence.WorkloadKind == "" &&
+		evidence.ServiceAccountExpected == "" &&
+		evidence.ServiceAccountObserved == "" &&
+		len(evidence.ApprovedLabels) == 0 &&
+		evidence.ApprovedDigest == "" &&
 		evidence.RunningDigest == "" &&
 		evidence.ExpectedConfigHash == "" &&
 		evidence.ActualConfigHash == "" &&
+		len(evidence.ApprovedContainers) == 0 &&
 		len(evidence.MissingContainers) == 0 &&
 		len(evidence.UnexpectedContainers) == 0 &&
 		len(evidence.ImageMismatches) == 0 &&
 		len(evidence.SecurityContextMismatches) == 0
+}
+
+func evidencepkgClone(bundle *evidence.Bundle) *evidence.Bundle {
+	return evidence.CloneBundle(bundle)
 }
