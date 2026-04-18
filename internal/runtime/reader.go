@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -12,7 +13,9 @@ import (
 var ErrObservedStateUnavailable = errors.New("observed runtime state unavailable")
 
 type WorkloadTarget struct {
+	ClusterID string
 	Namespace string
+	Kind      string
 	Workload  string
 }
 
@@ -50,7 +53,12 @@ func NewFixtureReader(path string) (*FixtureReader, error) {
 		if workload.Namespace == "" || workload.Workload == "" {
 			continue
 		}
-		states[targetKey(WorkloadTarget{Namespace: workload.Namespace, Workload: workload.Workload})] = workload
+		states[targetKey(WorkloadTarget{
+			ClusterID: workload.ClusterID,
+			Namespace: workload.Namespace,
+			Kind:      workload.WorkloadKind,
+			Workload:  workload.Workload,
+		})] = workload
 	}
 
 	return &FixtureReader{states: states}, nil
@@ -69,5 +77,5 @@ func (r *FixtureReader) ReadObservedWorkload(_ context.Context, target WorkloadT
 }
 
 func targetKey(target WorkloadTarget) string {
-	return target.Namespace + "/" + target.Workload
+	return firstNonEmpty(strings.TrimSpace(target.ClusterID), "local") + "/" + target.Namespace + "/" + normalizeWorkloadKind(target.Kind) + "/" + target.Workload
 }

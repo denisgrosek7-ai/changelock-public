@@ -4,8 +4,13 @@ import "sort"
 
 func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) ComparisonResult {
 	result := ComparisonResult{
-		Namespace: firstNonEmpty(observed.Namespace, approved.Namespace),
-		Workload:  firstNonEmpty(observed.Workload, approved.Workload),
+		ClusterID:                     firstNonEmpty(observed.ClusterID, approved.ClusterID),
+		Namespace:                     firstNonEmpty(observed.Namespace, approved.Namespace),
+		WorkloadKind:                  firstNonEmpty(normalizeWorkloadKind(observed.WorkloadKind), normalizeWorkloadKind(approved.WorkloadKind)),
+		Workload:                      firstNonEmpty(observed.Workload, approved.Workload),
+		ServiceAccountExpected:        approved.ServiceAccountName,
+		ServiceAccountObserved:        observed.ServiceAccountName,
+		DesiredStateVerificationState: approved.DesiredStateVerificationState,
 	}
 
 	evidence := &DriftEvidence{}
@@ -19,7 +24,7 @@ func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) Com
 
 		observedContainer, ok := observedByName[approvedContainer.Name]
 		if !ok {
-			classSet[DriftClassImage] = struct{}{}
+			classSet[DriftClassImageDigest] = struct{}{}
 			evidence.MissingContainers = append(evidence.MissingContainers, approvedContainer.Name)
 			result.Reasons = append(result.Reasons, approvedContainer.Name+": approved container is missing from runtime state")
 			continue
@@ -29,7 +34,7 @@ func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) Com
 		result.RunningDigest = firstNonEmpty(result.RunningDigest, observedContainer.RunningDigest)
 
 		if approvedContainer.ApprovedDigest != "" && approvedContainer.ApprovedDigest != observedContainer.RunningDigest {
-			classSet[DriftClassImage] = struct{}{}
+			classSet[DriftClassImageDigest] = struct{}{}
 			evidence.ImageMismatches = append(evidence.ImageMismatches, ImageMismatch{
 				Container:      approvedContainer.Name,
 				ApprovedImage:  approvedContainer.Image,
@@ -55,7 +60,7 @@ func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) Com
 		if _, ok := approvedByName[name]; ok {
 			continue
 		}
-		classSet[DriftClassImage] = struct{}{}
+		classSet[DriftClassImageDigest] = struct{}{}
 		unexpectedContainers = append(unexpectedContainers, name)
 		result.Image = firstNonEmpty(result.Image, observedContainer.Image)
 		result.RunningDigest = firstNonEmpty(result.RunningDigest, observedContainer.RunningDigest)
@@ -64,8 +69,15 @@ func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) Com
 	sort.Strings(unexpectedContainers)
 	evidence.UnexpectedContainers = append(evidence.UnexpectedContainers, unexpectedContainers...)
 
+	if approved.ServiceAccountName != "" && approved.ServiceAccountName != observed.ServiceAccountName {
+		classSet[DriftClassServiceAccount] = struct{}{}
+		evidence.ServiceAccountExpected = approved.ServiceAccountName
+		evidence.ServiceAccountObserved = observed.ServiceAccountName
+		result.Reasons = append(result.Reasons, "runtime service account does not match approved service account")
+	}
+
 	if approved.ExpectedConfigHash != "" && approved.ExpectedConfigHash != observed.ActualConfigHash {
-		classSet[DriftClassConfig] = struct{}{}
+		classSet[DriftClassWorkloadSpec] = struct{}{}
 		evidence.ConfigExpectation = approved.ExpectedConfigHash
 		evidence.ConfigObserved = observed.ActualConfigHash
 		result.Reasons = append(result.Reasons, "runtime config hash does not match approved config hash")
@@ -73,6 +85,7 @@ func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) Com
 
 	if len(classSet) == 0 {
 		result.Result = string(DriftClassNoDrift)
+		result.Severity = DriftSeverityLow
 	} else {
 		result.Classes = orderedClasses(classSet)
 		if len(result.Classes) == 1 {
@@ -80,6 +93,8 @@ func Compare(approved ApprovedWorkloadState, observed ObservedWorkloadState) Com
 		} else {
 			result.Result = string(DriftClassMultiple)
 		}
+		result.Severity = deriveSeverity(classSet, evidence)
+		result.Remediable = remediableDrift(classSet)
 		result.Evidence = trimEvidence(evidence)
 	}
 
@@ -122,7 +137,13 @@ func compareSecurityContext(containerName string, expected SecurityConstraints, 
 }
 
 func orderedClasses(classes map[DriftClass]struct{}) []string {
-	ordered := []DriftClass{DriftClassImage, DriftClassConfig, DriftClassSecurityContext}
+	ordered := []DriftClass{
+		DriftClassImageDigest,
+		DriftClassSecurityContext,
+		DriftClassServiceAccount,
+		DriftClassWorkloadSpec,
+		DriftClassUnknown,
+	}
 	values := make([]string, 0, len(classes))
 	for _, class := range ordered {
 		if _, ok := classes[class]; ok {
@@ -136,10 +157,45 @@ func trimEvidence(evidence *DriftEvidence) *DriftEvidence {
 	if evidence == nil {
 		return nil
 	}
-	if len(evidence.ImageMismatches) == 0 && evidence.ConfigExpectation == "" && evidence.ConfigObserved == "" && len(evidence.SecurityContextMismatches) == 0 && len(evidence.MissingContainers) == 0 && len(evidence.UnexpectedContainers) == 0 {
+	if len(evidence.ImageMismatches) == 0 &&
+		evidence.ConfigExpectation == "" &&
+		evidence.ConfigObserved == "" &&
+		evidence.ServiceAccountExpected == "" &&
+		evidence.ServiceAccountObserved == "" &&
+		len(evidence.SecurityContextMismatches) == 0 &&
+		len(evidence.MissingContainers) == 0 &&
+		len(evidence.UnexpectedContainers) == 0 {
 		return nil
 	}
 	return evidence
+}
+
+func deriveSeverity(classes map[DriftClass]struct{}, evidence *DriftEvidence) DriftSeverity {
+	if _, ok := classes[DriftClassSecurityContext]; ok {
+		for _, mismatch := range evidence.SecurityContextMismatches {
+			if mismatch.Field == "allowPrivilegeEscalation" || mismatch.Field == "privileged" {
+				return DriftSeverityCritical
+			}
+		}
+		return DriftSeverityHigh
+	}
+	if _, ok := classes[DriftClassServiceAccount]; ok {
+		return DriftSeverityHigh
+	}
+	if _, ok := classes[DriftClassImageDigest]; ok {
+		return DriftSeverityHigh
+	}
+	if _, ok := classes[DriftClassWorkloadSpec]; ok {
+		return DriftSeverityMedium
+	}
+	return DriftSeverityLow
+}
+
+func remediableDrift(classes map[DriftClass]struct{}) bool {
+	if _, ok := classes[DriftClassUnknown]; ok {
+		return false
+	}
+	return len(classes) > 0
 }
 
 func indexApprovedContainers(containers []ApprovedContainerState) map[string]ApprovedContainerState {

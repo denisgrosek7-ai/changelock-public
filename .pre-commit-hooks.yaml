@@ -1,0 +1,13 @@
+- id: changelock-manifest-preflight
+  name: changelock manifest preflight
+  description: Run changelock-cli manifest checks against staged YAML files.
+  entry: scripts/hooks/changelock-pre-commit.sh
+  language: script
+  files: \.(yaml|yml)$
+
+- id: changelock-prepush-preflight
+  name: changelock pre-push preflight
+  description: Run changelock-cli manifest checks and optional image-aware preflight before push.
+  entry: scripts/hooks/changelock-pre-push.sh
+  language: script
+  pass_filenames: false

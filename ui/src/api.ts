@@ -1,7 +1,11 @@
 import type {
   ActiveWorkloadRef,
+  AIInsightsResponse,
+  AuditFinding,
   AuditHealth,
+  AuditReport,
   AuthStatus,
+  BreakGlassGuidance,
   DriftStatsResponse,
   EventFilters,
   EventsResponse,
@@ -9,31 +13,61 @@ import type {
   ExceptionReport,
   ExceptionRequestInput,
   ExceptionsResponse,
+  GuidanceGrouping,
+  GuidanceItem,
+  GuidanceResponse,
+  GuidanceSummary,
+  GuidanceVEXDraftSuggestion,
   SBOMComponent,
   SBOMComponentsResponse,
   SBOMDocument,
   SBOMImageResponse,
   PolicyException,
+  PublishedTrustView,
   ReasonCount,
+  RuntimeDriftFinding,
+  RuntimeActiveState,
+  RuntimeActiveStatesResponse,
+  RuntimeClosedLoopStatus,
+  RuntimeDriftFindingsResponse,
+  RuntimeDriftStatus,
+  SigningIdentityFinding,
+  SigningIdentityFindingsResponse,
+  SigningIdentityObservation,
+  SigningIdentityObservationsResponse,
+  SigningIdentityPoliciesResponse,
+  SigningIdentityPolicy,
+  SigningIdentityStatus,
   StoredEvent,
   Summary,
   SyncStatus,
   TabKey,
+  TrustBadge,
+  TrustScoreMetric,
+  TrustScorecard,
   TopViolator,
   TopViolatorsResponse,
   TrendBucket,
   TrendsResponse,
+  VEXCreateInput,
+  VEXMatch,
+  VEXStatement,
+  VEXStatementActionResponse,
+  VEXStatementsResponse,
+  VEXStatusSummary,
   VulnerabilityBlastRadiusItem,
   VulnerabilityBlastRadiusResponse,
   VulnerabilityDecision,
   VulnerabilityDecisionInput,
   VulnerabilityDecisionsResponse,
   VulnerabilityFinding,
+  VulnerabilityNetResponse,
   VulnerabilitiesResponse,
   VulnerabilityRescanResponse,
   VulnerabilityTimelineEntry,
   VulnerabilityTimelineResponse,
   VerifierSummary,
+  StandardsMapping,
 } from "./types";
 
 type RuntimeConfig = {
@@ -529,6 +563,67 @@ function parseVulnerabilityDecision(value: unknown): VulnerabilityDecision {
   };
 }
 
+function parseVEXMatch(value: unknown): VEXMatch {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex match.");
+  }
+  return {
+    id: readNumber(value.id, "vex.id"),
+    source_format: readString(value.source_format, "vex.source_format"),
+    source_ref: readOptionalString(value.source_ref, "vex.source_ref"),
+    vulnerability_id: readString(value.vulnerability_id, "vex.vulnerability_id"),
+    status: readString(value.status, "vex.status") as VEXMatch["status"],
+    justification: readOptionalString(value.justification, "vex.justification"),
+    action_statement: readOptionalString(value.action_statement, "vex.action_statement"),
+    impact_statement: readOptionalString(value.impact_statement, "vex.impact_statement"),
+    fixed_version: readOptionalString(value.fixed_version, "vex.fixed_version"),
+    created_by: readOptionalString(value.created_by, "vex.created_by"),
+    updated_by: readOptionalString(value.updated_by, "vex.updated_by"),
+    expires_at: readOptionalString(value.expires_at, "vex.expires_at"),
+    created_at: readString(value.created_at, "vex.created_at"),
+    updated_at: readString(value.updated_at, "vex.updated_at"),
+  };
+}
+
+function parseVEXStatement(value: unknown): VEXStatement {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex statement.");
+  }
+  const scope = readOptionalRecord(value.scope, "statement.scope") || {};
+  return {
+    id: readNumber(value.id, "statement.id"),
+    statement_key: readOptionalString(value.statement_key, "statement.statement_key"),
+    source_format: readString(value.source_format, "statement.source_format"),
+    source_ref: readOptionalString(value.source_ref, "statement.source_ref"),
+    vulnerability_id: readString(value.vulnerability_id, "statement.vulnerability_id"),
+    scope: {
+      image_digest: readOptionalString(scope.image_digest, "statement.scope.image_digest"),
+      package_name: readOptionalString(scope.package_name, "statement.scope.package_name"),
+      purl: readOptionalString(scope.purl, "statement.scope.purl"),
+      repo: readOptionalString(scope.repo, "statement.scope.repo"),
+      workload: readOptionalString(scope.workload, "statement.scope.workload"),
+      tenant_id: readOptionalString(scope.tenant_id, "statement.scope.tenant_id"),
+      cluster_id: readOptionalString(scope.cluster_id, "statement.scope.cluster_id"),
+      environment: readOptionalString(scope.environment, "statement.scope.environment"),
+      namespace: readOptionalString(scope.namespace, "statement.scope.namespace"),
+    },
+    status: readString(value.status, "statement.status") as VEXStatement["status"],
+    justification: readOptionalString(value.justification, "statement.justification"),
+    action_statement: readOptionalString(value.action_statement, "statement.action_statement"),
+    impact_statement: readOptionalString(value.impact_statement, "statement.impact_statement"),
+    fixed_version: readOptionalString(value.fixed_version, "statement.fixed_version"),
+    created_by: readOptionalString(value.created_by, "statement.created_by"),
+    updated_by: readOptionalString(value.updated_by, "statement.updated_by"),
+    expires_at: readOptionalString(value.expires_at, "statement.expires_at"),
+    revoked_at: readOptionalString(value.revoked_at, "statement.revoked_at"),
+    revoked_by: readOptionalString(value.revoked_by, "statement.revoked_by"),
+    active: readBoolean(value.active, "statement.active"),
+    metadata: readOptionalRecord(value.metadata, "statement.metadata"),
+    created_at: readString(value.created_at, "statement.created_at"),
+    updated_at: readString(value.updated_at, "statement.updated_at"),
+  };
+}
+
 function parseVulnerabilityFinding(value: unknown): VulnerabilityFinding {
   if (!isRecord(value)) {
     throw new Error("Audit API returned invalid vulnerability finding.");
@@ -551,6 +646,7 @@ function parseVulnerabilityFinding(value: unknown): VulnerabilityFinding {
     metadata: readOptionalRecord(value.metadata, "findings[].metadata"),
     first_seen_at: readString(value.first_seen_at, "findings[].first_seen_at"),
     last_seen_at: readString(value.last_seen_at, "findings[].last_seen_at"),
+    vex: value.vex ? parseVEXMatch(value.vex) : undefined,
     decision: value.decision ? parseVulnerabilityDecision(value.decision) : undefined,
   };
 }
@@ -647,6 +743,187 @@ function parseVulnerabilityDecisionActionResponse(value: unknown): { status: str
   };
 }
 
+function parseVEXStatementsResponse(value: unknown): VEXStatementsResponse {
+  if (!isRecord(value) || !Array.isArray(value.statements)) {
+    throw new Error("Audit API returned invalid vex statements response.");
+  }
+  return {
+    statements: value.statements.map(parseVEXStatement),
+  };
+}
+
+function parseVEXStatementActionResponse(value: unknown): VEXStatementActionResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex action response.");
+  }
+  return {
+    status: readString(value.status, "status"),
+    statement: parseVEXStatement(value.statement),
+  };
+}
+
+function parseVEXStatusSummary(value: unknown): VEXStatusSummary {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid vex status.");
+  }
+  const counts = readOptionalRecord(value.counts_by_status, "counts_by_status") || {};
+  const countsByStatus: Record<string, number> = {};
+  for (const [key, count] of Object.entries(counts)) {
+    countsByStatus[key] = readNumber(count, `counts_by_status.${key}`);
+  }
+  return {
+    active_count: readNumber(value.active_count, "active_count"),
+    expiring_count: readNumber(value.expiring_count, "expiring_count"),
+    revoked_count: readNumber(value.revoked_count, "revoked_count"),
+    counts_by_status: countsByStatus,
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> | undefined,
+  };
+}
+
+function parseSigningIdentityObservation(value: unknown): SigningIdentityObservation {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid signing identity observation.");
+  }
+  return {
+    id: readString(value.id, "signing_identity.id"),
+    provider_type: readOptionalString(value.provider_type, "signing_identity.provider_type"),
+    issuer: readOptionalString(value.issuer, "signing_identity.issuer"),
+    signer_identity: readOptionalString(value.signer_identity, "signing_identity.signer_identity"),
+    subject: readOptionalString(value.subject, "signing_identity.subject"),
+    repository: readOptionalString(value.repository, "signing_identity.repository"),
+    workflow: readOptionalString(value.workflow, "signing_identity.workflow"),
+    ref: readOptionalString(value.ref, "signing_identity.ref"),
+    commit_sha: readOptionalString(value.commit_sha, "signing_identity.commit_sha"),
+    image_digest: readOptionalString(value.image_digest, "signing_identity.image_digest"),
+    tenant_id: readOptionalString(value.tenant_id, "signing_identity.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "signing_identity.cluster_id"),
+    environment: readOptionalString(value.environment, "signing_identity.environment"),
+    first_seen_at: readOptionalString(value.first_seen_at, "signing_identity.first_seen_at"),
+    last_seen_at: readOptionalString(value.last_seen_at, "signing_identity.last_seen_at"),
+    event_count: readNumber(value.event_count, "signing_identity.event_count"),
+    artifact_count: readNumber(value.artifact_count, "signing_identity.artifact_count"),
+    verification_state: readOptionalString(value.verification_state, "signing_identity.verification_state"),
+    authorized: readString(value.authorized, "signing_identity.authorized"),
+    matched_policy_id: readOptionalString(value.matched_policy_id, "signing_identity.matched_policy_id"),
+    distrusted_after: readOptionalString(value.distrusted_after, "signing_identity.distrusted_after"),
+    reason_code: readOptionalString(value.reason_code, "signing_identity.reason_code"),
+    reason_detail: readOptionalString(value.reason_detail, "signing_identity.reason_detail"),
+  };
+}
+
+function parseSigningIdentityObservationsResponse(value: unknown): SigningIdentityObservationsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid signing identities response.");
+  }
+  return {
+    items: value.items.map(parseSigningIdentityObservation),
+  };
+}
+
+function parseSigningIdentityPolicy(value: unknown): SigningIdentityPolicy {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid signing identity policy.");
+  }
+  return {
+    id: readString(value.id, "policy.id"),
+    name: readOptionalString(value.name, "policy.name"),
+    provider_type: readString(value.provider_type, "policy.provider_type"),
+    issuer: readOptionalString(value.issuer, "policy.issuer"),
+    signer_identity: readOptionalString(value.signer_identity, "policy.signer_identity"),
+    subject: readOptionalString(value.subject, "policy.subject"),
+    repository: readOptionalString(value.repository, "policy.repository"),
+    workflow: readOptionalString(value.workflow, "policy.workflow"),
+    ref: readOptionalString(value.ref, "policy.ref"),
+    tenant_id: readOptionalString(value.tenant_id, "policy.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "policy.cluster_id"),
+    environment: readOptionalString(value.environment, "policy.environment"),
+    enabled: readBoolean(value.enabled, "policy.enabled"),
+    distrusted_after: readOptionalString(value.distrusted_after, "policy.distrusted_after"),
+    distrust_reason: readOptionalString(value.distrust_reason, "policy.distrust_reason"),
+    created_at: readString(value.created_at, "policy.created_at"),
+    updated_at: readString(value.updated_at, "policy.updated_at"),
+    created_by: readOptionalString(value.created_by, "policy.created_by"),
+    updated_by: readOptionalString(value.updated_by, "policy.updated_by"),
+  };
+}
+
+function parseSigningIdentityPoliciesResponse(value: unknown): SigningIdentityPoliciesResponse {
+  if (!isRecord(value) || !Array.isArray(value.policies)) {
+    throw new Error("Audit API returned invalid signing identity policies response.");
+  }
+  return {
+    policies: value.policies.map(parseSigningIdentityPolicy),
+  };
+}
+
+function parseSigningIdentityFinding(value: unknown): SigningIdentityFinding {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid signing identity finding.");
+  }
+  return {
+    id: readString(value.id, "finding.id"),
+    type: readString(value.type, "finding.type"),
+    severity: readString(value.severity, "finding.severity"),
+    repository: readOptionalString(value.repository, "finding.repository"),
+    workflow: readOptionalString(value.workflow, "finding.workflow"),
+    ref: readOptionalString(value.ref, "finding.ref"),
+    policy_id: readOptionalString(value.policy_id, "finding.policy_id"),
+    observation_id: readOptionalString(value.observation_id, "finding.observation_id"),
+    reason: readString(value.reason, "finding.reason"),
+    detected_at: readOptionalString(value.detected_at, "finding.detected_at"),
+    advisory: readBoolean(value.advisory, "finding.advisory"),
+  };
+}
+
+function parseSigningIdentityFindingsResponse(value: unknown): SigningIdentityFindingsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid signing identity findings response.");
+  }
+  return {
+    items: value.items.map(parseSigningIdentityFinding),
+  };
+}
+
+function parseSigningIdentityStatus(value: unknown): SigningIdentityStatus {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid signing identity status.");
+  }
+  const counts = readOptionalRecord(value.counts_by_reason_code, "counts_by_reason_code") || {};
+  const countsByReasonCode: Record<string, number> = {};
+  for (const [key, count] of Object.entries(counts)) {
+    countsByReasonCode[key] = readNumber(count, `counts_by_reason_code.${key}`);
+  }
+  return {
+    enforcement_mode: readString(value.enforcement_mode, "enforcement_mode"),
+    require_rekor: readBoolean(value.require_rekor, "require_rekor"),
+    total_policies: readNumber(value.total_policies, "total_policies"),
+    enabled_policies: readNumber(value.enabled_policies, "enabled_policies"),
+    observed_identities: readNumber(value.observed_identities, "observed_identities"),
+    authorized: readNumber(value.authorized, "authorized"),
+    unauthorized: readNumber(value.unauthorized, "unauthorized"),
+    unknown: readNumber(value.unknown, "unknown"),
+    findings: readNumber(value.findings, "findings"),
+    workflow_drift_findings: readNumber(value.workflow_drift_findings, "workflow_drift_findings"),
+    counts_by_reason_code: countsByReasonCode,
+  };
+}
+
+function parseVulnerabilityNetResponse(value: unknown): VulnerabilityNetResponse {
+  if (!isRecord(value) || !Array.isArray(value.findings)) {
+    throw new Error("Audit API returned invalid vulnerability net response.");
+  }
+  return {
+    raw_count: readNumber(value.raw_count, "raw_count"),
+    resolved_by_vex_count: readNumber(value.resolved_by_vex_count, "resolved_by_vex_count"),
+    actionable_count: readNumber(value.actionable_count, "actionable_count"),
+    under_investigation_count: readNumber(value.under_investigation_count, "under_investigation_count"),
+    severity_threshold: readOptionalString(value.severity_threshold, "severity_threshold"),
+    threshold_breached: readBoolean(value.threshold_breached, "threshold_breached"),
+    findings: value.findings.map(parseVulnerabilityFinding),
+    applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
 function parseVulnerabilityRescanResponse(value: unknown): VulnerabilityRescanResponse {
   if (!isRecord(value) || !Array.isArray(value.scanned_digests)) {
     throw new Error("Audit API returned invalid vulnerability rescan response.");
@@ -658,6 +935,276 @@ function parseVulnerabilityRescanResponse(value: unknown): VulnerabilityRescanRe
     status: readString(value.status, "status"),
     scanned_digests: value.scanned_digests,
     scan_runs: readNumber(value.scan_runs, "scan_runs"),
+  };
+}
+
+function parseTrustScoreMetric(value: unknown): TrustScoreMetric {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid trust metric.");
+  }
+  return {
+    id: readString(value.id, "trust_metric.id"),
+    name: readString(value.name, "trust_metric.name"),
+    weight: readNumber(value.weight, "trust_metric.weight"),
+    score: readNumber(value.score, "trust_metric.score"),
+    status: readString(value.status, "trust_metric.status"),
+    reason_code: readString(value.reason_code, "trust_metric.reason_code"),
+    reason_detail: readOptionalString(value.reason_detail, "trust_metric.reason_detail"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "trust_metric.evidence_refs"),
+    advisory_only: readBoolean(value.advisory_only, "trust_metric.advisory_only"),
+    public_publishable: readBoolean(value.public_publishable, "trust_metric.public_publishable"),
+    mapping_refs: readOptionalStringArray(value.mapping_refs, "trust_metric.mapping_refs"),
+  };
+}
+
+function parseTrustScorecard(value: unknown): TrustScorecard {
+  if (!isRecord(value) || !Array.isArray(value.metrics)) {
+    throw new Error("Audit API returned invalid trust scorecard.");
+  }
+  return {
+    id: readString(value.id, "scorecard.id"),
+    scope_type: readString(value.scope_type, "scorecard.scope_type"),
+    scope_ref: readString(value.scope_ref, "scorecard.scope_ref"),
+    tenant_id: readOptionalString(value.tenant_id, "scorecard.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "scorecard.cluster_id"),
+    environment: readOptionalString(value.environment, "scorecard.environment"),
+    repo: readOptionalString(value.repo, "scorecard.repo"),
+    calculated_at: readString(value.calculated_at, "scorecard.calculated_at"),
+    overall_grade: readString(value.overall_grade, "scorecard.overall_grade"),
+    overall_score: readNumber(value.overall_score, "scorecard.overall_score"),
+    signing_coverage: readNumber(value.signing_coverage, "scorecard.signing_coverage"),
+    transparency_coverage: readNumber(value.transparency_coverage, "scorecard.transparency_coverage"),
+    sbom_or_provenance_coverage: readNumber(value.sbom_or_provenance_coverage, "scorecard.sbom_or_provenance_coverage"),
+    actionable_vulnerability_count: readNumber(value.actionable_vulnerability_count, "scorecard.actionable_vulnerability_count"),
+    stale_exception_count: readNumber(value.stale_exception_count, "scorecard.stale_exception_count"),
+    publication_mode: readString(value.publication_mode, "scorecard.publication_mode"),
+    metrics: value.metrics.map(parseTrustScoreMetric),
+    notes: readOptionalStringArray(value.notes, "scorecard.notes"),
+  };
+}
+
+function parseTrustBadge(value: unknown): TrustBadge {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid trust badge.");
+  }
+  return {
+    id: readString(value.id, "badge.id"),
+    label: readString(value.label, "badge.label"),
+    state: readString(value.state, "badge.state"),
+    summary: readString(value.summary, "badge.summary"),
+    public_publishable: readBoolean(value.public_publishable, "badge.public_publishable"),
+    svg: readOptionalString(value.svg, "badge.svg"),
+  };
+}
+
+function parseAuditFinding(value: unknown): AuditFinding {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid audit finding.");
+  }
+  return {
+    id: readString(value.id, "audit_finding.id"),
+    category: readString(value.category, "audit_finding.category"),
+    severity: readString(value.severity, "audit_finding.severity"),
+    status: readString(value.status, "audit_finding.status"),
+    reason_code: readString(value.reason_code, "audit_finding.reason_code"),
+    reason_detail: readOptionalString(value.reason_detail, "audit_finding.reason_detail"),
+    scope_ref: readOptionalString(value.scope_ref, "audit_finding.scope_ref"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "audit_finding.evidence_refs"),
+    advisory_only: readBoolean(value.advisory_only, "audit_finding.advisory_only"),
+    public_publishable: readBoolean(value.public_publishable, "audit_finding.public_publishable"),
+    detected_at: readString(value.detected_at, "audit_finding.detected_at"),
+  };
+}
+
+function parseStandardsMapping(value: unknown): StandardsMapping {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid standards mapping.");
+  }
+  return {
+    standard: readString(value.standard, "mapping.standard"),
+    control: readString(value.control, "mapping.control"),
+    status: readString(value.status, "mapping.status"),
+    summary: readString(value.summary, "mapping.summary"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "mapping.evidence_refs"),
+  };
+}
+
+function parsePublishedTrustView(value: unknown): PublishedTrustView {
+  if (!isRecord(value) || !Array.isArray(value.badges) || !Array.isArray(value.metrics) || !Array.isArray(value.mapping)) {
+    throw new Error("Audit API returned invalid published trust view.");
+  }
+  return {
+    generated_at: readString(value.generated_at, "published_trust.generated_at"),
+    scope_type: readString(value.scope_type, "published_trust.scope_type"),
+    scope_ref: readString(value.scope_ref, "published_trust.scope_ref"),
+    overall_grade: readString(value.overall_grade, "published_trust.overall_grade"),
+    overall_score: readNumber(value.overall_score, "published_trust.overall_score"),
+    badges: value.badges.map(parseTrustBadge),
+    metrics: value.metrics.map(parseTrustScoreMetric),
+    mapping: value.mapping.map(parseStandardsMapping),
+    notes: readOptionalStringArray(value.notes, "published_trust.notes"),
+  };
+}
+
+function parseAuditReport(value: unknown): AuditReport {
+  if (!isRecord(value) || !Array.isArray(value.findings) || !Array.isArray(value.badges) || !Array.isArray(value.standards_mapping)) {
+    throw new Error("Audit API returned invalid audit report.");
+  }
+  return {
+    id: readString(value.id, "audit_report.id"),
+    generated_at: readString(value.generated_at, "audit_report.generated_at"),
+    scope_type: readString(value.scope_type, "audit_report.scope_type"),
+    scope_ref: readString(value.scope_ref, "audit_report.scope_ref"),
+    scorecard: parseTrustScorecard(value.scorecard),
+    findings: value.findings.map(parseAuditFinding),
+    badges: value.badges.map(parseTrustBadge),
+    standards_mapping: value.standards_mapping.map(parseStandardsMapping),
+    public_view: value.public_view ? parsePublishedTrustView(value.public_view) : undefined,
+    limitations: readOptionalStringArray(value.limitations, "audit_report.limitations"),
+    format: readOptionalString(value.format, "audit_report.format"),
+    generated_by: readOptionalString(value.generated_by, "audit_report.generated_by"),
+  };
+}
+
+function parseGuidanceGrouping(value: unknown): GuidanceGrouping {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid guidance grouping.");
+  }
+  return {
+    key: readString(value.key, "guidance.grouping.key"),
+    label: readString(value.label, "guidance.grouping.label"),
+    category: readString(value.category, "guidance.grouping.category"),
+    finding_count: readNumber(value.finding_count, "guidance.grouping.finding_count"),
+    priority: readString(value.priority, "guidance.grouping.priority"),
+    contextual_risk_score: readNumber(value.contextual_risk_score, "guidance.grouping.contextual_risk_score"),
+    heuristic: readBoolean(value.heuristic, "guidance.grouping.heuristic"),
+  };
+}
+
+function parseGuidanceVEXDraftSuggestion(value: unknown): GuidanceVEXDraftSuggestion {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid VEX draft suggestion.");
+  }
+  return {
+    id: readString(value.id, "guidance.vex_draft.id"),
+    candidate_status: readString(value.candidate_status, "guidance.vex_draft.candidate_status"),
+    justification: readString(value.justification, "guidance.vex_draft.justification"),
+    impact_statement: readString(value.impact_statement, "guidance.vex_draft.impact_statement"),
+    missing_evidence: readOptionalStringArray(value.missing_evidence, "guidance.vex_draft.missing_evidence"),
+    confidence: readString(value.confidence, "guidance.vex_draft.confidence"),
+    confidence_basis: readOptionalString(value.confidence_basis, "guidance.vex_draft.confidence_basis"),
+    advisory_only: readBoolean(value.advisory_only, "guidance.vex_draft.advisory_only"),
+    requires_human_review: readBoolean(value.requires_human_review, "guidance.vex_draft.requires_human_review"),
+    docs_refs: readOptionalStringArray(value.docs_refs, "guidance.vex_draft.docs_refs"),
+  };
+}
+
+function parseBreakGlassGuidance(value: unknown): BreakGlassGuidance {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid break-glass guidance.");
+  }
+  return {
+    scope_explanation: readString(value.scope_explanation, "guidance.break_glass.scope_explanation"),
+    narrower_alternative: readOptionalString(value.narrower_alternative, "guidance.break_glass.narrower_alternative"),
+    cleanup_reminders: readOptionalStringArray(value.cleanup_reminders, "guidance.break_glass.cleanup_reminders"),
+    proposed_containment_steps: readOptionalStringArray(value.proposed_containment_steps, "guidance.break_glass.proposed_containment_steps"),
+    confidence: readString(value.confidence, "guidance.break_glass.confidence"),
+    confidence_basis: readOptionalString(value.confidence_basis, "guidance.break_glass.confidence_basis"),
+    advisory_only: readBoolean(value.advisory_only, "guidance.break_glass.advisory_only"),
+    requires_human_review: readBoolean(value.requires_human_review, "guidance.break_glass.requires_human_review"),
+    docs_refs: readOptionalStringArray(value.docs_refs, "guidance.break_glass.docs_refs"),
+  };
+}
+
+function parseGuidanceItem(value: unknown): GuidanceItem {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid guidance item.");
+  }
+  return {
+    id: readString(value.id, "guidance.item.id"),
+    category: readString(value.category, "guidance.item.category"),
+    source_component: readOptionalString(value.source_component, "guidance.item.source_component"),
+    grouping: parseGuidanceGrouping(value.grouping),
+    related_reason_codes: readOptionalStringArray(value.related_reason_codes, "guidance.item.related_reason_codes"),
+    finding_refs: readOptionalStringArray(value.finding_refs, "guidance.item.finding_refs"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "guidance.item.evidence_refs"),
+    docs_refs: readOptionalStringArray(value.docs_refs, "guidance.item.docs_refs"),
+    scope_type: readOptionalString(value.scope_type, "guidance.item.scope_type"),
+    scope_ref: readOptionalString(value.scope_ref, "guidance.item.scope_ref"),
+    tenant_id: readOptionalString(value.tenant_id, "guidance.item.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "guidance.item.cluster_id"),
+    environment: readOptionalString(value.environment, "guidance.item.environment"),
+    repository: readOptionalString(value.repository, "guidance.item.repository"),
+    severity: readOptionalString(value.severity, "guidance.item.severity"),
+    priority: readString(value.priority, "guidance.item.priority"),
+    confidence: readString(value.confidence, "guidance.item.confidence"),
+    confidence_basis: readOptionalString(value.confidence_basis, "guidance.item.confidence_basis"),
+    explanation: readOptionalString(value.explanation, "guidance.item.explanation"),
+    recommendation_summary: readOptionalString(value.recommendation_summary, "guidance.item.recommendation_summary"),
+    recommendation_steps: readOptionalStringArray(value.recommendation_steps, "guidance.item.recommendation_steps"),
+    safer_alternative: readOptionalString(value.safer_alternative, "guidance.item.safer_alternative"),
+    impact_summary: readOptionalString(value.impact_summary, "guidance.item.impact_summary"),
+    data_limitations: readOptionalStringArray(value.data_limitations, "guidance.item.data_limitations"),
+    advisory_only: readBoolean(value.advisory_only, "guidance.item.advisory_only"),
+    requires_human_review: readBoolean(value.requires_human_review, "guidance.item.requires_human_review"),
+    generated_at: readString(value.generated_at, "guidance.item.generated_at"),
+    generated_by: readString(value.generated_by, "guidance.item.generated_by"),
+    template_version: readOptionalString(value.template_version, "guidance.item.template_version"),
+    heuristic: readBoolean(value.heuristic, "guidance.item.heuristic"),
+    vex_draft: value.vex_draft ? parseGuidanceVEXDraftSuggestion(value.vex_draft) : undefined,
+    break_glass_guidance: value.break_glass_guidance ? parseBreakGlassGuidance(value.break_glass_guidance) : undefined,
+  };
+}
+
+function parseGuidanceSummary(value: unknown): GuidanceSummary {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid guidance summary.");
+  }
+  const countsByCategorySource = readOptionalRecord(value.counts_by_category, "guidance.summary.counts_by_category") || {};
+  const countsByCategory: Record<string, number> = {};
+  for (const [key, count] of Object.entries(countsByCategorySource)) {
+    countsByCategory[key] = readNumber(count, `guidance.summary.counts_by_category.${key}`);
+  }
+  const countsByPrioritySource = readOptionalRecord(value.counts_by_priority, "guidance.summary.counts_by_priority") || {};
+  const countsByPriority: Record<string, number> = {};
+  for (const [key, count] of Object.entries(countsByPrioritySource)) {
+    countsByPriority[key] = readNumber(count, `guidance.summary.counts_by_priority.${key}`);
+  }
+  return {
+    total_items: readNumber(value.total_items, "guidance.summary.total_items"),
+    counts_by_category: countsByCategory,
+    counts_by_priority: countsByPriority,
+    guidance_mode: readString(value.guidance_mode, "guidance.summary.guidance_mode"),
+    ai_enabled: readBoolean(value.ai_enabled, "guidance.summary.ai_enabled"),
+    deterministic_only: readBoolean(value.deterministic_only, "guidance.summary.deterministic_only"),
+    limitations: readOptionalStringArray(value.limitations, "guidance.summary.limitations"),
+  };
+}
+
+function parseGuidanceResponse(value: unknown): GuidanceResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid guidance response.");
+  }
+  return {
+    generated_at: readString(value.generated_at, "guidance.generated_at"),
+    scope_type: readOptionalString(value.scope_type, "guidance.scope_type"),
+    scope_ref: readOptionalString(value.scope_ref, "guidance.scope_ref"),
+    tenant_id: readOptionalString(value.tenant_id, "guidance.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "guidance.cluster_id"),
+    environment: readOptionalString(value.environment, "guidance.environment"),
+    repository: readOptionalString(value.repository, "guidance.repository"),
+    items: value.items.map(parseGuidanceItem),
+    summary: parseGuidanceSummary(value.summary),
+  };
+}
+
+function parseAIInsightsResponse(value: unknown): AIInsightsResponse {
+  if (!isRecord(value) || !Array.isArray(value.top_items)) {
+    throw new Error("Audit API returned invalid AI insights response.");
+  }
+  return {
+    summary: parseGuidanceSummary(value.summary),
+    top_items: value.top_items.map(parseGuidanceItem),
   };
 }
 
@@ -698,6 +1245,147 @@ function parseSyncStatus(value: unknown): SyncStatus {
     stale_after_seconds:
       value.stale_after_seconds === undefined ? undefined : readNumber(value.stale_after_seconds, "stale_after_seconds"),
     summary: readOptionalString(value.summary, "summary"),
+  };
+}
+
+function parseRuntimeDriftFinding(value: unknown): RuntimeDriftFinding {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime drift finding.");
+  }
+  return {
+    id: readString(value.id, "runtime_drift.id"),
+    tenant_id: readOptionalString(value.tenant_id, "runtime_drift.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "runtime_drift.cluster_id"),
+    namespace: readString(value.namespace, "runtime_drift.namespace"),
+    workload_kind: readString(value.workload_kind, "runtime_drift.workload_kind"),
+    workload: readString(value.workload, "runtime_drift.workload"),
+    service_account: readOptionalString(value.service_account, "runtime_drift.service_account"),
+    drift_result: readString(value.drift_result, "runtime_drift.drift_result"),
+    drift_classes: readOptionalStringArray(value.drift_classes, "runtime_drift.drift_classes"),
+    drift_severity: readOptionalString(value.drift_severity, "runtime_drift.drift_severity"),
+    remediation_mode: readOptionalString(value.remediation_mode, "runtime_drift.remediation_mode"),
+    remediation_attempt:
+      value.remediation_attempt === undefined ? undefined : readNumber(value.remediation_attempt, "runtime_drift.remediation_attempt"),
+    remediable: readBoolean(value.remediable, "runtime_drift.remediable"),
+    status: readString(value.status, "runtime_drift.status"),
+    quarantine_reason: readOptionalString(value.quarantine_reason, "runtime_drift.quarantine_reason"),
+    desired_state_verification_state: readOptionalString(
+      value.desired_state_verification_state,
+      "runtime_drift.desired_state_verification_state",
+    ),
+    detected_at: readString(value.detected_at, "runtime_drift.detected_at"),
+    last_updated_at: readString(value.last_updated_at, "runtime_drift.last_updated_at"),
+    last_event_type: readString(value.last_event_type, "runtime_drift.last_event_type"),
+    reasons: readOptionalStringArray(value.reasons, "runtime_drift.reasons"),
+    evidence: readOptionalRecord(value.evidence, "runtime_drift.evidence"),
+  };
+}
+
+function parseRuntimeDriftFindingsResponse(value: unknown): RuntimeDriftFindingsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid runtime drift findings response.");
+  }
+  return {
+    items: value.items.map(parseRuntimeDriftFinding),
+  };
+}
+
+function parseRuntimeDriftStatus(value: unknown): RuntimeDriftStatus {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime drift status.");
+  }
+  const countsBySeverity = readOptionalRecord(value.counts_by_severity, "counts_by_severity") || {};
+  const countsByStatus = readOptionalRecord(value.counts_by_status, "counts_by_status") || {};
+  return {
+    total_findings: readNumber(value.total_findings, "total_findings"),
+    active_findings: readNumber(value.active_findings, "active_findings"),
+    quarantined: readNumber(value.quarantined, "quarantined"),
+    failed: readNumber(value.failed, "failed"),
+    remediated: readNumber(value.remediated, "remediated"),
+    detected: readNumber(value.detected, "detected"),
+    counts_by_severity: Object.fromEntries(
+      Object.entries(countsBySeverity).map(([key, count]) => [key, readNumber(count, `counts_by_severity.${key}`)]),
+    ),
+    counts_by_status: Object.fromEntries(
+      Object.entries(countsByStatus).map(([key, count]) => [key, readNumber(count, `counts_by_status.${key}`)]),
+    ),
+    last_detected_at: readOptionalString(value.last_detected_at, "last_detected_at"),
+    last_updated_at: readOptionalString(value.last_updated_at, "last_updated_at"),
+  };
+}
+
+function parseRuntimeActiveState(value: unknown): RuntimeActiveState {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime active state.");
+  }
+  return {
+    id: readString(value.id, "runtime_active_state.id"),
+    tenant_id: readOptionalString(value.tenant_id, "runtime_active_state.tenant_id"),
+    cluster_id: readOptionalString(value.cluster_id, "runtime_active_state.cluster_id"),
+    namespace: readString(value.namespace, "runtime_active_state.namespace"),
+    workload_kind: readString(value.workload_kind, "runtime_active_state.workload_kind"),
+    workload: readString(value.workload, "runtime_active_state.workload"),
+    service_account: readOptionalString(value.service_account, "runtime_active_state.service_account"),
+    observed_digest: readOptionalString(value.observed_digest, "runtime_active_state.observed_digest"),
+    approved_digest: readOptionalString(value.approved_digest, "runtime_active_state.approved_digest"),
+    observed_config_hash: readOptionalString(value.observed_config_hash, "runtime_active_state.observed_config_hash"),
+    expected_config_hash: readOptionalString(value.expected_config_hash, "runtime_active_state.expected_config_hash"),
+    drift_result: readOptionalString(value.drift_result, "runtime_active_state.drift_result"),
+    drift_classes: readOptionalStringArray(value.drift_classes, "runtime_active_state.drift_classes"),
+    drift_severity: readOptionalString(value.drift_severity, "runtime_active_state.drift_severity"),
+    reconciliation_status: readString(value.reconciliation_status, "runtime_active_state.reconciliation_status"),
+    remediation_mode: readOptionalString(value.remediation_mode, "runtime_active_state.remediation_mode"),
+    remediation_attempt:
+      value.remediation_attempt === undefined ? undefined : readNumber(value.remediation_attempt, "runtime_active_state.remediation_attempt"),
+    remediable: readBoolean(value.remediable, "runtime_active_state.remediable"),
+    quarantine_reason: readOptionalString(value.quarantine_reason, "runtime_active_state.quarantine_reason"),
+    quarantine_type: readOptionalString(value.quarantine_type, "runtime_active_state.quarantine_type"),
+    protected_target:
+      value.protected_target === undefined ? undefined : readBoolean(value.protected_target, "runtime_active_state.protected_target"),
+    protected_reason: readOptionalString(value.protected_reason, "runtime_active_state.protected_reason"),
+    desired_state_source_ref: readOptionalString(value.desired_state_source_ref, "runtime_active_state.desired_state_source_ref"),
+    desired_state_approval_id: readOptionalString(value.desired_state_approval_id, "runtime_active_state.desired_state_approval_id"),
+    desired_state_verification_state: readOptionalString(
+      value.desired_state_verification_state,
+      "runtime_active_state.desired_state_verification_state",
+    ),
+    last_error: readOptionalString(value.last_error, "runtime_active_state.last_error"),
+    last_reconciled_at: readString(value.last_reconciled_at, "runtime_active_state.last_reconciled_at"),
+    reasons: readOptionalStringArray(value.reasons, "runtime_active_state.reasons"),
+    evidence: readOptionalRecord(value.evidence, "runtime_active_state.evidence"),
+  };
+}
+
+function parseRuntimeActiveStatesResponse(value: unknown): RuntimeActiveStatesResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid runtime active states response.");
+  }
+  return {
+    items: value.items.map(parseRuntimeActiveState),
+  };
+}
+
+function parseRuntimeClosedLoopStatus(value: unknown): RuntimeClosedLoopStatus {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime closed-loop status.");
+  }
+  const countsByStatus = readOptionalRecord(value.counts_by_status, "counts_by_status") || {};
+  const countsByQuarantine = readOptionalRecord(value.counts_by_quarantine_type, "counts_by_quarantine_type") || {};
+  return {
+    total_targets: readNumber(value.total_targets, "total_targets"),
+    in_sync: readNumber(value.in_sync, "in_sync"),
+    drift_detected: readNumber(value.drift_detected, "drift_detected"),
+    remediated: readNumber(value.remediated, "remediated"),
+    failed: readNumber(value.failed, "failed"),
+    quarantined: readNumber(value.quarantined, "quarantined"),
+    protected_blocked: readNumber(value.protected_blocked, "protected_blocked"),
+    counts_by_status: Object.fromEntries(
+      Object.entries(countsByStatus).map(([key, count]) => [key, readNumber(count, `counts_by_status.${key}`)]),
+    ),
+    counts_by_quarantine_type: Object.fromEntries(
+      Object.entries(countsByQuarantine).map(([key, count]) => [key, readNumber(count, `counts_by_quarantine_type.${key}`)]),
+    ),
+    last_reconciled_at: readOptionalString(value.last_reconciled_at, "last_reconciled_at"),
   };
 }
 
@@ -851,6 +1539,19 @@ export async function getActiveVulnerabilities(filters: {
   return parseVulnerabilitiesResponse(await fetchJSON<unknown>("/v1/vulnerabilities/active", { params: filters }));
 }
 
+export async function getNetVulnerabilities(filters: {
+  severity?: string;
+  severity_threshold?: string;
+  cve_id?: string;
+  image_digest?: string;
+  component_name?: string;
+  tenant_id?: string;
+  environment?: string;
+  limit?: string;
+}) {
+  return parseVulnerabilityNetResponse(await fetchJSON<unknown>("/v1/vulnerabilities/net", { params: filters }));
+}
+
 export async function getVulnerabilityBlastRadius(filters: {
   cve_id?: string;
   component_name?: string;
@@ -880,6 +1581,44 @@ export async function getVulnerabilityDecisions(filters: {
   return parseVulnerabilityDecisionsResponse(await fetchJSON<unknown>("/v1/vulnerabilities/decisions", { params: filters }));
 }
 
+export async function getVEXStatements(filters: {
+  vulnerability_id?: string;
+  image_digest?: string;
+  package_name?: string;
+  tenant_id?: string;
+  environment?: string;
+  active?: string;
+  limit?: string;
+}) {
+  return parseVEXStatementsResponse(await fetchJSON<unknown>("/v1/vex", { params: filters }));
+}
+
+export async function getVEXStatus(filters?: {
+  vulnerability_id?: string;
+  image_digest?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+}) {
+  return parseVEXStatusSummary(await fetchJSON<unknown>("/v1/vex/status", { params: filters }));
+}
+
+export async function createVEXStatement(input: VEXCreateInput) {
+  return parseVEXStatementActionResponse(
+    await fetchJSON<unknown>("/v1/vex", {
+      method: "POST",
+      body: input,
+    }),
+  );
+}
+
+export async function revokeVEXStatement(statementID: number) {
+  return parseVEXStatementActionResponse(
+    await fetchJSON<unknown>(`/v1/vex/${encodeURIComponent(String(statementID))}/revoke`, {
+      method: "POST",
+    }),
+  );
+}
+
 export async function createVulnerabilityDecision(input: VulnerabilityDecisionInput) {
   return parseVulnerabilityDecisionActionResponse(
     await fetchJSON<unknown>("/v1/vulnerabilities/decisions", {
@@ -904,6 +1643,102 @@ export async function rescanVulnerabilities(input?: { image_digest?: string; ima
       body: input || {},
     }),
   );
+}
+
+export async function getRuntimeDriftFindings(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  severity?: string;
+  status?: string;
+  limit?: string;
+}) {
+  return parseRuntimeDriftFindingsResponse(await fetchJSON<unknown>("/v1/runtime/drift", { params: filters }));
+}
+
+export async function getRuntimeDriftStatus(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  severity?: string;
+  status?: string;
+  limit?: string;
+}) {
+  return parseRuntimeDriftStatus(await fetchJSON<unknown>("/v1/runtime/drift/status", { params: filters }));
+}
+
+export async function getRuntimeActiveStates(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  reconciliation_status?: string;
+  quarantine_type?: string;
+  limit?: string;
+}) {
+  return parseRuntimeActiveStatesResponse(await fetchJSON<unknown>("/v1/runtime/active-state", { params: filters }));
+}
+
+export async function getRuntimeClosedLoopStatus(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  reconciliation_status?: string;
+  quarantine_type?: string;
+  limit?: string;
+}) {
+  return parseRuntimeClosedLoopStatus(await fetchJSON<unknown>("/v1/runtime/closed-loop/status", { params: filters }));
+}
+
+export async function getSigningIdentityObservations(filters?: Record<string, string | undefined>) {
+  return parseSigningIdentityObservationsResponse(await fetchJSON<unknown>("/v1/signing-identities", { params: filters }));
+}
+
+export async function getSigningIdentityPolicies() {
+  return parseSigningIdentityPoliciesResponse(await fetchJSON<unknown>("/v1/signing-identities/policies"));
+}
+
+export async function getSigningIdentityFindings(filters?: Record<string, string | undefined>) {
+  return parseSigningIdentityFindingsResponse(await fetchJSON<unknown>("/v1/signing-identities/findings", { params: filters }));
+}
+
+export async function getSigningIdentityStatus(filters?: Record<string, string | undefined>) {
+  const payload = await fetchJSON<unknown>("/v1/signing-identities/status", { params: filters });
+  if (!isRecord(payload) || !isRecord(payload.status)) {
+    throw new Error("Audit API returned invalid signing identity status response.");
+  }
+  return parseSigningIdentityStatus(payload.status);
+}
+
+export async function createAuditReport(input?: {
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  repo?: string;
+  format?: string;
+  include_public_view?: boolean;
+}) {
+  return parseAuditReport(
+    await fetchJSON<unknown>("/v1/audit/reports", {
+      method: "POST",
+      body: input || {},
+    }),
+  );
+}
+
+export async function getAIGuidance(filters?: Record<string, string | undefined>) {
+  return parseGuidanceResponse(await fetchJSON<unknown>("/v1/ai/guidance", { params: filters }));
+}
+
+export async function getAIInsights(filters?: Record<string, string | undefined>) {
+  return parseAIInsightsResponse(await fetchJSON<unknown>("/v1/ai/insights", { params: filters }));
 }
 
 export function apiBaseURL() {

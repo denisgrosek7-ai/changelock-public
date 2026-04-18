@@ -22,11 +22,14 @@ func TestCompareDetectsImageDrift(t *testing.T) {
 
 	result := Compare(sampleApprovedState(), observed)
 
-	if result.Result != string(DriftClassImage) {
-		t.Fatalf("expected image_drift, got %q", result.Result)
+	if result.Result != string(DriftClassImageDigest) {
+		t.Fatalf("expected image_digest_drift, got %q", result.Result)
 	}
-	if len(result.Classes) != 1 || result.Classes[0] != string(DriftClassImage) {
+	if len(result.Classes) != 1 || result.Classes[0] != string(DriftClassImageDigest) {
 		t.Fatalf("unexpected classes %#v", result.Classes)
+	}
+	if result.Severity != DriftSeverityHigh {
+		t.Fatalf("expected high severity, got %q", result.Severity)
 	}
 	if result.Evidence == nil || len(result.Evidence.ImageMismatches) != 1 {
 		t.Fatalf("expected image mismatch evidence, got %#v", result.Evidence)
@@ -39,8 +42,8 @@ func TestCompareDetectsConfigDrift(t *testing.T) {
 
 	result := Compare(sampleApprovedState(), observed)
 
-	if result.Result != string(DriftClassConfig) {
-		t.Fatalf("expected config_drift, got %q", result.Result)
+	if result.Result != string(DriftClassWorkloadSpec) {
+		t.Fatalf("expected workload_spec_drift, got %q", result.Result)
 	}
 	if result.Evidence == nil || result.Evidence.ConfigObserved != "cfg-mutated" {
 		t.Fatalf("expected config mismatch evidence, got %#v", result.Evidence)
@@ -59,6 +62,23 @@ func TestCompareDetectsSecurityContextDrift(t *testing.T) {
 	if result.Evidence == nil || len(result.Evidence.SecurityContextMismatches) != 1 {
 		t.Fatalf("expected security mismatch evidence, got %#v", result.Evidence)
 	}
+	if result.Severity != DriftSeverityCritical {
+		t.Fatalf("expected critical severity, got %q", result.Severity)
+	}
+}
+
+func TestCompareDetectsServiceAccountDrift(t *testing.T) {
+	observed := sampleObservedState()
+	observed.ServiceAccountName = "mutated-sa"
+
+	result := Compare(sampleApprovedState(), observed)
+
+	if result.Result != string(DriftClassServiceAccount) {
+		t.Fatalf("expected service_account_drift, got %q", result.Result)
+	}
+	if result.Evidence == nil || result.Evidence.ServiceAccountObserved != "mutated-sa" {
+		t.Fatalf("expected service account evidence, got %#v", result.Evidence)
+	}
 }
 
 func TestCompareDetectsMultipleDriftClasses(t *testing.T) {
@@ -72,7 +92,7 @@ func TestCompareDetectsMultipleDriftClasses(t *testing.T) {
 	if result.Result != string(DriftClassMultiple) {
 		t.Fatalf("expected multiple_drift, got %q", result.Result)
 	}
-	expectedClasses := []string{string(DriftClassImage), string(DriftClassConfig), string(DriftClassSecurityContext)}
+	expectedClasses := []string{string(DriftClassImageDigest), string(DriftClassSecurityContext), string(DriftClassWorkloadSpec)}
 	if len(result.Classes) != len(expectedClasses) {
 		t.Fatalf("expected classes %#v, got %#v", expectedClasses, result.Classes)
 	}
@@ -89,7 +109,9 @@ func TestCompareDetectsMultipleDriftClasses(t *testing.T) {
 func sampleApprovedState() ApprovedWorkloadState {
 	return ApprovedWorkloadState{
 		Namespace:          "acme-prod",
+		WorkloadKind:       "Deployment",
 		Workload:           "booking-api",
+		ServiceAccountName: "booking-api",
 		ExpectedConfigHash: "cfg-123",
 		Containers: []ApprovedContainerState{
 			{
@@ -112,7 +134,9 @@ func sampleApprovedState() ApprovedWorkloadState {
 func sampleObservedState() ObservedWorkloadState {
 	return ObservedWorkloadState{
 		Namespace:        "acme-prod",
+		WorkloadKind:     "Deployment",
 		Workload:         "booking-api",
+		ServiceAccountName: "booking-api",
 		ActualConfigHash: "cfg-123",
 		Containers: []ObservedContainerState{
 			{

@@ -49,6 +49,15 @@ signer:
     transitPath: transit
     transitKey: changelock-control-plane
 
+signingIdentity:
+  # Start in monitor mode for the first rollout. Move to enforce only after the
+  # expected signer policies and workflow path inputs are verified in-cluster.
+  enforcement: monitor
+  requireRekor: true
+  quarantineOnDrift: false
+  # Optional repository-local workflow scan path if the audit-writer deployment mounts CI workflow definitions.
+  workflowsDir: .github/workflows
+
 postgresql:
   enabled: false
 
@@ -77,6 +86,19 @@ auditWriter:
     CHANGELOCK_VULNOPS_TRIVY_PATH: trivy
     CHANGELOCK_VULNOPS_GRYPE_PATH: grype
     CHANGELOCK_CORS_ALLOW_ORIGINS: https://changelock.example.com
+    # Internal auditor-facing preview only. Leave disabled unless you explicitly
+    # want sanitized public-trust preview/export artifacts derived from 8k.
+    CHANGELOCK_TRUST_PUBLICATION_MODE: preview
+    CHANGELOCK_HARDENING_REVIEW_ENABLED: "true"
+    CHANGELOCK_HARDENING_REVIEW_STALE_EXCEPTION_DAYS: "14"
+    CHANGELOCK_SCORECARD_EVENT_LIMIT: "250"
+    CHANGELOCK_SCORECARD_SEVERITY_THRESHOLD: HIGH
+    # Keep advisory AI guidance disabled until prompt context boundaries and
+    # redaction posture are explicitly reviewed for the target environment.
+    CHANGELOCK_AI_GUIDANCE_MODE: disabled
+    CHANGELOCK_AI_GUIDANCE_MAX_ITEMS: "12"
+    CHANGELOCK_AI_GUIDANCE_INCLUDE_DOC_LINKS: "true"
+    CHANGELOCK_AI_GUIDANCE_REDACT_SENSITIVE: "true"
 
 policyEngine:
   replicaCount: 2
@@ -109,6 +131,8 @@ attestationVerifier:
 deployGate:
   replicaCount: 3
   antiAffinity: required
+  # Optional: set to enforce once VEX-aware vulnerability evaluation is part of the admission posture.
+  vexDeployMode: disabled
   tls:
     enabled: true
     secretName: changelock-deploy-gate-tls
@@ -137,6 +161,24 @@ runtimeAgent:
     limits:
       cpu: 500m
       memory: 512Mi
+  selfHealing:
+    mode: alert-only
+    maxAttempts: 3
+    window: 15m
+    allowedKinds: Deployment,DaemonSet,StatefulSet
+    requireSignedDesiredState: true
+    criticalOnly: false
+  closedLoop:
+    reconcileInterval: 2m
+    failMode: quarantine
+    verifyDesiredStateOnReconcile: true
+    protectedNamespaces: changelock,changelock-system
+    protectedWorkloads: ""
+    quarantineNetworkPolicyEnabled: false
+    vexQuarantine:
+      enabled: false
+      severity: critical
+      requireNetActionable: true
 
 ui:
   enabled: false

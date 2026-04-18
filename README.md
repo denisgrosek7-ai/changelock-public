@@ -18,7 +18,7 @@ Block Kubernetes deployments unless the image:
 - `services/policy-engine`: evaluates repo/build/deploy/runtime rules
 - `services/attestation-verifier`: verifies GitHub attestations and Cosign signatures
 - `services/deploy-gate`: admission decision service for Kubernetes
-- `services/runtime-agent`: runtime drift detector
+- `services/runtime-agent`: runtime drift detector and closed-loop reconciler for approved workload state
 - `services/audit-writer`: evidence writer, reports API, analytics API, exception governance source of truth, and vulnerability operations API
 - `connectors/github-webhook`: ingests SCM events
 - `deploy/kyverno`: cluster-side enforcement policies
@@ -31,7 +31,7 @@ Block Kubernetes deployments unless the image:
 - `services/attestation-verifier` performs real `cosign verify` and `cosign verify-attestation` checks and normalizes verified facts for policy decisions.
 - `services/deploy-gate` evaluates Kubernetes `AdmissionReview` payloads, checks runtime hardening rules, and blocks mutable or untrusted workloads based on verified signer and provenance facts.
 - `internal/audit` writes structured security events and can now forward them to a persistent `audit-writer` backend.
-- `services/runtime-agent` compares approved workload state against observed runtime state and emits structured drift findings for image, config, and security-context changes.
+- `services/runtime-agent` compares approved workload state against observed runtime state, emits structured drift findings, and can run a bounded closed-loop remediation pass for supported workloads.
 - `services/audit-writer` is now a Go service with PostgreSQL-backed persistence plus queryable reports endpoints.
 - `ui/` now contains a small local dashboard for summary, deny review, runtime drift, analytics, approvals, SBOM inventory, and vulnerability triage.
 - `deploy/k8s` now includes a local `kind` admission-webhook path with TLS bootstrap and `ValidatingWebhookConfiguration`.
@@ -128,6 +128,7 @@ The bearer token shown above is a local static-token example. In production, use
 
 Full usage and exit codes:
 - `docs/developer-preflight-cli.md`
+- `docs/shift-left-integration.md`
 
 ## Phase 8b cross-cluster sync
 
@@ -174,10 +175,181 @@ See:
 - `docs/hsm-kms-integration.md`
 - `docs/cross-cluster-sync.md`
 
+## Phase 8e runtime self-healing
+
+Phase 8e adds the first safe remediation layer on top of runtime drift detection:
+
+- remediation modes:
+  - `disabled`
+  - `alert-only`
+  - `quarantine`
+  - `patch-approved-state`
+  - `restart-to-approved-state`
+- supported workload kinds:
+  - `Deployment`
+  - `DaemonSet`
+  - `StatefulSet`
+- drift evidence remains explicit before remediation
+- repeated failed corrections escalate to quarantine instead of infinite loops
+
+See:
+
+- `docs/runtime-self-healing.md`
+
+## Phase 8h runtime closed-loop hardening
+
+Phase 8h hardens runtime remediation into a persistent controller-style loop:
+
+- `GET /v1/runtime/desired-state`
+- `GET /v1/runtime/active-state`
+- `GET /v1/runtime/quarantine`
+- `GET /v1/runtime/closed-loop/status`
+- persistent active-state and reconciliation views derived from stored audit evidence
+- desired-state trust gating before mutation when configured
+- protected namespaces/workloads to stop ChangeLock remediating its own control plane by default
+- optional bounded `NetworkPolicy` quarantine overlay
+- optional VEX-driven runtime containment using net-actionable vulnerability status
+
+See:
+
+- `docs/runtime-closed-loop-hardening.md`
+- `docs/runtime-self-healing.md`
+- `docs/vex-exploitability-ops.md`
+
+## Phase 8i signing identity and transparency monitoring
+
+Phase 8i adds signer authorization and signer drift monitoring on top of existing keyless verification:
+
+- explicit signing identity policies for allowed GitHub OIDC-style signers
+- observed signer inventory derived from real verification and policy-decision evidence
+- repository-local workflow drift advisories for signing-capable workflows
+- distrust cutoff semantics for short-lived signing identities
+- optional deploy-time signer authorization enforcement through:
+  - `CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT=disabled|monitor|enforce`
+- optional runtime containment for workloads whose observed signer is unauthorized or distrusted
+
+Currently supported signer and evidence claims:
+
+- issuer
+- signer identity URI
+- subject
+- repository
+- workflow path
+- ref
+- commit SHA when it is present in the verification/evidence flow
+- transparency verification state
+
+Intentionally unsupported today:
+
+- repository ID
+- reusable workflow trust chaining
+- environment claim extraction from unsupported certificate fields
+- organization-wide GitHub governance crawling
+- CRL-style certificate revocation
+
+See:
+
+- `docs/signing-identity-monitoring.md`
+- `docs/immutable-evidence-transparency-log.md`
+- `docs/runtime-closed-loop-hardening.md`
+
+## Phase 8k external review, scorecard, and hardening audit
+
+Phase 8k adds an externally legible trust posture layer without inventing a second truth model:
+
+- measured scorecards derived from existing evidence, VEX, signer identity, runtime, and exception signals
+- bounded trust badges
+- read-only audit report and JSON export generation
+- advisory continuous hardening review findings
+- standards mapping / readiness views with explicit non-certification language
+
+Public-facing trust output stays explicit and opt-in:
+
+- `CHANGELOCK_TRUST_PUBLICATION_MODE=disabled|preview|export`
+- default remains `disabled`
+- sanitized public views do not expose raw evidence, secrets, or internal-only findings
+
+See:
+
+- `docs/hardening-audit-scorecard.md`
+- `docs/audit-evidence.md`
+- `docs/signing-identity-monitoring.md`
+- `docs/runtime-closed-loop-hardening.md`
+
+## Phase 8l deeper AI guidance
+
+Phase 8l adds bounded contextual guidance on top of deterministic ChangeLock findings:
+
+- grouped operator and developer guidance derived from existing policy, VEX, signer, runtime, exception, and scorecard signals
+- explicit priority and confidence fields
+- review-only VEX draft candidates
+- break-glass review guidance and cleanup reminders
+- shared CLI/API/UI/PR/IDE rendering from the same guidance model
+
+The default posture remains conservative:
+
+- `CHANGELOCK_AI_GUIDANCE_MODE=disabled`
+- deterministic findings remain authoritative
+- AI guidance is advisory-only
+- no policy, VEX, signer, exception, runtime, or scorecard state is auto-mutated from guidance output
+
+See:
+
+- `docs/deeper-ai-guidance.md`
+- `docs/shift-left-integration.md`
+- `docs/hardening-audit-scorecard.md`
+
+## Phase 8j IDE and PR shift-left integration
+
+Phase 8j moves ChangeLock checks earlier into authoring and review without creating a second policy engine:
+
+- shared `diagnostics[]` output from `changelock-cli`
+- formatter command for:
+  - `github-annotations`
+  - `markdown`
+  - `sarif`
+- lightweight VS Code extension under `tools/vscode-extension/`
+- reusable PR composite action under `.github/actions/changelock-shift-left/`
+- advisory-by-default PR workflow in `.github/workflows/verify-policy.yml`
+- local hook examples under:
+  - `scripts/hooks/`
+  - `.githooks/`
+  - `.pre-commit-hooks.yaml`
+
+See:
+
+- `docs/shift-left-integration.md`
+- `docs/developer-preflight-cli.md`
+- `docs/audit-evidence.md`
+
+## Phase 8g VEX / exploitability-driven vulnerability operations
+
+Phase 8g adds an explicit exploitability layer on top of raw scanner findings:
+
+- canonical VEX statements with statuses:
+  - `not_affected`
+  - `affected`
+  - `fixed`
+  - `under_investigation`
+- standards-based ingest for:
+  - CSAF VEX JSON subset
+  - CycloneDX VEX JSON subset
+- `GET /v1/vulnerabilities/net` for raw vs VEX-resolved vs net actionable counts
+- `GET /v1/vex`, `POST /v1/vex`, and `POST /v1/vex/{id}/revoke`
+- optional startup import from `CHANGELOCK_VEX_IMPORT_DIR`
+- optional deploy-time VEX-aware enforcement via `CHANGELOCK_VEX_DEPLOY_MODE=enforce`
+
+This refines vulnerability decisioning. It does not remove raw evidence, replace approval exceptions, or silently auto-allow findings with no explicit VEX state.
+
+See:
+
+- `docs/vulnerability-ops.md`
+- `docs/vex-exploitability-ops.md`
+
 ## Phase 7e production packaging and readiness
 
 Phase 7e adds the production-minded packaging layer:
-- Helm chart packaging under [charts/changelock](/Users/denisgrosek/Downloads/changelock-blueprint/charts/changelock/Chart.yaml)
+- Helm chart packaging under `charts/changelock`
 - HA knobs for the critical path services
 - PDB and anti-affinity options
 - health/readiness operationalization, including `audit-writer /ready`
@@ -185,11 +357,11 @@ Phase 7e adds the production-minded packaging layer:
 - day-2 operations docs for install, upgrade, troubleshooting, and sizing
 
 Preferred production docs:
-- [docs/operations/install.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/install.md)
-- [docs/operations/upgrade.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/upgrade.md)
-- [docs/operations/backup-restore.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/backup-restore.md)
-- [docs/operations/troubleshooting.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/troubleshooting.md)
-- [docs/operations/sizing.md](/Users/denisgrosek/Downloads/changelock-blueprint/docs/operations/sizing.md)
+- `docs/operations/install.md`
+- `docs/operations/upgrade.md`
+- `docs/operations/backup-restore.md`
+- `docs/operations/troubleshooting.md`
+- `docs/operations/sizing.md`
 
 The raw manifests under `deploy/k8s/` remain useful references, but Helm is now the preferred installation surface.
 
@@ -312,6 +484,10 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `GET /v1/reports/summary`
 - `GET /v1/reports/denies`
 - `GET /v1/reports/runtime-drift`
+- `GET /v1/runtime/desired-state`
+- `GET /v1/runtime/active-state`
+- `GET /v1/runtime/quarantine`
+- `GET /v1/runtime/closed-loop/status`
 - `GET /v1/reports/exceptions`
 - `GET /v1/sync/status`
 - `GET /v1/sync/exceptions`
@@ -328,6 +504,19 @@ For the local demo, `deploy-gate` writes audit JSONL to `/dev/stdout`, so webhoo
 - `POST /v1/vulnerabilities/decisions`
 - `POST /v1/vulnerabilities/decisions/{id}/deactivate`
 - `POST /v1/vulnerabilities/rescan`
+- `GET /v1/signing-identities`
+- `GET /v1/signing-identities/{id}`
+- `GET /v1/signing-identities/status`
+- `GET /v1/signing-identities/findings`
+- `GET /v1/signing-identities/policies`
+- `POST /v1/signing-identities/policies`
+- `POST /v1/signing-identities/policies/{id}/distrust`
+- `GET /v1/scorecards`
+- `GET /v1/scorecards/findings`
+- `GET /v1/trust-badges`
+- `GET /v1/trust/published`
+- `POST /v1/audit/reports`
+- `POST /v1/audit/exports`
 
 ### Example queries
 - `curl -sS http://127.0.0.1:8094/v1/reports/events?limit=20`

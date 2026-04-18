@@ -145,6 +145,10 @@ func (a *App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	case "preflight":
 		result, err := a.runPreflight(ctx, args[1:])
 		return a.finish(result, err, stdout, stderr)
+	case "diagnostics":
+		return a.runDiagnostics(args[1:], stdout, stderr)
+	case "guidance":
+		return a.runGuidance(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		_, _ = io.WriteString(stdout, a.usage())
 		return ExitUsage
@@ -267,11 +271,13 @@ func (a *App) runPreflight(ctx context.Context, args []string) (Result, error) {
 		Command: "preflight",
 		Mode:    executionMode(options.imageOptions.Offline, options.imageOptions.APIURL),
 		Inputs: map[string]string{
-			"image":      options.imageOptions.Image,
-			"tenant":     options.imageOptions.Tenant,
-			"repository": options.imageOptions.Repository,
-			"bundle_dir": options.imageOptions.BundleDir,
-			"policy_dir": options.manifestOptions.PolicyDir,
+			"image":       options.imageOptions.Image,
+			"tenant":      options.imageOptions.Tenant,
+			"repository":  options.imageOptions.Repository,
+			"environment": options.imageOptions.Environment,
+			"namespace":   options.imageOptions.Namespace,
+			"bundle_dir":  options.imageOptions.BundleDir,
+			"policy_dir":  options.manifestOptions.PolicyDir,
 		},
 	}
 
@@ -570,6 +576,9 @@ func (a *App) manifestChecks(ctx context.Context, options manifestOptions) ([]Ch
 			Name:   "manifest",
 			Mode:   ModeLocal,
 			Target: resource,
+			Metadata: map[string]any{
+				"resource_kind": "manifest",
+			},
 		}
 		if execErr != nil {
 			check.Status = StatusError
@@ -620,6 +629,9 @@ func (a *App) imageChecks(ctx context.Context, options imageOptions) ([]CheckRes
 		Target:  options.Image,
 		Status:  statusForBool(strings.Contains(options.Image, "@sha256:"), StatusPass, StatusFail),
 		Summary: summaryForBool(strings.Contains(options.Image, "@sha256:"), "image is digest-pinned", "image is not digest-pinned"),
+		Metadata: map[string]any{
+			"digest_pinned": strings.Contains(options.Image, "@sha256:"),
+		},
 	}}
 
 	var verification *verify.ArtifactVerification
@@ -640,6 +652,10 @@ func (a *App) imageChecks(ctx context.Context, options imageOptions) ([]CheckRes
 				Target:  options.Image,
 				Status:  StatusError,
 				Summary: verifyErr.Error(),
+				Metadata: map[string]any{
+					"signature_valid":   false,
+					"attestation_valid": false,
+				},
 			})
 		} else {
 			verification = &result
@@ -686,6 +702,9 @@ func (a *App) imageChecks(ctx context.Context, options imageOptions) ([]CheckRes
 		Target:  options.Image,
 		Status:  StatusPass,
 		Summary: "local ChangeLock artifact policy would allow this image",
+		Metadata: map[string]any{
+			"decision": evaluation.Decision,
+		},
 	}
 	if evaluation.Decision != "ALLOW" {
 		policyCheck.Status = StatusFail
@@ -723,8 +742,10 @@ func (a *App) scanChecks(ctx context.Context, options scanOptions) ([]CheckResul
 		Status:  StatusPass,
 		Summary: fmt.Sprintf("%s scan found no findings at or above %s", summary.Scanner, options.FailSeverity),
 		Metadata: map[string]any{
-			"scanner": summary.Scanner,
-			"counts":  summary.Counts,
+			"scanner":         summary.Scanner,
+			"counts":          summary.Counts,
+			"breaching_count": len(breaching),
+			"fail_severity":   options.FailSeverity,
 		},
 	}
 	if len(breaching) > 0 {
@@ -823,6 +844,10 @@ func (a *App) remoteImageContextCheck(ctx context.Context, options imageOptions,
 		Status:  StatusPass,
 		Summary: summary,
 		Details: details,
+		Metadata: map[string]any{
+			"context_kind":    "exception-match",
+			"exception_count": len(exceptions),
+		},
 	}}
 }
 
@@ -849,6 +874,58 @@ func (a *App) remoteScanContextCheck(ctx context.Context, options scanOptions, d
 			Target:  options.Image,
 			Status:  StatusSkip,
 			Summary: "no threshold-breaching findings to match against ChangeLock exceptions",
+			Metadata: map[string]any{
+				"context_kind": "threshold-clear",
+			},
+		}}
+	}
+	if digest != "" {
+		netResponse, err := client.VulnerabilityNet(ctx, digest, options.Tenant, options.Environment, options.FailSeverity)
+		if err != nil {
+			return []CheckResult{{
+				Name:    "remote-scan-context",
+				Mode:    ModeRemote,
+				Target:  options.Image,
+				Status:  StatusError,
+				Summary: err.Error(),
+				Metadata: map[string]any{
+					"context_kind": "vex-net",
+				},
+			}}
+		}
+		details := make([]string, 0, min(5, len(netResponse.Findings)))
+		for _, finding := range netResponse.Findings {
+			disposition := "actionable"
+			if finding.VEX != nil && strings.TrimSpace(finding.VEX.Status) != "" {
+				disposition = finding.VEX.Status
+			}
+			details = append(details, fmt.Sprintf("%s %s %s", firstNonEmpty(finding.Severity, "UNKNOWN"), finding.CVEID, disposition))
+			if len(details) == 5 {
+				break
+			}
+		}
+		status := StatusPass
+		summary := fmt.Sprintf("net actionable vulnerability context shows %d remaining finding(s) after VEX merge", netResponse.ActionableCount)
+		if netResponse.ThresholdBreached {
+			status = StatusFail
+			summary = fmt.Sprintf("net actionable vulnerability context still breaches %s after VEX merge", options.FailSeverity)
+		}
+		return []CheckResult{{
+			Name:    "remote-scan-context",
+			Mode:    ModeRemote,
+			Target:  options.Image,
+			Status:  status,
+			Summary: summary,
+			Details: details,
+			Metadata: map[string]any{
+				"context_kind":              "vex-net",
+				"raw_count":                 netResponse.RawCount,
+				"resolved_by_vex_count":     netResponse.ResolvedByVEXCount,
+				"actionable_count":          netResponse.ActionableCount,
+				"under_investigation_count": netResponse.UnderInvestigationCount,
+				"threshold_breached":        netResponse.ThresholdBreached,
+				"severity_threshold":        netResponse.SeverityThreshold,
+			},
 		}}
 	}
 
@@ -890,9 +967,14 @@ func (a *App) remoteScanContextCheck(ctx context.Context, options scanOptions, d
 		Name:    "remote-scan-context",
 		Mode:    ModeRemote,
 		Target:  options.Image,
-		Status:  StatusPass,
-		Summary: summary,
+		Status:  StatusSkip,
+		Summary: "net actionable VEX context skipped because image is not digest-pinned; approved CVE exception matches are partial context only",
 		Details: matches,
+		Metadata: map[string]any{
+			"context_kind":          "vex-net-partial",
+			"exception_match_count": len(matches),
+			"partial_summary":       summary,
+		},
 	}}
 }
 
@@ -1167,6 +1249,8 @@ Usage:
   changelock-cli manifest [--file path | --dir path]
   changelock-cli image --image <ref>
   changelock-cli scan --image <ref>
+  changelock-cli diagnostics --input result.json --format markdown
+  changelock-cli guidance --input result.json --format markdown
   changelock-cli version
 
 Exit codes:

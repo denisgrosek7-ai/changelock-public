@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	internalvex "github.com/denisgrosek/changelock/internal/vex"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -312,13 +313,33 @@ WHERE finding_key = $1
 
 func (s *PostgresStore) ListActiveVulnerabilities(ctx context.Context, filter VulnerabilityActiveFilter) ([]VulnerabilityFinding, error) {
 	filter = NormalizeVulnerabilityActiveFilter(filter)
-	query, args := buildActiveVulnerabilitiesQuery(filter)
+	query, args := buildOpenVulnerabilitiesQuery(filter)
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	return pgx.CollectRows(rows, scanVulnerabilityFindingWithDecision)
+	findings, err := pgx.CollectRows(rows, scanVulnerabilityFinding)
+	if err != nil {
+		return nil, err
+	}
+	matches, err := resolveMatchingVEX(ctx, s, filter, findings)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]VulnerabilityFinding, 0, len(findings))
+	for _, finding := range findings {
+		key := strings.Join([]string{finding.ImageDigest, finding.CVEID, firstNonEmpty(finding.PURL, finding.PackageName)}, "|")
+		if statement := matches[key]; statement != nil {
+			finding.VEX = statementToVEXMatch(*statement)
+			finding.Decision = statementToLegacyDecision(*statement)
+			if internalvex.SuppressesFinding(*statement) && !filter.IncludeSuppressed {
+				continue
+			}
+		}
+		results = append(results, cloneVulnerabilityFindingWithVEX(finding))
+	}
+	return results, nil
 }
 
 func (s *PostgresStore) VulnerabilityBlastRadius(ctx context.Context, filter VulnerabilityBlastRadiusFilter) (VulnerabilityBlastRadiusResponse, error) {
@@ -431,29 +452,8 @@ SELECT
   f.severity,
   f.status,
   f.first_seen_at,
-  f.last_seen_at,
-  d.id,
-  d.image_digest,
-  d.cve_id,
-  d.decision,
-  d.justification,
-  d.decided_by,
-  d.expires_at,
-  d.active,
-  d.metadata,
-  d.created_at,
-  d.updated_at
+  f.last_seen_at
 FROM vulnerability_findings f
-LEFT JOIN LATERAL (
-  SELECT *
-  FROM vulnerability_decisions
-  WHERE image_digest = f.image_digest
-    AND cve_id = f.cve_id
-    AND active = TRUE
-    AND (expires_at IS NULL OR expires_at > now())
-  ORDER BY created_at DESC
-  LIMIT 1
-) d ON TRUE
 WHERE f.image_digest = $1
   AND f.cve_id = $2
   AND f.last_seen_at >= now() - ($3 * interval '1 day')
@@ -477,10 +477,27 @@ ORDER BY f.first_seen_at ASC
 	defer rows.Close()
 
 	items := []VulnerabilityTimelineEntry{}
+	statements, err := s.ListVEXStatements(ctx, internalvex.Filter{
+		ImageDigest:     filter.ImageDigest,
+		VulnerabilityID: filter.CVEID,
+		TenantID:        filter.TenantID,
+		Active:          boolPointer(true),
+		Limit:           200,
+	})
+	if err != nil {
+		return VulnerabilityTimelineResponse{}, err
+	}
 	for rows.Next() {
-		entry, err := scanVulnerabilityTimelineEntry(rows)
+		entry, err := scanVulnerabilityTimelineEntryRaw(rows)
 		if err != nil {
 			return VulnerabilityTimelineResponse{}, err
+		}
+		if statement := matchStatementForFinding(statements, VulnerabilityFinding{
+			ImageDigest: entry.ImageDigest,
+			CVEID:       entry.CVEID,
+			PackageName: entry.PackageName,
+		}, internalvex.EvaluationScope{TenantID: filter.TenantID}, time.Now().UTC()); statement != nil {
+			entry.Decision = statementToLegacyDecision(*statement)
 		}
 		items = append(items, entry)
 	}
@@ -500,132 +517,49 @@ ORDER BY f.first_seen_at ASC
 
 func (s *PostgresStore) ListVulnerabilityDecisions(ctx context.Context, filter VulnerabilityDecisionFilter) ([]VulnerabilityDecision, error) {
 	filter = NormalizeVulnerabilityDecisionFilter(filter)
-	conditions := []string{}
-	args := []any{}
-	appendCondition := func(value any, expression string) {
-		args = append(args, value)
-		conditions = append(conditions, fmt.Sprintf("%s $%d", expression, len(args)))
-	}
-	if filter.ImageDigest != "" {
-		appendCondition(filter.ImageDigest, "image_digest =")
-	}
-	if filter.CVEID != "" {
-		appendCondition(filter.CVEID, "cve_id =")
-	}
-	if filter.Active != nil {
-		appendCondition(*filter.Active, "active =")
-	}
-	if filter.TenantID != "" {
-		args = append(args, filter.TenantID)
-		conditions = append(conditions, fmt.Sprintf(`EXISTS (
-  SELECT 1 FROM audit_events ae
-  WHERE ae.digest = vulnerability_decisions.image_digest AND ae.tenant_id = $%d
-)`, len(args)))
-	}
-	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = " WHERE " + strings.Join(conditions, " AND ")
-	}
-	args = append(args, filter.Limit)
-	rows, err := s.pool.Query(ctx, `
-SELECT id, image_digest, cve_id, decision, justification, decided_by, expires_at, active, metadata, created_at, updated_at
-FROM vulnerability_decisions`+whereClause+`
-ORDER BY created_at DESC
-LIMIT $`+fmt.Sprint(len(args)), args...)
+	statements, err := s.ListVEXStatements(ctx, internalvex.Filter{
+		ImageDigest:     filter.ImageDigest,
+		VulnerabilityID: filter.CVEID,
+		TenantID:        filter.TenantID,
+		Active:          filter.Active,
+		Limit:           filter.Limit,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return pgx.CollectRows(rows, scanVulnerabilityDecision)
+	decisions := make([]VulnerabilityDecision, 0, len(statements))
+	for _, statement := range statements {
+		decisions = append(decisions, *statementToLegacyDecision(statement))
+	}
+	return decisions, nil
 }
 
 func (s *PostgresStore) GetVulnerabilityDecision(ctx context.Context, decisionID int64) (VulnerabilityDecision, error) {
-	rows, err := s.pool.Query(ctx, `
-SELECT id, image_digest, cve_id, decision, justification, decided_by, expires_at, active, metadata, created_at, updated_at
-FROM vulnerability_decisions
-WHERE id = $1
-`, decisionID)
+	statement, err := s.GetVEXStatement(ctx, decisionID)
 	if err != nil {
 		return VulnerabilityDecision{}, err
 	}
-	defer rows.Close()
-	decision, err := pgx.CollectOneRow(rows, scanVulnerabilityDecision)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return VulnerabilityDecision{}, ErrExceptionNotFound
-		}
-		return VulnerabilityDecision{}, err
-	}
-	return decision, nil
+	return *statementToLegacyDecision(statement), nil
 }
 
 func (s *PostgresStore) CreateVulnerabilityDecision(ctx context.Context, request VulnerabilityDecisionCreateRequest, decidedBy string) (VulnerabilityDecision, error) {
-	request, err := NormalizeVulnerabilityDecisionCreateRequest(request, time.Now)
+	createRequest, err := legacyDecisionCreateRequestToVEX(request)
 	if err != nil {
 		return VulnerabilityDecision{}, err
 	}
-	decidedBy = strings.TrimSpace(decidedBy)
-	if decidedBy == "" {
-		return VulnerabilityDecision{}, fmt.Errorf("%w: decided_by is required", ErrInvalidException)
-	}
-
-	tx, err := s.pool.Begin(ctx)
+	statement, err := s.CreateVEXStatement(ctx, createRequest, decidedBy)
 	if err != nil {
 		return VulnerabilityDecision{}, err
 	}
-	defer tx.Rollback(ctx)
-
-	now := time.Now().UTC()
-	if _, err := tx.Exec(ctx, `
-UPDATE vulnerability_decisions
-SET active = FALSE, updated_at = $3
-WHERE image_digest = $1 AND cve_id = $2 AND active = TRUE
-`, request.ImageDigest, request.CVEID, now); err != nil {
-		return VulnerabilityDecision{}, err
-	}
-
-	metadata, err := nullableJSON(request.Metadata)
-	if err != nil {
-		return VulnerabilityDecision{}, err
-	}
-	rows, err := tx.Query(ctx, `
-INSERT INTO vulnerability_decisions (image_digest, cve_id, decision, justification, decided_by, expires_at, active, metadata, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7::jsonb, $8, $8)
-RETURNING id, image_digest, cve_id, decision, justification, decided_by, expires_at, active, metadata, created_at, updated_at
-`, request.ImageDigest, request.CVEID, request.Decision, request.Justification, decidedBy, request.ExpiresAt, metadata, now)
-	if err != nil {
-		return VulnerabilityDecision{}, err
-	}
-	defer rows.Close()
-	decision, err := pgx.CollectOneRow(rows, scanVulnerabilityDecision)
-	if err != nil {
-		return VulnerabilityDecision{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return VulnerabilityDecision{}, err
-	}
-	return decision, nil
+	return *statementToLegacyDecision(statement), nil
 }
 
 func (s *PostgresStore) DeactivateVulnerabilityDecision(ctx context.Context, decisionID int64) (VulnerabilityDecision, error) {
-	rows, err := s.pool.Query(ctx, `
-UPDATE vulnerability_decisions
-SET active = FALSE, updated_at = now()
-WHERE id = $1
-RETURNING id, image_digest, cve_id, decision, justification, decided_by, expires_at, active, metadata, created_at, updated_at
-`, decisionID)
+	statement, err := s.RevokeVEXStatement(ctx, decisionID, "")
 	if err != nil {
 		return VulnerabilityDecision{}, err
 	}
-	defer rows.Close()
-	decision, err := pgx.CollectOneRow(rows, scanVulnerabilityDecision)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return VulnerabilityDecision{}, ErrExceptionNotFound
-		}
-		return VulnerabilityDecision{}, err
-	}
-	return decision, nil
+	return *statementToLegacyDecision(statement), nil
 }
 
 func (s *PostgresStore) ListActiveDigests(ctx context.Context, windowDays int, limit int) ([]ActiveDigestRef, error) {
@@ -748,6 +682,61 @@ LEFT JOIN LATERAL (
   ORDER BY created_at DESC
   LIMIT 1
 ) d ON TRUE
+WHERE ` + strings.Join(conditions, " AND ") + `
+ORDER BY
+  CASE UPPER(COALESCE(f.severity, ''))
+    WHEN 'CRITICAL' THEN 5
+    WHEN 'HIGH' THEN 4
+    WHEN 'MEDIUM' THEN 3
+    WHEN 'LOW' THEN 2
+    WHEN 'UNKNOWN' THEN 1
+    ELSE 0
+  END DESC,
+  f.cve_id,
+  f.image_digest
+LIMIT $` + fmt.Sprint(len(args)), args
+}
+
+func buildOpenVulnerabilitiesQuery(filter VulnerabilityActiveFilter) (string, []any) {
+	args := []any{}
+	conditions := []string{"f.status = 'OPEN'"}
+	appendCondition := func(value any, expression string) {
+		args = append(args, value)
+		conditions = append(conditions, fmt.Sprintf("%s $%d", expression, len(args)))
+	}
+	if filter.Severity != "" {
+		appendCondition(filter.Severity, "UPPER(f.severity) =")
+	}
+	if filter.CVEID != "" {
+		appendCondition(filter.CVEID, "f.cve_id =")
+	}
+	if filter.ImageDigest != "" {
+		appendCondition(filter.ImageDigest, "f.image_digest =")
+	}
+	if filter.ComponentName != "" {
+		args = append(args, "%"+strings.ToLower(filter.ComponentName)+"%")
+		conditions = append(conditions, fmt.Sprintf("(LOWER(f.package_name) LIKE $%d OR LOWER(COALESCE(f.purl, '')) LIKE $%d)", len(args), len(args)))
+	}
+	if filter.TenantID != "" {
+		args = append(args, filter.TenantID)
+		conditions = append(conditions, fmt.Sprintf(`EXISTS (
+  SELECT 1 FROM audit_events ae
+  WHERE ae.digest = f.image_digest AND ae.tenant_id = $%d
+)`, len(args)))
+	}
+	if filter.Environment != "" {
+		args = append(args, filter.Environment)
+		conditions = append(conditions, fmt.Sprintf(`EXISTS (
+  SELECT 1 FROM audit_events ae
+  WHERE ae.digest = f.image_digest AND ae.environment = $%d
+)`, len(args)))
+	}
+	args = append(args, filter.Limit)
+	return `
+SELECT
+  f.id, f.image_digest, COALESCE(f.image_ref, ''), f.scan_run_id, f.cve_id, COALESCE(f.severity, ''), COALESCE(f.package_name, ''), COALESCE(f.package_version, ''),
+  COALESCE(f.fixed_version, ''), COALESCE(f.purl, ''), f.status, COALESCE(f.title, ''), COALESCE(f.description, ''), COALESCE(f.source, ''), f.metadata, f.first_seen_at, f.last_seen_at
+FROM vulnerability_findings f
 WHERE ` + strings.Join(conditions, " AND ") + `
 ORDER BY
   CASE UPPER(COALESCE(f.severity, ''))
@@ -975,6 +964,27 @@ func scanVulnerabilityTimelineEntry(row pgx.CollectableRow) (VulnerabilityTimeli
 	entry.PackageVersion = nullableStringValue(packageVersion)
 	entry.Severity = nullableStringValue(severity)
 	entry.Decision = decision
+	return entry, nil
+}
+
+func scanVulnerabilityTimelineEntryRaw(row pgx.CollectableRow) (VulnerabilityTimelineEntry, error) {
+	var entry VulnerabilityTimelineEntry
+	var packageName, packageVersion, severity sql.NullString
+	if err := row.Scan(
+		&entry.ImageDigest,
+		&entry.CVEID,
+		&packageName,
+		&packageVersion,
+		&severity,
+		&entry.Status,
+		&entry.FirstSeenAt,
+		&entry.LastSeenAt,
+	); err != nil {
+		return VulnerabilityTimelineEntry{}, err
+	}
+	entry.PackageName = nullableStringValue(packageName)
+	entry.PackageVersion = nullableStringValue(packageVersion)
+	entry.Severity = nullableStringValue(severity)
 	return entry, nil
 }
 

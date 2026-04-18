@@ -1,6 +1,6 @@
-# Audit Evidence Model (Phases 1-6b)
+# Audit Evidence Model
 
-This document describes the audit event shape that is actually emitted and stored through Phase 6b.
+This document describes the audit event shape that is actually emitted and stored.
 It is intentionally exact rather than aspirational.
 
 ## Event envelope
@@ -36,13 +36,26 @@ Phase-specific optional fields:
 - `policy_bundle_hash`
 - `decision_hash`
 - `evidence`
+- `reconciliation_status`
+- `desired_state_source_ref`
+- `desired_state_approval_id`
+- `desired_state_verification`
 
-## Event types emitted through Phase 6b
+## Core event types emitted today
 
 - `artifact_verification_result`
 - `policy_decision`
 - `deploy_gate_decision`
 - `runtime_drift_result`
+- `runtime_desired_state_recorded`
+- `runtime_active_state_observed`
+- `drift_detected`
+- `drift_remediation_started`
+- `drift_remediation_succeeded`
+- `drift_remediation_failed`
+- `drift_quarantined`
+- `signing_identity_policy_recorded`
+- `signing_identity_policy_distrusted`
 
 ## Verifier summary
 
@@ -111,4 +124,47 @@ The following were previously implied in docs but are not first-class emitted Ph
 - a separate top-level attestation digest field
 - a separate top-level signature certificate identity field outside `evidence.artifact`
 
-Later-phase additive fields such as exception metadata are intentionally out of scope for this document.
+## Additive evidence fields used by current later phases
+
+`evidence` may now also include:
+
+- `bundle`
+  - transparency or bundle metadata
+- `verification_state`
+  - `verified`
+  - `unverified`
+  - `failed`
+  - `disabled`
+- `verification_reason`
+- `signing_identity`
+  - `policy_id`
+  - `policy_name`
+  - `provider_type`
+  - `issuer`
+  - `signer_identity`
+  - `subject`
+  - `repository`
+  - `workflow`
+  - `ref`
+  - `enforcement_mode`
+  - `authorized`
+  - `reason_code`
+  - `reason_detail`
+  - `distrusted_after`
+  - `workflow_drift_detected`
+  - `transparency_required`
+  - `transparency_state`
+  - `transparency_reason`
+
+These additive fields preserve historical evidence as observed at decision time. Later reevaluation may mark a signer or workload as affected, but it does not rewrite historical event payloads.
+
+## AI guidance relationship
+
+Phase 8l deeper AI guidance reads existing audit evidence and deterministic findings.
+It does not rewrite historical evidence, publish authoritative VEX state, or change exception/runtime posture.
+
+Generated guidance is intentionally separate from authoritative evidence:
+
+- audit evidence remains factual
+- guidance remains advisory
+- confidence labels reflect context quality, not proof

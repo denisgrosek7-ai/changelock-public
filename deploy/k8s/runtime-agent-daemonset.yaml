@@ -19,6 +19,19 @@ spec:
       containers:
         - name: runtime-agent
           image: ghcr.io/my-org/changelock-runtime-agent@sha256:REPLACE_ME
+          env:
+            - name: AUDIT_WRITER_URL
+              value: http://changelock-audit-writer.changelock-system.svc.cluster.local:8094
+            - name: CHANGELOCK_SELF_HEALING_MODE
+              value: alert-only
+            - name: CHANGELOCK_CLOSED_LOOP_RECONCILE_INTERVAL
+              value: 2m
+            - name: CHANGELOCK_CLOSED_LOOP_PROTECTED_NAMESPACES
+              value: changelock,changelock-system
+            - name: CHANGELOCK_RUNTIME_QUARANTINE_NETWORK_POLICY_ENABLED
+              value: "false"
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_ENABLED
+              value: "false"
           securityContext:
             runAsNonRoot: true
             readOnlyRootFilesystem: true

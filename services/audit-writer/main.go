@@ -100,8 +100,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	vexConfig, err := loadVEXConfigFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if syncRuntime != nil {
 		syncRuntime.signing = signingRuntime
+	}
+	if imported, err := importVEXDirectory(ctx, store, vexConfig, "vex-importer"); err != nil {
+		log.Fatal(err)
+	} else if imported > 0 {
+		log.Printf("audit-writer imported %d VEX statements from %s", imported, vexConfig.ImportDir)
 	}
 
 	if *migrateOnly {
@@ -211,15 +220,45 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/analytics/top-violators", srv.topViolatorsHandler)
 	mux.HandleFunc("/v1/analytics/drift-stats", srv.driftStatsHandler)
 	mux.HandleFunc("/v1/vulnerabilities/active", srv.activeVulnerabilitiesHandler)
+	mux.HandleFunc("/v1/vulnerabilities/net", srv.vulnerabilityNetHandler)
 	mux.HandleFunc("/v1/vulnerabilities/blast-radius", srv.vulnerabilityBlastRadiusHandler)
 	mux.HandleFunc("/v1/vulnerabilities/timeline", srv.vulnerabilityTimelineHandler)
 	mux.HandleFunc("/v1/vulnerabilities/rescan", srv.vulnerabilityRescanHandler)
 	mux.HandleFunc("/v1/vulnerabilities/decisions", srv.vulnerabilityDecisionsHandler)
 	mux.HandleFunc("/v1/vulnerabilities/decisions/", srv.vulnerabilityDecisionByIDHandler)
+	mux.HandleFunc("/v1/vex/status", srv.vexStatusHandler)
+	mux.HandleFunc("/v1/vex/ingest", srv.vexIngestHandler)
+	mux.HandleFunc("/v1/vex", srv.vexStatementsHandler)
+	mux.HandleFunc("/v1/vex/", srv.vexStatementByIDHandler)
+	mux.HandleFunc("/v1/signing-identities/status", srv.signingIdentityStatusHandler)
+	mux.HandleFunc("/v1/signing-identities/findings", srv.signingIdentityFindingsHandler)
+	mux.HandleFunc("/v1/signing-identities/evaluate", srv.signingIdentityEvaluateHandler)
+	mux.HandleFunc("/v1/signing-identities/policies", srv.signingIdentityPoliciesHandler)
+	mux.HandleFunc("/v1/signing-identities/policies/", srv.signingIdentityPolicyByIDHandler)
+	mux.HandleFunc("/v1/signing-identities/", srv.signingIdentityObservationByIDHandler)
+	mux.HandleFunc("/v1/signing-identities", srv.signingIdentityObservationsHandler)
+	mux.HandleFunc("/v1/scorecards/findings", srv.scorecardFindingsHandler)
+	mux.HandleFunc("/v1/scorecards", srv.scorecardHandler)
+	mux.HandleFunc("/v1/trust-badges", srv.trustBadgesHandler)
+	mux.HandleFunc("/v1/trust/published", srv.publishedTrustViewHandler)
+	mux.HandleFunc("/v1/audit/reports", srv.auditReportsHandler)
+	mux.HandleFunc("/v1/audit/exports", srv.auditExportsHandler)
+	mux.HandleFunc("/v1/ai/insights", srv.aiInsightsHandler)
+	mux.HandleFunc("/v1/ai/vex-drafts", srv.aiVEXDraftsHandler)
+	mux.HandleFunc("/v1/ai/break-glass-guidance", srv.aiBreakGlassGuidanceHandler)
+	mux.HandleFunc("/v1/ai/guidance/", srv.aiGuidanceByIDHandler)
+	mux.HandleFunc("/v1/ai/guidance", srv.aiGuidanceHandler)
 	mux.HandleFunc("/v1/reports/events", srv.eventsHandler)
 	mux.HandleFunc("/v1/reports/summary", srv.summaryHandler)
 	mux.HandleFunc("/v1/reports/denies", srv.deniesHandler)
 	mux.HandleFunc("/v1/reports/runtime-drift", srv.runtimeDriftHandler)
+	mux.HandleFunc("/v1/runtime/desired-state", srv.runtimeDesiredStateHandler)
+	mux.HandleFunc("/v1/runtime/active-state", srv.runtimeActiveStateHandler)
+	mux.HandleFunc("/v1/runtime/quarantine", srv.runtimeQuarantineHandler)
+	mux.HandleFunc("/v1/runtime/closed-loop/status", srv.runtimeClosedLoopStatusHandler)
+	mux.HandleFunc("/v1/runtime/drift/status", srv.runtimeDriftStatusHandler)
+	mux.HandleFunc("/v1/runtime/drift/", srv.runtimeDriftByIDHandler)
+	mux.HandleFunc("/v1/runtime/drift", srv.runtimeDriftFindingsHandler)
 	mux.HandleFunc("/v1/reports/exceptions", srv.exceptionsReportHandler)
 	return metrics.InstrumentHTTP("audit-writer", srv.wrap(mux))
 }
