@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   buildIncidents,
   type DefenseGapAssessment,
+  type ExecutiveDefenseReport,
   type IncidentExport,
   type IncidentImpactTone,
   type IncidentPackage,
@@ -25,6 +26,7 @@ type Props = {
   onClearMetricDrilldown?: () => void;
   onLoadExport?: (incidentID: string, audience: IncidentReportAudience) => Promise<IncidentExport>;
   onLoadPackage?: (incidentIDs: string[], audience: IncidentReportAudience) => Promise<IncidentPackage>;
+  onLoadExecutiveReport?: (incidentIDs: string[], audience: IncidentReportAudience) => Promise<ExecutiveDefenseReport>;
   onLoadIncidentDefenseGaps?: (incidentID: string) => Promise<DefenseGapAssessment>;
   onLoadMetricDefenseGaps?: (metricKey: string) => Promise<DefenseGapAssessment>;
   onLoadIncidentPolicyReplay?: (incidentID: string) => Promise<PolicyReplayAssessment>;
@@ -81,6 +83,14 @@ function impactClass(value: IncidentImpactTone) {
 
 function confidenceClass(value: "high" | "medium" | "limited") {
   return value === "high" ? "allow" : value === "medium" ? "warning" : "muted";
+}
+
+function trendClass(value: "improving" | "watch" | "worsening") {
+  return value === "improving" ? "allow" : value === "worsening" ? "deny" : "warning";
+}
+
+function shieldBandClass(value: "strong" | "watch" | "at_risk") {
+  return value === "strong" ? "allow" : value === "watch" ? "warning" : "deny";
 }
 
 function describeScope(incident: InvestigationIncident) {
@@ -144,6 +154,7 @@ export function IncidentWorkbench({
   onClearMetricDrilldown,
   onLoadExport,
   onLoadPackage,
+  onLoadExecutiveReport,
   onLoadIncidentDefenseGaps,
   onLoadMetricDefenseGaps,
   onLoadIncidentPolicyReplay,
@@ -182,6 +193,9 @@ export function IncidentWorkbench({
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState<string | null>(null);
   const [packageHandoffMode, setPackageHandoffMode] = useState(false);
+  const [executivePayload, setExecutivePayload] = useState<ExecutiveDefenseReport | null>(null);
+  const [executiveLoading, setExecutiveLoading] = useState(false);
+  const [executiveError, setExecutiveError] = useState<string | null>(null);
   const [incidentDefenseAssessments, setIncidentDefenseAssessments] = useState<Record<string, DefenseGapAssessment>>({});
   const [metricDefenseAssessments, setMetricDefenseAssessments] = useState<Record<string, DefenseGapAssessment>>({});
   const [incidentReplayAssessments, setIncidentReplayAssessments] = useState<Record<string, PolicyReplayAssessment>>({});
@@ -432,6 +446,22 @@ export function IncidentWorkbench({
     }
   }
 
+  async function loadExecutiveReport(incidentIDs: string[], audience: IncidentReportAudience) {
+    if (!onLoadExecutiveReport) {
+      return;
+    }
+    setExecutiveLoading(true);
+    setExecutiveError(null);
+    try {
+      const payload = await onLoadExecutiveReport(incidentIDs, audience);
+      setExecutivePayload(payload);
+    } catch (loadError) {
+      setExecutiveError(loadError instanceof Error ? loadError.message : "Unable to load executive defense report.");
+    } finally {
+      setExecutiveLoading(false);
+    }
+  }
+
   function downloadExport(payload: IncidentExport) {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -450,6 +480,18 @@ export function IncidentWorkbench({
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `incident-package-${payload.audience}-${payload.selectionMode}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadExecutiveReport(payload: ExecutiveDefenseReport) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `executive-defense-report-${payload.audience}-${payload.selectionMode}.json`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -612,8 +654,34 @@ export function IncidentWorkbench({
                     Download package JSON
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={executiveLoading || !onLoadExecutiveReport}
+                  onClick={() => void loadExecutiveReport(selectedPackageIDs, packageAudience)}
+                >
+                  {executiveLoading ? "Loading executive brief…" : "Load executive brief"}
+                </button>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={executiveLoading || !onLoadExecutiveReport}
+                  onClick={() => void loadExecutiveReport([], packageAudience)}
+                >
+                  Load scope brief
+                </button>
+                {executivePayload ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => downloadExecutiveReport(executivePayload)}
+                  >
+                    Download executive JSON
+                  </button>
+                ) : null}
               </div>
               {packageError ? <p className="details-copy details-copy--error">{packageError}</p> : null}
+              {executiveError ? <p className="details-copy details-copy--error">{executiveError}</p> : null}
             </div>
           </div>
 
@@ -633,6 +701,100 @@ export function IncidentWorkbench({
           ) : (
             <div className="summary-list-empty">No explicit incident IDs selected. Loading the package will use the current filtered scope.</div>
           )}
+
+          {executivePayload ? (
+            <section className="incident-case-section incident-case-section--wide">
+              <div className="incident-report-section__header">
+                <span className="summary-label">Executive defense reporting</span>
+                <strong>{executivePayload.boardPackage.headline}</strong>
+              </div>
+              <div className="chip-row">
+                <span className={`chip chip--${shieldBandClass(executivePayload.shieldHealth.band)}`}>{executivePayload.shieldHealth.band}</span>
+                <span className={`chip chip--${executivePayload.redacted ? "warning" : "allow"}`}>{executivePayload.redacted ? "redacted" : "internal"}</span>
+                <span className="chip chip--muted">{executivePayload.audience}</span>
+                <span className="chip chip--muted">{executivePayload.incidentCount} incidents</span>
+              </div>
+              <p>{executivePayload.boardPackage.narrative}</p>
+              <p className="details-copy">{executivePayload.executiveSummary.whatMattersNow}</p>
+
+              <div className="incident-evidence-grid">
+                <div>
+                  <span className="summary-label">Top risks</span>
+                  {renderValueList(executivePayload.executiveSummary.topRisks, "No executive risk summary loaded.", 3)}
+                </div>
+                <div>
+                  <span className="summary-label">Top improvements</span>
+                  {renderValueList(executivePayload.executiveSummary.topImprovements, "No executive improvement priorities loaded.", 3)}
+                </div>
+              </div>
+
+              <div className="summary-grid">
+                <article className="summary-card">
+                  <span className="summary-label">Shield health</span>
+                  <strong className="summary-value">{executivePayload.shieldHealth.score}</strong>
+                  <p>{executivePayload.shieldHealth.summary}</p>
+                </article>
+                {executivePayload.shieldHealth.components.map((component) => (
+                  <article className="summary-card summary-card--compact" key={`shield-${component.key}`}>
+                    <span className="summary-label">{component.label}</span>
+                    <strong className="summary-value">{component.score}</strong>
+                    <p>{component.summary}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="incident-impact-list">
+                {executivePayload.riskReductionTrends.map((trend) => (
+                  <article className="incident-impact-card incident-defense-gap" key={`trend-${trend.key}`}>
+                    <div className="incident-impact-card__header">
+                      <strong>{trend.label}</strong>
+                      <span className={`chip chip--${trendClass(trend.direction)}`}>{trend.direction}</span>
+                    </div>
+                    <p>{trend.value}</p>
+                    <small>{trend.summary}</small>
+                  </article>
+                ))}
+              </div>
+
+              {executivePayload.strategicGaps.length > 0 ? (
+                <div className="incident-impact-list">
+                  {executivePayload.strategicGaps.map((gap) => (
+                    <article className="incident-impact-card incident-defense-gap" key={`strategic-gap-${gap.id}`}>
+                      <div className="incident-impact-card__header">
+                        <strong>{gap.title}</strong>
+                        <span className={`chip chip--${confidenceClass(gap.confidence)}`}>{gap.confidence}</span>
+                      </div>
+                      <p>{gap.summary}</p>
+                      <small>{gap.investmentTarget}</small>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="incident-evidence-grid">
+                <div>
+                  <span className="summary-label">Investment priorities</span>
+                  {renderValueList(executivePayload.boardPackage.investmentPriorities, "No investment priorities attached.", 4)}
+                </div>
+                <div>
+                  <span className="summary-label">Next-quarter priorities</span>
+                  {renderValueList(executivePayload.boardPackage.nextQuarterPriorities, "No next-quarter priorities attached.", 4)}
+                </div>
+              </div>
+
+              <div className="incident-evidence-grid">
+                <div>
+                  <span className="summary-label">Business impact framing</span>
+                  <p>{executivePayload.businessImpact.summary}</p>
+                  {renderValueList(executivePayload.businessImpact.estimates.map((estimate) => `${estimate.label}: ${estimate.value}`), "No business-impact framing attached.", 4)}
+                </div>
+                <div>
+                  <span className="summary-label">Limitations</span>
+                  {renderValueList([...executivePayload.redactionSummary, ...executivePayload.limitations], "No executive limitations attached.", 8)}
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           {packagePayload ? (
             <div className={`incident-package-preview ${packageHandoffMode ? "incident-package-preview--handoff" : ""}`}>

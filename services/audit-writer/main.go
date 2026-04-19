@@ -187,6 +187,7 @@ func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.C
 	mux.HandleFunc("/v1/ai/defense-gap-assessments", srv.defenseGapAssessmentsHandler)
 	mux.HandleFunc("/v1/ai/policy-replay", srv.policyReplayAssessmentsHandler)
 	mux.HandleFunc("/v1/ai/systemic-weaknesses", srv.systemicWeaknessesHandler)
+	mux.HandleFunc("/v1/ai/executive-defense-report", srv.executiveDefenseReportHandler)
 	mux.HandleFunc("/v1/scorecard/metrics/", srv.scorecardMetricIncidentsHandler)
 	mux.HandleFunc("/v1/incidents/package", srv.incidentPackageHandler)
 	mux.HandleFunc("/v1/incidents", srv.incidentsHandler)

@@ -193,6 +193,88 @@ type systemicWeakness struct {
 	Limitations             []string `json:"limitations"`
 }
 
+type executiveDefenseReportResponse struct {
+	GeneratedAt      time.Time               `json:"generated_at"`
+	Audience         string                  `json:"audience"`
+	Redacted         bool                    `json:"redacted"`
+	RedactionSummary []string                `json:"redaction_summary"`
+	AdvisoryOnly     bool                    `json:"advisory_only"`
+	SelectionMode    string                  `json:"selection_mode"`
+	ScopeSummary     string                  `json:"scope_summary"`
+	IncidentCount    int                     `json:"incident_count"`
+	IncidentRefs     []string                `json:"incident_refs"`
+	ExecutiveSummary executiveSummary        `json:"executive_summary"`
+	StrategicGaps    []executiveStrategicGap `json:"strategic_gaps"`
+	RiskTrends       []executiveRiskTrend    `json:"risk_reduction_trends"`
+	ShieldHealth     executiveShieldHealth   `json:"shield_health"`
+	BusinessImpact   executiveBusinessImpact `json:"business_impact"`
+	BoardPackage     executiveBoardPackage   `json:"board_package"`
+	Limitations      []string                `json:"limitations"`
+}
+
+type executiveSummary struct {
+	TopRisks        []string `json:"top_risks"`
+	TopImprovements []string `json:"top_improvements"`
+	TrendChange     string   `json:"trend_change"`
+	WhatMattersNow  string   `json:"what_matters_now"`
+}
+
+type executiveStrategicGap struct {
+	ID                  string   `json:"id"`
+	Title               string   `json:"title"`
+	Summary             string   `json:"summary"`
+	InvestmentTarget    string   `json:"investment_target"`
+	Confidence          string   `json:"confidence"`
+	RelatedIncidentRefs []string `json:"related_incident_refs"`
+	EvidenceRefs        []string `json:"evidence_refs"`
+}
+
+type executiveRiskTrend struct {
+	Key          string   `json:"key"`
+	Label        string   `json:"label"`
+	Direction    string   `json:"direction"`
+	Value        string   `json:"value"`
+	Summary      string   `json:"summary"`
+	EvidenceRefs []string `json:"evidence_refs"`
+}
+
+type executiveShieldHealth struct {
+	Score      int                              `json:"score"`
+	Band       string                           `json:"band"`
+	Summary    string                           `json:"summary"`
+	Components []executiveShieldHealthComponent `json:"components"`
+}
+
+type executiveShieldHealthComponent struct {
+	Key          string   `json:"key"`
+	Label        string   `json:"label"`
+	Score        int      `json:"score"`
+	Summary      string   `json:"summary"`
+	EvidenceRefs []string `json:"evidence_refs"`
+}
+
+type executiveBusinessImpact struct {
+	Summary   string                    `json:"summary"`
+	Estimates []executiveImpactEstimate `json:"estimates"`
+}
+
+type executiveImpactEstimate struct {
+	Key         string   `json:"key"`
+	Label       string   `json:"label"`
+	Value       string   `json:"value"`
+	Confidence  string   `json:"confidence"`
+	Summary     string   `json:"summary"`
+	Assumptions []string `json:"assumptions"`
+}
+
+type executiveBoardPackage struct {
+	Headline              string   `json:"headline"`
+	Narrative             string   `json:"narrative"`
+	InvestmentPriorities  []string `json:"investment_priorities"`
+	NextQuarterPriorities []string `json:"next_quarter_priorities"`
+	PackageSummary        string   `json:"package_summary"`
+}
+
 type incidentExportResponse struct {
 	GeneratedAt         time.Time              `json:"generated_at"`
 	Audience            string                 `json:"audience"`
@@ -925,6 +1007,44 @@ func (s server) systemicWeaknessesHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 	httpjson.Write(w, http.StatusOK, buildSystemicWeaknessResponse(incidents, "current filtered scope"))
+}
+
+func (s server) executiveDefenseReportHandler(w http.ResponseWriter, r *http.Request) {
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	filter, err := parseIncidentFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	audience, err := parseIncidentExportAudience(r.URL.Query().Get("audience"))
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	selectedIDs := parseIncidentIDList(r)
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+	incidents, err := s.listIncidents(ctx, filter)
+	if err != nil {
+		writeIncidentError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, buildExecutiveDefenseReport(incidents, selectedIDs, filter, audience))
 }
 
 func (s server) getIncidentTimelineHandler(w http.ResponseWriter, r *http.Request, incidentID string) {
@@ -2602,29 +2722,32 @@ func redactGovernanceImpacts(impacts []incidentImpact, audience string) []incide
 	return redacted
 }
 
+func selectIncidentScope(incidents []investigationIncident, selectedIDs []string) ([]investigationIncident, string) {
+	if len(selectedIDs) == 0 {
+		return incidents, "query_derived"
+	}
+
+	index := make(map[string]investigationIncident, len(incidents))
+	for _, incident := range incidents {
+		index[incident.ID] = incident
+	}
+	selected := make([]investigationIncident, 0, len(selectedIDs))
+	for _, incidentID := range selectedIDs {
+		if incident, ok := index[incidentID]; ok {
+			selected = append(selected, incident)
+		}
+	}
+	return selected, "explicit"
+}
+
 func buildIncidentPackage(incidents []investigationIncident, selectedIDs []string, filter incidentFilter, audience string) incidentPackageResponse {
-	selectionMode := "query_derived"
-	filtered := incidents
+	filtered, selectionMode := selectIncidentScope(incidents, selectedIDs)
 	limitations := []string{
 		"Package index is derived from canonical incident cases and existing case export lineage.",
 		"No persisted package object is created; this bundle is query-derived at render time.",
 	}
-	if len(selectedIDs) > 0 {
-		selectionMode = "explicit"
-		selected := make([]investigationIncident, 0, len(selectedIDs))
-		index := make(map[string]investigationIncident, len(incidents))
-		for _, incident := range incidents {
-			index[incident.ID] = incident
-		}
-		for _, incidentID := range selectedIDs {
-			if incident, ok := index[incidentID]; ok {
-				selected = append(selected, incident)
-			}
-		}
-		if len(selected) < len(selectedIDs) {
-			limitations = append(limitations, fmt.Sprintf("%d requested incident IDs were not present in the current filtered scope and were omitted from the package.", len(selectedIDs)-len(selected)))
-		}
-		filtered = selected
+	if selectionMode == "explicit" && len(filtered) < len(selectedIDs) {
+		limitations = append(limitations, fmt.Sprintf("%d requested incident IDs were not present in the current filtered scope and were omitted from the package.", len(selectedIDs)-len(filtered)))
 	}
 
 	items := make([]incidentPackageItem, 0, len(filtered))
@@ -2732,6 +2855,460 @@ func incidentPackageLimitations(audience string) []string {
 		limitations = append(limitations, "All included case summaries inherit the same audience redaction rules as the underlying case exports.")
 	}
 	return limitations
+}
+
+func buildExecutiveDefenseReport(incidents []investigationIncident, selectedIDs []string, filter incidentFilter, audience string) executiveDefenseReportResponse {
+	filtered, selectionMode := selectIncidentScope(incidents, selectedIDs)
+	scopeSummary := incidentPackageSelectionSummary(selectionMode, filter, selectedIDs)
+	if len(filtered) == 0 {
+		report := executiveDefenseReportResponse{
+			GeneratedAt:      time.Now().UTC(),
+			Audience:         audience,
+			Redacted:         audience != incidentAudienceInternal,
+			RedactionSummary: incidentExportRedactionSummary(audience),
+			AdvisoryOnly:     true,
+			SelectionMode:    selectionMode,
+			ScopeSummary:     scopeSummary,
+			IncidentCount:    0,
+			IncidentRefs:     nil,
+			ExecutiveSummary: executiveSummary{
+				TopRisks:        []string{"No incidents are currently loaded in the selected scope."},
+				TopImprovements: []string{"Generate this view from a populated scope to derive executive priorities."},
+				TrendChange:     "No in-scope cases are available for trend framing.",
+				WhatMattersNow:  "Load a filtered scope or selected cases first to build executive defense reporting.",
+			},
+			RiskTrends: []executiveRiskTrend{
+				{
+					Key:       "scope-readiness",
+					Label:     "Scope readiness",
+					Direction: "watch",
+					Value:     "0 incidents in scope",
+					Summary:   "Executive reporting stays in empty-state mode until canonical incidents are present in the current scope.",
+				},
+			},
+			ShieldHealth: executiveShieldHealth{
+				Score:   100,
+				Band:    "strong",
+				Summary: "No in-scope incidents are currently degrading the executive defense view.",
+			},
+			BusinessImpact: executiveBusinessImpact{
+				Summary: "No business-impact estimate is generated when there are no canonical cases in scope.",
+			},
+			BoardPackage: executiveBoardPackage{
+				Headline:       "No current executive case package",
+				Narrative:      "Generate this report from a populated incident scope to build a board-ready defense narrative.",
+				PackageSummary: "No canonical cases were included in this report.",
+			},
+			Limitations: []string{
+				"Executive defense reporting is derived from canonical incidents already in scope and does not create a new truth model.",
+				"No cases were present in the current selection, so all executive sections are empty-state guidance only.",
+			},
+		}
+		if audience == incidentAudienceInternal {
+			return report
+		}
+		return redactExecutiveDefenseReport(report, audience)
+	}
+
+	replay := buildScopePolicyReplayAssessment(filtered)
+	systemic := buildSystemicWeaknessResponse(filtered, scopeSummary)
+	gaps := buildExecutiveStrategicGaps(systemic.Weaknesses, replay.CoverageGaps)
+	report := executiveDefenseReportResponse{
+		GeneratedAt:      time.Now().UTC(),
+		Audience:         audience,
+		Redacted:         audience != incidentAudienceInternal,
+		RedactionSummary: incidentExportRedactionSummary(audience),
+		AdvisoryOnly:     true,
+		SelectionMode:    selectionMode,
+		ScopeSummary:     scopeSummary,
+		IncidentCount:    len(filtered),
+		IncidentRefs:     incidentIDs(filtered),
+		ExecutiveSummary: buildExecutiveSummary(filtered, gaps, systemic, replay),
+		StrategicGaps:    gaps,
+		RiskTrends:       buildExecutiveRiskTrends(filtered, systemic, replay),
+		ShieldHealth:     buildExecutiveShieldHealth(filtered, systemic, replay),
+		BusinessImpact:   buildExecutiveBusinessImpact(filtered, systemic, replay),
+		BoardPackage:     buildExecutiveBoardPackage(filtered, systemic, gaps, audience),
+		Limitations: []string{
+			"Executive defense reporting is a presentation layer derived from canonical incident, replay, and systemic-weakness payloads already in scope.",
+			"Trend, score, and business-impact sections are bounded estimates for leadership communication and do not become new incident or report truth.",
+			"All narrative sections remain traceable back to canonical incidents, lifecycle history, metric links, and evidence lineage already present in the system.",
+		},
+	}
+	if audience == incidentAudienceInternal {
+		return report
+	}
+	return redactExecutiveDefenseReport(report, audience)
+}
+
+func buildExecutiveSummary(incidents []investigationIncident, gaps []executiveStrategicGap, systemic systemicWeaknessResponse, replay policyReplayAssessment) executiveSummary {
+	topRisks := make([]string, 0, 3)
+	for _, gap := range gaps[:minInt(len(gaps), 3)] {
+		topRisks = append(topRisks, fmt.Sprintf("%s: %s", gap.Title, gap.Summary))
+	}
+	if len(topRisks) == 0 {
+		topRisks = append(topRisks, "No concentrated executive risk cluster stands out beyond the current incident scope.")
+	}
+
+	topImprovements := make([]string, 0, 3)
+	for _, weakness := range systemic.Weaknesses[:minInt(len(systemic.Weaknesses), 3)] {
+		topImprovements = append(topImprovements, weakness.ExecutiveRecommendation)
+	}
+	if len(topImprovements) == 0 {
+		topImprovements = append(topImprovements, "No strategic improvement path could be derived beyond the current case set.")
+	}
+
+	openLike := countIncidentsByState(incidents, incidentStateOpen, incidentStateAcknowledged, incidentStateWatching, incidentStateReopened)
+	trendChange := fmt.Sprintf("%d open-like cases, %d resolved cases, and %d replay coverage gaps are currently shaping leadership posture.", openLike, countIncidentsByState(incidents, incidentStateResolved), len(replay.CoverageGaps))
+	whatMattersNow := topImprovements[0]
+	if len(gaps) > 0 {
+		whatMattersNow = fmt.Sprintf("%s This is the highest-signal strategic gap in the current scope.", gaps[0].InvestmentTarget)
+	}
+
+	return executiveSummary{
+		TopRisks:        topRisks,
+		TopImprovements: topImprovements,
+		TrendChange:     trendChange,
+		WhatMattersNow:  whatMattersNow,
+	}
+}
+
+func buildExecutiveStrategicGaps(weaknesses []systemicWeakness, coverageGaps []coverageGapFinding) []executiveStrategicGap {
+	results := make([]executiveStrategicGap, 0, minInt(len(weaknesses)+len(coverageGaps), 6))
+	for _, weakness := range weaknesses[:minInt(len(weaknesses), 4)] {
+		results = append(results, executiveStrategicGap{
+			ID:                  "weakness-" + weakness.PatternKey,
+			Title:               weakness.Title,
+			Summary:             weakness.Summary,
+			InvestmentTarget:    weakness.ExecutiveRecommendation,
+			Confidence:          executiveConfidenceFromPriority(weakness.Priority),
+			RelatedIncidentRefs: append([]string{}, weakness.RelatedIncidentRefs...),
+			EvidenceRefs:        append([]string{}, weakness.EvidenceRefs...),
+		})
+	}
+	for _, gap := range coverageGaps[:minInt(len(coverageGaps), 3)] {
+		results = append(results, executiveStrategicGap{
+			ID:                  "coverage-" + gap.GapType,
+			Title:               gap.Title,
+			Summary:             gap.Summary,
+			InvestmentTarget:    gap.RecommendedAction,
+			Confidence:          gap.Confidence,
+			RelatedIncidentRefs: append([]string{}, gap.RelatedIncidentRefs...),
+			EvidenceRefs:        append([]string{}, gap.EvidenceRefs...),
+		})
+	}
+	return results[:minInt(len(results), 6)]
+}
+
+func buildExecutiveRiskTrends(incidents []investigationIncident, systemic systemicWeaknessResponse, replay policyReplayAssessment) []executiveRiskTrend {
+	openLike := countIncidentsByState(incidents, incidentStateOpen, incidentStateAcknowledged, incidentStateWatching, incidentStateReopened)
+	resolved := countIncidentsByState(incidents, incidentStateResolved)
+	exceptionPressure := countIncidentsWithReason(incidents, "exception")
+	unowned := countOwnerlessIncidents(incidents)
+	runtimePressure := countIncidentsByScorecardRef(incidents, "runtime-hardening")
+
+	return []executiveRiskTrend{
+		{
+			Key:          "critical-gap-closure",
+			Label:        "Critical gap closure rate",
+			Direction:    trendDirection(resolved, openLike),
+			Value:        fmt.Sprintf("%d resolved vs %d open-like cases", resolved, openLike),
+			Summary:      "Derived from current lifecycle mix in the canonical incident set, not from a predictive engine.",
+			EvidenceRefs: executiveTrendEvidenceRefs(incidents, 6),
+		},
+		{
+			Key:          "exception-dependency",
+			Label:        "Exception dependency trend",
+			Direction:    trendDirection(maxInt(0, len(incidents)-exceptionPressure), exceptionPressure),
+			Value:        fmt.Sprintf("%d exception-linked cases remain in scope", exceptionPressure),
+			Summary:      "Highlights whether exception governance pressure is shrinking or still dominating current operational review.",
+			EvidenceRefs: executiveTrendEvidenceRefs(incidentsWithScorecardRefOrReason(incidents, "exception-hygiene", "exception"), 6),
+		},
+		{
+			Key:          "policy-hardening-maturity",
+			Label:        "Policy hardening maturity",
+			Direction:    trendDirection(maxInt(0, len(incidents)-len(replay.CoverageGaps)), len(replay.CoverageGaps)),
+			Value:        fmt.Sprintf("%d replay coverage gaps across %d canonical cases", len(replay.CoverageGaps), len(incidents)),
+			Summary:      "Uses replay-backed coverage gaps to show how much earlier control movement is still available in the current scope.",
+			EvidenceRefs: executiveTrendEvidenceRefs(incidents, 6),
+		},
+		{
+			Key:          "systemic-weakness-pressure",
+			Label:        "Systemic weakness pressure",
+			Direction:    trendDirection(maxInt(0, len(incidents)-len(systemic.Weaknesses)), len(systemic.Weaknesses)),
+			Value:        fmt.Sprintf("%d weakness clusters, %d ownerless cases, %d runtime-heavy cases", len(systemic.Weaknesses), unowned, runtimePressure),
+			Summary:      "Shows whether recurring cross-incident weakness is being converted into owned hardening work or still accumulating as shared risk.",
+			EvidenceRefs: executiveTrendEvidenceRefs(incidents, 6),
+		},
+	}
+}
+
+func buildExecutiveShieldHealth(incidents []investigationIncident, systemic systemicWeaknessResponse, replay policyReplayAssessment) executiveShieldHealth {
+	total := maxInt(len(incidents), 1)
+	integrityAffected := countIncidentsByScorecardRef(incidents, "artifact-integrity") + countIncidentsByScorecardRef(incidents, "workflow-governance")
+	coverageAffected := minInt(total, len(replay.CoverageGaps)+countIncidentsByScorecardRef(incidents, "control-plane-health"))
+	responseAffected := minInt(total, countOwnerlessIncidents(incidents)+countIncidentsByState(incidents, incidentStateAcknowledged, incidentStateWatching, incidentStateReopened))
+	hardeningAffected := countIncidentsByScorecardRef(incidents, "runtime-hardening")
+	governanceAffected := countIncidentsByScorecardRef(incidents, "exception-hygiene") + countIncidentsWithReason(incidents, "exception")
+
+	components := []executiveShieldHealthComponent{
+		buildExecutiveShieldComponent("integrity", "Integrity", integrityAffected, total, "Artifact identity and workflow governance signals are still dragging the current trust boundary.", executiveTrendEvidenceRefs(incidentsWithAnyScorecardRef(incidents, "artifact-integrity", "workflow-governance"), 6)),
+		buildExecutiveShieldComponent("coverage", "Coverage", coverageAffected, total, "Replay coverage gaps show how much earlier control visibility is still missing.", executiveTrendEvidenceRefs(incidents, 6)),
+		buildExecutiveShieldComponent("response", "Response", responseAffected, total, "Open-like, unowned, or repeatedly watched cases indicate operational response pressure.", executiveTrendEvidenceRefs(incidents, 6)),
+		buildExecutiveShieldComponent("hardening", "Hardening", hardeningAffected, total, "Runtime-heavy incidents show where controller-first containment is still lagging.", executiveTrendEvidenceRefs(incidentsWithScorecardRefOrReason(incidents, "runtime-hardening", "runtime"), 6)),
+		buildExecutiveShieldComponent("governance", "Governance", governanceAffected, total, "Exception dependency and policy governance drag leadership confidence until they are reduced.", executiveTrendEvidenceRefs(incidentsWithScorecardRefOrReason(incidents, "exception-hygiene", "exception"), 6)),
+	}
+
+	scoreTotal := 0
+	for _, component := range components {
+		scoreTotal += component.Score
+	}
+	score := scoreTotal / len(components)
+	band := "strong"
+	summary := "Executive shield health is stable across integrity, coverage, response, hardening, and governance."
+	if score < 75 {
+		band = "watch"
+		summary = "Executive shield health is under watch because at least one control dimension is still carrying repeated pressure."
+	}
+	if score < 55 {
+		band = "at_risk"
+		summary = "Executive shield health is at risk because multiple control dimensions are still degrading the current operating posture."
+	}
+	return executiveShieldHealth{
+		Score:      score,
+		Band:       band,
+		Summary:    summary,
+		Components: components,
+	}
+}
+
+func buildExecutiveShieldComponent(key, label string, affected, total int, summary string, evidenceRefs []string) executiveShieldHealthComponent {
+	ratio := float64(affected) / float64(maxInt(total, 1))
+	score := maxInt(0, minInt(100, 100-int(ratio*70)))
+	return executiveShieldHealthComponent{
+		Key:          key,
+		Label:        label,
+		Score:        score,
+		Summary:      summary,
+		EvidenceRefs: evidenceRefs,
+	}
+}
+
+func buildExecutiveBusinessImpact(incidents []investigationIncident, systemic systemicWeaknessResponse, replay policyReplayAssessment) executiveBusinessImpact {
+	openLike := countIncidentsByState(incidents, incidentStateOpen, incidentStateAcknowledged, incidentStateWatching, incidentStateReopened)
+	exceptionPressure := countIncidentsWithReason(incidents, "exception")
+	estimates := []executiveImpactEstimate{
+		{
+			Key:        "manual-triage-pressure",
+			Label:      "Estimated manual triage pressure",
+			Value:      fmt.Sprintf("Up to %d repeated manual review loops remain visible in the current scope.", openLike),
+			Confidence: "medium",
+			Summary:    "Uses current open-like lifecycle count as a bounded estimate of repeated human review effort still present in the current control path.",
+			Assumptions: []string{
+				"Each open-like case is assumed to require at least one additional human review cycle until resolution or stable containment.",
+			},
+		},
+		{
+			Key:        "audit-prep-readiness",
+			Label:      "Estimated audit preparation reduction",
+			Value:      fmt.Sprintf("%d canonical cases already carry exportable lineage, reducing manual audit assembly work.", len(incidents)),
+			Confidence: "high",
+			Summary:    "Counts case packages that already have linked export, history, and evidence lineage available for handoff.",
+			Assumptions: []string{
+				"Every in-scope incident is assumed to be export-ready because it inherits the canonical case export path already in ChangeLock.",
+			},
+		},
+		{
+			Key:        "governance-friction",
+			Label:      "Estimated governance friction",
+			Value:      fmt.Sprintf("%d exception-linked cases and %d replay coverage gaps are still driving operator friction.", exceptionPressure, len(replay.CoverageGaps)),
+			Confidence: "limited",
+			Summary:    "Highlights where governance or evidence debt is still forcing extra approvals, replay analysis, or follow-up validation work.",
+			Assumptions: []string{
+				"Exception-linked incidents and replay coverage gaps are treated as proxies for governance overhead, not as direct financial measurements.",
+			},
+		},
+	}
+	if len(systemic.Weaknesses) == 0 {
+		estimates = estimates[:2]
+	}
+	return executiveBusinessImpact{
+		Summary:   "Business-impact framing remains a conservative estimate derived from canonical case counts, replay coverage, and governance pressure rather than a financial truth model.",
+		Estimates: estimates,
+	}
+}
+
+func buildExecutiveBoardPackage(incidents []investigationIncident, systemic systemicWeaknessResponse, gaps []executiveStrategicGap, audience string) executiveBoardPackage {
+	headline := "Executive defense posture remains under active hardening."
+	if len(systemic.Weaknesses) == 0 && len(gaps) == 0 {
+		headline = "Executive defense posture is stable for the current scoped case set."
+	}
+	if len(systemic.Weaknesses) > 0 && systemicPriorityRank(systemic.Weaknesses[0].Priority) >= systemicPriorityRank("high") {
+		headline = fmt.Sprintf("%s is the top strategic weakness currently shaping leadership posture.", systemic.Weaknesses[0].Title)
+	}
+
+	investmentPriorities := make([]string, 0, 3)
+	for _, gap := range gaps[:minInt(len(gaps), 3)] {
+		investmentPriorities = append(investmentPriorities, gap.InvestmentTarget)
+	}
+	if len(investmentPriorities) == 0 {
+		investmentPriorities = append(investmentPriorities, "No additional strategic investment target stands out beyond the currently loaded scope.")
+	}
+
+	nextQuarter := make([]string, 0, 3)
+	for _, incident := range incidents[:minInt(len(incidents), 3)] {
+		nextQuarter = append(nextQuarter, incident.RecommendedAction)
+	}
+	return executiveBoardPackage{
+		Headline:              headline,
+		Narrative:             fmt.Sprintf("This %s executive package is derived from %d canonical cases and keeps the same evidence lineage, lifecycle history, and advisory boundaries as the underlying incident reports.", strings.ReplaceAll(audience, "_", "-"), len(incidents)),
+		InvestmentPriorities:  limitStrings(uniqueStrings(investmentPriorities), 3),
+		NextQuarterPriorities: limitStrings(uniqueStrings(nextQuarter), 3),
+		PackageSummary:        fmt.Sprintf("%d cases are included in this executive package, ready for board, auditor, or customer-safe handoff depending on audience mode.", len(incidents)),
+	}
+}
+
+func redactExecutiveDefenseReport(report executiveDefenseReportResponse, audience string) executiveDefenseReportResponse {
+	report.Audience = audience
+	report.Redacted = audience != incidentAudienceInternal
+	report.RedactionSummary = incidentExportRedactionSummary(audience)
+	report.Limitations = append(report.Limitations,
+		fmt.Sprintf("This executive report is a redacted %s variant derived from the canonical internal case scope.", audience),
+	)
+	switch audience {
+	case incidentAudienceAuditorSafe:
+		for index := range report.StrategicGaps {
+			report.StrategicGaps[index].EvidenceRefs = nil
+		}
+		for index := range report.RiskTrends {
+			report.RiskTrends[index].EvidenceRefs = nil
+		}
+		for index := range report.ShieldHealth.Components {
+			report.ShieldHealth.Components[index].EvidenceRefs = nil
+		}
+		for index := range report.BusinessImpact.Estimates {
+			report.BusinessImpact.Estimates[index].Assumptions = nil
+		}
+	case incidentAudienceCustomerSafe:
+		report.ScopeSummary = "Current included defense cases."
+		report.IncidentRefs = nil
+		for index := range report.StrategicGaps {
+			report.StrategicGaps[index].RelatedIncidentRefs = nil
+			report.StrategicGaps[index].EvidenceRefs = nil
+		}
+		for index := range report.RiskTrends {
+			report.RiskTrends[index].EvidenceRefs = nil
+		}
+		for index := range report.ShieldHealth.Components {
+			report.ShieldHealth.Components[index].EvidenceRefs = nil
+		}
+		for index := range report.BusinessImpact.Estimates {
+			report.BusinessImpact.Estimates[index].Assumptions = nil
+		}
+		report.BoardPackage.Narrative = "This customer-safe executive package summarizes current defense posture without exposing internal incident identifiers or sensitive evidence details."
+	}
+	return report
+}
+
+func incidentIDs(incidents []investigationIncident) []string {
+	ids := make([]string, 0, len(incidents))
+	for _, incident := range incidents {
+		ids = append(ids, incident.ID)
+	}
+	return ids
+}
+
+func executiveTrendEvidenceRefs(incidents []investigationIncident, limit int) []string {
+	refs := make([]string, 0, len(incidents)*2)
+	for _, incident := range incidents {
+		refs = append(refs, incident.EvidenceRefs...)
+		refs = append(refs, incident.FindingRefs...)
+	}
+	return limitStrings(uniqueStrings(refs), limit)
+}
+
+func executiveConfidenceFromPriority(priority string) string {
+	switch priority {
+	case "critical", "high":
+		return "high"
+	case "medium":
+		return "medium"
+	default:
+		return "limited"
+	}
+}
+
+func trendDirection(improvingSignals int, degradingSignals int) string {
+	if improvingSignals > degradingSignals {
+		return "improving"
+	}
+	if degradingSignals > improvingSignals {
+		return "worsening"
+	}
+	return "watch"
+}
+
+func countIncidentsByState(incidents []investigationIncident, states ...string) int {
+	count := 0
+	for _, incident := range incidents {
+		if containsString(states, incident.State) {
+			count++
+		}
+	}
+	return count
+}
+
+func countOwnerlessIncidents(incidents []investigationIncident) int {
+	count := 0
+	for _, incident := range incidents {
+		if strings.TrimSpace(incident.Owner) == "" {
+			count++
+		}
+	}
+	return count
+}
+
+func countIncidentsByScorecardRef(incidents []investigationIncident, ref string) int {
+	count := 0
+	for _, incident := range incidents {
+		if hasString(incident.ScorecardRefs, ref) {
+			count++
+		}
+	}
+	return count
+}
+
+func countIncidentsWithReason(incidents []investigationIncident, fragment string) int {
+	count := 0
+	for _, incident := range incidents {
+		if containsSubstring(incident.ReasonCodes, fragment) || strings.Contains(strings.ToLower(incident.CategoryKey), strings.ToLower(fragment)) {
+			count++
+		}
+	}
+	return count
+}
+
+func incidentsWithAnyScorecardRef(incidents []investigationIncident, refs ...string) []investigationIncident {
+	filtered := make([]investigationIncident, 0, len(incidents))
+	for _, incident := range incidents {
+		for _, ref := range refs {
+			if hasString(incident.ScorecardRefs, ref) {
+				filtered = append(filtered, incident)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
+func incidentsWithScorecardRefOrReason(incidents []investigationIncident, ref string, reasonFragment string) []investigationIncident {
+	filtered := make([]investigationIncident, 0, len(incidents))
+	for _, incident := range incidents {
+		if hasString(incident.ScorecardRefs, ref) || containsSubstring(incident.ReasonCodes, reasonFragment) || strings.Contains(strings.ToLower(incident.CategoryKey), strings.ToLower(reasonFragment)) {
+			filtered = append(filtered, incident)
+		}
+	}
+	return filtered
 }
 
 func buildIncidentDefenseGapAssessment(incident investigationIncident, incidents []investigationIncident) defenseGapAssessment {
@@ -3822,6 +4399,13 @@ func uniqueStrings(values []string) []string {
 
 func minInt(left, right int) int {
 	if left < right {
+		return left
+	}
+	return right
+}
+
+func maxInt(left, right int) int {
+	if left > right {
 		return left
 	}
 	return right

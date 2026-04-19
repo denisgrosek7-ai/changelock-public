@@ -1,5 +1,6 @@
 import type {
   DefenseGapAssessment,
+  ExecutiveDefenseReport,
   IncidentExport,
   IncidentPackage,
   InvestigationIncident,
@@ -1177,6 +1178,105 @@ function parseSystemicWeaknessResponse(value: unknown): SystemicWeaknessResponse
   };
 }
 
+function parseExecutiveStrategicGap(value: unknown): ExecutiveDefenseReport["strategicGaps"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid executive strategic gap.");
+  }
+  return {
+    id: readString(value.id, "strategic_gaps[].id"),
+    title: readString(value.title, "strategic_gaps[].title"),
+    summary: readString(value.summary, "strategic_gaps[].summary"),
+    investmentTarget: readString(value.investment_target, "strategic_gaps[].investment_target"),
+    confidence: readString(value.confidence, "strategic_gaps[].confidence") as ExecutiveDefenseReport["strategicGaps"][number]["confidence"],
+    relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "strategic_gaps[].related_incident_refs") || [],
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "strategic_gaps[].evidence_refs") || [],
+  };
+}
+
+function parseExecutiveRiskTrend(value: unknown): ExecutiveDefenseReport["riskReductionTrends"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid executive risk trend.");
+  }
+  return {
+    key: readString(value.key, "risk_reduction_trends[].key"),
+    label: readString(value.label, "risk_reduction_trends[].label"),
+    direction: readString(value.direction, "risk_reduction_trends[].direction") as ExecutiveDefenseReport["riskReductionTrends"][number]["direction"],
+    value: readString(value.value, "risk_reduction_trends[].value"),
+    summary: readString(value.summary, "risk_reduction_trends[].summary"),
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "risk_reduction_trends[].evidence_refs") || [],
+  };
+}
+
+function parseExecutiveShieldHealthComponent(value: unknown): ExecutiveDefenseReport["shieldHealth"]["components"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid shield health component.");
+  }
+  return {
+    key: readString(value.key, "shield_health.components[].key"),
+    label: readString(value.label, "shield_health.components[].label"),
+    score: readNumber(value.score, "shield_health.components[].score"),
+    summary: readString(value.summary, "shield_health.components[].summary"),
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "shield_health.components[].evidence_refs") || [],
+  };
+}
+
+function parseExecutiveImpactEstimate(value: unknown): ExecutiveDefenseReport["businessImpact"]["estimates"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid executive impact estimate.");
+  }
+  return {
+    key: readString(value.key, "business_impact.estimates[].key"),
+    label: readString(value.label, "business_impact.estimates[].label"),
+    value: readString(value.value, "business_impact.estimates[].value"),
+    confidence: readString(value.confidence, "business_impact.estimates[].confidence") as ExecutiveDefenseReport["businessImpact"]["estimates"][number]["confidence"],
+    summary: readString(value.summary, "business_impact.estimates[].summary"),
+    assumptions: readOptionalStringArray(value.assumptions, "business_impact.estimates[].assumptions") || [],
+  };
+}
+
+function parseExecutiveDefenseReport(value: unknown): ExecutiveDefenseReport {
+  if (!isRecord(value) || !isRecord(value.executive_summary) || !Array.isArray(value.strategic_gaps) || !Array.isArray(value.risk_reduction_trends) || !isRecord(value.shield_health) || !Array.isArray((value.shield_health as Record<string, unknown>).components) || !isRecord(value.business_impact) || !Array.isArray((value.business_impact as Record<string, unknown>).estimates) || !isRecord(value.board_package)) {
+    throw new Error("Audit API returned invalid executive defense report.");
+  }
+  return {
+    generatedAt: readString(value.generated_at, "generated_at"),
+    audience: (readOptionalString(value.audience, "audience") || "internal") as ExecutiveDefenseReport["audience"],
+    redacted: value.redacted === undefined ? false : readBoolean(value.redacted, "redacted"),
+    redactionSummary: readOptionalStringArray(value.redaction_summary, "redaction_summary") || [],
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "advisory_only"),
+    selectionMode: readString(value.selection_mode, "selection_mode") as ExecutiveDefenseReport["selectionMode"],
+    scopeSummary: readString(value.scope_summary, "scope_summary"),
+    incidentCount: readNumber(value.incident_count, "incident_count"),
+    incidentRefs: readOptionalStringArray(value.incident_refs, "incident_refs") || [],
+    executiveSummary: {
+      topRisks: readOptionalStringArray((value.executive_summary as Record<string, unknown>).top_risks, "executive_summary.top_risks") || [],
+      topImprovements: readOptionalStringArray((value.executive_summary as Record<string, unknown>).top_improvements, "executive_summary.top_improvements") || [],
+      trendChange: readString((value.executive_summary as Record<string, unknown>).trend_change, "executive_summary.trend_change"),
+      whatMattersNow: readString((value.executive_summary as Record<string, unknown>).what_matters_now, "executive_summary.what_matters_now"),
+    },
+    strategicGaps: value.strategic_gaps.map(parseExecutiveStrategicGap),
+    riskReductionTrends: value.risk_reduction_trends.map(parseExecutiveRiskTrend),
+    shieldHealth: {
+      score: readNumber((value.shield_health as Record<string, unknown>).score, "shield_health.score"),
+      band: readString((value.shield_health as Record<string, unknown>).band, "shield_health.band") as ExecutiveDefenseReport["shieldHealth"]["band"],
+      summary: readString((value.shield_health as Record<string, unknown>).summary, "shield_health.summary"),
+      components: ((value.shield_health as Record<string, unknown>).components as unknown[]).map(parseExecutiveShieldHealthComponent),
+    },
+    businessImpact: {
+      summary: readString((value.business_impact as Record<string, unknown>).summary, "business_impact.summary"),
+      estimates: ((value.business_impact as Record<string, unknown>).estimates as unknown[]).map(parseExecutiveImpactEstimate),
+    },
+    boardPackage: {
+      headline: readString((value.board_package as Record<string, unknown>).headline, "board_package.headline"),
+      narrative: readString((value.board_package as Record<string, unknown>).narrative, "board_package.narrative"),
+      investmentPriorities: readOptionalStringArray((value.board_package as Record<string, unknown>).investment_priorities, "board_package.investment_priorities") || [],
+      nextQuarterPriorities: readOptionalStringArray((value.board_package as Record<string, unknown>).next_quarter_priorities, "board_package.next_quarter_priorities") || [],
+      packageSummary: readString((value.board_package as Record<string, unknown>).package_summary, "board_package.package_summary"),
+    },
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
@@ -1344,6 +1444,31 @@ export async function getSystemicWeaknesses(filters: EventFilters & { scorecard_
       tenant_id: filters.tenant_id,
       limit: filters.limit,
       scorecard_ref: filters.scorecard_ref,
+    },
+  }));
+}
+
+export async function getExecutiveDefenseReport(
+  filters: Pick<EventFilters, "environment" | "tenant_id" | "repo"> & {
+    state?: string;
+    severity?: string;
+    category?: string;
+    scorecard_ref?: string;
+  },
+  incidentIDs: string[],
+  audience: ExecutiveDefenseReport["audience"],
+) {
+  return parseExecutiveDefenseReport(await fetchJSON<unknown>("/v1/ai/executive-defense-report", {
+    params: {
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      repo: filters.repo,
+      state: filters.state,
+      severity: filters.severity,
+      category: filters.category,
+      scorecard_ref: filters.scorecard_ref,
+      audience,
+      incident_id: incidentIDs,
     },
   }));
 }

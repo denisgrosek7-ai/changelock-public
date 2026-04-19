@@ -848,6 +848,42 @@ func TestIncidentExportAndMetricDrillDown(t *testing.T) {
 	if metricSystemicRec.Code != http.StatusOK {
 		t.Fatalf("expected metric systemic weaknesses 200, got %d: %s", metricSystemicRec.Code, metricSystemicRec.Body.String())
 	}
+
+	executiveReq := httptest.NewRequest(http.MethodGet, "/v1/ai/executive-defense-report?tenant_id=acme", nil)
+	executiveRec := httptest.NewRecorder()
+	handler.ServeHTTP(executiveRec, executiveReq)
+	if executiveRec.Code != http.StatusOK {
+		t.Fatalf("expected executive report 200, got %d: %s", executiveRec.Code, executiveRec.Body.String())
+	}
+
+	var executiveReport executiveDefenseReportResponse
+	if err := json.NewDecoder(executiveRec.Body).Decode(&executiveReport); err != nil {
+		t.Fatalf("decode executive report: %v", err)
+	}
+	if !executiveReport.AdvisoryOnly || executiveReport.IncidentCount == 0 || executiveReport.ShieldHealth.Score <= 0 {
+		t.Fatalf("unexpected executive report %#v", executiveReport)
+	}
+	if len(executiveReport.StrategicGaps) == 0 || len(executiveReport.RiskTrends) == 0 || len(executiveReport.BusinessImpact.Estimates) == 0 {
+		t.Fatalf("expected strategic gaps, risk trends, and business impact estimates in executive report, got %#v", executiveReport)
+	}
+
+	customerExecutiveReq := httptest.NewRequest(http.MethodGet, "/v1/ai/executive-defense-report?tenant_id=acme&audience=customer_safe&incident_id="+incidentID, nil)
+	customerExecutiveRec := httptest.NewRecorder()
+	handler.ServeHTTP(customerExecutiveRec, customerExecutiveReq)
+	if customerExecutiveRec.Code != http.StatusOK {
+		t.Fatalf("expected customer-safe executive report 200, got %d: %s", customerExecutiveRec.Code, customerExecutiveRec.Body.String())
+	}
+
+	var customerExecutive executiveDefenseReportResponse
+	if err := json.NewDecoder(customerExecutiveRec.Body).Decode(&customerExecutive); err != nil {
+		t.Fatalf("decode customer-safe executive report: %v", err)
+	}
+	if !customerExecutive.Redacted || customerExecutive.Audience != incidentAudienceCustomerSafe {
+		t.Fatalf("expected redacted customer-safe executive report, got %#v", customerExecutive)
+	}
+	if len(customerExecutive.IncidentRefs) != 0 || strings.Contains(strings.ToLower(customerExecutive.ScopeSummary), "tenant ") {
+		t.Fatalf("expected customer-safe executive report to strip incident refs and scope detail, got %#v", customerExecutive)
+	}
 }
 
 func TestIncidentPackageEndpointBuildsDerivedBundle(t *testing.T) {

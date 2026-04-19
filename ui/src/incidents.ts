@@ -241,6 +241,88 @@ export type SystemicWeaknessResponse = {
   limitations: string[];
 };
 
+export type ExecutiveDefenseSummary = {
+  topRisks: string[];
+  topImprovements: string[];
+  trendChange: string;
+  whatMattersNow: string;
+};
+
+export type ExecutiveStrategicGap = {
+  id: string;
+  title: string;
+  summary: string;
+  investmentTarget: string;
+  confidence: "high" | "medium" | "limited";
+  relatedIncidentRefs: string[];
+  evidenceRefs: string[];
+};
+
+export type ExecutiveRiskTrend = {
+  key: string;
+  label: string;
+  direction: "improving" | "watch" | "worsening";
+  value: string;
+  summary: string;
+  evidenceRefs: string[];
+};
+
+export type ExecutiveShieldHealthComponent = {
+  key: string;
+  label: string;
+  score: number;
+  summary: string;
+  evidenceRefs: string[];
+};
+
+export type ExecutiveShieldHealth = {
+  score: number;
+  band: "strong" | "watch" | "at_risk";
+  summary: string;
+  components: ExecutiveShieldHealthComponent[];
+};
+
+export type ExecutiveImpactEstimate = {
+  key: string;
+  label: string;
+  value: string;
+  confidence: "high" | "medium" | "limited";
+  summary: string;
+  assumptions: string[];
+};
+
+export type ExecutiveBusinessImpact = {
+  summary: string;
+  estimates: ExecutiveImpactEstimate[];
+};
+
+export type ExecutiveBoardPackage = {
+  headline: string;
+  narrative: string;
+  investmentPriorities: string[];
+  nextQuarterPriorities: string[];
+  packageSummary: string;
+};
+
+export type ExecutiveDefenseReport = {
+  generatedAt: string;
+  audience: IncidentReportAudience;
+  redacted: boolean;
+  redactionSummary: string[];
+  advisoryOnly: boolean;
+  selectionMode: "query_derived" | "explicit";
+  scopeSummary: string;
+  incidentCount: number;
+  incidentRefs: string[];
+  executiveSummary: ExecutiveDefenseSummary;
+  strategicGaps: ExecutiveStrategicGap[];
+  riskReductionTrends: ExecutiveRiskTrend[];
+  shieldHealth: ExecutiveShieldHealth;
+  businessImpact: ExecutiveBusinessImpact;
+  boardPackage: ExecutiveBoardPackage;
+  limitations: string[];
+};
+
 export type MetricIncidentDrilldown = {
   metricKey: string;
   metricLabel: string;

@@ -1,5 +1,5 @@
 import { buildOverviewModel } from "../overview";
-import type { SystemicWeaknessResponse } from "../incidents";
+import type { ExecutiveDefenseReport, SystemicWeaknessResponse } from "../incidents";
 import type {
   AuditHealth,
   DriftStatsResponse,
@@ -18,6 +18,7 @@ type Props = {
   driftStats: DriftStatsResponse | null;
   exceptionReport: ExceptionReport | null;
   systemicWeaknesses: SystemicWeaknessResponse | null;
+  executiveReport: ExecutiveDefenseReport | null;
   syncStatus: SyncStatus | null;
   loading: boolean;
   onSelectTrustMetric?: (metricKey: string, label: string) => void;
@@ -39,6 +40,14 @@ function confidenceClass(value: string) {
   return value === "high" ? "allow" : value === "medium" ? "warning" : "muted";
 }
 
+function trendClass(value: string) {
+  return value === "improving" ? "allow" : value === "worsening" ? "deny" : "warning";
+}
+
+function shieldBandClass(value: string) {
+  return value === "strong" ? "allow" : value === "watch" ? "warning" : "deny";
+}
+
 export function OverviewDashboard({
   health,
   summary,
@@ -47,6 +56,7 @@ export function OverviewDashboard({
   driftStats,
   exceptionReport,
   systemicWeaknesses,
+  executiveReport,
   syncStatus,
   loading,
   onSelectTrustMetric,
@@ -172,6 +182,110 @@ export function OverviewDashboard({
       </section>
 
       <section className="overview-workbench">
+        <article className="panel analytics-panel">
+          <div className="table-toolbar">
+            <span className="summary-label">Executive defense reporting</span>
+            <strong>{executiveReport?.shieldHealth.score ?? 0}</strong>
+          </div>
+          {executiveReport ? (
+            <div className="overview-executive">
+              <div className="overview-executive__header">
+                <div>
+                  <strong>{executiveReport.boardPackage.headline}</strong>
+                  <p>{executiveReport.boardPackage.narrative}</p>
+                  <small>{executiveReport.executiveSummary.whatMattersNow}</small>
+                </div>
+                <div className="chip-row">
+                  <span className={`chip chip--${shieldBandClass(executiveReport.shieldHealth.band)}`}>{executiveReport.shieldHealth.band.replace("_", " ")}</span>
+                  <span className="chip chip--muted">{executiveReport.audience}</span>
+                </div>
+              </div>
+
+              <div className="overview-executive__summary">
+                <div>
+                  <span className="summary-label">Top risks</span>
+                  <ul className="summary-list summary-list--compact">
+                    {executiveReport.executiveSummary.topRisks.map((risk) => (
+                      <li key={risk}><span>{risk}</span></li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <span className="summary-label">Top improvements</span>
+                  <ul className="summary-list summary-list--compact">
+                    {executiveReport.executiveSummary.topImprovements.map((item) => (
+                      <li key={item}><span>{item}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="overview-executive__shield">
+                <div>
+                  <span className="summary-label">Shield health score</span>
+                  <p className="overview-executive__score">{executiveReport.shieldHealth.score}/100</p>
+                  <p>{executiveReport.shieldHealth.summary}</p>
+                </div>
+                <div className="overview-executive__components">
+                  {executiveReport.shieldHealth.components.map((component) => (
+                    <article className="summary-card summary-card--compact" key={component.key}>
+                      <span className="summary-label">{component.label}</span>
+                      <strong className="summary-value">{component.score}</strong>
+                      <p>{component.summary}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="overview-executive__trends">
+                {executiveReport.riskReductionTrends.map((trend) => (
+                  <article className="summary-card summary-card--compact" key={trend.key}>
+                    <div className="overview-list-item__title">
+                      <strong>{trend.label}</strong>
+                      <span className={`chip chip--${trendClass(trend.direction)}`}>{trend.direction}</span>
+                    </div>
+                    <p>{trend.value}</p>
+                    <small>{trend.summary}</small>
+                  </article>
+                ))}
+              </div>
+
+              {executiveReport.strategicGaps.length > 0 ? (
+                <div>
+                  <span className="summary-label">Strategic gap analysis</span>
+                  <ul className="analytics-list">
+                    {executiveReport.strategicGaps.slice(0, 3).map((gap) => (
+                      <li key={gap.id} className="analytics-list__item overview-list-item">
+                        <div>
+                          <div className="overview-list-item__title">
+                            <strong>{gap.title}</strong>
+                            <span className={`chip chip--${confidenceClass(gap.confidence)}`}>{gap.confidence}</span>
+                          </div>
+                          <p>{gap.summary}</p>
+                        </div>
+                        <div className="overview-list-item__aside">{gap.investmentTarget}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="overview-executive__footer">
+                <div>
+                  <span className="summary-label">Board package</span>
+                  <p>{executiveReport.boardPackage.packageSummary}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Trend change</span>
+                  <p>{executiveReport.executiveSummary.trendChange}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="panel-empty">No executive defense report is currently loaded for the selected posture scope.</div>
+          )}
+        </article>
+
         <article className="panel analytics-panel">
           <div className="table-toolbar">
             <span className="summary-label">Systemic weaknesses</span>

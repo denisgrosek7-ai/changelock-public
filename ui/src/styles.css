@@ -1562,6 +1562,52 @@ pre {
   font-size: 13px;
 }
 
+.summary-card--compact p {
+  margin: 8px 0 0;
+  color: #56697b;
+  font-size: 13px;
+}
+
+.overview-executive {
+  display: grid;
+  gap: 18px;
+}
+
+.overview-executive__header,
+.overview-executive__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.overview-executive__header p,
+.overview-executive__footer p {
+  margin: 8px 0 0;
+  color: #56697b;
+}
+
+.overview-executive__summary,
+.overview-executive__shield,
+.overview-executive__trends {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.overview-executive__score {
+  margin: 4px 0;
+  font-size: 30px;
+  font-weight: 800;
+  color: #12202f;
+}
+
+.overview-executive__components {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 @media (max-width: 1180px) {
   .hero,
   .highlights-grid,
@@ -1588,6 +1634,10 @@ pre {
   .exception-form,
   .overview-split,
   .overview-scorecard__metrics,
+  .overview-executive__summary,
+  .overview-executive__shield,
+  .overview-executive__trends,
+  .overview-executive__components,
   .incident-stat-grid,
   .incident-case-grid,
   .incident-scope-grid,
@@ -1629,7 +1679,9 @@ pre {
   .status-banner,
   .overview-scope-bar,
   .overview-evidence-header,
-  .inventory-header {
+  .inventory-header,
+  .overview-executive__header,
+  .overview-executive__footer {
     flex-direction: column;
     align-items: stretch;
   }

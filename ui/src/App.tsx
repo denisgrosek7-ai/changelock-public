@@ -10,6 +10,7 @@ import {
   assignIncident,
   getAuthStatus,
   getDriftStats,
+  getExecutiveDefenseReport,
   getEvents,
   getExceptionReport,
   getExceptions,
@@ -49,6 +50,7 @@ import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
 import { VulnerabilityOpsPanel } from "./components/VulnerabilityOpsPanel";
 import type {
   DefenseGapAssessment,
+  ExecutiveDefenseReport,
   IncidentExport,
   IncidentPackage,
   PolicyReplayAssessment,
@@ -116,6 +118,7 @@ export default function App() {
   const [exceptionReport, setExceptionReport] = useState<ExceptionReport | null>(null);
   const [incidents, setIncidents] = useState<InvestigationIncident[]>([]);
   const [systemicWeaknesses, setSystemicWeaknesses] = useState<SystemicWeaknessResponse | null>(null);
+  const [executiveReport, setExecutiveReport] = useState<ExecutiveDefenseReport | null>(null);
   const [pendingExceptions, setPendingExceptions] = useState<PolicyException[]>([]);
   const [metricDrilldown, setMetricDrilldown] = useState<MetricIncidentDrilldown | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,6 +165,7 @@ export default function App() {
           setDriftStats(null);
           setExceptionReport(null);
           setIncidents([]);
+          setExecutiveReport(null);
           setPendingExceptions([]);
 
           if (authResult.reason instanceof APIError) {
@@ -277,6 +281,19 @@ export default function App() {
                 throw systemicError;
               }),
             );
+            promises.push(
+              getExecutiveDefenseReport({
+                environment: filters.environment,
+                tenant_id: scopedTenantID,
+                repo: filters.repo,
+              }, [], "internal").then(setExecutiveReport).catch((executiveError) => {
+                if (isOptionalFeatureMissing(executiveError)) {
+                  setExecutiveReport(null);
+                  return;
+                }
+                throw executiveError;
+              }),
+            );
             setPendingExceptions([]);
             setIncidents([]);
           } else if (activeTab === "events") {
@@ -308,6 +325,7 @@ export default function App() {
             setDriftStats(null);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
+            setExecutiveReport(null);
             setPendingExceptions([]);
           } else if (activeTab === "analytics") {
             promises.push(
@@ -334,6 +352,7 @@ export default function App() {
             setEvents([]);
             setSelectedEvent(null);
             setSystemicWeaknesses(null);
+            setExecutiveReport(null);
           } else if (activeTab === "exceptions") {
             promises.push(getExceptionReport(baseFilters).then((report) => {
               setExceptionReport(report);
@@ -347,6 +366,7 @@ export default function App() {
                 limit: filters.limit,
               }).then((response) => setPendingExceptions(response.exceptions)),
             );
+            setExecutiveReport(null);
           } else if (activeTab === "inventory" || activeTab === "vulnerabilities") {
             setEvents([]);
             setSelectedEvent(null);
@@ -355,6 +375,7 @@ export default function App() {
             setDriftStats(null);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
+            setExecutiveReport(null);
             setIncidents([]);
             setPendingExceptions([]);
           } else {
@@ -369,6 +390,7 @@ export default function App() {
             setDriftStats(null);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
+            setExecutiveReport(null);
             setIncidents([]);
             setPendingExceptions([]);
           }
@@ -487,6 +509,15 @@ export default function App() {
 
   async function handleLoadIncidentPackage(incidentIDs: string[], audience: IncidentReportAudience): Promise<IncidentPackage> {
     return getIncidentPackage({
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+      scorecard_ref: metricDrilldown?.metricKey,
+    }, incidentIDs, audience);
+  }
+
+  async function handleLoadExecutiveReport(incidentIDs: string[], audience: IncidentReportAudience): Promise<ExecutiveDefenseReport> {
+    return getExecutiveDefenseReport({
       environment: filters.environment,
       tenant_id: enforcedTenantID || filters.tenant_id,
       repo: filters.repo,
@@ -645,6 +676,7 @@ export default function App() {
             driftStats={driftStats}
             exceptionReport={exceptionReport}
             systemicWeaknesses={systemicWeaknesses}
+            executiveReport={executiveReport}
             syncStatus={syncStatus}
             loading={loading}
             onSelectTrustMetric={(metricKey, label) => {
@@ -728,6 +760,7 @@ export default function App() {
           onClearMetricDrilldown={() => setMetricDrilldown(null)}
           onLoadExport={handleLoadIncidentExport}
           onLoadPackage={handleLoadIncidentPackage}
+          onLoadExecutiveReport={handleLoadExecutiveReport}
           onLoadIncidentDefenseGaps={handleLoadIncidentDefenseGaps}
           onLoadMetricDefenseGaps={handleLoadMetricDefenseGaps}
           onLoadIncidentPolicyReplay={handleLoadIncidentPolicyReplay}
