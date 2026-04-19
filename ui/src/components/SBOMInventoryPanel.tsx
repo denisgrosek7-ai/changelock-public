@@ -16,6 +16,52 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
   const [selectedImage, setSelectedImage] = useState<SBOMImageResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const trimmedComponentName = componentName.trim();
+  const trimmedPURL = purl.trim();
+  const trimmedImageDigest = imageDigest.trim();
+  const hasSearchFilters = Boolean(trimmedComponentName || trimmedPURL || trimmedImageDigest);
+
+  const exampleQueries = [
+    {
+      label: "openssl",
+      apply: () => {
+        setComponentName("openssl");
+        setPURL("");
+        setImageDigest("");
+        setError(null);
+      },
+    },
+    {
+      label: "pkg:maven/...",
+      apply: () => {
+        setComponentName("");
+        setPURL("pkg:maven/org.apache.logging.log4j/log4j-core");
+        setImageDigest("");
+        setError(null);
+      },
+    },
+    {
+      label: "sha256 digest",
+      apply: () => {
+        setComponentName("");
+        setPURL("");
+        setImageDigest("sha256:");
+        setError(null);
+      },
+    },
+  ];
+
+  function normalizeSearchError(searchError: unknown) {
+    if (!(searchError instanceof Error)) {
+      return "Unable to search SBOM inventory.";
+    }
+    if (searchError.message.includes("at least one component search filter is required")) {
+      return "Start by searching a package name, PURL, or image digest.";
+    }
+    return searchError.message;
+  }
 
   async function loadImage(digest: string) {
     setSelectedDigest(digest);
@@ -23,13 +69,21 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
   }
 
   async function handleSearch() {
+    setHasSearched(true);
+    if (!hasSearchFilters) {
+      setError("Start by searching a package name, PURL, or image digest.");
+      setResults([]);
+      setSelectedDigest("");
+      setSelectedImage(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const response = await searchSBOMComponents({
-        component_name: componentName || undefined,
-        purl: purl || undefined,
-        image_digest: imageDigest || undefined,
+        component_name: trimmedComponentName || undefined,
+        purl: trimmedPURL || undefined,
+        image_digest: trimmedImageDigest || undefined,
         tenant_id: tenantID || undefined,
         limit: "100",
       });
@@ -42,7 +96,7 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
         setSelectedImage(null);
       }
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Unable to search SBOM inventory.");
+      setError(normalizeSearchError(searchError));
       setResults([]);
       setSelectedDigest("");
       setSelectedImage(null);
@@ -54,7 +108,24 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
   return (
     <>
       <section className="panel filters-panel inventory-filters">
-        <div className="filters-grid">
+        <div className="inventory-header">
+          <div>
+            <span className="summary-label">SBOM investigation</span>
+            <h2>Trace components to digests, documents, and evidence</h2>
+            <p>
+              Start with a package name, PURL, or digest. This view is optimized for investigation, not raw form entry.
+            </p>
+          </div>
+          <div className="chip-row inventory-example-row">
+            {exampleQueries.map((query) => (
+              <button key={query.label} className="button button--ghost inventory-example" onClick={query.apply}>
+                Try {query.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="filters-grid inventory-search-grid">
           <label>
             <span>Component</span>
             <input value={componentName} onChange={(event) => setComponentName(event.target.value)} placeholder="openssl" />
@@ -68,6 +139,10 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
             <input value={imageDigest} onChange={(event) => setImageDigest(event.target.value)} placeholder="sha256:..." />
           </label>
         </div>
+        <p className="inventory-helper">
+          Search examples: <code>openssl</code>, <code>pkg:maven/org.apache.logging.log4j/log4j-core</code>, or a full
+          image digest.
+        </p>
         <div className="filters-actions">
           <button className="button" onClick={() => {
             setComponentName("");
@@ -77,10 +152,11 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
             setSelectedDigest("");
             setSelectedImage(null);
             setError(null);
+            setHasSearched(false);
           }}>
             Reset
           </button>
-          <button className="button button--primary" onClick={() => void handleSearch()} disabled={loading}>
+          <button className="button button--primary" onClick={() => void handleSearch()} disabled={loading || !hasSearchFilters}>
             {loading ? "Searching…" : "Search Inventory"}
           </button>
         </div>
@@ -93,7 +169,16 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
             <strong>{results.length}</strong>
           </div>
           {error ? <div className="panel-empty panel-error">{error}</div> : null}
-          {!error && results.length === 0 ? <div className="panel-empty">Search for a component, PURL, or digest to browse the SBOM inventory.</div> : null}
+          {!error && !hasSearched ? (
+            <div className="panel-empty inventory-empty-state">
+              Start by searching a package name, PURL, or image digest. Example queries are available above to speed up triage.
+            </div>
+          ) : null}
+          {!error && hasSearched && results.length === 0 ? (
+            <div className="panel-empty inventory-empty-state">
+              No components matched the current query. Try a broader package name or switch to a full digest search.
+            </div>
+          ) : null}
           {results.length > 0 ? (
             <div className="table-scroll">
               <table className="events-table">
@@ -173,7 +258,11 @@ export function SBOMInventoryPanel({ tenantID }: Props) {
               </section>
             </>
           ) : (
-            <div className="details-empty">Select a component result to inspect the stored SBOM document and component list for that digest.</div>
+            <div className="details-empty">
+              {hasSearched
+                ? "Select a component result to inspect the stored SBOM document, digest, and component inventory."
+                : "Run a component, PURL, or digest search first, then inspect the matching SBOM document here."}
+            </div>
           )}
         </aside>
       </section>

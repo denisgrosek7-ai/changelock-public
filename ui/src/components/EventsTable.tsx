@@ -6,6 +6,8 @@ type Props = {
   onSelect: (event: StoredEvent) => void;
   loading: boolean;
   error: string | null;
+  title?: string;
+  emptyMessage?: string;
 };
 
 function formatTimestamp(timestamp?: string, fallback?: string) {
@@ -27,7 +29,7 @@ function displayValue(...values: Array<string | undefined>) {
   return "-";
 }
 
-export function EventsTable({ events, selectedEventID, onSelect, loading, error }: Props) {
+export function EventsTable({ events, selectedEventID, onSelect, loading, error, title, emptyMessage }: Props) {
   if (loading) {
     return <section className="panel panel-empty">Loading events from the audit store…</section>;
   }
@@ -37,13 +39,13 @@ export function EventsTable({ events, selectedEventID, onSelect, loading, error 
   }
 
   if (events.length === 0) {
-    return <section className="panel panel-empty">No events matched the current view.</section>;
+    return <section className="panel panel-empty">{emptyMessage || "No events matched the current view."}</section>;
   }
 
   return (
     <section className="panel table-panel">
       <div className="table-toolbar">
-        <span className="summary-label">Recent Events</span>
+        <span className="summary-label">{title || "Recent Events"}</span>
         <strong>{events.length}</strong>
       </div>
       <div className="table-scroll">

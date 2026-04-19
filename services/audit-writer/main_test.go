@@ -195,6 +195,767 @@ func TestReportsSummaryReturnsCounts(t *testing.T) {
 	}
 }
 
+func TestIncidentsEndpointBuildsCaseView(t *testing.T) {
+	store := audit.NewMemoryStore()
+	mustIngest := func(event audit.Event) {
+		t.Helper()
+		if _, err := store.Ingest(t.Context(), event); err != nil {
+			t.Fatalf("Ingest() error = %v", err)
+		}
+	}
+
+	mustIngest(audit.Event{
+		RequestID:      "req-incident-1",
+		Component:      "deploy-gate",
+		EventType:      audit.EventTypeDeployGateDecision,
+		Decision:       audit.DecisionDeny,
+		TenantID:       "acme",
+		Repo:           "repo-a",
+		Environment:    "prod",
+		Workload:       "api",
+		Image:          "ghcr.io/acme/api@sha256:1111",
+		Digest:         "sha256:1111",
+		Reasons:        []string{"workflow mismatch"},
+		PolicyBundleID: "bundle-a",
+		CVEID:          "CVE-2026-1111",
+	})
+	mustIngest(audit.Event{
+		RequestID:      "req-incident-2",
+		Component:      "policy-engine",
+		EventType:      audit.EventTypePolicyDecision,
+		Decision:       audit.DecisionDeny,
+		TenantID:       "acme",
+		Repo:           "repo-a",
+		Environment:    "prod",
+		Namespace:      "prod-acme",
+		Workload:       "api",
+		Image:          "ghcr.io/acme/api@sha256:1111",
+		Digest:         "sha256:1111",
+		Reasons:        []string{"workflow mismatch"},
+		PolicyBundleID: "bundle-a",
+		ExceptionID:    "EX-2026-INCIDENT",
+		VerifierSummary: &audit.VerifierSummary{
+			SignatureValid:   false,
+			AttestationValid: true,
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/incidents?tenant_id=acme&limit=25", nil)
+	rec := httptest.NewRecorder()
+	newHandler(store, "memory").ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response incidentsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Incidents) != 1 {
+		t.Fatalf("expected 1 incident, got %#v", response)
+	}
+
+	incident := response.Incidents[0]
+	if !strings.HasPrefix(incident.ID, "INC-") || incident.IdentityKey == "" {
+		t.Fatalf("unexpected incident id %#v", incident)
+	}
+	if incident.CategoryKey != "workflow-governance" || incident.State != incidentStateOpen {
+		t.Fatalf("expected stable workflow incident metadata, got %#v", incident)
+	}
+	if incident.EventCount != 2 || incident.DenyCount != 2 {
+		t.Fatalf("unexpected incident counts %#v", incident)
+	}
+	if len(incident.RemediationChecklist) == 0 || len(incident.Timeline) < 3 {
+		t.Fatalf("expected checklist and timeline, got %#v", incident)
+	}
+	if len(incident.EvidencePack.RequestIDs) != 2 || len(incident.Events) != 2 {
+		t.Fatalf("expected request IDs and events, got %#v", incident)
+	}
+	if len(incident.GovernanceImpacts) == 0 {
+		t.Fatalf("expected governance impacts, got %#v", incident)
+	}
+
+	detailReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incident.ID+"?tenant_id=acme", nil)
+	detailRec := httptest.NewRecorder()
+	newHandler(store, "memory").ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("expected detail 200, got %d: %s", detailRec.Code, detailRec.Body.String())
+	}
+}
+
+func TestIncidentLifecycleEndpointsPersistAndValidate(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		RequestID:   "req-incident-lifecycle-1",
+		Component:   "deploy-gate",
+		EventType:   audit.EventTypeDeployGateDecision,
+		Decision:    audit.DecisionDeny,
+		TenantID:    "acme",
+		Repo:        "repo-lifecycle",
+		Environment: "prod",
+		Workload:    "api",
+		Reasons:     []string{"workflow mismatch"},
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/incidents?tenant_id=acme", nil)
+	listReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+
+	var list incidentsResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&list); err != nil {
+		t.Fatalf("decode incidents: %v", err)
+	}
+	if len(list.Incidents) != 1 {
+		t.Fatalf("expected 1 incident, got %#v", list)
+	}
+	incidentID := list.Incidents[0].ID
+
+	viewerAssignReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/assign?tenant_id=acme", bytes.NewBufferString(`{"owner":"secops","reason":"viewer denied"}`))
+	viewerAssignReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	viewerAssignReq.Header.Set("Content-Type", "application/json")
+	viewerAssignRec := httptest.NewRecorder()
+	handler.ServeHTTP(viewerAssignRec, viewerAssignReq)
+	if viewerAssignRec.Code != http.StatusForbidden {
+		t.Fatalf("expected viewer assign 403, got %d: %s", viewerAssignRec.Code, viewerAssignRec.Body.String())
+	}
+
+	assignReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/assign?tenant_id=acme", bytes.NewBufferString(`{"owner":"secops","reason":"workflow drift ownership"}`))
+	assignReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	assignReq.Header.Set("Content-Type", "application/json")
+	assignRec := httptest.NewRecorder()
+	handler.ServeHTTP(assignRec, assignReq)
+	if assignRec.Code != http.StatusOK {
+		t.Fatalf("expected assign 200, got %d: %s", assignRec.Code, assignRec.Body.String())
+	}
+
+	var assigned investigationIncident
+	if err := json.NewDecoder(assignRec.Body).Decode(&assigned); err != nil {
+		t.Fatalf("decode assigned incident: %v", err)
+	}
+	if assigned.Owner != "secops" || assigned.Assignment.Owner != "secops" {
+		t.Fatalf("expected owner assignment, got %#v", assigned)
+	}
+
+	ackReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/acknowledge?tenant_id=acme", bytes.NewBufferString(`{"summary":"triage started"}`))
+	ackReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	ackReq.Header.Set("Content-Type", "application/json")
+	ackRec := httptest.NewRecorder()
+	handler.ServeHTTP(ackRec, ackReq)
+	if ackRec.Code != http.StatusOK {
+		t.Fatalf("expected acknowledge 200, got %d: %s", ackRec.Code, ackRec.Body.String())
+	}
+
+	var acknowledged investigationIncident
+	if err := json.NewDecoder(ackRec.Body).Decode(&acknowledged); err != nil {
+		t.Fatalf("decode acknowledged incident: %v", err)
+	}
+	if acknowledged.State != incidentStateAcknowledged {
+		t.Fatalf("expected acknowledged state, got %#v", acknowledged)
+	}
+
+	watchReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/watch?tenant_id=acme", bytes.NewBufferString(`{"summary":"watch for repeat signal"}`))
+	watchReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	watchReq.Header.Set("Content-Type", "application/json")
+	watchRec := httptest.NewRecorder()
+	handler.ServeHTTP(watchRec, watchReq)
+	if watchRec.Code != http.StatusOK {
+		t.Fatalf("expected watch 200, got %d: %s", watchRec.Code, watchRec.Body.String())
+	}
+
+	var watching investigationIncident
+	if err := json.NewDecoder(watchRec.Body).Decode(&watching); err != nil {
+		t.Fatalf("decode watching incident: %v", err)
+	}
+	if watching.State != incidentStateWatching {
+		t.Fatalf("expected watching state, got %#v", watching)
+	}
+
+	noteReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/notes?tenant_id=acme", bytes.NewBufferString(`{"note":"waiting for signer policy owner confirmation"}`))
+	noteReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	noteReq.Header.Set("Content-Type", "application/json")
+	noteRec := httptest.NewRecorder()
+	handler.ServeHTTP(noteRec, noteReq)
+	if noteRec.Code != http.StatusOK {
+		t.Fatalf("expected note 200, got %d: %s", noteRec.Code, noteRec.Body.String())
+	}
+
+	resolveForbiddenReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/resolve?tenant_id=acme", bytes.NewBufferString(`{"resolution_type":"fixed","resolution_summary":"policy updated"}`))
+	resolveForbiddenReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	resolveForbiddenReq.Header.Set("Content-Type", "application/json")
+	resolveForbiddenRec := httptest.NewRecorder()
+	handler.ServeHTTP(resolveForbiddenRec, resolveForbiddenReq)
+	if resolveForbiddenRec.Code != http.StatusForbidden {
+		t.Fatalf("expected operator resolve 403, got %d: %s", resolveForbiddenRec.Code, resolveForbiddenRec.Body.String())
+	}
+
+	resolveReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/resolve?tenant_id=acme", bytes.NewBufferString(`{
+	  "resolution_type":"fixed",
+	  "resolution_summary":"workflow trust rule updated",
+	  "resolution_details":"trusted workflow ref rotated to the new release workflow",
+	  "follow_up_required":true,
+	  "resolution_refs":["decision:sha256:test"]
+	}`))
+	resolveReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	resolveReq.Header.Set("Content-Type", "application/json")
+	resolveRec := httptest.NewRecorder()
+	handler.ServeHTTP(resolveRec, resolveReq)
+	if resolveRec.Code != http.StatusOK {
+		t.Fatalf("expected resolve 200, got %d: %s", resolveRec.Code, resolveRec.Body.String())
+	}
+
+	var resolved investigationIncident
+	if err := json.NewDecoder(resolveRec.Body).Decode(&resolved); err != nil {
+		t.Fatalf("decode resolved incident: %v", err)
+	}
+	if resolved.State != incidentStateResolved || resolved.Resolution.Type != "fixed" {
+		t.Fatalf("expected resolved incident, got %#v", resolved)
+	}
+	if !resolved.Resolution.FollowUpRequired || resolved.NewActivityDetected {
+		t.Fatalf("expected structured resolution and no reopen signal, got %#v", resolved)
+	}
+
+	persistedHandler := newHandler(store, "memory")
+	persistedReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"?tenant_id=acme", nil)
+	persistedReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	persistedRec := httptest.NewRecorder()
+	persistedHandler.ServeHTTP(persistedRec, persistedReq)
+	if persistedRec.Code != http.StatusOK {
+		t.Fatalf("expected persisted detail 200, got %d: %s", persistedRec.Code, persistedRec.Body.String())
+	}
+	var persisted investigationIncident
+	if err := json.NewDecoder(persistedRec.Body).Decode(&persisted); err != nil {
+		t.Fatalf("decode persisted incident: %v", err)
+	}
+	if persisted.State != incidentStateResolved || len(persisted.Notes) == 0 || len(persisted.History) == 0 {
+		t.Fatalf("expected persisted overlay after handler rebuild, got %#v", persisted)
+	}
+
+	reopenReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/reopen?tenant_id=acme", bytes.NewBufferString(`{"reason":"new deploy signal requires re-review"}`))
+	reopenReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	reopenReq.Header.Set("Content-Type", "application/json")
+	reopenRec := httptest.NewRecorder()
+	handler.ServeHTTP(reopenRec, reopenReq)
+	if reopenRec.Code != http.StatusOK {
+		t.Fatalf("expected reopen 200, got %d: %s", reopenRec.Code, reopenRec.Body.String())
+	}
+
+	var reopened investigationIncident
+	if err := json.NewDecoder(reopenRec.Body).Decode(&reopened); err != nil {
+		t.Fatalf("decode reopened incident: %v", err)
+	}
+	if reopened.State != incidentStateReopened {
+		t.Fatalf("expected reopened state, got %#v", reopened)
+	}
+
+	timelineReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/timeline?tenant_id=acme", nil)
+	timelineReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	timelineRec := httptest.NewRecorder()
+	handler.ServeHTTP(timelineRec, timelineReq)
+	if timelineRec.Code != http.StatusOK {
+		t.Fatalf("expected timeline 200, got %d: %s", timelineRec.Code, timelineRec.Body.String())
+	}
+
+	var timeline incidentTimelineResponse
+	if err := json.NewDecoder(timelineRec.Body).Decode(&timeline); err != nil {
+		t.Fatalf("decode timeline: %v", err)
+	}
+	if len(timeline.Timeline) < 5 {
+		t.Fatalf("expected lifecycle timeline entries, got %#v", timeline)
+	}
+
+	historyReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/history?tenant_id=acme", nil)
+	historyReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	historyRec := httptest.NewRecorder()
+	handler.ServeHTTP(historyRec, historyReq)
+	if historyRec.Code != http.StatusOK {
+		t.Fatalf("expected history 200, got %d: %s", historyRec.Code, historyRec.Body.String())
+	}
+	var history incidentHistoryResponse
+	if err := json.NewDecoder(historyRec.Body).Decode(&history); err != nil {
+		t.Fatalf("decode history: %v", err)
+	}
+	if len(history.History) < 5 {
+		t.Fatalf("expected lifecycle history entries, got %#v", history)
+	}
+}
+
+func TestResolvedIncidentShowsNewActivityWithoutImplicitReopen(t *testing.T) {
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+	baseTime := time.Now().UTC()
+
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		RequestID:   "req-incident-new-activity-1",
+		Timestamp:   baseTime,
+		Component:   "deploy-gate",
+		EventType:   audit.EventTypeDeployGateDecision,
+		Decision:    audit.DecisionDeny,
+		TenantID:    "acme",
+		Repo:        "repo-new-activity",
+		Environment: "prod",
+		Workload:    "api",
+		Reasons:     []string{"workflow mismatch"},
+	}); err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/incidents?tenant_id=acme", nil)
+	listReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+
+	var list incidentsResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&list); err != nil {
+		t.Fatalf("decode incidents: %v", err)
+	}
+	if len(list.Incidents) != 1 {
+		t.Fatalf("expected 1 incident, got %#v", list)
+	}
+	incidentID := list.Incidents[0].ID
+
+	resolveReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/resolve?tenant_id=acme", bytes.NewBufferString(`{
+	  "resolution_type":"fixed",
+	  "resolution_summary":"initial policy update"
+	}`))
+	resolveReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	resolveReq.Header.Set("Content-Type", "application/json")
+	resolveRec := httptest.NewRecorder()
+	handler.ServeHTTP(resolveRec, resolveReq)
+	if resolveRec.Code != http.StatusOK {
+		t.Fatalf("expected resolve 200, got %d: %s", resolveRec.Code, resolveRec.Body.String())
+	}
+
+	if _, err := store.Ingest(t.Context(), audit.Event{
+		RequestID:   "req-incident-new-activity-2",
+		Timestamp:   baseTime.Add(time.Minute),
+		Component:   "deploy-gate",
+		EventType:   audit.EventTypeDeployGateDecision,
+		Decision:    audit.DecisionDeny,
+		TenantID:    "acme",
+		Repo:        "repo-new-activity",
+		Environment: "prod",
+		Workload:    "api",
+		Reasons:     []string{"workflow mismatch"},
+	}); err != nil {
+		t.Fatalf("Ingest() second event error = %v", err)
+	}
+
+	detailReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"?tenant_id=acme", nil)
+	detailReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	detailRec := httptest.NewRecorder()
+	handler.ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("expected detail 200, got %d: %s", detailRec.Code, detailRec.Body.String())
+	}
+
+	var detail investigationIncident
+	if err := json.NewDecoder(detailRec.Body).Decode(&detail); err != nil {
+		t.Fatalf("decode incident detail: %v", err)
+	}
+	if detail.State != incidentStateResolved || !detail.NewActivityDetected {
+		t.Fatalf("expected resolved incident with new activity flag, got %#v", detail)
+	}
+}
+
+func TestIncidentExportAndMetricDrillDown(t *testing.T) {
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	mustIngest := func(event audit.Event) {
+		t.Helper()
+		if _, err := store.Ingest(t.Context(), event); err != nil {
+			t.Fatalf("Ingest() error = %v", err)
+		}
+	}
+
+	mustIngest(audit.Event{
+		RequestID:      "req-export-1",
+		Component:      "deploy-gate",
+		EventType:      audit.EventTypeDeployGateDecision,
+		Decision:       audit.DecisionDeny,
+		TenantID:       "acme",
+		Repo:           "repo-export",
+		Environment:    "prod",
+		Workload:       "api",
+		Image:          "ghcr.io/acme/api@sha256:aaaa",
+		Digest:         "sha256:aaaa",
+		Reasons:        []string{"workflow mismatch"},
+		PolicyBundleID: "bundle-export",
+	})
+	mustIngest(audit.Event{
+		RequestID:   "req-export-2",
+		Component:   "policy-engine",
+		EventType:   audit.EventTypePolicyDecision,
+		Decision:    audit.DecisionDeny,
+		TenantID:    "acme",
+		Repo:        "repo-export",
+		Environment: "prod",
+		Namespace:   "prod-acme",
+		Workload:    "api",
+		Reasons:     []string{"workflow mismatch"},
+	})
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/incidents?tenant_id=acme", nil)
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+
+	var list incidentsResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&list); err != nil {
+		t.Fatalf("decode incidents: %v", err)
+	}
+	if len(list.Incidents) != 1 {
+		t.Fatalf("expected 1 incident, got %#v", list)
+	}
+	incidentID := list.Incidents[0].ID
+
+	ackReq := httptest.NewRequest(http.MethodPost, "/v1/incidents/"+incidentID+"/acknowledge?tenant_id=acme", bytes.NewBufferString(`{"summary":"triage started"}`))
+	ackReq.Header.Set("Content-Type", "application/json")
+	ackRec := httptest.NewRecorder()
+	handler.ServeHTTP(ackRec, ackReq)
+	if ackRec.Code != http.StatusOK {
+		t.Fatalf("expected acknowledge 200, got %d: %s", ackRec.Code, ackRec.Body.String())
+	}
+
+	detailReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"?tenant_id=acme", nil)
+	detailRec := httptest.NewRecorder()
+	handler.ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("expected detail 200, got %d: %s", detailRec.Code, detailRec.Body.String())
+	}
+
+	var detail investigationIncident
+	if err := json.NewDecoder(detailRec.Body).Decode(&detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if len(detail.MetricLinks) == 0 || detail.MetricLinks[0].MetricKey != "workflow-governance" {
+		t.Fatalf("expected metric links on incident detail, got %#v", detail.MetricLinks)
+	}
+
+	exportReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/export?tenant_id=acme", nil)
+	exportRec := httptest.NewRecorder()
+	handler.ServeHTTP(exportRec, exportReq)
+	if exportRec.Code != http.StatusOK {
+		t.Fatalf("expected export 200, got %d: %s", exportRec.Code, exportRec.Body.String())
+	}
+
+	var exportPayload incidentExportResponse
+	if err := json.NewDecoder(exportRec.Body).Decode(&exportPayload); err != nil {
+		t.Fatalf("decode export payload: %v", err)
+	}
+	if exportPayload.IncidentID != incidentID || exportPayload.State != incidentStateAcknowledged {
+		t.Fatalf("unexpected export payload %#v", exportPayload)
+	}
+	if len(exportPayload.MetricLinks) == 0 || len(exportPayload.RelatedEventRefs) != 2 {
+		t.Fatalf("expected metric links and event refs in export payload, got %#v", exportPayload)
+	}
+	if len(exportPayload.History) == 0 || !containsString(exportPayload.ScorecardRefs, "workflow-governance") {
+		t.Fatalf("expected history and scorecard refs in export payload, got %#v", exportPayload)
+	}
+
+	auditorReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/export?tenant_id=acme&audience=auditor_safe", nil)
+	auditorRec := httptest.NewRecorder()
+	handler.ServeHTTP(auditorRec, auditorReq)
+	if auditorRec.Code != http.StatusOK {
+		t.Fatalf("expected auditor export 200, got %d: %s", auditorRec.Code, auditorRec.Body.String())
+	}
+
+	var auditorPayload incidentExportResponse
+	if err := json.NewDecoder(auditorRec.Body).Decode(&auditorPayload); err != nil {
+		t.Fatalf("decode auditor export: %v", err)
+	}
+	if !auditorPayload.Redacted || auditorPayload.Audience != incidentAudienceAuditorSafe {
+		t.Fatalf("expected redacted auditor payload, got %#v", auditorPayload)
+	}
+	if auditorPayload.Repository == "repo-export" || auditorPayload.Owner != "" || len(auditorPayload.Notes) != 0 {
+		t.Fatalf("expected masked repo/owner and removed notes, got %#v", auditorPayload)
+	}
+	if len(auditorPayload.RedactionSummary) == 0 || len(auditorPayload.RelatedEventRefs) == 0 {
+		t.Fatalf("expected redaction summary and masked event refs, got %#v", auditorPayload)
+	}
+
+	customerReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/export?tenant_id=acme&audience=customer_safe", nil)
+	customerRec := httptest.NewRecorder()
+	handler.ServeHTTP(customerRec, customerReq)
+	if customerRec.Code != http.StatusOK {
+		t.Fatalf("expected customer export 200, got %d: %s", customerRec.Code, customerRec.Body.String())
+	}
+
+	var customerPayload incidentExportResponse
+	if err := json.NewDecoder(customerRec.Body).Decode(&customerPayload); err != nil {
+		t.Fatalf("decode customer export: %v", err)
+	}
+	if !customerPayload.Redacted || customerPayload.Audience != incidentAudienceCustomerSafe {
+		t.Fatalf("expected redacted customer payload, got %#v", customerPayload)
+	}
+	if customerPayload.Repository != "" || customerPayload.ScopeRef != "" || len(customerPayload.RelatedEventRefs) != 0 {
+		t.Fatalf("expected customer-safe scope and event refs to be stripped, got %#v", customerPayload)
+	}
+	if len(customerPayload.GuidanceRefs) != 0 || len(customerPayload.RedactionSummary) == 0 {
+		t.Fatalf("expected customer-safe guidance stripping and redaction summary, got %#v", customerPayload)
+	}
+
+	metricReq := httptest.NewRequest(http.MethodGet, "/v1/scorecard/metrics/workflow-governance/incidents?tenant_id=acme", nil)
+	metricRec := httptest.NewRecorder()
+	handler.ServeHTTP(metricRec, metricReq)
+	if metricRec.Code != http.StatusOK {
+		t.Fatalf("expected metric drill-down 200, got %d: %s", metricRec.Code, metricRec.Body.String())
+	}
+
+	var metricResponse metricIncidentsResponse
+	if err := json.NewDecoder(metricRec.Body).Decode(&metricResponse); err != nil {
+		t.Fatalf("decode metric drill-down: %v", err)
+	}
+	if metricResponse.MetricKey != "workflow-governance" || metricResponse.MetricLabel == "" {
+		t.Fatalf("unexpected metric drill-down header %#v", metricResponse)
+	}
+	if len(metricResponse.Incidents) != 1 || metricResponse.Incidents[0].ID != incidentID {
+		t.Fatalf("expected linked incident in metric drill-down, got %#v", metricResponse)
+	}
+	if len(metricResponse.Limitations) == 0 {
+		t.Fatalf("expected drill-down limitations, got %#v", metricResponse)
+	}
+
+	incidentDefenseReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/defense-gaps?tenant_id=acme", nil)
+	incidentDefenseRec := httptest.NewRecorder()
+	handler.ServeHTTP(incidentDefenseRec, incidentDefenseReq)
+	if incidentDefenseRec.Code != http.StatusOK {
+		t.Fatalf("expected incident defense-gap 200, got %d: %s", incidentDefenseRec.Code, incidentDefenseRec.Body.String())
+	}
+
+	var incidentAssessment defenseGapAssessment
+	if err := json.NewDecoder(incidentDefenseRec.Body).Decode(&incidentAssessment); err != nil {
+		t.Fatalf("decode incident defense-gap assessment: %v", err)
+	}
+	if incidentAssessment.SubjectType != "incident" || incidentAssessment.SubjectRef != incidentID || len(incidentAssessment.DefenseGaps) == 0 {
+		t.Fatalf("unexpected incident defense-gap assessment %#v", incidentAssessment)
+	}
+	if !incidentAssessment.AdvisoryOnly || len(incidentAssessment.Limitations) == 0 {
+		t.Fatalf("expected advisory-only incident assessment with limitations, got %#v", incidentAssessment)
+	}
+
+	metricDefenseReq := httptest.NewRequest(http.MethodGet, "/v1/scorecard/metrics/workflow-governance/defense-gaps?tenant_id=acme", nil)
+	metricDefenseRec := httptest.NewRecorder()
+	handler.ServeHTTP(metricDefenseRec, metricDefenseReq)
+	if metricDefenseRec.Code != http.StatusOK {
+		t.Fatalf("expected metric defense-gap 200, got %d: %s", metricDefenseRec.Code, metricDefenseRec.Body.String())
+	}
+
+	var metricAssessment defenseGapAssessment
+	if err := json.NewDecoder(metricDefenseRec.Body).Decode(&metricAssessment); err != nil {
+		t.Fatalf("decode metric defense-gap assessment: %v", err)
+	}
+	if metricAssessment.SubjectType != "metric" || metricAssessment.SubjectRef != "workflow-governance" || len(metricAssessment.DefenseGaps) == 0 {
+		t.Fatalf("unexpected metric defense-gap assessment %#v", metricAssessment)
+	}
+	if !containsString(metricAssessment.DefenseGaps[0].RelatedIncidentRefs, incidentID) {
+		t.Fatalf("expected metric defense-gap to reference incident %s, got %#v", incidentID, metricAssessment)
+	}
+
+	aiDefenseReq := httptest.NewRequest(http.MethodGet, "/v1/ai/defense-gap-assessments?tenant_id=acme&incident_id="+incidentID, nil)
+	aiDefenseRec := httptest.NewRecorder()
+	handler.ServeHTTP(aiDefenseRec, aiDefenseReq)
+	if aiDefenseRec.Code != http.StatusOK {
+		t.Fatalf("expected ai defense-gap 200, got %d: %s", aiDefenseRec.Code, aiDefenseRec.Body.String())
+	}
+
+	incidentReplayReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+incidentID+"/policy-replay?tenant_id=acme", nil)
+	incidentReplayRec := httptest.NewRecorder()
+	handler.ServeHTTP(incidentReplayRec, incidentReplayReq)
+	if incidentReplayRec.Code != http.StatusOK {
+		t.Fatalf("expected incident replay 200, got %d: %s", incidentReplayRec.Code, incidentReplayRec.Body.String())
+	}
+
+	var incidentReplay policyReplayAssessment
+	if err := json.NewDecoder(incidentReplayRec.Body).Decode(&incidentReplay); err != nil {
+		t.Fatalf("decode incident replay: %v", err)
+	}
+	if incidentReplay.SubjectType != "incident" || incidentReplay.SubjectRef != incidentID || len(incidentReplay.ReplayResults) == 0 || len(incidentReplay.CoverageGaps) == 0 {
+		t.Fatalf("unexpected incident replay %#v", incidentReplay)
+	}
+	if !incidentReplay.AdvisoryOnly || !incidentReplay.ShadowMode {
+		t.Fatalf("expected advisory shadow-mode replay, got %#v", incidentReplay)
+	}
+
+	metricReplayReq := httptest.NewRequest(http.MethodGet, "/v1/scorecard/metrics/workflow-governance/policy-replay?tenant_id=acme", nil)
+	metricReplayRec := httptest.NewRecorder()
+	handler.ServeHTTP(metricReplayRec, metricReplayReq)
+	if metricReplayRec.Code != http.StatusOK {
+		t.Fatalf("expected metric replay 200, got %d: %s", metricReplayRec.Code, metricReplayRec.Body.String())
+	}
+
+	var metricReplay policyReplayAssessment
+	if err := json.NewDecoder(metricReplayRec.Body).Decode(&metricReplay); err != nil {
+		t.Fatalf("decode metric replay: %v", err)
+	}
+	if metricReplay.SubjectType != "metric" || metricReplay.SubjectRef != "workflow-governance" || len(metricReplay.ReplayResults) == 0 {
+		t.Fatalf("unexpected metric replay %#v", metricReplay)
+	}
+
+	scopeReplayReq := httptest.NewRequest(http.MethodGet, "/v1/ai/policy-replay?tenant_id=acme", nil)
+	scopeReplayRec := httptest.NewRecorder()
+	handler.ServeHTTP(scopeReplayRec, scopeReplayReq)
+	if scopeReplayRec.Code != http.StatusOK {
+		t.Fatalf("expected scope replay 200, got %d: %s", scopeReplayRec.Code, scopeReplayRec.Body.String())
+	}
+
+	var scopeReplay policyReplayAssessment
+	if err := json.NewDecoder(scopeReplayRec.Body).Decode(&scopeReplay); err != nil {
+		t.Fatalf("decode scope replay: %v", err)
+	}
+	if scopeReplay.SubjectType != "scope" || len(scopeReplay.CoverageGaps) == 0 || scopeReplay.BlastRadius.IncidentCount == 0 {
+		t.Fatalf("unexpected scope replay %#v", scopeReplay)
+	}
+
+	systemicReq := httptest.NewRequest(http.MethodGet, "/v1/ai/systemic-weaknesses?tenant_id=acme", nil)
+	systemicRec := httptest.NewRecorder()
+	handler.ServeHTTP(systemicRec, systemicReq)
+	if systemicRec.Code != http.StatusOK {
+		t.Fatalf("expected systemic weaknesses 200, got %d: %s", systemicRec.Code, systemicRec.Body.String())
+	}
+
+	var systemicResponse systemicWeaknessResponse
+	if err := json.NewDecoder(systemicRec.Body).Decode(&systemicResponse); err != nil {
+		t.Fatalf("decode systemic weaknesses: %v", err)
+	}
+	if !systemicResponse.AdvisoryOnly || len(systemicResponse.Weaknesses) == 0 {
+		t.Fatalf("unexpected systemic weakness response %#v", systemicResponse)
+	}
+
+	metricSystemicReq := httptest.NewRequest(http.MethodGet, "/v1/scorecard/metrics/workflow-governance/systemic-weaknesses?tenant_id=acme", nil)
+	metricSystemicRec := httptest.NewRecorder()
+	handler.ServeHTTP(metricSystemicRec, metricSystemicReq)
+	if metricSystemicRec.Code != http.StatusOK {
+		t.Fatalf("expected metric systemic weaknesses 200, got %d: %s", metricSystemicRec.Code, metricSystemicRec.Body.String())
+	}
+}
+
+func TestIncidentPackageEndpointBuildsDerivedBundle(t *testing.T) {
+	store := audit.NewMemoryStore()
+	handler := newHandler(store, "memory")
+
+	mustIngest := func(event audit.Event) {
+		t.Helper()
+		if _, err := store.Ingest(t.Context(), event); err != nil {
+			t.Fatalf("Ingest() error = %v", err)
+		}
+	}
+
+	mustIngest(audit.Event{
+		RequestID:      "req-package-1",
+		Component:      "deploy-gate",
+		EventType:      audit.EventTypeDeployGateDecision,
+		Decision:       audit.DecisionDeny,
+		TenantID:       "acme",
+		Repo:           "repo-package-a",
+		Environment:    "prod",
+		Workload:       "api",
+		Digest:         "sha256:package-a",
+		Reasons:        []string{"workflow mismatch"},
+		PolicyBundleID: "bundle-package-a",
+	})
+	mustIngest(audit.Event{
+		RequestID:   "req-package-2",
+		Component:   "runtime-agent",
+		EventType:   audit.EventTypeRuntimeDriftResult,
+		Decision:    audit.DecisionDeny,
+		TenantID:    "acme",
+		Repo:        "repo-package-b",
+		Environment: "prod",
+		Workload:    "worker",
+		Image:       "ghcr.io/acme/worker@sha256:bbbb",
+		Digest:      "sha256:bbbb",
+		DriftResult: "image_drift",
+		Reasons:     []string{"image drift"},
+	})
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/incidents?tenant_id=acme", nil)
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected incident list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+
+	var list incidentsResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&list); err != nil {
+		t.Fatalf("decode incident list: %v", err)
+	}
+	if len(list.Incidents) != 2 {
+		t.Fatalf("expected 2 incidents, got %#v", list)
+	}
+
+	packageReq := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf(
+			"/v1/incidents/package?tenant_id=acme&audience=auditor_safe&incident_id=%s&incident_id=%s",
+			list.Incidents[0].ID,
+			list.Incidents[1].ID,
+		),
+		nil,
+	)
+	packageRec := httptest.NewRecorder()
+	handler.ServeHTTP(packageRec, packageReq)
+	if packageRec.Code != http.StatusOK {
+		t.Fatalf("expected package 200, got %d: %s", packageRec.Code, packageRec.Body.String())
+	}
+
+	var packageResponse incidentPackageResponse
+	if err := json.NewDecoder(packageRec.Body).Decode(&packageResponse); err != nil {
+		t.Fatalf("decode package response: %v", err)
+	}
+	if packageResponse.SelectionMode != "explicit" || packageResponse.Audience != incidentAudienceAuditorSafe || !packageResponse.Redacted {
+		t.Fatalf("unexpected package header %#v", packageResponse)
+	}
+	if packageResponse.IncidentCount != 2 || len(packageResponse.Incidents) != 2 || len(packageResponse.IncidentRefs) != 2 {
+		t.Fatalf("expected two included incidents, got %#v", packageResponse)
+	}
+	totalSeverityCount := 0
+	for _, count := range packageResponse.Aggregate.BySeverity {
+		totalSeverityCount += count
+	}
+	if totalSeverityCount != 2 {
+		t.Fatalf("expected severity aggregate counts for both incidents, got %#v", packageResponse.Aggregate)
+	}
+	if len(packageResponse.RedactionSummary) == 0 || len(packageResponse.Limitations) == 0 {
+		t.Fatalf("expected redaction summary and limitations, got %#v", packageResponse)
+	}
+
+	queryReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/package?tenant_id=acme&audience=internal", nil)
+	queryRec := httptest.NewRecorder()
+	handler.ServeHTTP(queryRec, queryReq)
+	if queryRec.Code != http.StatusOK {
+		t.Fatalf("expected query-derived package 200, got %d: %s", queryRec.Code, queryRec.Body.String())
+	}
+
+	var queryResponse incidentPackageResponse
+	if err := json.NewDecoder(queryRec.Body).Decode(&queryResponse); err != nil {
+		t.Fatalf("decode query-derived package: %v", err)
+	}
+	if queryResponse.SelectionMode != "query_derived" || queryResponse.IncidentCount != 2 {
+		t.Fatalf("unexpected query-derived package %#v", queryResponse)
+	}
+}
+
 func TestPostgresReportsRoundTripPreservesRawEventAndSummary(t *testing.T) {
 	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeDisabled)
 
@@ -659,6 +1420,14 @@ func TestViewerCanReadReportsAndExceptionsButCannotMutate(t *testing.T) {
 	handler.ServeHTTP(readRec, readReq)
 	if readRec.Code != http.StatusOK {
 		t.Fatalf("expected report read 200, got %d: %s", readRec.Code, readRec.Body.String())
+	}
+
+	incidentsReq := httptest.NewRequest(http.MethodGet, "/v1/incidents", nil)
+	incidentsReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	incidentsRec := httptest.NewRecorder()
+	handler.ServeHTTP(incidentsRec, incidentsReq)
+	if incidentsRec.Code != http.StatusOK {
+		t.Fatalf("expected incidents read 200, got %d: %s", incidentsRec.Code, incidentsRec.Body.String())
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/exceptions", nil)

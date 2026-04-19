@@ -1,4 +1,13 @@
 import type {
+  DefenseGapAssessment,
+  IncidentExport,
+  IncidentPackage,
+  InvestigationIncident,
+  MetricIncidentDrilldown,
+  PolicyReplayAssessment,
+  SystemicWeaknessResponse,
+} from "./incidents";
+import type {
   ActiveWorkloadRef,
   AuditHealth,
   AuthStatus,
@@ -63,11 +72,13 @@ export class APIError extends Error {
   }
 }
 
-function buildURL(path: string, params?: Record<string, string | undefined>) {
+function buildURL(path: string, params?: Record<string, string | string[] | undefined>) {
   const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
-      if (value) {
+      if (Array.isArray(value)) {
+        value.filter(Boolean).forEach((item) => url.searchParams.append(key, item));
+      } else if (value) {
         url.searchParams.set(key, value);
       }
     }
@@ -79,7 +90,7 @@ async function fetchJSON<T>(
   path: string,
   options?: {
     method?: string;
-    params?: Record<string, string | undefined>;
+    params?: Record<string, string | string[] | undefined>;
     body?: unknown;
   },
 ): Promise<T> {
@@ -701,6 +712,471 @@ function parseSyncStatus(value: unknown): SyncStatus {
   };
 }
 
+function parseIncidentImpact(value: unknown): InvestigationIncident["governanceImpacts"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident impact.");
+  }
+  return {
+    id: readString(value.id, "governance_impacts[].id"),
+    title: readString(value.title, "governance_impacts[].title"),
+    detail: readString(value.detail, "governance_impacts[].detail"),
+    tone: readString(value.tone, "governance_impacts[].tone") as InvestigationIncident["governanceImpacts"][number]["tone"],
+  };
+}
+
+function parseIncidentTimelineEntry(value: unknown): InvestigationIncident["timeline"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident timeline entry.");
+  }
+  return {
+    id: readString(value.id, "timeline[].id"),
+    kind: readOptionalString(value.kind, "timeline[].kind"),
+    timestamp: readOptionalString(value.timestamp, "timeline[].timestamp"),
+    title: readString(value.title, "timeline[].title"),
+    summary: readString(value.summary, "timeline[].summary"),
+    eventType: readString(value.event_type, "timeline[].event_type"),
+    outcome: readString(value.outcome, "timeline[].outcome") as InvestigationIncident["timeline"][number]["outcome"],
+    requestID: readOptionalString(value.request_id, "timeline[].request_id"),
+    actor: readOptionalString(value.actor, "timeline[].actor"),
+  };
+}
+
+function parseIncidentNote(value: unknown): InvestigationIncident["notes"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident note.");
+  }
+  return {
+    id: readString(value.id, "notes[].id"),
+    note: readString(value.note, "notes[].note"),
+    actor: readOptionalString(value.actor, "notes[].actor"),
+    timestamp: readOptionalString(value.timestamp, "notes[].timestamp"),
+  };
+}
+
+function parseIncidentHistoryEntry(value: unknown): InvestigationIncident["history"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident history entry.");
+  }
+  return {
+    id: readString(value.id, "history[].id"),
+    kind: readString(value.kind, "history[].kind"),
+    timestamp: readOptionalString(value.timestamp, "history[].timestamp"),
+    actor: readOptionalString(value.actor, "history[].actor"),
+    summary: readString(value.summary, "history[].summary"),
+    state: readOptionalString(value.state, "history[].state"),
+    owner: readOptionalString(value.owner, "history[].owner"),
+    note: readOptionalString(value.note, "history[].note"),
+  };
+}
+
+function parseIncidentEvidencePack(value: unknown): InvestigationIncident["evidencePack"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident evidence pack.");
+  }
+  return {
+    requestIDs: readOptionalStringArray(value.request_ids, "evidence_pack.request_ids") || [],
+    digests: readOptionalStringArray(value.digests, "evidence_pack.digests") || [],
+    bundles: readOptionalStringArray(value.bundles, "evidence_pack.bundles") || [],
+    exceptions: readOptionalStringArray(value.exceptions, "evidence_pack.exceptions") || [],
+    vulnerabilities: readOptionalStringArray(value.vulnerabilities, "evidence_pack.vulnerabilities") || [],
+  };
+}
+
+function parseIncidentAssignment(value: unknown): InvestigationIncident["assignment"] {
+  if (value === undefined || value === null) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident assignment.");
+  }
+  return {
+    owner: readOptionalString(value.owner, "assignment.owner"),
+    at: readOptionalString(value.at, "assignment.at"),
+    by: readOptionalString(value.by, "assignment.by"),
+    reason: readOptionalString(value.reason, "assignment.reason"),
+  };
+}
+
+function parseIncidentResolution(value: unknown): InvestigationIncident["resolution"] {
+  if (value === undefined || value === null) {
+    return { refs: [] };
+  }
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident resolution.");
+  }
+  return {
+    type: readOptionalString(value.type, "resolution.type"),
+    summary: readOptionalString(value.summary, "resolution.summary"),
+    details: readOptionalString(value.details, "resolution.details"),
+    refs: readOptionalStringArray(value.refs, "resolution.refs") || [],
+    by: readOptionalString(value.by, "resolution.by"),
+    at: readOptionalString(value.at, "resolution.at"),
+    followUpRequired:
+      value.follow_up_required === undefined ? undefined : readBoolean(value.follow_up_required, "resolution.follow_up_required"),
+  };
+}
+
+function parseIncidentMetricLink(value: unknown): InvestigationIncident["metricLinks"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident metric link.");
+  }
+  return {
+    metricKey: readString(value.metric_key, "metric_links[].metric_key"),
+    metricLabel: readString(value.metric_label, "metric_links[].metric_label"),
+    linkReason: readString(value.link_reason, "metric_links[].link_reason"),
+    supportingRefs: readOptionalStringArray(value.supporting_refs, "metric_links[].supporting_refs") || [],
+    impactWeight: readNumber(value.impact_weight, "metric_links[].impact_weight"),
+  };
+}
+
+function parseIncidentExportEventRef(value: unknown): IncidentExport["relatedEventRefs"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident export event ref.");
+  }
+  return {
+    eventID: readNumber(value.event_id, "related_event_refs[].event_id"),
+    requestID: readOptionalString(value.request_id, "related_event_refs[].request_id"),
+    timestamp: readString(value.timestamp, "related_event_refs[].timestamp"),
+    component: readString(value.component, "related_event_refs[].component"),
+    eventType: readString(value.event_type, "related_event_refs[].event_type"),
+    decision: readString(value.decision, "related_event_refs[].decision"),
+    decisionHash: readOptionalString(value.decision_hash, "related_event_refs[].decision_hash"),
+  };
+}
+
+function parseIncidentLifecycle(value: unknown): InvestigationIncident["lifecycle"] {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident lifecycle.");
+  }
+  return {
+    state: readString(value.state, "lifecycle.state") as InvestigationIncident["state"],
+    owner: readOptionalString(value.owner, "lifecycle.owner"),
+    assignment: parseIncidentAssignment(value.assignment),
+    resolution: parseIncidentResolution(value.resolution),
+    resolutionSummary: readOptionalString(value.resolution_summary, "lifecycle.resolution_summary"),
+    notes: Array.isArray(value.notes) ? value.notes.map(parseIncidentNote) : [],
+    history: Array.isArray(value.history) ? value.history.map(parseIncidentHistoryEntry) : [],
+    lastOperatorUpdateAt: readOptionalString(value.last_operator_update_at, "lifecycle.last_operator_update_at"),
+    newActivityDetected:
+      value.new_activity_detected === undefined ? false : readBoolean(value.new_activity_detected, "lifecycle.new_activity_detected"),
+  };
+}
+
+function parseIncident(value: unknown): InvestigationIncident {
+  if (!isRecord(value) || !Array.isArray(value.events) || !Array.isArray(value.governance_impacts) || !Array.isArray(value.timeline)) {
+    throw new Error("Audit API returned invalid incident.");
+  }
+  const lifecycle = parseIncidentLifecycle(value.lifecycle);
+  return {
+    id: readString(value.id, "incidents[].id"),
+    identityKey: readOptionalString(value.identity_key, "incidents[].identity_key"),
+    categoryKey: readOptionalString(value.category_key, "incidents[].category_key"),
+    title: readString(value.title, "incidents[].title"),
+    category: readString(value.category, "incidents[].category"),
+    severity: readString(value.severity, "incidents[].severity") as InvestigationIncident["severity"],
+    priority: (readOptionalString(value.priority, "incidents[].priority") || readString(value.severity, "incidents[].severity")) as InvestigationIncident["priority"],
+    state: (readOptionalString(value.state, "incidents[].state") || "open") as InvestigationIncident["state"],
+    status: readString(value.status, "incidents[].status") as InvestigationIncident["status"],
+    scopeType: readOptionalString(value.scope_type, "incidents[].scope_type"),
+    scopeRef: readOptionalString(value.scope_ref, "incidents[].scope_ref"),
+    tenantID: readOptionalString(value.tenant_id, "incidents[].tenant_id"),
+    clusterID: readOptionalString(value.cluster_id, "incidents[].cluster_id"),
+    environment: readOptionalString(value.environment, "incidents[].environment"),
+    repository: readOptionalString(value.repository, "incidents[].repository"),
+    summary: readString(value.summary, "incidents[].summary"),
+    caseSummary: readString(value.case_summary, "incidents[].case_summary"),
+    statusNarrative: readString(value.status_narrative, "incidents[].status_narrative"),
+    likelyCause: readString(value.likely_cause, "incidents[].likely_cause"),
+    recommendedAction: readString(value.recommended_action, "incidents[].recommended_action"),
+    remediationChecklist: readOptionalStringArray(value.remediation_checklist, "incidents[].remediation_checklist") || [],
+    eventCount: readNumber(value.event_count, "incidents[].event_count"),
+    denyCount: readNumber(value.deny_count, "incidents[].deny_count"),
+    allowCount: readNumber(value.allow_count, "incidents[].allow_count"),
+    errorCount: readNumber(value.error_count, "incidents[].error_count"),
+    openedAt: readOptionalString(value.opened_at, "incidents[].opened_at"),
+    updatedAt: readOptionalString(value.updated_at, "incidents[].updated_at"),
+    lastActivityAt: readOptionalString(value.last_activity_at, "incidents[].last_activity_at"),
+    lastOperatorUpdateAt: readOptionalString(value.last_operator_update_at, "incidents[].last_operator_update_at"),
+    resolvedAt: readOptionalString(value.resolved_at, "incidents[].resolved_at"),
+    owner: readOptionalString(value.owner, "incidents[].owner"),
+    assignment: parseIncidentAssignment(value.assignment),
+    resolution: parseIncidentResolution(value.resolution),
+    lifecycle,
+    resolutionSummary: readOptionalString(value.resolution_summary, "incidents[].resolution_summary"),
+    newActivityDetected:
+      value.new_activity_detected === undefined ? lifecycle?.newActivityDetected || false : readBoolean(value.new_activity_detected, "incidents[].new_activity_detected"),
+    notes: Array.isArray(value.notes) ? value.notes.map(parseIncidentNote) : lifecycle?.notes || [],
+    history: Array.isArray(value.history) ? value.history.map(parseIncidentHistoryEntry) : lifecycle?.history || [],
+    firstSeenAt: readOptionalString(value.first_seen_at, "incidents[].first_seen_at"),
+    lastSeenAt: readOptionalString(value.last_seen_at, "incidents[].last_seen_at"),
+    primaryReason: readString(value.primary_reason, "incidents[].primary_reason"),
+    reasonCodes: readOptionalStringArray(value.reason_codes, "incidents[].reason_codes") || [],
+    relatedReasons: readOptionalStringArray(value.related_reasons, "incidents[].related_reasons") || [],
+    findingRefs: readOptionalStringArray(value.finding_refs, "incidents[].finding_refs") || [],
+    guidanceRefs: readOptionalStringArray(value.guidance_refs, "incidents[].guidance_refs") || [],
+    scorecardRefs: readOptionalStringArray(value.scorecard_refs, "incidents[].scorecard_refs") || [],
+    metricLinks: Array.isArray(value.metric_links) ? value.metric_links.map(parseIncidentMetricLink) : [],
+    affectedRepos: readOptionalStringArray(value.affected_repos, "incidents[].affected_repos") || [],
+    affectedEnvironments: readOptionalStringArray(value.affected_environments, "incidents[].affected_environments") || [],
+    affectedTenants: readOptionalStringArray(value.affected_tenants, "incidents[].affected_tenants") || [],
+    affectedNamespaces: readOptionalStringArray(value.affected_namespaces, "incidents[].affected_namespaces") || [],
+    affectedWorkloads: readOptionalStringArray(value.affected_workloads, "incidents[].affected_workloads") || [],
+    affectedImages: readOptionalStringArray(value.affected_images, "incidents[].affected_images") || [],
+    affectedComponents: readOptionalStringArray(value.affected_components, "incidents[].affected_components") || [],
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "incidents[].evidence_refs") || [],
+    evidencePack: parseIncidentEvidencePack(value.evidence_pack),
+    governanceImpacts: value.governance_impacts.map(parseIncidentImpact),
+    labels: readOptionalStringArray(value.labels, "incidents[].labels") || [],
+    timeline: value.timeline.map(parseIncidentTimelineEntry),
+    events: value.events.map(parseStoredEvent),
+  };
+}
+
+function parseIncidentsResponse(value: unknown): InvestigationIncident[] {
+  if (!isRecord(value) || !Array.isArray(value.incidents)) {
+    throw new Error("Audit API returned invalid incidents response.");
+  }
+  return value.incidents.map(parseIncident);
+}
+
+function parseMetricIncidentsResponse(value: unknown): MetricIncidentDrilldown {
+  if (!isRecord(value) || !Array.isArray(value.incidents)) {
+    throw new Error("Audit API returned invalid metric drill-down response.");
+  }
+  return {
+    metricKey: readString(value.metric_key, "metric_key"),
+    metricLabel: readString(value.metric_label, "metric_label"),
+    incidents: value.incidents.map(parseIncident),
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parseIncidentExport(value: unknown): IncidentExport {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident export.");
+  }
+  return {
+    generatedAt: readString(value.generated_at, "generated_at"),
+    audience: (readOptionalString(value.audience, "audience") || "internal") as IncidentExport["audience"],
+    redacted: value.redacted === undefined ? false : readBoolean(value.redacted, "redacted"),
+    redactionSummary: readOptionalStringArray(value.redaction_summary, "redaction_summary") || [],
+    incidentID: readString(value.incident_id, "incident_id"),
+    identityKey: readOptionalString(value.identity_key, "identity_key"),
+    title: readString(value.title, "title"),
+    summary: readString(value.summary, "summary"),
+    state: readString(value.state, "state") as IncidentExport["state"],
+    severity: readString(value.severity, "severity") as IncidentExport["severity"],
+    priority: readString(value.priority, "priority") as IncidentExport["priority"],
+    owner: readOptionalString(value.owner, "owner"),
+    openedAt: readOptionalString(value.opened_at, "opened_at"),
+    updatedAt: readOptionalString(value.updated_at, "updated_at"),
+    resolvedAt: readOptionalString(value.resolved_at, "resolved_at"),
+    scopeType: readOptionalString(value.scope_type, "scope_type"),
+    scopeRef: readOptionalString(value.scope_ref, "scope_ref"),
+    tenantID: readOptionalString(value.tenant_id, "tenant_id"),
+    clusterID: readOptionalString(value.cluster_id, "cluster_id"),
+    environment: readOptionalString(value.environment, "environment"),
+    repository: readOptionalString(value.repository, "repository"),
+    governanceImpacts: Array.isArray(value.governance_impacts) ? value.governance_impacts.map(parseIncidentImpact) : [],
+    reasonCodes: readOptionalStringArray(value.reason_codes, "reason_codes") || [],
+    findingRefs: readOptionalStringArray(value.finding_refs, "finding_refs") || [],
+    guidanceRefs: readOptionalStringArray(value.guidance_refs, "guidance_refs") || [],
+    scorecardRefs: readOptionalStringArray(value.scorecard_refs, "scorecard_refs") || [],
+    metricLinks: Array.isArray(value.metric_links) ? value.metric_links.map(parseIncidentMetricLink) : [],
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "evidence_refs") || [],
+    evidencePack: parseIncidentEvidencePack(value.evidence_pack),
+    history: Array.isArray(value.history) ? value.history.map(parseIncidentHistoryEntry) : [],
+    resolution: parseIncidentResolution(value.resolution),
+    notes: Array.isArray(value.notes) ? value.notes.map(parseIncidentNote) : [],
+    newActivityDetected:
+      value.new_activity_detected === undefined ? false : readBoolean(value.new_activity_detected, "new_activity_detected"),
+    relatedEventRefs: Array.isArray(value.related_event_refs) ? value.related_event_refs.map(parseIncidentExportEventRef) : [],
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parseCountRecord(value: unknown, field: string): Record<string, number> {
+  const record = readOptionalRecord(value, field) || {};
+  const output: Record<string, number> = {};
+  for (const [key, item] of Object.entries(record)) {
+    output[key] = readNumber(item, `${field}.${key}`);
+  }
+  return output;
+}
+
+function parseIncidentPackageItem(value: unknown): IncidentPackage["incidents"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid incident package item.");
+  }
+  return {
+    incidentID: readString(value.incident_id, "incidents[].incident_id"),
+    title: readString(value.title, "incidents[].title"),
+    summary: readString(value.summary, "incidents[].summary"),
+    state: readString(value.state, "incidents[].state") as IncidentPackage["incidents"][number]["state"],
+    severity: readString(value.severity, "incidents[].severity") as IncidentPackage["incidents"][number]["severity"],
+    priority: readString(value.priority, "incidents[].priority") as IncidentPackage["incidents"][number]["priority"],
+    category: readString(value.category, "incidents[].category"),
+    scopeLabel: readOptionalString(value.scope_label, "incidents[].scope_label"),
+    openedAt: readOptionalString(value.opened_at, "incidents[].opened_at"),
+    updatedAt: readOptionalString(value.updated_at, "incidents[].updated_at"),
+    resolvedAt: readOptionalString(value.resolved_at, "incidents[].resolved_at"),
+  };
+}
+
+function parseIncidentPackage(value: unknown): IncidentPackage {
+  if (!isRecord(value) || !Array.isArray(value.incidents) || !isRecord(value.aggregate)) {
+    throw new Error("Audit API returned invalid incident package.");
+  }
+  return {
+    generatedAt: readString(value.generated_at, "generated_at"),
+    audience: (readOptionalString(value.audience, "audience") || "internal") as IncidentPackage["audience"],
+    redacted: value.redacted === undefined ? false : readBoolean(value.redacted, "redacted"),
+    redactionSummary: readOptionalStringArray(value.redaction_summary, "redaction_summary") || [],
+    selectionMode: readString(value.selection_mode, "selection_mode") as IncidentPackage["selectionMode"],
+    selectionSummary: readString(value.selection_summary, "selection_summary"),
+    packageSummary: readString(value.package_summary, "package_summary"),
+    incidentCount: readNumber(value.incident_count, "incident_count"),
+    incidentRefs: readOptionalStringArray(value.incident_refs, "incident_refs") || [],
+    aggregate: {
+      byState: parseCountRecord((value.aggregate as Record<string, unknown>).by_state, "aggregate.by_state"),
+      bySeverity: parseCountRecord((value.aggregate as Record<string, unknown>).by_severity, "aggregate.by_severity"),
+      byCategory: parseCountRecord((value.aggregate as Record<string, unknown>).by_category, "aggregate.by_category"),
+    },
+    incidents: value.incidents.map(parseIncidentPackageItem),
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parseDefenseGapFinding(value: unknown): DefenseGapAssessment["defenseGaps"][number] {
+  if (!isRecord(value) || !isRecord(value.recommended_actions)) {
+    throw new Error("Audit API returned invalid defense gap finding.");
+  }
+  return {
+    gapType: readString(value.gap_type, "defense_gaps[].gap_type"),
+    title: readString(value.title, "defense_gaps[].title"),
+    confidence: readString(value.confidence, "defense_gaps[].confidence") as DefenseGapAssessment["defenseGaps"][number]["confidence"],
+    whyItMatters: readString(value.why_it_matters, "defense_gaps[].why_it_matters"),
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "defense_gaps[].evidence_refs") || [],
+    relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "defense_gaps[].related_incident_refs") || [],
+    recommendedActions: {
+      containment: readOptionalStringArray((value.recommended_actions as Record<string, unknown>).containment, "defense_gaps[].recommended_actions.containment") || [],
+      hardening: readOptionalStringArray((value.recommended_actions as Record<string, unknown>).hardening, "defense_gaps[].recommended_actions.hardening") || [],
+      governanceFix: readOptionalStringArray((value.recommended_actions as Record<string, unknown>).governance_fix, "defense_gaps[].recommended_actions.governance_fix") || [],
+    },
+  };
+}
+
+function parseDefenseGapAssessment(value: unknown): DefenseGapAssessment {
+  if (!isRecord(value) || !isRecord(value.systemic_pattern) || !Array.isArray(value.defense_gaps)) {
+    throw new Error("Audit API returned invalid defense gap assessment.");
+  }
+  return {
+    assessmentID: readString(value.assessment_id, "assessment_id"),
+    subjectType: readString(value.subject_type, "subject_type") as DefenseGapAssessment["subjectType"],
+    subjectRef: readString(value.subject_ref, "subject_ref"),
+    generatedAt: readString(value.generated_at, "generated_at"),
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "advisory_only"),
+    defenseGaps: value.defense_gaps.map(parseDefenseGapFinding),
+    systemicPattern: {
+      present: readBoolean((value.systemic_pattern as Record<string, unknown>).present, "systemic_pattern.present"),
+      patternKey: readOptionalString((value.systemic_pattern as Record<string, unknown>).pattern_key, "systemic_pattern.pattern_key"),
+      summary: readString((value.systemic_pattern as Record<string, unknown>).summary, "systemic_pattern.summary"),
+      relatedIncidentRefs: readOptionalStringArray((value.systemic_pattern as Record<string, unknown>).related_incident_refs, "systemic_pattern.related_incident_refs") || [],
+    },
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parseCoverageGapFinding(value: unknown): PolicyReplayAssessment["coverageGaps"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid coverage gap finding.");
+  }
+  return {
+    gapType: readString(value.gap_type, "coverage_gaps[].gap_type"),
+    title: readString(value.title, "coverage_gaps[].title"),
+    summary: readString(value.summary, "coverage_gaps[].summary"),
+    confidence: readString(value.confidence, "coverage_gaps[].confidence") as PolicyReplayAssessment["coverageGaps"][number]["confidence"],
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "coverage_gaps[].evidence_refs") || [],
+    relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "coverage_gaps[].related_incident_refs") || [],
+    recommendedAction: readString(value.recommended_action, "coverage_gaps[].recommended_action"),
+  };
+}
+
+function parsePolicyReplayResult(value: unknown): PolicyReplayAssessment["replayResults"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid policy replay result.");
+  }
+  return {
+    caseRef: readString(value.case_ref, "replay_results[].case_ref"),
+    title: readString(value.title, "replay_results[].title"),
+    currentOutcome: readString(value.current_outcome, "replay_results[].current_outcome"),
+    proposedOutcome: readString(value.proposed_outcome, "replay_results[].proposed_outcome"),
+    delta: readString(value.delta, "replay_results[].delta"),
+    supportingEvidenceRefs: readOptionalStringArray(value.supporting_evidence_refs, "replay_results[].supporting_evidence_refs") || [],
+    confidence: readString(value.confidence, "replay_results[].confidence") as PolicyReplayAssessment["replayResults"][number]["confidence"],
+    limitations: readOptionalStringArray(value.limitations, "replay_results[].limitations") || [],
+  };
+}
+
+function parsePolicyReplayAssessment(value: unknown): PolicyReplayAssessment {
+  if (!isRecord(value) || !isRecord(value.blast_radius) || !Array.isArray(value.replay_results) || !Array.isArray(value.coverage_gaps)) {
+    throw new Error("Audit API returned invalid policy replay assessment.");
+  }
+  return {
+    assessmentID: readString(value.assessment_id, "assessment_id"),
+    subjectType: readString(value.subject_type, "subject_type") as PolicyReplayAssessment["subjectType"],
+    subjectRef: readString(value.subject_ref, "subject_ref"),
+    generatedAt: readString(value.generated_at, "generated_at"),
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "advisory_only"),
+    shadowMode: value.shadow_mode === undefined ? true : readBoolean(value.shadow_mode, "shadow_mode"),
+    replayResults: value.replay_results.map(parsePolicyReplayResult),
+    coverageGaps: value.coverage_gaps.map(parseCoverageGapFinding),
+    blastRadius: {
+      incidentCount: readNumber((value.blast_radius as Record<string, unknown>).incident_count, "blast_radius.incident_count"),
+      repoCount: readNumber((value.blast_radius as Record<string, unknown>).repo_count, "blast_radius.repo_count"),
+      environmentCount: readNumber((value.blast_radius as Record<string, unknown>).environment_count, "blast_radius.environment_count"),
+      workloadCount: readNumber((value.blast_radius as Record<string, unknown>).workload_count, "blast_radius.workload_count"),
+      topScopes: readOptionalStringArray((value.blast_radius as Record<string, unknown>).top_scopes, "blast_radius.top_scopes") || [],
+    },
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parseSystemicWeakness(value: unknown): SystemicWeaknessResponse["weaknesses"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid systemic weakness.");
+  }
+  return {
+    patternKey: readString(value.pattern_key, "weaknesses[].pattern_key"),
+    title: readString(value.title, "weaknesses[].title"),
+    priority: readString(value.priority, "weaknesses[].priority") as SystemicWeaknessResponse["weaknesses"][number]["priority"],
+    summary: readString(value.summary, "weaknesses[].summary"),
+    processFragility: readOptionalStringArray(value.process_fragility, "weaknesses[].process_fragility") || [],
+    supplyChainBlindSpots: readOptionalStringArray(value.supply_chain_blind_spots, "weaknesses[].supply_chain_blind_spots") || [],
+    rootCauseHypothesis: readString(value.root_cause_hypothesis, "weaknesses[].root_cause_hypothesis"),
+    executiveRecommendation: readString(value.executive_recommendation, "weaknesses[].executive_recommendation"),
+    relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "weaknesses[].related_incident_refs") || [],
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "weaknesses[].evidence_refs") || [],
+    limitations: readOptionalStringArray(value.limitations, "weaknesses[].limitations") || [],
+  };
+}
+
+function parseSystemicWeaknessResponse(value: unknown): SystemicWeaknessResponse {
+  if (!isRecord(value) || !Array.isArray(value.weaknesses)) {
+    throw new Error("Audit API returned invalid systemic weakness response.");
+  }
+  return {
+    generatedAt: readString(value.generated_at, "generated_at"),
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "advisory_only"),
+    scopeSummary: readString(value.scope_summary, "scope_summary"),
+    weaknesses: value.weaknesses.map(parseSystemicWeakness),
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
@@ -738,6 +1214,189 @@ export async function getEvents(tab: TabKey, filters: EventFilters) {
         : "/v1/reports/events";
 
   return parseEventsResponse(await fetchJSON<unknown>(path, { params }));
+}
+
+export async function getIncidents(filters: EventFilters) {
+  return parseIncidentsResponse(await fetchJSON<unknown>("/v1/incidents", {
+    params: {
+      decision: filters.decision,
+      component: filters.component,
+      repo: filters.repo,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      limit: filters.limit,
+    },
+  }));
+}
+
+export async function getMetricIncidents(metricKey: string, filters: EventFilters) {
+  return parseMetricIncidentsResponse(await fetchJSON<unknown>(`/v1/scorecard/metrics/${encodeURIComponent(metricKey)}/incidents`, {
+    params: {
+      decision: filters.decision,
+      component: filters.component,
+      repo: filters.repo,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      limit: filters.limit,
+    },
+  }));
+}
+
+export async function getIncidentExport(
+  incidentID: string,
+  filters?: Pick<EventFilters, "environment" | "tenant_id" | "repo">,
+  audience?: IncidentExport["audience"],
+) {
+  return parseIncidentExport(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/export`, {
+    params: {
+      environment: filters?.environment,
+      tenant_id: filters?.tenant_id,
+      repo: filters?.repo,
+      audience,
+    },
+  }));
+}
+
+export async function getIncidentPackage(
+  filters: Pick<EventFilters, "environment" | "tenant_id" | "repo"> & {
+    state?: string;
+    severity?: string;
+    category?: string;
+    scorecard_ref?: string;
+  },
+  incidentIDs: string[],
+  audience: IncidentPackage["audience"],
+) {
+  return parseIncidentPackage(await fetchJSON<unknown>("/v1/incidents/package", {
+    params: {
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      repo: filters.repo,
+      state: filters.state,
+      severity: filters.severity,
+      category: filters.category,
+      scorecard_ref: filters.scorecard_ref,
+      audience,
+      incident_id: incidentIDs,
+    },
+  }));
+}
+
+export async function getIncidentDefenseGaps(
+  incidentID: string,
+  filters?: Pick<EventFilters, "environment" | "tenant_id" | "repo">,
+) {
+  return parseDefenseGapAssessment(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/defense-gaps`, {
+    params: {
+      environment: filters?.environment,
+      tenant_id: filters?.tenant_id,
+      repo: filters?.repo,
+    },
+  }));
+}
+
+export async function getMetricDefenseGaps(metricKey: string, filters: EventFilters) {
+  return parseDefenseGapAssessment(await fetchJSON<unknown>(`/v1/scorecard/metrics/${encodeURIComponent(metricKey)}/defense-gaps`, {
+    params: {
+      decision: filters.decision,
+      component: filters.component,
+      repo: filters.repo,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      limit: filters.limit,
+    },
+  }));
+}
+
+export async function getIncidentPolicyReplay(
+  incidentID: string,
+  filters?: Pick<EventFilters, "environment" | "tenant_id" | "repo">,
+) {
+  return parsePolicyReplayAssessment(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/policy-replay`, {
+    params: {
+      environment: filters?.environment,
+      tenant_id: filters?.tenant_id,
+      repo: filters?.repo,
+    },
+  }));
+}
+
+export async function getMetricPolicyReplay(metricKey: string, filters: EventFilters) {
+  return parsePolicyReplayAssessment(await fetchJSON<unknown>(`/v1/scorecard/metrics/${encodeURIComponent(metricKey)}/policy-replay`, {
+    params: {
+      decision: filters.decision,
+      component: filters.component,
+      repo: filters.repo,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      limit: filters.limit,
+    },
+  }));
+}
+
+export async function getSystemicWeaknesses(filters: EventFilters & { scorecard_ref?: string }) {
+  return parseSystemicWeaknessResponse(await fetchJSON<unknown>("/v1/ai/systemic-weaknesses", {
+    params: {
+      decision: filters.decision,
+      component: filters.component,
+      repo: filters.repo,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      limit: filters.limit,
+      scorecard_ref: filters.scorecard_ref,
+    },
+  }));
+}
+
+export async function acknowledgeIncident(incidentID: string, summary?: string) {
+  return parseIncident(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/acknowledge`, {
+    method: "POST",
+    body: summary ? { summary } : {},
+  }));
+}
+
+export async function watchIncident(incidentID: string, summary?: string) {
+  return parseIncident(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/watch`, {
+    method: "POST",
+    body: summary ? { summary } : {},
+  }));
+}
+
+export async function assignIncident(incidentID: string, owner: string, reason: string) {
+  return parseIncident(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/assign`, {
+    method: "POST",
+    body: { owner, reason },
+  }));
+}
+
+export async function resolveIncident(
+  incidentID: string,
+  input: {
+    resolution_type: string;
+    resolution_summary: string;
+    resolution_details?: string;
+    resolution_refs?: string[];
+    follow_up_required?: boolean;
+  },
+) {
+  return parseIncident(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/resolve`, {
+    method: "POST",
+    body: input,
+  }));
+}
+
+export async function reopenIncident(incidentID: string, reason?: string) {
+  return parseIncident(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/reopen`, {
+    method: "POST",
+    body: reason ? { reason } : {},
+  }));
+}
+
+export async function addIncidentNote(incidentID: string, note: string) {
+  return parseIncident(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/notes`, {
+    method: "POST",
+    body: { note },
+  }));
 }
 
 export async function getExceptionReport(filters: {

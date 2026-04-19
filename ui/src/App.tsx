@@ -2,36 +2,61 @@ import { useEffect, useState } from "react";
 
 import {
   APIError,
+  acknowledgeIncident,
+  addIncidentNote,
   apiBaseURL,
   apiTokenConfigured,
   approveException,
+  assignIncident,
   getAuthStatus,
   getDriftStats,
   getEvents,
   getExceptionReport,
   getExceptions,
   getHealth,
+  getIncidentDefenseGaps,
+  getIncidentExport,
+  getIncidentPolicyReplay,
+  getIncidentPackage,
+  getIncidents,
+  getMetricDefenseGaps,
+  getMetricIncidents,
+  getMetricPolicyReplay,
   getSummary,
+  getSystemicWeaknesses,
   getSyncStatus,
   getTopViolators,
   getTrends,
   rejectException,
+  reopenIncident,
+  resolveIncident,
   requestException,
   revokeException,
+  watchIncident,
 } from "./api";
 import { AnalyticsTrendsPanel } from "./components/AnalyticsTrendsPanel";
-import { BuyerHighlights } from "./components/BuyerHighlights";
 import { DriftStatsPanel } from "./components/DriftStatsPanel";
 import { EventDetails } from "./components/EventDetails";
 import { EventsTable } from "./components/EventsTable";
 import { ExceptionRequestForm } from "./components/ExceptionRequestForm";
 import { Filters } from "./components/Filters";
 import { HealthBadge } from "./components/HealthBadge";
+import { IncidentWorkbench } from "./components/IncidentWorkbench";
+import { OverviewDashboard } from "./components/OverviewDashboard";
 import { PendingExceptionsPanel } from "./components/PendingExceptionsPanel";
 import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
-import { SummaryCards } from "./components/SummaryCards";
 import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
 import { VulnerabilityOpsPanel } from "./components/VulnerabilityOpsPanel";
+import type {
+  DefenseGapAssessment,
+  IncidentExport,
+  IncidentPackage,
+  PolicyReplayAssessment,
+  IncidentReportAudience,
+  InvestigationIncident,
+  MetricIncidentDrilldown,
+  SystemicWeaknessResponse,
+} from "./incidents";
 import type {
   AuditHealth,
   AuthStatus,
@@ -58,18 +83,22 @@ const initialFilters: EventFilters = {
 };
 
 const tabs: Array<{ key: TabKey; label: string; description: string }> = [
-  { key: "overview", label: "Overview", description: "Summary plus latest audit events." },
-  { key: "events", label: "Events", description: "All audit events with operator filters." },
-  { key: "denies", label: "Denies", description: "Rejected operations and why they were blocked." },
-  { key: "runtime", label: "Runtime Drift", description: "Runtime scans and drift findings." },
-  { key: "analytics", label: "Analytics", description: "Trends, violators, and drift statistics." },
+  { key: "overview", label: "Posture", description: "Current posture, active incidents, and next operator actions." },
+  { key: "events", label: "Investigations", description: "Evidence-backed event stream for drill-down and triage." },
+  { key: "denies", label: "Denials", description: "Rejected operations and the trust reasons that blocked them." },
+  { key: "runtime", label: "Runtime", description: "Drift findings and the workloads that need reconciliation." },
+  { key: "analytics", label: "Governance", description: "Trends, violators, and control-plane operating pressure." },
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
-  { key: "inventory", label: "SBOM Inventory", description: "Search stored SBOM components by digest, package, or PURL." },
-  { key: "vulnerabilities", label: "Vulnerability Ops", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
+  { key: "inventory", label: "Components", description: "Investigate stored SBOM components by digest, package, or PURL." },
+  { key: "vulnerabilities", label: "Vulnerabilities", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
 ];
 
 function isHumanRole(role?: string) {
   return role === "viewer" || role === "operator" || role === "security_admin";
+}
+
+function isOptionalFeatureMissing(error: unknown) {
+  return error instanceof APIError && error.status === 404;
 }
 
 export default function App() {
@@ -85,7 +114,10 @@ export default function App() {
   const [topViolators, setTopViolators] = useState<TopViolatorsResponse | null>(null);
   const [driftStats, setDriftStats] = useState<DriftStatsResponse | null>(null);
   const [exceptionReport, setExceptionReport] = useState<ExceptionReport | null>(null);
+  const [incidents, setIncidents] = useState<InvestigationIncident[]>([]);
+  const [systemicWeaknesses, setSystemicWeaknesses] = useState<SystemicWeaknessResponse | null>(null);
   const [pendingExceptions, setPendingExceptions] = useState<PolicyException[]>([]);
+  const [metricDrilldown, setMetricDrilldown] = useState<MetricIncidentDrilldown | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +161,7 @@ export default function App() {
           setTopViolators(null);
           setDriftStats(null);
           setExceptionReport(null);
+          setIncidents([]);
           setPendingExceptions([]);
 
           if (authResult.reason instanceof APIError) {
@@ -156,12 +189,127 @@ export default function App() {
             getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
           ];
           if (isHumanRole(authResult.value.role)) {
-            promises.push(getSyncStatus().then(setSyncStatus));
+            promises.push(
+              getSyncStatus()
+                .then(setSyncStatus)
+                .catch((syncError) => {
+                  if (isOptionalFeatureMissing(syncError)) {
+                    setSyncStatus({
+                      mode: "disabled",
+                      sync_mode: "disabled",
+                      health: "disabled",
+                      cache_present: false,
+                      summary: "Sync status endpoint is not enabled on this backend.",
+                    });
+                    return;
+                  }
+                  throw syncError;
+                }),
+            );
           } else {
             setSyncStatus(null);
           }
 
-          if (activeTab === "analytics") {
+          if (activeTab === "overview") {
+            promises.push(
+              getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
+                setEvents(response.events);
+                setSelectedEvent((current) => response.events.find((event) => event.id === current?.id) || response.events[0] || null);
+              }),
+            );
+            promises.push(
+              getTrends({
+                window_days: "7",
+                granularity: "day",
+                ...baseFilters,
+              }).then(setTrends).catch((trendsError) => {
+                if (isOptionalFeatureMissing(trendsError)) {
+                  setTrends(null);
+                  return;
+                }
+                throw trendsError;
+              }),
+            );
+            promises.push(
+              getTopViolators({
+                window_days: "7",
+                limit: "5",
+                dimension: "repo",
+                ...baseFilters,
+              }).then(setTopViolators).catch((violatorsError) => {
+                if (isOptionalFeatureMissing(violatorsError)) {
+                  setTopViolators(null);
+                  return;
+                }
+                throw violatorsError;
+              }),
+            );
+            promises.push(
+              getDriftStats({
+                window_days: "7",
+                ...baseFilters,
+              }).then(setDriftStats).catch((driftError) => {
+                if (isOptionalFeatureMissing(driftError)) {
+                  setDriftStats(null);
+                  return;
+                }
+                throw driftError;
+              }),
+            );
+            promises.push(
+              getExceptionReport(baseFilters).then(setExceptionReport).catch((reportError) => {
+                if (isOptionalFeatureMissing(reportError)) {
+                  setExceptionReport(null);
+                  return;
+                }
+                throw reportError;
+              }),
+            );
+            promises.push(
+              getSystemicWeaknesses({
+                ...filters,
+                tenant_id: scopedTenantID,
+              }).then(setSystemicWeaknesses).catch((systemicError) => {
+                if (isOptionalFeatureMissing(systemicError)) {
+                  setSystemicWeaknesses(null);
+                  return;
+                }
+                throw systemicError;
+              }),
+            );
+            setPendingExceptions([]);
+            setIncidents([]);
+          } else if (activeTab === "events") {
+            promises.push(
+              (metricDrilldown
+                ? getMetricIncidents(metricDrilldown.metricKey, { ...filters, tenant_id: scopedTenantID }).then((response) => {
+                    setMetricDrilldown(response);
+                    setIncidents(response.incidents);
+                    setEvents([]);
+                    setSelectedEvent(null);
+                  })
+                : getIncidents({ ...filters, tenant_id: scopedTenantID }).then((response) => {
+                    setIncidents(response);
+                    setEvents([]);
+                    setSelectedEvent(null);
+                  })).catch((incidentError) => {
+                if (isOptionalFeatureMissing(incidentError)) {
+                  return getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
+                    setIncidents([]);
+                    setEvents(response.events);
+                    setSelectedEvent((current) => response.events.find((event) => event.id === current?.id) || response.events[0] || null);
+                  });
+                }
+                throw incidentError;
+              }),
+            );
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setPendingExceptions([]);
+          } else if (activeTab === "analytics") {
             promises.push(
               getTrends({
                 window_days: "30",
@@ -185,6 +333,7 @@ export default function App() {
             );
             setEvents([]);
             setSelectedEvent(null);
+            setSystemicWeaknesses(null);
           } else if (activeTab === "exceptions") {
             promises.push(getExceptionReport(baseFilters).then((report) => {
               setExceptionReport(report);
@@ -205,6 +354,8 @@ export default function App() {
             setTopViolators(null);
             setDriftStats(null);
             setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setIncidents([]);
             setPendingExceptions([]);
           } else {
             promises.push(
@@ -217,6 +368,8 @@ export default function App() {
             setTopViolators(null);
             setDriftStats(null);
             setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setIncidents([]);
             setPendingExceptions([]);
           }
 
@@ -252,7 +405,7 @@ export default function App() {
     return () => {
       ignore = true;
     };
-  }, [activeTab, filters.component, filters.decision, filters.environment, filters.limit, filters.repo, filters.tenant_id, refreshIndex]);
+  }, [activeTab, filters.component, filters.decision, filters.environment, filters.limit, filters.repo, filters.tenant_id, metricDrilldown?.metricKey, refreshIndex]);
 
   const activeTabMeta = tabs.find((tab) => tab.key === activeTab) || tabs[0];
   const role = authStatus?.role;
@@ -285,15 +438,101 @@ export default function App() {
     setRefreshIndex((value) => value + 1);
   }
 
+  async function handleAcknowledgeIncident(incidentID: string, summary?: string) {
+    await acknowledgeIncident(incidentID, summary);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleWatchIncident(incidentID: string, summary?: string) {
+    await watchIncident(incidentID, summary);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleAssignIncident(incidentID: string, owner: string, reason: string) {
+    await assignIncident(incidentID, owner, reason);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleResolveIncident(
+    incidentID: string,
+    input: {
+      resolution_type: string;
+      resolution_summary: string;
+      resolution_details?: string;
+      resolution_refs?: string[];
+      follow_up_required?: boolean;
+    },
+  ) {
+    await resolveIncident(incidentID, input);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleReopenIncident(incidentID: string, reason?: string) {
+    await reopenIncident(incidentID, reason);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleIncidentNote(incidentID: string, note: string) {
+    await addIncidentNote(incidentID, note);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleLoadIncidentExport(incidentID: string, audience: IncidentReportAudience): Promise<IncidentExport> {
+    return getIncidentExport(incidentID, {
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+    }, audience);
+  }
+
+  async function handleLoadIncidentPackage(incidentIDs: string[], audience: IncidentReportAudience): Promise<IncidentPackage> {
+    return getIncidentPackage({
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+      scorecard_ref: metricDrilldown?.metricKey,
+    }, incidentIDs, audience);
+  }
+
+  async function handleLoadIncidentDefenseGaps(incidentID: string): Promise<DefenseGapAssessment> {
+    return getIncidentDefenseGaps(incidentID, {
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+    });
+  }
+
+  async function handleLoadMetricDefenseGaps(metricKey: string): Promise<DefenseGapAssessment> {
+    return getMetricDefenseGaps(metricKey, {
+      ...filters,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+    });
+  }
+
+  async function handleLoadIncidentPolicyReplay(incidentID: string): Promise<PolicyReplayAssessment> {
+    return getIncidentPolicyReplay(incidentID, {
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+    });
+  }
+
+  async function handleLoadMetricPolicyReplay(metricKey: string): Promise<PolicyReplayAssessment> {
+    return getMetricPolicyReplay(metricKey, {
+      ...filters,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+    });
+  }
+
   return (
     <main className="app-shell">
       <header className="hero">
         <div>
           <p className="eyebrow">ChangeLock Security Dashboard</p>
-          <h1>Audit Visibility, Approval Governance, and Operational Trends</h1>
+          <h1>Security posture and active incidents</h1>
           <p className="hero-copy">
-            This dashboard renders the live PostgreSQL-backed reports, analytics, and exception governance APIs from the
-            ChangeLock control plane.
+            Live ChangeLock audit signals, grouped into the operator questions that matter first: what changed, what is at
+            risk, what is affected, and what to do next.
           </p>
         </div>
 
@@ -349,9 +588,6 @@ export default function App() {
         </section>
       ) : null}
 
-      <BuyerHighlights summary={summary} loading={loading} />
-      <SummaryCards summary={summary} loading={loading} />
-
       <section className="tabs">
         {tabs.map((tab) => (
           <button
@@ -364,16 +600,29 @@ export default function App() {
         ))}
       </section>
 
-      <section className="tab-header panel">
-        <div>
-          <h2>{activeTabMeta.label}</h2>
-          <p>{activeTabMeta.description}</p>
-          {lastLoadedAt ? <p className="tab-header__meta">Last refresh at {lastLoadedAt}</p> : null}
-        </div>
-        <button className="button" onClick={() => setRefreshIndex((value) => value + 1)}>
-          Refresh Data
-        </button>
-      </section>
+      {activeTab !== "overview" ? (
+        <section className="tab-header panel">
+          <div>
+            <h2>{activeTabMeta.label}</h2>
+            <p>{activeTabMeta.description}</p>
+            {lastLoadedAt ? <p className="tab-header__meta">Last refresh at {lastLoadedAt}</p> : null}
+          </div>
+          <button className="button" onClick={() => setRefreshIndex((value) => value + 1)}>
+            Refresh Data
+          </button>
+        </section>
+      ) : (
+        <section className="panel overview-scope-bar">
+          <div>
+            <span className="summary-label">Posture workspace</span>
+            <strong>{activeTabMeta.description}</strong>
+            {lastLoadedAt ? <p className="tab-header__meta">Last refresh at {lastLoadedAt}</p> : null}
+          </div>
+          <button className="button" onClick={() => setRefreshIndex((value) => value + 1)}>
+            Refresh posture
+          </button>
+        </section>
+      )}
 
       {activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
         <Filters
@@ -384,6 +633,39 @@ export default function App() {
           onRefresh={() => setRefreshIndex((value) => value + 1)}
           onReset={() => setFilters({ ...initialFilters, tenant_id: enforcedTenantID })}
         />
+      ) : null}
+
+      {activeTab === "overview" ? (
+        <>
+          <OverviewDashboard
+            health={health}
+            summary={summary}
+            trends={trends}
+            topViolators={topViolators}
+            driftStats={driftStats}
+            exceptionReport={exceptionReport}
+            systemicWeaknesses={systemicWeaknesses}
+            syncStatus={syncStatus}
+            loading={loading}
+            onSelectTrustMetric={(metricKey, label) => {
+              setMetricDrilldown({
+                metricKey,
+                metricLabel: label,
+                incidents: [],
+                limitations: [],
+              });
+              setActiveTab("events");
+            }}
+          />
+
+          <section className="panel overview-evidence-header">
+            <div>
+              <span className="summary-label">Recent evidence-backed decisions</span>
+              <h2>Investigation feed</h2>
+              <p>Use the latest events and evidence payloads to validate root cause before widening scope or approving exceptions.</p>
+            </div>
+          </section>
+        </>
       ) : null}
 
       {activeTab === "analytics" ? (
@@ -435,7 +717,31 @@ export default function App() {
 
       {activeTab === "vulnerabilities" ? <VulnerabilityOpsPanel role={role} tenantID={enforcedTenantID || undefined} /> : null}
 
-      {activeTab !== "analytics" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
+      {activeTab === "events" ? (
+        <IncidentWorkbench
+          incidents={incidents}
+          events={events}
+          loading={loading}
+          error={error}
+          role={role}
+          metricDrilldown={metricDrilldown}
+          onClearMetricDrilldown={() => setMetricDrilldown(null)}
+          onLoadExport={handleLoadIncidentExport}
+          onLoadPackage={handleLoadIncidentPackage}
+          onLoadIncidentDefenseGaps={handleLoadIncidentDefenseGaps}
+          onLoadMetricDefenseGaps={handleLoadMetricDefenseGaps}
+          onLoadIncidentPolicyReplay={handleLoadIncidentPolicyReplay}
+          onLoadMetricPolicyReplay={handleLoadMetricPolicyReplay}
+          onAcknowledge={handleAcknowledgeIncident}
+          onWatch={handleWatchIncident}
+          onAssign={handleAssignIncident}
+          onResolve={handleResolveIncident}
+          onReopen={handleReopenIncident}
+          onAddNote={handleIncidentNote}
+        />
+      ) : null}
+
+      {activeTab !== "analytics" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "events" ? (
         <section className="content-grid">
           <EventsTable
             events={events}
@@ -443,6 +749,8 @@ export default function App() {
             onSelect={setSelectedEvent}
             loading={loading}
             error={error}
+            title={activeTab === "overview" ? "Recent Decisions" : "Recent Events"}
+            emptyMessage={activeTab === "overview" ? "No recent evidence-backed decisions matched the current scope." : undefined}
           />
           <EventDetails event={selectedEvent} />
         </section>

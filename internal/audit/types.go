@@ -58,6 +58,30 @@ type Event struct {
 	ExceptionRejectedAt      *time.Time       `json:"exception_rejected_at,omitempty"`
 	ExceptionRejectionReason string           `json:"exception_rejection_reason,omitempty"`
 	ExceptionExpiresAt       *time.Time       `json:"exception_expires_at,omitempty"`
+	IncidentID               string           `json:"incident_id,omitempty"`
+	IncidentIdentityKey      string           `json:"incident_identity_key,omitempty"`
+	IncidentTitle            string           `json:"incident_title,omitempty"`
+	IncidentSummary          string           `json:"incident_summary,omitempty"`
+	IncidentCategory         string           `json:"incident_category,omitempty"`
+	IncidentSeverity         string           `json:"incident_severity,omitempty"`
+	IncidentPriority         string           `json:"incident_priority,omitempty"`
+	IncidentState            string           `json:"incident_state,omitempty"`
+	IncidentScopeType        string           `json:"incident_scope_type,omitempty"`
+	IncidentScopeRef         string           `json:"incident_scope_ref,omitempty"`
+	IncidentOwner            string           `json:"incident_owner,omitempty"`
+	IncidentAssignmentReason string           `json:"incident_assignment_reason,omitempty"`
+	IncidentResolutionType   string           `json:"incident_resolution_type,omitempty"`
+	IncidentResolutionSummary string          `json:"incident_resolution_summary,omitempty"`
+	IncidentResolutionDetails string          `json:"incident_resolution_details,omitempty"`
+	IncidentFollowUpRequired bool             `json:"incident_follow_up_required,omitempty"`
+	IncidentResolutionRefs   []string         `json:"incident_resolution_refs,omitempty"`
+	IncidentFindingRefs      []string         `json:"incident_finding_refs,omitempty"`
+	IncidentGuidanceRefs     []string         `json:"incident_guidance_refs,omitempty"`
+	IncidentScorecardRefs    []string         `json:"incident_scorecard_refs,omitempty"`
+	IncidentEvidenceRefs     []string         `json:"incident_evidence_refs,omitempty"`
+	IncidentReasonCodes      []string         `json:"incident_reason_codes,omitempty"`
+	IncidentLabels           []string         `json:"incident_labels,omitempty"`
+	IncidentNote             string           `json:"incident_note,omitempty"`
 	Evidence                 *Evidence        `json:"evidence,omitempty"`
 }
 
