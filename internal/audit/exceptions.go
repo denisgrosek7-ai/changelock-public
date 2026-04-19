@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 const (
@@ -42,30 +44,33 @@ var (
 )
 
 type PolicyException struct {
-	ID              int64           `json:"id"`
-	ExceptionID     string          `json:"exception_id"`
-	ExceptionType   string          `json:"exception_type"`
-	Status          string          `json:"status"`
-	TenantID        string          `json:"tenant_id,omitempty"`
-	Environment     string          `json:"environment,omitempty"`
-	Namespace       string          `json:"namespace,omitempty"`
-	Repo            string          `json:"repo,omitempty"`
-	ImageDigest     string          `json:"image_digest,omitempty"`
-	CVEID           string          `json:"cve_id,omitempty"`
-	Reason          string          `json:"reason"`
-	TicketID        string          `json:"ticket_id"`
-	RequestedBy     string          `json:"requested_by,omitempty"`
-	RequestedAt     *time.Time      `json:"requested_at,omitempty"`
-	ApprovedBy      string          `json:"approved_by,omitempty"`
-	ApprovedAt      *time.Time      `json:"approved_at,omitempty"`
-	RejectedBy      string          `json:"rejected_by,omitempty"`
-	RejectedAt      *time.Time      `json:"rejected_at,omitempty"`
-	RejectionReason string          `json:"rejection_reason,omitempty"`
-	CreatedAt       time.Time       `json:"created_at"`
-	ExpiresAt       time.Time       `json:"expires_at"`
-	Active          bool            `json:"active"`
-	LastUpdatedAt   *time.Time      `json:"last_updated_at,omitempty"`
-	Metadata        json.RawMessage `json:"metadata,omitempty"`
+	ID                 int64             `json:"id"`
+	ExceptionID        string            `json:"exception_id"`
+	ExceptionType      string            `json:"exception_type"`
+	Status             string            `json:"status"`
+	TenantID           string            `json:"tenant_id,omitempty"`
+	Environment        string            `json:"environment,omitempty"`
+	Namespace          string            `json:"namespace,omitempty"`
+	Repo               string            `json:"repo,omitempty"`
+	ImageDigest        string            `json:"image_digest,omitempty"`
+	CVEID              string            `json:"cve_id,omitempty"`
+	Reason             string            `json:"reason"`
+	TicketID           string            `json:"ticket_id"`
+	RequestedBy        string            `json:"requested_by,omitempty"`
+	RequestedAt        *time.Time        `json:"requested_at,omitempty"`
+	ApprovedBy         string            `json:"approved_by,omitempty"`
+	ApprovedAt         *time.Time        `json:"approved_at,omitempty"`
+	RejectedBy         string            `json:"rejected_by,omitempty"`
+	RejectedAt         *time.Time        `json:"rejected_at,omitempty"`
+	RejectionReason    string            `json:"rejection_reason,omitempty"`
+	CreatedAt          time.Time         `json:"created_at"`
+	ExpiresAt          time.Time         `json:"expires_at"`
+	Active             bool              `json:"active"`
+	LastUpdatedAt      *time.Time        `json:"last_updated_at,omitempty"`
+	Signature          *signing.Envelope `json:"signature,omitempty"`
+	VerificationState  string            `json:"verification_state,omitempty"`
+	VerificationReason string            `json:"verification_reason,omitempty"`
+	Metadata           json.RawMessage   `json:"metadata,omitempty"`
 }
 
 type ApprovalLog struct {
@@ -126,9 +131,11 @@ type ExceptionValidationRequest struct {
 }
 
 type ExceptionValidationResult struct {
-	Valid     bool             `json:"valid"`
-	Reason    string           `json:"reason,omitempty"`
-	Exception *PolicyException `json:"exception,omitempty"`
+	Valid              bool             `json:"valid"`
+	Reason             string           `json:"reason,omitempty"`
+	VerificationState  string           `json:"verification_state,omitempty"`
+	VerificationReason string           `json:"verification_reason,omitempty"`
+	Exception          *PolicyException `json:"exception,omitempty"`
 }
 
 type ExceptionReport struct {
@@ -362,6 +369,7 @@ func clonePolicyException(exception PolicyException) PolicyException {
 	if exception.Metadata != nil {
 		exception.Metadata = slices.Clone(exception.Metadata)
 	}
+	exception.Signature = cloneSignatureEnvelope(exception.Signature)
 	if exception.RequestedAt != nil {
 		requestedAt := exception.RequestedAt.UTC()
 		exception.RequestedAt = &requestedAt

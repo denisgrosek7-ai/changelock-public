@@ -1,0 +1,110 @@
+{
+  "name": "changelock-shift-left",
+  "displayName": "ChangeLock Shift-Left",
+  "description": "Run ChangeLock preflight diagnostics inside VS Code using changelock-cli.",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml",
+    "onCommand:changelock.runCurrentFileChecks",
+    "onCommand:changelock.runWorkspaceChecks",
+    "onCommand:changelock.showCurrentFileGuidance",
+    "onCommand:changelock.clearDiagnostics"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "changelock.runCurrentFileChecks",
+        "title": "ChangeLock: Run Current File Checks"
+      },
+      {
+        "command": "changelock.runWorkspaceChecks",
+        "title": "ChangeLock: Run Workspace Checks"
+      },
+      {
+        "command": "changelock.showCurrentFileGuidance",
+        "title": "ChangeLock: Show Current File Guidance"
+      },
+      {
+        "command": "changelock.clearDiagnostics",
+        "title": "ChangeLock: Clear Diagnostics"
+      }
+    ],
+    "configuration": {
+      "title": "ChangeLock",
+      "properties": {
+        "changelock.cliPath": {
+          "type": "string",
+          "default": "changelock-cli",
+          "description": "Path to the changelock-cli binary."
+        },
+        "changelock.apiUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional ChangeLock API URL for API-assisted context."
+        },
+        "changelock.token": {
+          "type": "string",
+          "default": "",
+          "description": "Optional read-only ChangeLock API bearer token. Prefer tokenEnvVar in shared workspaces."
+        },
+        "changelock.tokenEnvVar": {
+          "type": "string",
+          "default": "CHANGELOCK_CLI_TOKEN",
+          "description": "Environment variable to read when no inline token is configured."
+        },
+        "changelock.offline": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable API-assisted checks and run local-only preflight diagnostics."
+        },
+        "changelock.policyDir": {
+          "type": "string",
+          "default": "deploy/kyverno",
+          "description": "Path to the Kyverno policy directory, relative to the workspace root unless absolute."
+        },
+        "changelock.bundleDir": {
+          "type": "string",
+          "default": "policies",
+          "description": "Path to the ChangeLock bundle directory, relative to the workspace root unless absolute."
+        },
+        "changelock.scanner": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "trivy",
+            "grype"
+          ],
+          "default": "auto",
+          "description": "Scanner preference when preflight extracts a digest-pinned image from the current manifest."
+        },
+        "changelock.tenant": {
+          "type": "string",
+          "default": "acme",
+          "description": "Tenant used for API-assisted context and local bundle evaluation."
+        },
+        "changelock.repository": {
+          "type": "string",
+          "default": "",
+          "description": "Optional repository identity override, for example my-org/acme-app."
+        },
+        "changelock.runOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run current-file ChangeLock checks automatically after saving YAML manifests."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js",
+    "test": "node --test ./test/*.test.js"
+  }
+}

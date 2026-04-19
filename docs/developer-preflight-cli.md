@@ -12,6 +12,7 @@ It does **not** replace the server-side ChangeLock decision path. It is a local 
 - optional ChangeLock API context:
   - `/v1/auth/me`
   - `/v1/exceptions`
+  - `/v1/vulnerabilities/net` when a digest-pinned image allows VEX-aware net vulnerability context
 
 ## What it does not guarantee
 
@@ -19,6 +20,7 @@ It does **not** replace the server-side ChangeLock decision path. It is a local 
 - it does not bypass server-side RBAC or tenant enforcement
 - it does not guarantee cluster admission success when local inputs differ from real deploy inputs
 - it does not replace CI or admission webhook enforcement
+- any demo token examples in this document are local static-token examples only and are not production-safe
 
 ## Build and install
 
@@ -68,6 +70,8 @@ changelock-cli manifest --file deploy.yaml
 changelock-cli image --image ghcr.io/my-org/acme-app@sha256:...
 changelock-cli scan --image ghcr.io/my-org/acme-app@sha256:...
 changelock-cli preflight --file deploy.yaml --image ghcr.io/my-org/acme-app@sha256:...
+changelock-cli diagnostics --input ./artifacts/preflight.json --format markdown
+changelock-cli guidance --input ./artifacts/preflight.json --format markdown
 ```
 
 ## Common flags
@@ -113,6 +117,10 @@ Command-specific flags:
 - `CHANGELOCK_CLI_GRYPE_BIN`
 - `CHANGELOCK_CLI_SCANNER`
 - `CHANGELOCK_VULN_FAIL_SEVERITY`
+- `CHANGELOCK_AI_GUIDANCE_MODE`
+- `CHANGELOCK_AI_GUIDANCE_MAX_ITEMS`
+- `CHANGELOCK_AI_GUIDANCE_INCLUDE_DOC_LINKS`
+- `CHANGELOCK_AI_GUIDANCE_REDACT_SENSITIVE`
 
 ## Output modes
 
@@ -144,6 +152,11 @@ Informal JSON contract:
   "mode": "offline",
   "overall_result": "PASS",
   "exit_code": 0,
+  "diagnostic_summary": {
+    "total": 2,
+    "blocking": 0,
+    "advisory": 1
+  },
   "checks": [
     {
       "name": "manifest",
@@ -158,6 +171,29 @@ Informal JSON contract:
       "mode": "remote",
       "status": "SKIP",
       "summary": "API-assisted checks disabled or no API URL configured"
+    }
+  ],
+  "diagnostics": [
+    {
+      "check_id": "manifest",
+      "rule_id": "preflight.manifest",
+      "category": "policy",
+      "severity": "note",
+      "reason_code": "manifest_policy_satisfied",
+      "summary": "Kyverno accepted the manifest against the local policy set",
+      "target": "/abs/path/deploy.yaml",
+      "target_file": "/abs/path/deploy.yaml",
+      "range": {
+        "start_line": 1,
+        "start_column": 1,
+        "end_line": 1,
+        "end_column": 1
+      },
+      "fix_hint": "No action required.",
+      "docs_ref": "docs/developer-preflight-cli.md",
+      "source": "policy",
+      "blocking": false,
+      "evaluation_state": "pass"
     }
   ]
 }
@@ -177,6 +213,35 @@ The JSON output is stable enough for wrappers to key on:
   - `summary`
   - `target` when relevant
   - `details` when relevant
+- top-level diagnostics:
+  - `diagnostics[]`
+  - `diagnostic_summary`
+- per-diagnostic:
+  - `rule_id`
+  - `category`
+  - `severity`
+  - `reason_code`
+  - `fix_hint`
+  - `docs_ref`
+
+## Contextual guidance formatter
+
+Phase 8l adds a second read-only formatter path for bounded contextual guidance:
+
+```bash
+changelock-cli guidance --input ./artifacts/preflight.json --format json
+changelock-cli guidance --input ./artifacts/preflight.json --format markdown
+```
+
+This formatter:
+
+- reuses deterministic `checks[]` and `diagnostics[]`
+- never mutates policy, VEX, signer policy, exceptions, or runtime state
+- keeps deterministic findings authoritative even when guidance mode is enabled
+- defaults to `CHANGELOCK_AI_GUIDANCE_MODE=disabled`, which still emits conservative deterministic guidance
+  - `source`
+  - `blocking`
+  - `evaluation_state`
 
 ## Exit codes
 
@@ -215,6 +280,7 @@ API-assisted mode:
 - currently enriches results with:
   - auth identity diagnostic from `/v1/auth/me`
   - approved exception lookups from `/v1/exceptions`
+  - VEX-aware net vulnerability context from `/v1/vulnerabilities/net` when the evaluated image is digest-pinned
 
 Local-only mode:
 
@@ -227,6 +293,30 @@ Configured online mode with an unreachable API:
 - does **not** silently degrade to `PASS`
 - remote/API-assisted checks return `ERROR`
 - aggregate result exits with code `3`
+
+## Diagnostics formatter
+
+The formatter command converts a stored JSON result into other developer-facing surfaces without rerunning policy logic:
+
+```bash
+changelock-cli diagnostics --input ./artifacts/preflight.json --format json
+changelock-cli diagnostics --input ./artifacts/preflight.json --format github-annotations
+changelock-cli diagnostics --input ./artifacts/preflight.json --format markdown
+changelock-cli diagnostics --input ./artifacts/preflight.json --format sarif
+```
+
+Supported formats:
+
+- `json`
+  - emits the filtered `diagnostics[]` payload plus `diagnostic_summary`
+- `github-annotations`
+  - emits workflow-command annotations for CI and PR jobs
+- `markdown`
+  - emits a concise summary for job summaries or review artifacts
+- `sarif`
+  - emits a basic SARIF view from the same shared diagnostics contract
+
+Default formatter behavior excludes `PASS` diagnostics so IDE and PR surfaces stay focused on actionable findings.
 
 ## Manifest input examples
 

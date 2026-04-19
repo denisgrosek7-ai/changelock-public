@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 const (
@@ -24,24 +26,25 @@ const (
 )
 
 type SyncedException struct {
-	ExceptionID   string          `json:"exception_id"`
-	ExceptionType string          `json:"exception_type"`
-	TenantID      string          `json:"tenant_id,omitempty"`
-	Environment   string          `json:"environment,omitempty"`
-	Namespace     string          `json:"namespace,omitempty"`
-	Repo          string          `json:"repo,omitempty"`
-	ImageDigest   string          `json:"image_digest,omitempty"`
-	CVEID         string          `json:"cve_id,omitempty"`
-	Reason        string          `json:"reason"`
-	TicketID      string          `json:"ticket_id"`
-	RequestedBy   string          `json:"requested_by,omitempty"`
-	RequestedAt   *time.Time      `json:"requested_at,omitempty"`
-	ApprovedBy    string          `json:"approved_by,omitempty"`
-	ApprovedAt    *time.Time      `json:"approved_at,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	ExpiresAt     time.Time       `json:"expires_at"`
-	LastUpdatedAt *time.Time      `json:"last_updated_at,omitempty"`
-	Metadata      json.RawMessage `json:"metadata,omitempty"`
+	ExceptionID   string            `json:"exception_id"`
+	ExceptionType string            `json:"exception_type"`
+	TenantID      string            `json:"tenant_id,omitempty"`
+	Environment   string            `json:"environment,omitempty"`
+	Namespace     string            `json:"namespace,omitempty"`
+	Repo          string            `json:"repo,omitempty"`
+	ImageDigest   string            `json:"image_digest,omitempty"`
+	CVEID         string            `json:"cve_id,omitempty"`
+	Reason        string            `json:"reason"`
+	TicketID      string            `json:"ticket_id"`
+	RequestedBy   string            `json:"requested_by,omitempty"`
+	RequestedAt   *time.Time        `json:"requested_at,omitempty"`
+	ApprovedBy    string            `json:"approved_by,omitempty"`
+	ApprovedAt    *time.Time        `json:"approved_at,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
+	ExpiresAt     time.Time         `json:"expires_at"`
+	LastUpdatedAt *time.Time        `json:"last_updated_at,omitempty"`
+	Signature     *signing.Envelope `json:"signature,omitempty"`
+	Metadata      json.RawMessage   `json:"metadata,omitempty"`
 }
 
 type ExceptionSyncSnapshot struct {
@@ -49,6 +52,7 @@ type ExceptionSyncSnapshot struct {
 	Revision    string            `json:"revision"`
 	GeneratedAt time.Time         `json:"generated_at"`
 	Exceptions  []SyncedException `json:"exceptions"`
+	Signature   *signing.Envelope `json:"signature,omitempty"`
 }
 
 type SyncStatus struct {
@@ -65,6 +69,9 @@ type SyncStatus struct {
 	LastError            string     `json:"last_error,omitempty"`
 	CachePresent         bool       `json:"cache_present"`
 	StaleAfterSeconds    int64      `json:"stale_after_seconds,omitempty"`
+	SignerMode           string     `json:"signer_mode,omitempty"`
+	VerificationState    string     `json:"verification_state,omitempty"`
+	VerificationReason   string     `json:"verification_reason,omitempty"`
 	Summary              string     `json:"summary,omitempty"`
 }
 
@@ -87,6 +94,7 @@ func SyncedExceptionFromPolicyException(exception PolicyException) SyncedExcepti
 		CreatedAt:     exception.CreatedAt.UTC(),
 		ExpiresAt:     exception.ExpiresAt.UTC(),
 		LastUpdatedAt: cloneTimePointer(exception.LastUpdatedAt),
+		Signature:     cloneSignatureEnvelope(exception.Signature),
 		Metadata:      normalizeMetadata(exception.Metadata),
 	}
 }
@@ -128,6 +136,7 @@ func (exception SyncedException) ToPolicyException(now time.Time, id int64) Poli
 		ExpiresAt:     exception.ExpiresAt.UTC(),
 		Active:        true,
 		LastUpdatedAt: lastUpdatedAt,
+		Signature:     cloneSignatureEnvelope(exception.Signature),
 		Metadata:      normalizeMetadata(exception.Metadata),
 	}
 }
@@ -135,7 +144,7 @@ func (exception SyncedException) ToPolicyException(now time.Time, id int64) Poli
 func ComputeExceptionSyncRevision(exceptions []SyncedException) string {
 	normalized := make([]SyncedException, 0, len(exceptions))
 	for _, exception := range exceptions {
-		normalized = append(normalized, exception)
+		normalized = append(normalized, cloneSyncedException(exception))
 	}
 	sort.Slice(normalized, func(i, j int) bool {
 		return normalized[i].ExceptionID < normalized[j].ExceptionID

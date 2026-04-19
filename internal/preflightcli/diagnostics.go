@@ -1,0 +1,681 @@
+package preflightcli
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type diagnosticsOptions struct {
+	Input       string
+	Format      string
+	IncludePass bool
+}
+
+type DiagnosticsOutput struct {
+	Command           string            `json:"command"`
+	Mode              string            `json:"mode"`
+	OverallResult     Status            `json:"overall_result"`
+	ExitCode          int               `json:"exit_code"`
+	Inputs            map[string]string `json:"inputs,omitempty"`
+	Diagnostics       []Diagnostic      `json:"diagnostics"`
+	DiagnosticSummary DiagnosticSummary `json:"diagnostic_summary"`
+}
+
+type sarifLog struct {
+	Version string     `json:"version"`
+	Schema  string     `json:"$schema"`
+	Runs    []sarifRun `json:"runs"`
+}
+
+type sarifRun struct {
+	Tool    sarifTool     `json:"tool"`
+	Results []sarifResult `json:"results"`
+}
+
+type sarifTool struct {
+	Driver sarifDriver `json:"driver"`
+}
+
+type sarifDriver struct {
+	Name           string      `json:"name"`
+	InformationURI string      `json:"informationUri,omitempty"`
+	Rules          []sarifRule `json:"rules,omitempty"`
+}
+
+type sarifRule struct {
+	ID                   string                 `json:"id"`
+	Name                 string                 `json:"name,omitempty"`
+	ShortDescription     sarifMultiformMessage  `json:"shortDescription"`
+	HelpURI              string                 `json:"helpUri,omitempty"`
+	DefaultConfiguration map[string]string      `json:"defaultConfiguration,omitempty"`
+	Properties           map[string]interface{} `json:"properties,omitempty"`
+}
+
+type sarifResult struct {
+	RuleID     string            `json:"ruleId"`
+	Level      string            `json:"level"`
+	Message    sarifPlainMessage `json:"message"`
+	Locations  []sarifLocation   `json:"locations,omitempty"`
+	Properties map[string]any    `json:"properties,omitempty"`
+}
+
+type sarifMultiformMessage struct {
+	Text string `json:"text"`
+}
+
+type sarifPlainMessage struct {
+	Text string `json:"text"`
+}
+
+type sarifLocation struct {
+	PhysicalLocation sarifPhysicalLocation `json:"physicalLocation"`
+}
+
+type sarifPhysicalLocation struct {
+	ArtifactLocation sarifArtifactLocation `json:"artifactLocation"`
+	Region           *sarifRegion          `json:"region,omitempty"`
+}
+
+type sarifArtifactLocation struct {
+	URI string `json:"uri"`
+}
+
+type sarifRegion struct {
+	StartLine   int `json:"startLine"`
+	StartColumn int `json:"startColumn,omitempty"`
+	EndLine     int `json:"endLine,omitempty"`
+	EndColumn   int `json:"endColumn,omitempty"`
+}
+
+func attachDiagnostics(result Result) Result {
+	diagnostics, summary := buildDiagnostics(result)
+	result.Diagnostics = diagnostics
+	result.DiagnosticSummary = summary
+	return result
+}
+
+func buildDiagnostics(result Result) ([]Diagnostic, DiagnosticSummary) {
+	diagnostics := make([]Diagnostic, 0, len(result.Checks))
+	summary := DiagnosticSummary{
+		CountsBySeverity:        map[string]int{},
+		CountsBySource:          map[string]int{},
+		CountsByEvaluationState: map[string]int{},
+	}
+	for _, check := range result.Checks {
+		diagnostic := diagnosticForCheck(result.Command, check)
+		diagnostics = append(diagnostics, diagnostic)
+		summary.Total++
+		if diagnostic.Blocking {
+			summary.Blocking++
+		} else if diagnostic.EvaluationState != EvaluationStatePass {
+			summary.Advisory++
+		}
+		summary.CountsBySeverity[string(diagnostic.Severity)]++
+		summary.CountsBySource[diagnostic.Source]++
+		summary.CountsByEvaluationState[string(diagnostic.EvaluationState)]++
+	}
+	return diagnostics, summary
+}
+
+func diagnosticForCheck(command string, check CheckResult) Diagnostic {
+	reasonCode, category, source, docsRef, fixHint := diagnosticDescriptor(check)
+	targetFile := diagnosticTargetFile(check.Target)
+	diagnostic := Diagnostic{
+		CheckID:          check.Name,
+		RuleID:           diagnosticRuleID(command, check.Name),
+		Category:         category,
+		Severity:         diagnosticSeverity(check.Status),
+		ReasonCode:       reasonCode,
+		Message:          diagnosticMessage(check),
+		Summary:          check.Summary,
+		Target:           check.Target,
+		TargetFile:       targetFile,
+		ResourceIdentity: diagnosticResourceIdentity(check.Target, targetFile),
+		FixHint:          fixHint,
+		DocsRef:          docsRef,
+		Source:           source,
+		Blocking:         check.Status == StatusFail || check.Status == StatusError,
+		EvaluationState:  evaluationState(check.Status),
+	}
+	if targetFile != "" {
+		diagnostic.Range = &DiagnosticRange{
+			StartLine:   1,
+			StartColumn: 1,
+			EndLine:     1,
+			EndColumn:   1,
+		}
+	}
+	return diagnostic
+}
+
+func diagnosticDescriptor(check CheckResult) (reasonCode, category, source, docsRef, fixHint string) {
+	contextKind := metadataString(check.Metadata, "context_kind")
+	switch check.Name {
+	case "manifest":
+		switch check.Status {
+		case StatusPass:
+			return "manifest_policy_satisfied", "policy", "policy", "docs/developer-preflight-cli.md", "No action required."
+		case StatusFail:
+			return "manifest_policy_violation", "policy", "policy", "docs/developer-preflight-cli.md", "Review the Kyverno deny output and update the manifest or tenant policy before pushing."
+		default:
+			return "manifest_check_error", "policy", "policy", "docs/developer-preflight-cli.md", "Install `kyverno` or set `CHANGELOCK_CLI_KYVERNO_BIN` to a working binary before rerunning the check."
+		}
+	case "image-digest":
+		if check.Status == StatusPass {
+			return "image_digest_pinned", "supply-chain", "policy", "docs/supply-chain.md", "No action required."
+		}
+		return "image_digest_required", "supply-chain", "policy", "docs/supply-chain.md", "Use immutable `@sha256:` image references in manifests and examples."
+	case "image-trust":
+		switch check.Status {
+		case StatusPass:
+			return "image_trust_verified", "supply-chain", "signer_identity", "docs/supply-chain.md", "No action required."
+		case StatusFail:
+			return "image_trust_verification_failed", "supply-chain", "signer_identity", "docs/supply-chain.md", "Verify the image signature, provenance, and allowed signer identity before promotion."
+		default:
+			return "image_trust_check_error", "supply-chain", "signer_identity", "docs/supply-chain.md", "Install `cosign` or set `CHANGELOCK_CLI_COSIGN_BIN` to a working binary before rerunning the check."
+		}
+	case "image-policy":
+		switch check.Status {
+		case StatusPass:
+			return "artifact_policy_allowed", "policy", "policy", "docs/supply-chain.md", "No action required."
+		case StatusFail:
+			return "artifact_policy_denied", "policy", "policy", "docs/deployment-flow.md", "Adjust repository, branch, signer, or environment inputs so the artifact satisfies ChangeLock policy."
+		default:
+			return "artifact_policy_error", "policy", "policy", "docs/deployment-flow.md", "Verify the local policy bundle path and rerun the artifact policy check."
+		}
+	case "scan":
+		switch check.Status {
+		case StatusPass:
+			return "vulnerability_threshold_clear", "vulnerability", "vulnerability", "docs/vulnerability-ops.md", "No action required."
+		case StatusFail:
+			return "vulnerability_threshold_breached", "vulnerability", "vulnerability", "docs/vex-exploitability-ops.md", "Remediate the package version or record a scoped VEX statement if the finding is truly not affected."
+		default:
+			if strings.Contains(strings.ToLower(check.Summary), "command not found") {
+				return "scanner_unavailable", "vulnerability", "vulnerability", "docs/developer-preflight-cli.md", "Install `trivy` or `grype`, or point the CLI to a working scanner binary."
+			}
+			return "vulnerability_scan_error", "vulnerability", "vulnerability", "docs/vulnerability-ops.md", "Rerun the scan and inspect local scanner output before treating the result as trusted."
+		}
+	case "remote-auth":
+		switch check.Status {
+		case StatusPass:
+			return "api_identity_confirmed", "context", "evidence", "docs/developer-preflight-cli.md", "No action required."
+		case StatusSkip:
+			return "api_context_not_configured", "context", "evidence", "docs/developer-preflight-cli.md", "Set `--api-url` and a read-only token if you want ChangeLock server context in local checks."
+		default:
+			return "api_identity_lookup_failed", "context", "evidence", "docs/developer-preflight-cli.md", "Verify the ChangeLock API URL, token, and local network path before relying on API-assisted checks."
+		}
+	case "remote-image-context":
+		switch check.Status {
+		case StatusPass:
+			if metadataInt(check.Metadata, "exception_count") > 0 {
+				return "remote_exception_context_found", "context", "evidence", "docs/audit-evidence.md", "Review the linked approved exceptions and confirm they still match the intended deployment scope."
+			}
+			return "remote_exception_context_clear", "context", "evidence", "docs/audit-evidence.md", "No approved digest exceptions matched this image."
+		case StatusSkip:
+			if strings.Contains(strings.ToLower(check.Summary), "not digest-pinned") {
+				return "remote_context_skipped_not_digest_pinned", "context", "evidence", "docs/developer-preflight-cli.md", "Use a digest-pinned image reference if you want digest-scoped server context and exception matching."
+			}
+			return "api_context_not_configured", "context", "evidence", "docs/developer-preflight-cli.md", "Set `--api-url` and a read-only token if you want ChangeLock server context in local checks."
+		default:
+			return "remote_exception_context_failed", "context", "evidence", "docs/audit-evidence.md", "Verify ChangeLock API reachability before relying on server-side exception context."
+		}
+	case "remote-scan-context":
+		switch check.Status {
+		case StatusPass:
+			if contextKind == "vex-net" {
+				if metadataBool(check.Metadata, "threshold_breached") {
+					return "remote_vex_context_actionable", "vulnerability", "vex", "docs/vex-exploitability-ops.md", "The finding still breaches the threshold after VEX merge. Remediate or record a tighter, valid VEX statement."
+				}
+				return "remote_vex_context_clear", "vulnerability", "vex", "docs/vex-exploitability-ops.md", "No threshold breach remains after VEX merge for the evaluated digest."
+			}
+			if metadataInt(check.Metadata, "exception_match_count") > 0 {
+				return "remote_exception_context_found", "context", "evidence", "docs/audit-evidence.md", "Review the linked approved CVE exceptions and confirm they still match the intended digest and environment."
+			}
+			return "remote_exception_context_clear", "context", "evidence", "docs/audit-evidence.md", "No approved CVE exceptions matched the threshold-breaching findings."
+		case StatusSkip:
+			if contextKind == "vex-net-partial" {
+				return "remote_vex_context_unavailable", "vulnerability", "vex", "docs/vex-exploitability-ops.md", "Use a digest-pinned image reference if you want net-actionable VEX context in local checks."
+			}
+			if strings.Contains(strings.ToLower(check.Summary), "no threshold-breaching findings") {
+				return "remote_context_skipped_no_findings", "vulnerability", "vulnerability", "docs/vulnerability-ops.md", "No findings breached the configured threshold, so server-side vulnerability context was not queried."
+			}
+			return "api_context_not_configured", "context", "evidence", "docs/developer-preflight-cli.md", "Set `--api-url` and a read-only token if you want ChangeLock server context in local checks."
+		default:
+			return "remote_vex_context_failed", "vulnerability", "vex", "docs/vex-exploitability-ops.md", "Verify ChangeLock API reachability before relying on server-side VEX and net-actionable vulnerability context."
+		}
+	default:
+		return "check_unknown", "general", "evidence", "docs/developer-preflight-cli.md", "Review the CLI output for details and rerun with `--output json` if automation needs to inspect the result."
+	}
+}
+
+func diagnosticRuleID(command, checkName string) string {
+	command = strings.TrimSpace(strings.ToLower(command))
+	if command == "" {
+		command = "preflight"
+	}
+	checkName = strings.TrimSpace(strings.ReplaceAll(checkName, "-", "_"))
+	if checkName == "" {
+		checkName = "check"
+	}
+	return command + "." + checkName
+}
+
+func diagnosticSeverity(status Status) DiagnosticSeverity {
+	switch status {
+	case StatusPass:
+		return DiagnosticSeverityNote
+	case StatusSkip:
+		return DiagnosticSeverityWarning
+	default:
+		return DiagnosticSeverityError
+	}
+}
+
+func evaluationState(status Status) EvaluationState {
+	switch status {
+	case StatusPass:
+		return EvaluationStatePass
+	case StatusFail:
+		return EvaluationStateFail
+	case StatusSkip:
+		return EvaluationStateSkipped
+	case StatusError:
+		return EvaluationStateUnknown
+	default:
+		return EvaluationStateWarn
+	}
+}
+
+func diagnosticMessage(check CheckResult) string {
+	if len(check.Details) == 0 {
+		return check.Summary
+	}
+	details := strings.Join(check.Details, "; ")
+	if strings.TrimSpace(details) == "" {
+		return check.Summary
+	}
+	return fmt.Sprintf("%s (%s)", check.Summary, details)
+}
+
+func diagnosticTargetFile(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return ""
+	}
+	if isYAML(target) {
+		return target
+	}
+	return ""
+}
+
+func diagnosticResourceIdentity(target, targetFile string) string {
+	if targetFile != "" {
+		return ""
+	}
+	return strings.TrimSpace(target)
+}
+
+func metadataString(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, ok := values[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+func metadataInt(values map[string]any, key string) int {
+	if values == nil {
+		return 0
+	}
+	value, ok := values[key]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		return 0
+	}
+}
+
+func metadataBool(values map[string]any, key string) bool {
+	if values == nil {
+		return false
+	}
+	value, ok := values[key]
+	if !ok {
+		return false
+	}
+	typed, ok := value.(bool)
+	return ok && typed
+}
+
+func parseDiagnosticsOptions(args []string) (diagnosticsOptions, error) {
+	fs := newFlagSet("diagnostics")
+	options := diagnosticsOptions{
+		Input:  "-",
+		Format: "json",
+	}
+	fs.StringVar(&options.Input, "input", options.Input, "path to a JSON preflight result or - for stdin")
+	fs.StringVar(&options.Format, "format", options.Format, "diagnostic output: json|github-annotations|markdown|sarif")
+	fs.BoolVar(&options.IncludePass, "include-pass", false, "include PASS diagnostics in formatted output")
+	if err := fs.Parse(args); err != nil {
+		return diagnosticsOptions{}, usageError{message: err.Error()}
+	}
+	switch strings.ToLower(strings.TrimSpace(options.Format)) {
+	case "json", "github-annotations", "markdown", "sarif":
+	default:
+		return diagnosticsOptions{}, usageError{message: fmt.Sprintf("unsupported diagnostics format %q", options.Format)}
+	}
+	return options, nil
+}
+
+func (a *App) runDiagnostics(args []string, stdout, stderr io.Writer) int {
+	options, err := parseDiagnosticsOptions(args)
+	if err != nil {
+		return a.writeError(stderr, err)
+	}
+	result, err := loadResultForDiagnostics(options.Input)
+	if err != nil {
+		return a.writeError(stderr, err)
+	}
+	switch strings.ToLower(strings.TrimSpace(options.Format)) {
+	case "json":
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(DiagnosticsOutput{
+			Command:           result.Command,
+			Mode:              result.Mode,
+			OverallResult:     result.OverallResult,
+			ExitCode:          result.ExitCode,
+			Inputs:            result.Inputs,
+			Diagnostics:       filterDiagnostics(result.Diagnostics, options.IncludePass),
+			DiagnosticSummary: summarizeDiagnostics(filterDiagnostics(result.Diagnostics, options.IncludePass)),
+		}); err != nil {
+			return a.writeError(stderr, err)
+		}
+		return ExitSuccess
+	case "github-annotations":
+		if err := renderGitHubAnnotations(stdout, result, options.IncludePass); err != nil {
+			return a.writeError(stderr, err)
+		}
+		return ExitSuccess
+	case "markdown":
+		if err := renderDiagnosticsMarkdown(stdout, result, options.IncludePass); err != nil {
+			return a.writeError(stderr, err)
+		}
+		return ExitSuccess
+	case "sarif":
+		if err := renderDiagnosticsSARIF(stdout, result, options.IncludePass); err != nil {
+			return a.writeError(stderr, err)
+		}
+		return ExitSuccess
+	default:
+		return a.writeError(stderr, usageError{message: fmt.Sprintf("unsupported diagnostics format %q", options.Format)})
+	}
+}
+
+func loadResultForDiagnostics(path string) (Result, error) {
+	var reader io.Reader
+	switch strings.TrimSpace(path) {
+	case "", "-":
+		reader = os.Stdin
+	default:
+		file, err := os.Open(filepath.Clean(path))
+		if err != nil {
+			return Result{}, err
+		}
+		defer file.Close()
+		reader = file
+	}
+	var result Result
+	if err := json.NewDecoder(reader).Decode(&result); err != nil {
+		return Result{}, fmt.Errorf("decode diagnostics input: %w", err)
+	}
+	return finalizeResult(result), nil
+}
+
+func filterDiagnostics(diagnostics []Diagnostic, includePass bool) []Diagnostic {
+	if includePass {
+		return append([]Diagnostic(nil), diagnostics...)
+	}
+	filtered := make([]Diagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if diagnostic.EvaluationState == EvaluationStatePass {
+			continue
+		}
+		filtered = append(filtered, diagnostic)
+	}
+	return filtered
+}
+
+func summarizeDiagnostics(diagnostics []Diagnostic) DiagnosticSummary {
+	summary := DiagnosticSummary{
+		CountsBySeverity:        map[string]int{},
+		CountsBySource:          map[string]int{},
+		CountsByEvaluationState: map[string]int{},
+	}
+	for _, diagnostic := range diagnostics {
+		summary.Total++
+		if diagnostic.Blocking {
+			summary.Blocking++
+		} else if diagnostic.EvaluationState != EvaluationStatePass {
+			summary.Advisory++
+		}
+		summary.CountsBySeverity[string(diagnostic.Severity)]++
+		summary.CountsBySource[diagnostic.Source]++
+		summary.CountsByEvaluationState[string(diagnostic.EvaluationState)]++
+	}
+	return summary
+}
+
+func renderGitHubAnnotations(w io.Writer, result Result, includePass bool) error {
+	for _, diagnostic := range filterDiagnostics(result.Diagnostics, includePass) {
+		level := "notice"
+		switch diagnostic.Severity {
+		case DiagnosticSeverityError:
+			level = "error"
+		case DiagnosticSeverityWarning:
+			level = "warning"
+		}
+		properties := []string{}
+		if diagnostic.TargetFile != "" {
+			properties = append(properties, "file="+escapeGitHubAnnotationValue(diagnostic.TargetFile))
+		}
+		if diagnostic.Range != nil {
+			properties = append(properties,
+				fmt.Sprintf("line=%d", diagnostic.Range.StartLine),
+				fmt.Sprintf("col=%d", diagnostic.Range.StartColumn),
+				fmt.Sprintf("endLine=%d", diagnostic.Range.EndLine),
+				fmt.Sprintf("endColumn=%d", diagnostic.Range.EndColumn),
+			)
+		}
+		title := escapeGitHubAnnotationValue(fmt.Sprintf("%s [%s]", diagnostic.ReasonCode, diagnostic.Category))
+		message := diagnostic.Message
+		if strings.TrimSpace(diagnostic.FixHint) != "" {
+			message += " Fix: " + diagnostic.FixHint
+		}
+		if strings.TrimSpace(diagnostic.DocsRef) != "" {
+			message += " Docs: " + diagnostic.DocsRef
+		}
+		if len(properties) > 0 {
+			if _, err := fmt.Fprintf(w, "::%s %s,title=%s::%s\n", level, strings.Join(properties, ","), title, escapeGitHubAnnotationValue(message)); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "::%s title=%s::%s\n", level, title, escapeGitHubAnnotationValue(message)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func escapeGitHubAnnotationValue(value string) string {
+	replacer := strings.NewReplacer("%", "%25", "\r", "%0D", "\n", "%0A", ":", "%3A", ",", "%2C")
+	return replacer.Replace(value)
+}
+
+func renderDiagnosticsMarkdown(w io.Writer, result Result, includePass bool) error {
+	diagnostics := filterDiagnostics(result.Diagnostics, includePass)
+	summary := summarizeDiagnostics(diagnostics)
+	if _, err := fmt.Fprintf(w, "## ChangeLock Shift-Left Summary\n\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "- Command: `%s`\n- Mode: `%s`\n- Overall result: `%s`\n- Blocking findings: `%d`\n- Advisory findings: `%d`\n", result.Command, result.Mode, result.OverallResult, summary.Blocking, summary.Advisory); err != nil {
+		return err
+	}
+	if vulnerabilityMarkdownSummary, ok := deriveVulnerabilityMarkdownSummary(result); ok {
+		if _, err := fmt.Fprintln(w, "\n### Vulnerability Context"); err != nil {
+			return err
+		}
+		for _, line := range vulnerabilityMarkdownSummary {
+			if _, err := fmt.Fprintf(w, "- %s\n", line); err != nil {
+				return err
+			}
+		}
+	}
+	if len(diagnostics) == 0 {
+		_, err := fmt.Fprintln(w, "\nNo blocking or advisory diagnostics were emitted for this run.")
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "\n### Findings"); err != nil {
+		return err
+	}
+	for _, diagnostic := range diagnostics {
+		target := firstNonEmpty(diagnostic.TargetFile, diagnostic.ResourceIdentity, diagnostic.Target, "-")
+		if _, err := fmt.Fprintf(w, "- `%s` `%s` `%s` on `%s`: %s\n", diagnostic.Severity, diagnostic.ReasonCode, diagnostic.EvaluationState, target, diagnostic.Summary); err != nil {
+			return err
+		}
+		if strings.TrimSpace(diagnostic.FixHint) != "" {
+			if _, err := fmt.Fprintf(w, "  Fix: %s\n", diagnostic.FixHint); err != nil {
+				return err
+			}
+		}
+		if strings.TrimSpace(diagnostic.DocsRef) != "" {
+			if _, err := fmt.Fprintf(w, "  Docs: `%s`\n", diagnostic.DocsRef); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func deriveVulnerabilityMarkdownSummary(result Result) ([]string, bool) {
+	for _, check := range result.Checks {
+		if check.Name != "remote-scan-context" || metadataString(check.Metadata, "context_kind") != "vex-net" {
+			continue
+		}
+		lines := []string{
+			fmt.Sprintf("Raw findings: `%d`", metadataInt(check.Metadata, "raw_count")),
+			fmt.Sprintf("Resolved by VEX: `%d`", metadataInt(check.Metadata, "resolved_by_vex_count")),
+			fmt.Sprintf("Net actionable: `%d`", metadataInt(check.Metadata, "actionable_count")),
+			fmt.Sprintf("Under investigation: `%d`", metadataInt(check.Metadata, "under_investigation_count")),
+			fmt.Sprintf("Threshold breached after VEX merge: `%t`", metadataBool(check.Metadata, "threshold_breached")),
+		}
+		return lines, true
+	}
+	return nil, false
+}
+
+func renderDiagnosticsSARIF(w io.Writer, result Result, includePass bool) error {
+	diagnostics := filterDiagnostics(result.Diagnostics, includePass)
+	rules := make([]sarifRule, 0, len(diagnostics))
+	seenRules := map[string]struct{}{}
+	results := make([]sarifResult, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if _, ok := seenRules[diagnostic.RuleID]; !ok {
+			seenRules[diagnostic.RuleID] = struct{}{}
+			rules = append(rules, sarifRule{
+				ID:               diagnostic.RuleID,
+				Name:             diagnostic.ReasonCode,
+				ShortDescription: sarifMultiformMessage{Text: diagnostic.Summary},
+				HelpURI:          diagnostic.DocsRef,
+				DefaultConfiguration: map[string]string{
+					"level": sarifLevel(diagnostic.Severity),
+				},
+				Properties: map[string]interface{}{
+					"category":        diagnostic.Category,
+					"source":          diagnostic.Source,
+					"evaluationState": diagnostic.EvaluationState,
+					"blocking":        diagnostic.Blocking,
+				},
+			})
+		}
+		resultItem := sarifResult{
+			RuleID:  diagnostic.RuleID,
+			Level:   sarifLevel(diagnostic.Severity),
+			Message: sarifPlainMessage{Text: diagnostic.Message},
+			Properties: map[string]any{
+				"reasonCode":      diagnostic.ReasonCode,
+				"evaluationState": diagnostic.EvaluationState,
+				"blocking":        diagnostic.Blocking,
+				"docsRef":         diagnostic.DocsRef,
+				"fixHint":         diagnostic.FixHint,
+				"source":          diagnostic.Source,
+			},
+		}
+		if diagnostic.TargetFile != "" {
+			location := sarifLocation{
+				PhysicalLocation: sarifPhysicalLocation{
+					ArtifactLocation: sarifArtifactLocation{URI: diagnostic.TargetFile},
+				},
+			}
+			if diagnostic.Range != nil {
+				location.PhysicalLocation.Region = &sarifRegion{
+					StartLine:   diagnostic.Range.StartLine,
+					StartColumn: diagnostic.Range.StartColumn,
+					EndLine:     diagnostic.Range.EndLine,
+					EndColumn:   diagnostic.Range.EndColumn,
+				}
+			}
+			resultItem.Locations = []sarifLocation{location}
+		}
+		results = append(results, resultItem)
+	}
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(sarifLog{
+		Version: "2.1.0",
+		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
+		Runs: []sarifRun{{
+			Tool: sarifTool{
+				Driver: sarifDriver{
+					Name:           "ChangeLock CLI",
+					InformationURI: "docs/shift-left-integration.md",
+					Rules:          rules,
+				},
+			},
+			Results: results,
+		}},
+	})
+}
+
+func sarifLevel(severity DiagnosticSeverity) string {
+	switch severity {
+	case DiagnosticSeverityError:
+		return "error"
+	case DiagnosticSeverityWarning:
+		return "warning"
+	default:
+		return "note"
+	}
+}

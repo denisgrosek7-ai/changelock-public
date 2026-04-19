@@ -1,3 +1,5 @@
+# Local demo/dev compose only.
+# This file intentionally keeps lower-trust defaults for local evaluation and is not production-safe.
 services:
   postgres:
     image: postgres:17-alpine
@@ -47,6 +49,7 @@ services:
       dockerfile: ./services/attestation-verifier/Dockerfile
     environment:
       AUDIT_WRITER_URL: http://audit-writer:8094
+      CHANGELOCK_INTERNAL_SERVICE_TOKEN: ${CHANGELOCK_INTERNAL_SERVICE_TOKEN:-service-internal-demo-token}
     ports:
       - "8091:8091"
     depends_on:
@@ -75,6 +78,7 @@ services:
       dockerfile: ./services/runtime-agent/Dockerfile
     environment:
       AUDIT_WRITER_URL: http://audit-writer:8094
+      CHANGELOCK_INTERNAL_SERVICE_TOKEN: ${CHANGELOCK_INTERNAL_SERVICE_TOKEN:-service-internal-demo-token}
     ports:
       - "8093:8093"
     depends_on:
@@ -92,6 +96,7 @@ services:
       CHANGELOCK_REPORTS_TIMEOUT: 5s
       CHANGELOCK_AUTH_MODE: ${CHANGELOCK_AUTH_MODE:-disabled}
       CHANGELOCK_AUTH_TOKENS_JSON: ${CHANGELOCK_AUTH_TOKENS_JSON:-}
+      CHANGELOCK_INTERNAL_SERVICE_TOKEN: ${CHANGELOCK_INTERNAL_SERVICE_TOKEN:-service-internal-demo-token}
       CHANGELOCK_SBOM_INGEST_ENABLED: ${CHANGELOCK_SBOM_INGEST_ENABLED:-true}
       CHANGELOCK_VULNOPS_ENABLED: ${CHANGELOCK_VULNOPS_ENABLED:-false}
       CHANGELOCK_VULNOPS_SCAN_INTERVAL: ${CHANGELOCK_VULNOPS_SCAN_INTERVAL:-6h}

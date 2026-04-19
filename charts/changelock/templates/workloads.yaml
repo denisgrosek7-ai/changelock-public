@@ -108,6 +108,11 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if eq .Values.sync.mode "spoke" }}
+      volumes:
+        - name: sync-cache
+          emptyDir: {}
+      {{- end }}
       containers:
         - name: audit-writer
           image: {{ include "changelock.image" (dict "image" .Values.auditWriter.image) }}
@@ -136,6 +141,16 @@ spec:
               {{- end }}
             - name: CHANGELOCK_AUTH_MODE
               value: {{ .Values.auth.mode | quote }}
+            {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "changelock.authSecretName" . }}
+                  key: {{ .Values.auth.internalServiceTokenKey }}
+            {{- else if .Values.auth.internalServiceToken }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              value: {{ .Values.auth.internalServiceToken | quote }}
+            {{- end }}
             {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
             - name: CHANGELOCK_AUTH_TOKENS_JSON
               valueFrom:
@@ -173,6 +188,89 @@ spec:
             {{- end }}
             - name: CHANGELOCK_OIDC_CLOCK_SKEW
               value: {{ .Values.auth.oidc.clockSkew | quote }}
+            - name: CHANGELOCK_SYNC_MODE
+              value: {{ .Values.sync.mode | quote }}
+            - name: CHANGELOCK_SYNC_FAIL_MODE
+              value: {{ .Values.sync.failMode | quote }}
+            - name: CHANGELOCK_SYNC_POLL_INTERVAL
+              value: {{ .Values.sync.pollInterval | quote }}
+            - name: CHANGELOCK_SYNC_CACHE_DIR
+              value: {{ .Values.sync.cacheDir | quote }}
+            - name: CHANGELOCK_SYNC_REQUIRE_CLUSTER_ID
+              value: {{ .Values.sync.requireClusterId | quote }}
+            {{- if .Values.sync.clusterId }}
+            - name: CHANGELOCK_CLUSTER_ID
+              value: {{ .Values.sync.clusterId | quote }}
+            {{- end }}
+            {{- if .Values.sync.hubUrl }}
+            - name: CHANGELOCK_SYNC_HUB_URL
+              value: {{ .Values.sync.hubUrl | quote }}
+            {{- end }}
+            {{- if .Values.sync.tokenExistingSecret }}
+            - name: CHANGELOCK_SYNC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sync.tokenExistingSecret }}
+                  key: {{ .Values.sync.tokenKey }}
+            {{- end }}
+            {{- if .Values.sync.clusterBindingsExistingSecret }}
+            - name: CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sync.clusterBindingsExistingSecret }}
+                  key: {{ .Values.sync.clusterBindingsKey }}
+            {{- else if .Values.sync.clusterBindingsJson }}
+            - name: CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON
+              value: {{ .Values.sync.clusterBindingsJson | quote }}
+            {{- end }}
+            - name: CHANGELOCK_SIGNER_MODE
+              value: {{ .Values.signer.mode | quote }}
+            - name: CHANGELOCK_SIGNER_PURPOSES
+              value: {{ .Values.signer.purposes | quote }}
+            - name: CHANGELOCK_SIGNER_VERIFY_ON_READ
+              value: {{ .Values.signer.verifyOnRead | quote }}
+            {{- if .Values.signer.keyId }}
+            - name: CHANGELOCK_SIGNER_KEY_ID
+              value: {{ .Values.signer.keyId | quote }}
+            {{- end }}
+            {{- if .Values.signer.algorithm }}
+            - name: CHANGELOCK_SIGNER_ALGORITHM
+              value: {{ .Values.signer.algorithm | quote }}
+            {{- end }}
+            {{- if .Values.signer.vault.addr }}
+            - name: CHANGELOCK_VAULT_ADDR
+              value: {{ .Values.signer.vault.addr | quote }}
+            {{- end }}
+            {{- if .Values.signer.vault.transitPath }}
+            - name: CHANGELOCK_VAULT_TRANSIT_PATH
+              value: {{ .Values.signer.vault.transitPath | quote }}
+            {{- end }}
+            {{- if .Values.signer.vault.transitKey }}
+            - name: CHANGELOCK_VAULT_TRANSIT_KEY
+              value: {{ .Values.signer.vault.transitKey | quote }}
+            {{- end }}
+            {{- if and .Values.signer.existingSecret (eq .Values.signer.mode "software") }}
+            - name: CHANGELOCK_SIGNER_SOFTWARE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signer.existingSecret }}
+                  key: {{ .Values.signer.softwareSecretKey }}
+            {{- end }}
+            {{- if and .Values.signer.existingSecret (eq .Values.signer.mode "vault-transit") }}
+            - name: CHANGELOCK_VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signer.existingSecret }}
+                  key: {{ .Values.signer.vaultTokenKey }}
+            {{- end }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT
+              value: {{ .Values.signingIdentity.enforcement | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_REQUIRE_REKOR
+              value: {{ .Values.signingIdentity.requireRekor | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_QUARANTINE_ON_DRIFT
+              value: {{ .Values.signingIdentity.quarantineOnDrift | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_WORKFLOWS_DIR
+              value: {{ .Values.signingIdentity.workflowsDir | quote }}
             {{- range $name, $value := .Values.auditWriter.env }}
             - name: {{ $name }}
               value: {{ $value | quote }}
@@ -196,6 +294,11 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          {{- if eq .Values.sync.mode "spoke" }}
+          volumeMounts:
+            - name: sync-cache
+              mountPath: {{ .Values.sync.cacheDir | quote }}
+          {{- end }}
 ---
 {{- end }}
 {{- if .Values.policyEngine.enabled }}
@@ -269,6 +372,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "changelock.authSecretName" . }}
                   key: {{ .Values.auth.internalServiceTokenKey }}
+            {{- else if .Values.auth.internalServiceToken }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              value: {{ .Values.auth.internalServiceToken | quote }}
             {{- end }}
           readinessProbe:
             httpGet:
@@ -354,6 +460,16 @@ spec:
               value: {{ .Values.attestationVerifier.service.port | quote }}
             - name: AUDIT_WRITER_URL
               value: http://{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}:{{ .Values.auditWriter.service.port }}
+            {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "changelock.authSecretName" . }}
+                  key: {{ .Values.auth.internalServiceTokenKey }}
+            {{- else if .Values.auth.internalServiceToken }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              value: {{ .Values.auth.internalServiceToken | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health
@@ -445,12 +561,21 @@ spec:
               value: /etc/changelock/policies
             - name: AUDIT_WRITER_URL
               value: http://{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}:{{ .Values.auditWriter.service.port }}
+            - name: CHANGELOCK_VEX_DEPLOY_MODE
+              value: {{ .Values.deployGate.vexDeployMode | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT
+              value: {{ .Values.signingIdentity.enforcement | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_REQUIRE_REKOR
+              value: {{ .Values.signingIdentity.requireRekor | quote }}
             {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
             - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "changelock.authSecretName" . }}
                   key: {{ .Values.auth.internalServiceTokenKey }}
+            {{- else if .Values.auth.internalServiceToken }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              value: {{ .Values.auth.internalServiceToken | quote }}
             {{- end }}
             {{- if .Values.deployGate.tls.enabled }}
             - name: TLS_CERT_FILE
@@ -549,6 +674,52 @@ spec:
               value: {{ .Values.runtimeAgent.service.port | quote }}
             - name: AUDIT_WRITER_URL
               value: http://{{ include "changelock.componentFullname" (dict "root" . "component" "audit-writer") }}:{{ .Values.auditWriter.service.port }}
+            - name: CHANGELOCK_SELF_HEALING_MODE
+              value: {{ .Values.runtimeAgent.selfHealing.mode | quote }}
+            - name: CHANGELOCK_SELF_HEALING_MAX_ATTEMPTS
+              value: {{ .Values.runtimeAgent.selfHealing.maxAttempts | quote }}
+            - name: CHANGELOCK_SELF_HEALING_WINDOW
+              value: {{ .Values.runtimeAgent.selfHealing.window | quote }}
+            - name: CHANGELOCK_SELF_HEALING_ALLOWED_KINDS
+              value: {{ .Values.runtimeAgent.selfHealing.allowedKinds | quote }}
+            - name: CHANGELOCK_SELF_HEALING_REQUIRE_SIGNED_DESIRED_STATE
+              value: {{ .Values.runtimeAgent.selfHealing.requireSignedDesiredState | quote }}
+            - name: CHANGELOCK_SELF_HEALING_CRITICAL_ONLY
+              value: {{ .Values.runtimeAgent.selfHealing.criticalOnly | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_RECONCILE_INTERVAL
+              value: {{ .Values.runtimeAgent.closedLoop.reconcileInterval | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_FAIL_MODE
+              value: {{ .Values.runtimeAgent.closedLoop.failMode | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_REQUIRE_SIGNED_DESIRED_STATE
+              value: {{ .Values.runtimeAgent.selfHealing.requireSignedDesiredState | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_VERIFY_DESIRED_STATE_ON_RECONCILE
+              value: {{ .Values.runtimeAgent.closedLoop.verifyDesiredStateOnReconcile | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_PROTECTED_NAMESPACES
+              value: {{ .Values.runtimeAgent.closedLoop.protectedNamespaces | quote }}
+            - name: CHANGELOCK_CLOSED_LOOP_PROTECTED_WORKLOADS
+              value: {{ .Values.runtimeAgent.closedLoop.protectedWorkloads | quote }}
+            - name: CHANGELOCK_RUNTIME_QUARANTINE_NETWORK_POLICY_ENABLED
+              value: {{ .Values.runtimeAgent.closedLoop.quarantineNetworkPolicyEnabled | quote }}
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_ENABLED
+              value: {{ .Values.runtimeAgent.closedLoop.vexQuarantine.enabled | quote }}
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_SEVERITY
+              value: {{ .Values.runtimeAgent.closedLoop.vexQuarantine.severity | quote }}
+            - name: CHANGELOCK_RUNTIME_VEX_QUARANTINE_REQUIRE_NET_ACTIONABLE
+              value: {{ .Values.runtimeAgent.closedLoop.vexQuarantine.requireNetActionable | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_ENFORCEMENT
+              value: {{ .Values.signingIdentity.enforcement | quote }}
+            - name: CHANGELOCK_SIGNER_IDENTITY_QUARANTINE_ON_DRIFT
+              value: {{ .Values.signingIdentity.quarantineOnDrift | quote }}
+            {{- if or .Values.auth.existingSecret .Values.auth.createSecret }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "changelock.authSecretName" . }}
+                  key: {{ .Values.auth.internalServiceTokenKey }}
+            {{- else if .Values.auth.internalServiceToken }}
+            - name: CHANGELOCK_INTERNAL_SERVICE_TOKEN
+              value: {{ .Values.auth.internalServiceToken | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health

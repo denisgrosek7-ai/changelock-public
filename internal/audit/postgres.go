@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denisgrosek/changelock/internal/signing"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -329,12 +330,12 @@ func (s *PostgresStore) CreateException(ctx context.Context, request ExceptionCr
 INSERT INTO policy_exceptions (
   exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by,
-  approved_at, expires_at, active, last_updated_at, metadata
+  approved_at, expires_at, active, last_updated_at, signature, metadata
 )
 VALUES (
   $1, $2, $3, $4, $5, $6, $7,
   $8, $9, $10, $11, $12, $13, $14,
-  $15, $16, $17, $18, $19::jsonb
+  $15, $16, $17, $18, $19::jsonb, $20::jsonb
 )
 RETURNING id, created_at
 `
@@ -381,6 +382,7 @@ RETURNING id, created_at
 		exception.ExpiresAt,
 		exception.Active,
 		exception.LastUpdatedAt,
+		nil,
 		string(exception.Metadata),
 	).Scan(&exception.ID, &exception.CreatedAt)
 	if err != nil {
@@ -406,12 +408,12 @@ func (s *PostgresStore) RequestException(ctx context.Context, request ExceptionC
 INSERT INTO policy_exceptions (
   exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at,
-  expires_at, active, last_updated_at, metadata
+  expires_at, active, last_updated_at, signature, metadata
 )
 VALUES (
   $1, $2, $3, $4, $5, $6, $7,
   $8, $9, $10, $11, $12, $13,
-  $14, $15, $16, $17::jsonb
+  $14, $15, $16, $17::jsonb, $18::jsonb
 )
 RETURNING id, created_at
 `
@@ -454,6 +456,7 @@ RETURNING id, created_at
 		exception.ExpiresAt,
 		exception.Active,
 		exception.LastUpdatedAt,
+		nil,
 		string(exception.Metadata),
 	).Scan(&exception.ID, &exception.CreatedAt)
 	if err != nil {
@@ -521,7 +524,7 @@ SET status = $2,
 WHERE exception_id = $1
 RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
-  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, signature, metadata
 `
 
 	row := s.pool.QueryRow(ctx, statement, strings.TrimSpace(exceptionID), ExceptionStatusApproved, strings.TrimSpace(approvedBy), now)
@@ -566,7 +569,7 @@ SET status = $2,
 WHERE exception_id = $1
 RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
-  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, signature, metadata
 `
 
 	row := s.pool.QueryRow(ctx, statement, strings.TrimSpace(exceptionID), ExceptionStatusRejected, strings.TrimSpace(rejectedBy), now, reason)
@@ -598,7 +601,7 @@ SET active = FALSE,
 WHERE exception_id = $1
 RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
-  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, signature, metadata
 `
 
 	now := time.Now().UTC()
@@ -645,6 +648,35 @@ func (s *PostgresStore) ValidateException(ctx context.Context, request Exception
 		Valid:     true,
 		Exception: &exception,
 	}, nil
+}
+
+func (s *PostgresStore) SetExceptionSignature(ctx context.Context, exceptionID string, envelope *signing.Envelope) (PolicyException, error) {
+	exceptionID = strings.TrimSpace(exceptionID)
+	if exceptionID == "" {
+		return PolicyException{}, fmt.Errorf("%w: exception_id is required", ErrInvalidException)
+	}
+	signatureJSON, err := nullableJSON(envelope)
+	if err != nil {
+		return PolicyException{}, err
+	}
+	const statement = `
+UPDATE policy_exceptions
+SET signature = $2::jsonb,
+    last_updated_at = $3
+WHERE exception_id = $1
+RETURNING id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
+  image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, signature, metadata
+`
+	now := time.Now().UTC()
+	exception, err := scanPolicyException(s.pool.QueryRow(ctx, statement, exceptionID, signatureJSON, now))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PolicyException{}, ErrExceptionNotFound
+		}
+		return PolicyException{}, err
+	}
+	return exception.WithEffectiveStatus(now), nil
 }
 
 func (s *PostgresStore) ExceptionReport(ctx context.Context, filter ExceptionFilter) (ExceptionReport, error) {
@@ -779,7 +811,7 @@ func buildExceptionListQuery(filter ExceptionFilter) (string, []any) {
 	query := `
 SELECT id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
-  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, signature, metadata
 FROM policy_exceptions` + whereClause + `
 ORDER BY created_at DESC
 LIMIT $` + fmt.Sprint(len(args)+1)
@@ -888,6 +920,7 @@ func scanPolicyException(row interface {
 	var rejectedAt sql.NullTime
 	var rejectionReason sql.NullString
 	var lastUpdatedAt sql.NullTime
+	var signatureBytes []byte
 
 	if err := row.Scan(
 		&exception.ID,
@@ -913,6 +946,7 @@ func scanPolicyException(row interface {
 		&exception.ExpiresAt,
 		&exception.Active,
 		&lastUpdatedAt,
+		&signatureBytes,
 		&exception.Metadata,
 	); err != nil {
 		return PolicyException{}, err
@@ -941,6 +975,13 @@ func scanPolicyException(row interface {
 	if lastUpdatedAt.Valid {
 		exception.LastUpdatedAt = timePointer(lastUpdatedAt.Time.UTC())
 	}
+	if len(signatureBytes) > 0 && string(signatureBytes) != "null" {
+		var envelope signing.Envelope
+		if err := json.Unmarshal(signatureBytes, &envelope); err != nil {
+			return PolicyException{}, err
+		}
+		exception.Signature = cloneSignatureEnvelope(&envelope)
+	}
 	exception.Metadata = normalizeMetadata(exception.Metadata)
 	return exception, nil
 }
@@ -954,7 +995,7 @@ func (s *PostgresStore) loadException(ctx context.Context, exceptionID string) (
 	const statement = `
 SELECT id, exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by, approved_at,
-  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, metadata
+  rejected_by, rejected_at, rejection_reason, created_at, expires_at, active, last_updated_at, signature, metadata
 FROM policy_exceptions
 WHERE exception_id = $1
 `

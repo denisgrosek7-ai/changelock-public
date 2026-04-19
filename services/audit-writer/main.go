@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/denisgrosek/changelock/internal/auth"
 	"github.com/denisgrosek/changelock/internal/httpjson"
 	"github.com/denisgrosek/changelock/internal/metrics"
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 type server struct {
@@ -28,6 +30,8 @@ type server struct {
 	authConfig     auth.Config
 	vulnOps        *vulnOpsRuntime
 	syncRuntime    *syncRuntime
+	signing        *signingRuntime
+	internalToken  string
 }
 
 type ingestResponse struct {
@@ -92,6 +96,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	signingRuntime, err := loadSigningRuntimeFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	vexConfig, err := loadVEXConfigFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if syncRuntime != nil {
+		syncRuntime.signing = signingRuntime
+	}
+	if imported, err := importVEXDirectory(ctx, store, vexConfig, "vex-importer"); err != nil {
+		log.Fatal(err)
+	} else if imported > 0 {
+		log.Printf("audit-writer imported %d VEX statements from %s", imported, vexConfig.ImportDir)
+	}
 
 	if *migrateOnly {
 		log.Printf("audit-writer migrations applied using %s backend", backend)
@@ -108,7 +128,7 @@ func main() {
 	log.Printf("audit-writer listening on %s using %s backend", addr, backend)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           newHandlerWithDeps(store, backend, authConfig, vulnOps),
+		Handler:           newHandlerWithDeps(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -126,7 +146,15 @@ func newHandler(store audit.Store, backend string) http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithDeps(store, backend, authConfig, vulnOps)
+	syncRuntime, err := loadSyncRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	signingRuntime, err := loadSigningRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithDeps(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
 }
 
 func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Config) http.Handler {
@@ -138,18 +166,29 @@ func newHandlerWithAuth(store audit.Store, backend string, authConfig auth.Confi
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithRuntimes(store, backend, authConfig, vulnOps, syncRuntime)
-}
-
-func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime) http.Handler {
-	syncRuntime, err := loadSyncRuntimeFromEnv()
+	signingRuntime, err := loadSigningRuntimeFromEnv()
 	if err != nil {
 		panic(err)
 	}
-	return newHandlerWithRuntimes(store, backend, authConfig, vulnOps, syncRuntime)
+	return newHandlerWithRuntimesAndSigning(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
+}
+
+func newHandlerWithDeps(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime, signingRuntime *signingRuntime) http.Handler {
+	return newHandlerWithRuntimesAndSigning(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
 }
 
 func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime) http.Handler {
+	signingRuntime, err := loadSigningRuntimeFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return newHandlerWithRuntimesAndSigning(store, backend, authConfig, vulnOps, syncRuntime, signingRuntime)
+}
+
+func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authConfig auth.Config, vulnOps *vulnOpsRuntime, syncRuntime *syncRuntime, signingRuntime *signingRuntime) http.Handler {
+	if syncRuntime != nil {
+		syncRuntime.signing = signingRuntime
+	}
 	srv := server{
 		store:          store,
 		backend:        backend,
@@ -158,6 +197,8 @@ func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.C
 		authConfig:     authConfig,
 		vulnOps:        vulnOps,
 		syncRuntime:    syncRuntime,
+		signing:        signingRuntime,
+		internalToken:  strings.TrimSpace(os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")),
 	}
 
 	mux := http.NewServeMux()
@@ -179,6 +220,7 @@ func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.C
 	mux.HandleFunc("/v1/analytics/top-violators", srv.topViolatorsHandler)
 	mux.HandleFunc("/v1/analytics/drift-stats", srv.driftStatsHandler)
 	mux.HandleFunc("/v1/vulnerabilities/active", srv.activeVulnerabilitiesHandler)
+	mux.HandleFunc("/v1/vulnerabilities/net", srv.vulnerabilityNetHandler)
 	mux.HandleFunc("/v1/vulnerabilities/blast-radius", srv.vulnerabilityBlastRadiusHandler)
 	mux.HandleFunc("/v1/vulnerabilities/timeline", srv.vulnerabilityTimelineHandler)
 	mux.HandleFunc("/v1/vulnerabilities/rescan", srv.vulnerabilityRescanHandler)
@@ -192,10 +234,39 @@ func newHandlerWithRuntimes(store audit.Store, backend string, authConfig auth.C
 	mux.HandleFunc("/v1/incidents/package", srv.incidentPackageHandler)
 	mux.HandleFunc("/v1/incidents", srv.incidentsHandler)
 	mux.HandleFunc("/v1/incidents/", srv.incidentByIDHandler)
+	mux.HandleFunc("/v1/vex/status", srv.vexStatusHandler)
+	mux.HandleFunc("/v1/vex/ingest", srv.vexIngestHandler)
+	mux.HandleFunc("/v1/vex", srv.vexStatementsHandler)
+	mux.HandleFunc("/v1/vex/", srv.vexStatementByIDHandler)
+	mux.HandleFunc("/v1/signing-identities/status", srv.signingIdentityStatusHandler)
+	mux.HandleFunc("/v1/signing-identities/findings", srv.signingIdentityFindingsHandler)
+	mux.HandleFunc("/v1/signing-identities/evaluate", srv.signingIdentityEvaluateHandler)
+	mux.HandleFunc("/v1/signing-identities/policies", srv.signingIdentityPoliciesHandler)
+	mux.HandleFunc("/v1/signing-identities/policies/", srv.signingIdentityPolicyByIDHandler)
+	mux.HandleFunc("/v1/signing-identities/", srv.signingIdentityObservationByIDHandler)
+	mux.HandleFunc("/v1/signing-identities", srv.signingIdentityObservationsHandler)
+	mux.HandleFunc("/v1/scorecards/findings", srv.scorecardFindingsHandler)
+	mux.HandleFunc("/v1/scorecards", srv.scorecardHandler)
+	mux.HandleFunc("/v1/trust-badges", srv.trustBadgesHandler)
+	mux.HandleFunc("/v1/trust/published", srv.publishedTrustViewHandler)
+	mux.HandleFunc("/v1/audit/reports", srv.auditReportsHandler)
+	mux.HandleFunc("/v1/audit/exports", srv.auditExportsHandler)
+	mux.HandleFunc("/v1/ai/insights", srv.aiInsightsHandler)
+	mux.HandleFunc("/v1/ai/vex-drafts", srv.aiVEXDraftsHandler)
+	mux.HandleFunc("/v1/ai/break-glass-guidance", srv.aiBreakGlassGuidanceHandler)
+	mux.HandleFunc("/v1/ai/guidance/", srv.aiGuidanceByIDHandler)
+	mux.HandleFunc("/v1/ai/guidance", srv.aiGuidanceHandler)
 	mux.HandleFunc("/v1/reports/events", srv.eventsHandler)
 	mux.HandleFunc("/v1/reports/summary", srv.summaryHandler)
 	mux.HandleFunc("/v1/reports/denies", srv.deniesHandler)
 	mux.HandleFunc("/v1/reports/runtime-drift", srv.runtimeDriftHandler)
+	mux.HandleFunc("/v1/runtime/desired-state", srv.runtimeDesiredStateHandler)
+	mux.HandleFunc("/v1/runtime/active-state", srv.runtimeActiveStateHandler)
+	mux.HandleFunc("/v1/runtime/quarantine", srv.runtimeQuarantineHandler)
+	mux.HandleFunc("/v1/runtime/closed-loop/status", srv.runtimeClosedLoopStatusHandler)
+	mux.HandleFunc("/v1/runtime/drift/status", srv.runtimeDriftStatusHandler)
+	mux.HandleFunc("/v1/runtime/drift/", srv.runtimeDriftByIDHandler)
+	mux.HandleFunc("/v1/runtime/drift", srv.runtimeDriftFindingsHandler)
 	mux.HandleFunc("/v1/reports/exceptions", srv.exceptionsReportHandler)
 	return metrics.InstrumentHTTP("audit-writer", srv.wrap(mux))
 }
@@ -269,6 +340,12 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
+	principal, err := s.requireIngestPrincipal(r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	r = r.WithContext(auth.WithPrincipal(r.Context(), principal))
 
 	var event audit.Event
 	if err := httpjson.Decode(r, &event); err != nil {
@@ -278,7 +355,7 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 	if event.RequestID == "" {
 		event.RequestID = requestIDFromHeader(r)
 	}
-	clusterID, err := s.resolveInboundClusterID(r)
+	clusterID, err := s.resolveInboundClusterID(r, principal)
 	if err != nil {
 		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
 		return
@@ -452,6 +529,11 @@ func (s server) exceptionsHandler(w http.ResponseWriter, r *http.Request) {
 			httpjson.Write(w, status, map[string]string{"error": err.Error()})
 			return
 		}
+		exception, err = s.signAndPersistException(ctx, exception)
+		if err != nil {
+			httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
 
 		s.writeLifecycleAuditEvent(ctx, r, principal.Subject, audit.EventTypeExceptionApproved, audit.DecisionAllow, exception, "direct emergency exception created as approved")
 		httpjson.Write(w, http.StatusCreated, exceptionResponse{
@@ -616,6 +698,11 @@ func (s server) approveExceptionHandler(w http.ResponseWriter, r *http.Request, 
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
 	}
+	exception, err = s.signAndPersistException(ctx, exception)
+	if err != nil {
+		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 
 	reason := "exception approved"
 	if normalized := audit.NormalizeExceptionActionRequest(request); normalized.Reason != "" {
@@ -723,6 +810,25 @@ func (s server) validateExceptionHandler(w http.ResponseWriter, r *http.Request)
 		}
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
+	}
+	if result.Exception != nil {
+		verification, err := s.signing.verifyException(ctx, *result.Exception)
+		if err != nil {
+			httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		result.VerificationState = verification.State
+		result.VerificationReason = verification.Reason
+		result.Exception.VerificationState = verification.State
+		result.Exception.VerificationReason = verification.Reason
+		if s.signing.verifyOnRead(signing.PurposeExceptions) && verification.State != signing.StateVerified {
+			result.Valid = false
+			if result.Reason == "" {
+				result.Reason = firstNonEmpty(verification.Reason, "exception evidence verification failed")
+			}
+		}
+	} else {
+		result.VerificationState = signing.StateDisabled
 	}
 
 	httpjson.Write(w, http.StatusOK, result)
@@ -973,6 +1079,9 @@ func (s server) syncStatusHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		status = deriveSyncStatus(status, s.syncRuntime.config, time.Now().UTC())
 	}
+	if s.signing != nil {
+		status.SignerMode = s.signing.mode()
+	}
 	httpjson.Write(w, http.StatusOK, status)
 }
 
@@ -1014,6 +1123,12 @@ func (s server) syncExceptionsHandler(w http.ResponseWriter, r *http.Request) {
 		GeneratedAt: time.Now().UTC(),
 		Exceptions:  filtered,
 	}
+	envelope, err := s.signing.signSyncSnapshot(r.Context(), response)
+	if err != nil {
+		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	response.Signature = envelope
 	w.Header().Set("ETag", etag)
 	httpjson.Write(w, http.StatusOK, response)
 }
@@ -1081,17 +1196,50 @@ func parseExceptionFilter(r *http.Request) (audit.ExceptionFilter, error) {
 	return audit.NormalizeExceptionFilter(filter)
 }
 
-func (s server) resolveInboundClusterID(r *http.Request) (string, error) {
+func (s server) requireIngestPrincipal(r *http.Request) (auth.Principal, error) {
+	if s.authConfig.Mode != auth.ModeDisabled {
+		return s.authConfig.Require(r, auth.RoleService)
+	}
+	if strings.TrimSpace(s.internalToken) == "" {
+		return auth.Principal{}, auth.ErrMissingBearerToken
+	}
+	token, err := bearerTokenFromHeader(r.Header.Get("Authorization"))
+	if err != nil {
+		return auth.Principal{}, err
+	}
+	if subtle.ConstantTimeCompare([]byte(token), []byte(s.internalToken)) != 1 {
+		return auth.Principal{}, auth.ErrInvalidBearerToken
+	}
+	return auth.Principal{
+		Authenticated: true,
+		AuthMode:      auth.ModeDisabled,
+		Subject:       "internal-service",
+		Role:          auth.RoleService,
+		TokenID:       "internal-service",
+		IdentityType:  auth.IdentityTypeService,
+		GlobalScope:   true,
+	}, nil
+}
+
+func bearerTokenFromHeader(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", auth.ErrMissingBearerToken
+	}
+	parts := strings.Fields(value)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
+		return "", auth.ErrMalformedAuthorization
+	}
+	return strings.TrimSpace(parts[1]), nil
+}
+
+func (s server) resolveInboundClusterID(r *http.Request, principal auth.Principal) (string, error) {
 	clusterID := strings.TrimSpace(r.Header.Get(syncClusterHeader))
 	if clusterID == "" {
 		return "", nil
 	}
 	if s.syncRuntime == nil || s.syncRuntime.config.Mode != audit.SyncModeHub {
 		return clusterID, nil
-	}
-	principal, err := s.authConfig.Require(r, auth.RoleService)
-	if err != nil {
-		return "", err
 	}
 	if _, err := s.syncRuntime.authorizeClusterPrincipal(principal, clusterID); err != nil {
 		return "", err

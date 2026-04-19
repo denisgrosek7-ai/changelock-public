@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	runtimestate "github.com/denisgrosek/changelock/internal/runtime"
@@ -23,15 +24,42 @@ func (f fakeStateReader) ReadObservedWorkload(_ context.Context, _ runtimestate.
 	return f.state, f.err
 }
 
+type fakeRemediator struct {
+	patchCalls   int
+	restartCalls int
+	quarantineCalls int
+	err          error
+}
+
+func (f *fakeRemediator) PatchApprovedState(_ context.Context, _ runtimestate.ApprovedWorkloadState) error {
+	f.patchCalls++
+	return f.err
+}
+
+func (f *fakeRemediator) RestartToApprovedState(_ context.Context, _ runtimestate.ApprovedWorkloadState) error {
+	f.restartCalls++
+	return f.err
+}
+
+func (f *fakeRemediator) ApplyQuarantineOverlay(_ context.Context, _ runtimestate.ApprovedWorkloadState, _ runtimestate.ObservedWorkloadState) error {
+	f.quarantineCalls++
+	return f.err
+}
+
 func TestScanAllowsNoDrift(t *testing.T) {
 	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
 	previousWriter := auditWriter
-	previousReader := stateReader
+	previousRuntime := runtimeControl
 	auditWriter = audit.NewWriter(audit.NewFileSink(auditPath))
-	stateReader = fakeStateReader{}
+	runtimeControl = agentRuntime{
+		config:      runtimestate.SelfHealingConfig{Mode: runtimestate.RemediationModeDisabled},
+		stateReader: fakeStateReader{},
+		remediator:  runtimestate.NoopRemediationClient{},
+		tracker:     runtimestate.NewTracker(),
+	}
 	defer func() {
 		auditWriter = previousWriter
-		stateReader = previousReader
+		runtimeControl = previousRuntime
 	}()
 
 	payload := scanRequest{
@@ -55,12 +83,17 @@ func TestScanAllowsNoDrift(t *testing.T) {
 func TestScanDeniesDriftedWorkload(t *testing.T) {
 	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
 	previousWriter := auditWriter
-	previousReader := stateReader
+	previousRuntime := runtimeControl
 	auditWriter = audit.NewWriter(audit.NewFileSink(auditPath))
-	stateReader = fakeStateReader{}
+	runtimeControl = agentRuntime{
+		config:      runtimestate.SelfHealingConfig{Mode: runtimestate.RemediationModeAlertOnly},
+		stateReader: fakeStateReader{},
+		remediator:  runtimestate.NoopRemediationClient{},
+		tracker:     runtimestate.NewTracker(),
+	}
 	defer func() {
 		auditWriter = previousWriter
-		stateReader = previousReader
+		runtimeControl = previousRuntime
 	}()
 
 	observed := observedState()
@@ -80,6 +113,86 @@ func TestScanDeniesDriftedWorkload(t *testing.T) {
 	event := findDecisionEvent(events, audit.EventTypeRuntimeDriftResult, audit.DecisionDeny)
 	if event == nil || len(event.Reasons) == 0 || event.Evidence == nil || event.Evidence.Runtime == nil {
 		t.Fatalf("expected explainable DENY runtime drift event, got %#v", events)
+	}
+	if response.Remediation == nil || response.Remediation.Mode != runtimestate.RemediationModeAlertOnly {
+		t.Fatalf("expected alert-only remediation outcome, got %#v", response.Remediation)
+	}
+}
+
+func TestScanPatchApprovedStateRemediatesWithMockedClient(t *testing.T) {
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	previousWriter := auditWriter
+	previousRuntime := runtimeControl
+	remediator := &fakeRemediator{}
+	auditWriter = audit.NewWriter(audit.NewFileSink(auditPath))
+	runtimeControl = agentRuntime{
+		config: runtimestate.SelfHealingConfig{
+			Mode:         runtimestate.RemediationModePatchApprovedState,
+			MaxAttempts:  3,
+			Window:       time.Minute,
+			AllowedKinds: map[string]struct{}{"Deployment": {}},
+		},
+		stateReader: fakeStateReader{},
+		remediator:  remediator,
+		tracker:     runtimestate.NewTracker(),
+	}
+	defer func() {
+		auditWriter = previousWriter
+		runtimeControl = previousRuntime
+	}()
+
+	observed := observedState()
+	observed.Containers[0].RunningDigest = "sha256:mutated"
+
+	response := executeScanRequest(t, scanRequest{
+		ScanID:   "scan-remediate",
+		Approved: approvedState(),
+		Observed: observed,
+	})
+
+	if remediator.patchCalls != 1 {
+		t.Fatalf("expected one patch remediation call, got %d", remediator.patchCalls)
+	}
+	if response.Remediation == nil || response.Remediation.Status != runtimestate.FindingStatusRemediated {
+		t.Fatalf("expected remediated outcome, got %#v", response.Remediation)
+	}
+	events := readAuditEvents(t, auditPath)
+	if findDecisionEvent(events, audit.EventTypeDriftRemediationSucceeded, audit.DecisionAllow) == nil {
+		t.Fatalf("expected remediation succeeded audit event, got %#v", events)
+	}
+}
+
+func TestScanQuarantinesWhenSignedDesiredStateIsRequired(t *testing.T) {
+	previousRuntime := runtimeControl
+	runtimeControl = agentRuntime{
+		config: runtimestate.SelfHealingConfig{
+			Mode:                      runtimestate.RemediationModePatchApprovedState,
+			MaxAttempts:               3,
+			Window:                    time.Minute,
+			AllowedKinds:              map[string]struct{}{"Deployment": {}},
+			RequireSignedDesiredState: true,
+		},
+		stateReader: fakeStateReader{},
+		remediator:  &fakeRemediator{},
+		tracker:     runtimestate.NewTracker(),
+	}
+	defer func() {
+		runtimeControl = previousRuntime
+	}()
+
+	approved := approvedState()
+	approved.DesiredStateVerificationState = runtimestate.VerificationStateUnverified
+	observed := observedState()
+	observed.Containers[0].RunningDigest = "sha256:mutated"
+
+	response := executeScanRequest(t, scanRequest{
+		ScanID:   "scan-quarantine",
+		Approved: approved,
+		Observed: observed,
+	})
+
+	if response.Remediation == nil || response.Remediation.Status != runtimestate.FindingStatusQuarantined {
+		t.Fatalf("expected quarantined outcome, got %#v", response.Remediation)
 	}
 }
 
@@ -111,7 +224,9 @@ func executeScanRequest(t *testing.T, payload scanRequest) scanResponse {
 func approvedState() runtimestate.ApprovedWorkloadState {
 	return runtimestate.ApprovedWorkloadState{
 		Namespace:          "acme-prod",
+		WorkloadKind:       "Deployment",
 		Workload:           "runtime-agent",
+		ServiceAccountName: "runtime-agent",
 		ExpectedConfigHash: "cfg-123",
 		Containers: []runtimestate.ApprovedContainerState{
 			{
@@ -133,9 +248,11 @@ func approvedState() runtimestate.ApprovedWorkloadState {
 
 func observedState() *runtimestate.ObservedWorkloadState {
 	return &runtimestate.ObservedWorkloadState{
-		Namespace:        "acme-prod",
-		Workload:         "runtime-agent",
-		ActualConfigHash: "cfg-123",
+		Namespace:          "acme-prod",
+		WorkloadKind:       "Deployment",
+		Workload:           "runtime-agent",
+		ServiceAccountName: "runtime-agent",
+		ActualConfigHash:   "cfg-123",
 		Containers: []runtimestate.ObservedContainerState{
 			{
 				Name:          "agent",

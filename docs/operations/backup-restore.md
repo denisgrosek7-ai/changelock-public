@@ -11,8 +11,8 @@ The durable ChangeLock source of truth lives in PostgreSQL:
 ## Backup
 
 The repository provides:
-- [`scripts/backup_postgres.sh`](/Users/denisgrosek/Downloads/changelock-blueprint/scripts/backup_postgres.sh)
-- [`scripts/restore_postgres.sh`](/Users/denisgrosek/Downloads/changelock-blueprint/scripts/restore_postgres.sh)
+- `scripts/backup_postgres.sh`
+- `scripts/restore_postgres.sh`
 
 Using a DSN:
 ```bash
@@ -46,4 +46,3 @@ curl -sS http://127.0.0.1:8094/ready
 curl -sS http://127.0.0.1:8094/v1/reports/summary
 curl -sS http://127.0.0.1:8094/v1/reports/exceptions
 ```
-

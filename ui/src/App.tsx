@@ -23,6 +23,10 @@ import {
   getMetricDefenseGaps,
   getMetricIncidents,
   getMetricPolicyReplay,
+  getRuntimeActiveStates,
+  getRuntimeClosedLoopStatus,
+  getRuntimeDriftFindings,
+  getRuntimeDriftStatus,
   getSummary,
   getSystemicWeaknesses,
   getSyncStatus,
@@ -35,6 +39,7 @@ import {
   revokeException,
   watchIncident,
 } from "./api";
+import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsTrendsPanel } from "./components/AnalyticsTrendsPanel";
 import { DriftStatsPanel } from "./components/DriftStatsPanel";
 import { EventDetails } from "./components/EventDetails";
@@ -45,8 +50,12 @@ import { HealthBadge } from "./components/HealthBadge";
 import { IncidentWorkbench } from "./components/IncidentWorkbench";
 import { OverviewDashboard } from "./components/OverviewDashboard";
 import { PendingExceptionsPanel } from "./components/PendingExceptionsPanel";
+import { RuntimeDriftPanel } from "./components/RuntimeDriftPanel";
 import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
+import { SigningIdentityPanel } from "./components/SigningIdentityPanel";
+import { SummaryCards } from "./components/SummaryCards";
 import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
+import { TrustScorecardPanel } from "./components/TrustScorecardPanel";
 import { VulnerabilityOpsPanel } from "./components/VulnerabilityOpsPanel";
 import type {
   DefenseGapAssessment,
@@ -67,6 +76,10 @@ import type {
   ExceptionReport,
   ExceptionRequestInput,
   PolicyException,
+  RuntimeActiveState,
+  RuntimeClosedLoopStatus,
+  RuntimeDriftFinding,
+  RuntimeDriftStatus,
   StoredEvent,
   Summary,
   SyncStatus,
@@ -93,6 +106,9 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
   { key: "inventory", label: "Components", description: "Investigate stored SBOM components by digest, package, or PURL." },
   { key: "vulnerabilities", label: "Vulnerabilities", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
+  { key: "signing", label: "Signing Identities", description: "Authorized signers, observed identities, and workflow drift findings." },
+  { key: "scorecard", label: "Trust Scorecard", description: "Measured hardening grade, audit findings, trust badges, and auditor-ready posture." },
+  { key: "guidance", label: "AI Guidance", description: "Contextual grouping, bounded remediation guidance, VEX draft candidates, and break-glass reminders." },
 ];
 
 function isHumanRole(role?: string) {
@@ -115,6 +131,10 @@ export default function App() {
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [topViolators, setTopViolators] = useState<TopViolatorsResponse | null>(null);
   const [driftStats, setDriftStats] = useState<DriftStatsResponse | null>(null);
+  const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
+  const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
+  const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
+  const [runtimeDriftStatus, setRuntimeDriftStatus] = useState<RuntimeDriftStatus | null>(null);
   const [exceptionReport, setExceptionReport] = useState<ExceptionReport | null>(null);
   const [incidents, setIncidents] = useState<InvestigationIncident[]>([]);
   const [systemicWeaknesses, setSystemicWeaknesses] = useState<SystemicWeaknessResponse | null>(null);
@@ -163,6 +183,10 @@ export default function App() {
           setTrends(null);
           setTopViolators(null);
           setDriftStats(null);
+          setRuntimeActiveStates([]);
+          setRuntimeClosedLoopStatus(null);
+          setRuntimeDriftFindings([]);
+          setRuntimeDriftStatus(null);
           setExceptionReport(null);
           setIncidents([]);
           setExecutiveReport(null);
@@ -353,6 +377,48 @@ export default function App() {
             setSelectedEvent(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
+          } else if (activeTab === "runtime") {
+            promises.push(
+              getRuntimeDriftFindings({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then((response) => setRuntimeDriftFindings(response.items)),
+            );
+            promises.push(
+              getRuntimeDriftStatus({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then(setRuntimeDriftStatus),
+            );
+            promises.push(
+              getRuntimeActiveStates({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then((response) => setRuntimeActiveStates(response.items)),
+            );
+            promises.push(
+              getRuntimeClosedLoopStatus({
+                tenant_id: scopedTenantID,
+                limit: filters.limit,
+              }).then(setRuntimeClosedLoopStatus),
+            );
+            promises.push(
+              getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
+                setEvents(response.events);
+                setSelectedEvent((current) => response.events.find((event) => event.id === current?.id) || response.events[0] || null);
+              }),
+            );
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setExecutiveReport(null);
+            setPendingExceptions([]);
           } else if (activeTab === "exceptions") {
             promises.push(getExceptionReport(baseFilters).then((report) => {
               setExceptionReport(report);
@@ -367,12 +433,16 @@ export default function App() {
               }).then((response) => setPendingExceptions(response.exceptions)),
             );
             setExecutiveReport(null);
-          } else if (activeTab === "inventory" || activeTab === "vulnerabilities") {
+          } else if (activeTab === "inventory" || activeTab === "vulnerabilities" || activeTab === "signing" || activeTab === "scorecard" || activeTab === "guidance") {
             setEvents([]);
             setSelectedEvent(null);
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
@@ -388,6 +458,10 @@ export default function App() {
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
@@ -655,7 +729,7 @@ export default function App() {
         </section>
       )}
 
-      {activeTab !== "inventory" && activeTab !== "vulnerabilities" ? (
+      {activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
         <Filters
           filters={filters}
           tab={activeTab}
@@ -745,9 +819,34 @@ export default function App() {
         </>
       ) : null}
 
+      {activeTab === "runtime" ? (
+        <>
+          <RuntimeDriftPanel
+            findings={runtimeDriftFindings}
+            status={runtimeDriftStatus}
+            activeStates={runtimeActiveStates}
+            closedLoopStatus={runtimeClosedLoopStatus}
+            loading={loading}
+          />
+          <section className="content-grid">
+            <EventsTable
+              events={events}
+              selectedEventID={selectedEvent?.id || null}
+              onSelect={setSelectedEvent}
+              loading={loading}
+              error={error}
+            />
+            <EventDetails event={selectedEvent} />
+          </section>
+        </>
+      ) : null}
+
       {activeTab === "inventory" ? <SBOMInventoryPanel tenantID={enforcedTenantID || undefined} /> : null}
 
       {activeTab === "vulnerabilities" ? <VulnerabilityOpsPanel role={role} tenantID={enforcedTenantID || undefined} /> : null}
+      {activeTab === "signing" ? <SigningIdentityPanel tenantID={enforcedTenantID || undefined} /> : null}
+      {activeTab === "scorecard" ? <TrustScorecardPanel tenantID={enforcedTenantID || undefined} /> : null}
+      {activeTab === "guidance" ? <AIInsightsPanel tenantID={enforcedTenantID || undefined} /> : null}
 
       {activeTab === "events" ? (
         <IncidentWorkbench
@@ -774,7 +873,7 @@ export default function App() {
         />
       ) : null}
 
-      {activeTab !== "analytics" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "events" ? (
+      {activeTab !== "analytics" && activeTab !== "runtime" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
         <section className="content-grid">
           <EventsTable
             events={events}

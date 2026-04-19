@@ -1,0 +1,182 @@
+name: ChangeLock Shift-Left
+description: Run changelock-cli preflight checks and emit GitHub-friendly diagnostics.
+
+inputs:
+  manifest-files:
+    description: Newline-separated list of YAML files to evaluate.
+    required: false
+    default: ""
+  image:
+    description: Optional digest-pinned image reference for trust and vulnerability context.
+    required: false
+    default: ""
+  tenant:
+    description: ChangeLock tenant scope used for local bundle and API-assisted context.
+    required: false
+    default: "acme"
+  repository:
+    description: Optional repository identity override, for example my-org/acme-app.
+    required: false
+    default: ""
+  api-url:
+    description: Optional ChangeLock API URL for read-only context.
+    required: false
+    default: ""
+  token:
+    description: Optional read-only ChangeLock API token.
+    required: false
+    default: ""
+  offline:
+    description: Disable API-assisted checks and stay local-only.
+    required: false
+    default: "false"
+  fail-severity:
+    description: Vulnerability threshold when an image is evaluated.
+    required: false
+    default: "HIGH"
+  fail-on-findings:
+    description: Fail the action on CLI FAIL results instead of advisory-only summaries.
+    required: false
+    default: "false"
+  output-dir:
+    description: Directory for generated result and summary artifacts.
+    required: false
+    default: ".changelock-shift-left"
+
+outputs:
+  result-path:
+    description: Path to the raw ChangeLock JSON result.
+    value: ${{ steps.run.outputs.result-path }}
+  summary-path:
+    description: Path to the markdown summary file.
+    value: ${{ steps.run.outputs.summary-path }}
+  guidance-path:
+    description: Path to the markdown contextual guidance file.
+    value: ${{ steps.run.outputs.guidance-path }}
+  sarif-path:
+    description: Path to the generated SARIF file.
+    value: ${{ steps.run.outputs.sarif-path }}
+  overall-result:
+    description: Overall result from changelock-cli.
+    value: ${{ steps.run.outputs.overall-result }}
+  blocking-count:
+    description: Number of blocking diagnostics emitted by the run.
+    value: ${{ steps.run.outputs.blocking-count }}
+  advisory-count:
+    description: Number of advisory diagnostics emitted by the run.
+    value: ${{ steps.run.outputs.advisory-count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build changelock-cli
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "${{ inputs.output-dir }}/bin"
+        go build -o "${{ inputs.output-dir }}/bin/changelock-cli" ./cmd/changelock-cli
+
+    - name: Run preflight and publish diagnostics
+      id: run
+      shell: bash
+      env:
+        CHANGELOCK_ACTION_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        out_dir="${{ inputs.output-dir }}"
+        cli="${out_dir}/bin/changelock-cli"
+        result_path="${out_dir}/result.json"
+        summary_path="${out_dir}/summary.md"
+        guidance_path="${out_dir}/guidance.md"
+        sarif_path="${out_dir}/diagnostics.sarif"
+        annotations_path="${out_dir}/annotations.txt"
+        stderr_path="${out_dir}/preflight.stderr"
+
+        mapfile -t manifest_files < <(printf '%s\n' "${{ inputs.manifest-files }}" | sed '/^[[:space:]]*$/d')
+
+        args=()
+        for file in "${manifest_files[@]}"; do
+          args+=("--file" "$file")
+        done
+
+        if [ -n "${{ inputs.image }}" ]; then
+          args+=("--image" "${{ inputs.image }}")
+        fi
+        if [ -n "${{ inputs.tenant }}" ]; then
+          args+=("--tenant" "${{ inputs.tenant }}")
+        fi
+        if [ -n "${{ inputs.repository }}" ]; then
+          args+=("--repository" "${{ inputs.repository }}")
+        fi
+        if [ -n "${{ inputs.api-url }}" ]; then
+          args+=("--api-url" "${{ inputs.api-url }}")
+        fi
+        if [ "${{ inputs.offline }}" = "true" ]; then
+          args+=("--offline")
+        fi
+        if [ -n "${{ inputs.fail-severity }}" ]; then
+          args+=("--fail-severity" "${{ inputs.fail-severity }}")
+        fi
+
+        if [ ${#args[@]} -eq 0 ]; then
+          printf '## ChangeLock Shift-Left Summary\n\nNo manifest or image inputs were provided.\n' > "${summary_path}"
+          cat "${summary_path}" >> "${GITHUB_STEP_SUMMARY}"
+          cat > "${sarif_path}" <<'EOF'
+          {
+            "version": "2.1.0",
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "runs": []
+          }
+          EOF
+          echo "result-path=" >> "${GITHUB_OUTPUT}"
+          echo "summary-path=${summary_path}" >> "${GITHUB_OUTPUT}"
+          echo "guidance-path=${guidance_path}" >> "${GITHUB_OUTPUT}"
+          echo "sarif-path=${sarif_path}" >> "${GITHUB_OUTPUT}"
+          echo "overall-result=SKIP" >> "${GITHUB_OUTPUT}"
+          echo "blocking-count=0" >> "${GITHUB_OUTPUT}"
+          echo "advisory-count=0" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        if [ -n "${CHANGELOCK_ACTION_TOKEN}" ]; then
+          export CHANGELOCK_CLI_TOKEN="${CHANGELOCK_ACTION_TOKEN}"
+        fi
+
+        set +e
+        "${cli}" preflight "${args[@]}" --output json > "${result_path}" 2> "${stderr_path}"
+        exit_code=$?
+        set -e
+
+        if [ ! -s "${result_path}" ]; then
+          cat "${stderr_path}" >&2
+          exit "${exit_code}"
+        fi
+
+        "${cli}" diagnostics --input "${result_path}" --format github-annotations > "${annotations_path}"
+        cat "${annotations_path}"
+        "${cli}" diagnostics --input "${result_path}" --format markdown > "${summary_path}"
+        cat "${summary_path}" >> "${GITHUB_STEP_SUMMARY}"
+        "${cli}" guidance --input "${result_path}" --format markdown > "${guidance_path}"
+        cat "${guidance_path}" >> "${GITHUB_STEP_SUMMARY}"
+        "${cli}" diagnostics --input "${result_path}" --format sarif > "${sarif_path}"
+
+        blocking_count="$(jq -r '.diagnostic_summary.blocking // 0' "${result_path}")"
+        advisory_count="$(jq -r '.diagnostic_summary.advisory // 0' "${result_path}")"
+        overall_result="$(jq -r '.overall_result // "UNKNOWN"' "${result_path}")"
+
+        echo "result-path=${result_path}" >> "${GITHUB_OUTPUT}"
+        echo "summary-path=${summary_path}" >> "${GITHUB_OUTPUT}"
+        echo "guidance-path=${guidance_path}" >> "${GITHUB_OUTPUT}"
+        echo "sarif-path=${sarif_path}" >> "${GITHUB_OUTPUT}"
+        echo "overall-result=${overall_result}" >> "${GITHUB_OUTPUT}"
+        echo "blocking-count=${blocking_count}" >> "${GITHUB_OUTPUT}"
+        echo "advisory-count=${advisory_count}" >> "${GITHUB_OUTPUT}"
+
+        if [ "${exit_code}" -ge 2 ]; then
+          cat "${stderr_path}" >&2
+          exit "${exit_code}"
+        fi
+        if [ "${exit_code}" -eq 1 ] && [ "${{ inputs.fail-on-findings }}" = "true" ]; then
+          exit 1
+        fi

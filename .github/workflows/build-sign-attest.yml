@@ -79,7 +79,7 @@ jobs:
           echo "METADATA_PATH=${METADATA_PATH}" >> "$GITHUB_ENV"
 
       - name: Run Trivy image scan (JSON)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.DIGEST_REF }}
           format: json
@@ -88,7 +88,7 @@ jobs:
           vuln-type: os,library
 
       - name: Run Trivy image scan (SARIF)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.DIGEST_REF }}
           format: sarif
@@ -196,7 +196,7 @@ jobs:
 
       - name: Upload supply-chain artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: supply-chain-${{ inputs.image_name }}-${{ env.DIGEST_SAFE }}
           path: |

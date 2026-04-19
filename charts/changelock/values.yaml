@@ -1,3 +1,8 @@
+# Evaluation/demo defaults only.
+# For real deployments start from charts/changelock/values-prod-example.yaml
+# and set deploymentProfile=production.
+deploymentProfile: demo
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -6,7 +11,8 @@ imagePullSecrets: []
 
 auth:
   mode: disabled
-  createSecret: false
+  # Demo/eval convenience. Production should prefer auth.existingSecret.
+  createSecret: true
   existingSecret: ""
   tokensJson: ""
   tokensJsonKey: CHANGELOCK_AUTH_TOKENS_JSON
@@ -24,6 +30,44 @@ auth:
     audiences: ""
     jwksUrl: ""
     clockSkew: 1m
+
+sync:
+  mode: disabled
+  clusterId: ""
+  hubUrl: ""
+  pollInterval: 30s
+  failMode: last-known-good
+  cacheDir: /var/lib/changelock-sync
+  requireClusterId: true
+  tokenExistingSecret: ""
+  tokenKey: CHANGELOCK_SYNC_TOKEN
+  clusterBindingsJson: ""
+  clusterBindingsExistingSecret: ""
+  clusterBindingsKey: CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON
+
+signer:
+  mode: disabled
+  purposes: exceptions,sync-snapshots
+  keyId: ""
+  algorithm: ""
+  verifyOnRead: true
+  existingSecret: ""
+  softwareSecretKey: CHANGELOCK_SIGNER_SOFTWARE_SECRET
+  vaultTokenKey: CHANGELOCK_VAULT_TOKEN
+  vault:
+    addr: ""
+    transitPath: transit
+    transitKey: ""
+
+signingIdentity:
+  # Backward-compatible default. Move to monitor first, then enforce only after
+  # explicit signer policies and workflow inputs are validated.
+  enforcement: disabled
+  requireRekor: false
+  quarantineOnDrift: false
+  # Repository-local workflow scan path. Only useful when workflow files are
+  # intentionally mounted into the audit-writer container.
+  workflowsDir: .github/workflows
 
 postgresql:
   enabled: true
@@ -86,6 +130,17 @@ auditWriter:
     CHANGELOCK_VULNOPS_TRIVY_PATH: trivy
     CHANGELOCK_VULNOPS_GRYPE_PATH: grype
     CHANGELOCK_CORS_ALLOW_ORIGINS: https://dashboard.example.com
+    # 8k scorecard/audit defaults stay read-only and conservative.
+    CHANGELOCK_TRUST_PUBLICATION_MODE: disabled
+    CHANGELOCK_HARDENING_REVIEW_ENABLED: "true"
+    CHANGELOCK_HARDENING_REVIEW_STALE_EXCEPTION_DAYS: "14"
+    CHANGELOCK_SCORECARD_EVENT_LIMIT: "250"
+    CHANGELOCK_SCORECARD_SEVERITY_THRESHOLD: HIGH
+    # 8l deeper AI guidance stays advisory and disabled by default.
+    CHANGELOCK_AI_GUIDANCE_MODE: disabled
+    CHANGELOCK_AI_GUIDANCE_MAX_ITEMS: "12"
+    CHANGELOCK_AI_GUIDANCE_INCLUDE_DOC_LINKS: "true"
+    CHANGELOCK_AI_GUIDANCE_REDACT_SENSITIVE: "true"
   nodeSelector: {}
   tolerations: []
   serviceAccount:
@@ -161,6 +216,9 @@ deployGate:
   tls:
     enabled: false
     secretName: ""
+  # Optional VEX-aware deploy-time vulnerability evaluation.
+  # Use "enforce" only when audit-writer vulnerability/VEX APIs are reachable.
+  vexDeployMode: disabled
   webhook:
     enabled: false
     name: pods.changelock.io
@@ -211,6 +269,24 @@ runtimeAgent:
     create: true
     name: ""
     automountServiceAccountToken: false
+  selfHealing:
+    mode: disabled
+    maxAttempts: 3
+    window: 15m
+    allowedKinds: Deployment,DaemonSet,StatefulSet
+    requireSignedDesiredState: false
+    criticalOnly: false
+  closedLoop:
+    reconcileInterval: 2m
+    failMode: quarantine
+    verifyDesiredStateOnReconcile: false
+    protectedNamespaces: changelock,changelock-system
+    protectedWorkloads: ""
+    quarantineNetworkPolicyEnabled: false
+    vexQuarantine:
+      enabled: false
+      severity: critical
+      requireNetActionable: true
 
 ui:
   enabled: false

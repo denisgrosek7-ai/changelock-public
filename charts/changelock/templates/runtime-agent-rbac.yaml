@@ -1,0 +1,73 @@
+{{- if .Values.runtimeAgent.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "runtime-agent-read") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "runtime-agent-read") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "runtime-agent-read") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "changelock.serviceAccountName" (dict "root" . "component" "runtime-agent" "serviceAccount" .Values.runtimeAgent.serviceAccount) }}
+    namespace: {{ .Release.Namespace }}
+{{- $patchEnabled := eq .Values.runtimeAgent.selfHealing.mode "patch-approved-state" -}}
+{{- $restartEnabled := eq .Values.runtimeAgent.selfHealing.mode "restart-to-approved-state" -}}
+{{- $quarantineOverlayEnabled := .Values.runtimeAgent.closedLoop.quarantineNetworkPolicyEnabled -}}
+{{- if or $patchEnabled $restartEnabled $quarantineOverlayEnabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "runtime-agent-write") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+rules:
+  {{- if or $patchEnabled $restartEnabled }}
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets"]
+    verbs: ["patch", "update"]
+  {{- end }}
+  {{- if $restartEnabled }}
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+  {{- end }}
+  {{- if $quarantineOverlayEnabled }}
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "runtime-agent-write") }}
+  labels:
+    {{- include "changelock.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "changelock.componentFullname" (dict "root" . "component" "runtime-agent-write") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "changelock.serviceAccountName" (dict "root" . "component" "runtime-agent" "serviceAccount" .Values.runtimeAgent.serviceAccount) }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

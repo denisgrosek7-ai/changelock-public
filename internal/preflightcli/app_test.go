@@ -269,6 +269,11 @@ func TestRenderJSONOutputShape(t *testing.T) {
 			t.Fatalf("expected key %q in payload: %+v", key, payload)
 		}
 	}
+	for _, key := range []string{"diagnostics", "diagnostic_summary"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("expected key %q in payload: %+v", key, payload)
+		}
+	}
 	checks, ok := payload["checks"].([]any)
 	if !ok || len(checks) != 4 {
 		t.Fatalf("unexpected checks payload: %#v", payload["checks"])

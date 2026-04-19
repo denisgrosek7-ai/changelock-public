@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/denisgrosek/changelock/internal/signing"
+	internalvex "github.com/denisgrosek/changelock/internal/vex"
 )
 
 var (
@@ -29,6 +32,10 @@ type Store interface {
 	GetVulnerabilityDecision(ctx context.Context, decisionID int64) (VulnerabilityDecision, error)
 	CreateVulnerabilityDecision(ctx context.Context, request VulnerabilityDecisionCreateRequest, decidedBy string) (VulnerabilityDecision, error)
 	DeactivateVulnerabilityDecision(ctx context.Context, decisionID int64) (VulnerabilityDecision, error)
+	ListVEXStatements(ctx context.Context, filter internalvex.Filter) ([]internalvex.Statement, error)
+	GetVEXStatement(ctx context.Context, statementID int64) (internalvex.Statement, error)
+	CreateVEXStatement(ctx context.Context, request internalvex.CreateRequest, createdBy string) (internalvex.Statement, error)
+	RevokeVEXStatement(ctx context.Context, statementID int64, revokedBy string) (internalvex.Statement, error)
 	ListActiveDigests(ctx context.Context, windowDays int, limit int) ([]ActiveDigestRef, error)
 	LookupDigestScopes(ctx context.Context, imageDigest string, limit int) ([]ActiveWorkloadRef, error)
 	CreateException(ctx context.Context, request ExceptionCreateRequest) (PolicyException, error)
@@ -38,6 +45,7 @@ type Store interface {
 	ApproveException(ctx context.Context, exceptionID string, approvedBy string, approverRole string) (PolicyException, error)
 	RejectException(ctx context.Context, exceptionID string, reason string, rejectedBy string, rejectorRole string) (PolicyException, error)
 	RevokeException(ctx context.Context, exceptionID string) (PolicyException, error)
+	SetExceptionSignature(ctx context.Context, exceptionID string, envelope *signing.Envelope) (PolicyException, error)
 	ValidateException(ctx context.Context, request ExceptionValidationRequest) (ExceptionValidationResult, error)
 	ExceptionReport(ctx context.Context, filter ExceptionFilter) (ExceptionReport, error)
 	ListApprovalLogs(ctx context.Context, exceptionID string, limit int) ([]ApprovalLog, error)

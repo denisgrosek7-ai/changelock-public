@@ -26,12 +26,14 @@ Pull-based API sync from hub to spokes:
 
 - approved exceptions only
 - revisioned snapshots via `GET /v1/sync/exceptions`
+- optional signed snapshot metadata for tamper-evident transfer
 - local on-disk last-known-good cache
 
 Hub-directed ingest:
 
 - audit events forwarded from spokes to the hub
 - each forwarded event carries `cluster_id`
+- ingest remains machine-authenticated and cluster-bound when a cluster identity is asserted
 
 ## Sync configuration
 
@@ -55,6 +57,7 @@ Rules:
   - `CHANGELOCK_SYNC_HUB_URL`
   - `CHANGELOCK_SYNC_TOKEN` or `CHANGELOCK_INTERNAL_SERVICE_TOKEN`
 - hub mode can require explicit cluster bindings with `CHANGELOCK_SYNC_REQUIRE_CLUSTER_ID=true`
+- in Helm production profile, hub/spoke deployments should use Kubernetes Secrets for machine-auth tokens and cluster bindings instead of inline values
 
 ## Cluster identity and auth
 
@@ -71,7 +74,7 @@ Example binding:
 
 ```json
 {
-  "service-internal-demo": {
+  "service-internal-prod": {
     "clusters": ["prod-eu", "prod-us"],
     "tenants": ["acme", "globex"]
   }
@@ -79,6 +82,10 @@ Example binding:
 ```
 
 The binding key matches the static-token `token_id` or the machine principal subject. Human roles and machine identities remain separate.
+
+Any demo token strings used elsewhere in local examples are not production-safe for hub/spoke deployments. Production clusters should use explicit machine credentials distributed through Kubernetes Secrets or equivalent secret management.
+
+Cluster-attributed audit ingest follows the same rule. A client-supplied `X-Changelock-Cluster-Id` header is never trusted by itself.
 
 ## Hub endpoints
 
@@ -138,6 +145,9 @@ Important:
 - `last_error`
 - `cache_present`
 - `stale_after_seconds`
+- `signer_mode`
+- `verification_state`
+- `verification_reason`
 - `summary`
 
 Health values:
@@ -164,6 +174,7 @@ Exact meaning:
     - no cache and unreachable hub
     - deny mode while sync is unavailable
     - cluster authorization failure
+    - signed snapshot verification failure
 
 Fail-mode interaction:
 
@@ -172,6 +183,22 @@ Fail-mode interaction:
 - `deny`
   - unavailable hub => `error`
   - exception-based allowance does not proceed
+
+## Signed snapshot verification
+
+When signing is enabled for `sync-snapshots`:
+
+- the hub signs the snapshot returned by `GET /v1/sync/exceptions`
+- the spoke verifies it before replacing local approved exceptions
+- verification failure is surfaced explicitly in `/v1/sync/status`
+- if verify-on-read is enabled, the spoke fails closed and rejects the snapshot
+
+Verification states:
+
+- `verified`
+- `unverified`
+- `failed`
+- `disabled`
 
 ## Policy rollout with GitOps
 
@@ -194,7 +221,7 @@ Recommended usage:
 ```bash
 export CHANGELOCK_SYNC_MODE=hub
 export CHANGELOCK_SYNC_REQUIRE_CLUSTER_ID=true
-export CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON='{"service-internal-demo":{"clusters":["prod-eu","prod-us"],"tenants":["acme","globex"]}}'
+export CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON='{"service-internal-prod":{"clusters":["prod-eu","prod-us"],"tenants":["acme","globex"]}}'
 ```
 
 ## Example spoke setup
@@ -203,7 +230,7 @@ export CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON='{"service-internal-demo":{"cluster
 export CHANGELOCK_SYNC_MODE=spoke
 export CHANGELOCK_CLUSTER_ID=prod-eu
 export CHANGELOCK_SYNC_HUB_URL=https://hub.example.com
-export CHANGELOCK_SYNC_TOKEN=service-internal-demo-token
+export CHANGELOCK_SYNC_TOKEN=service-internal-prod-token
 export CHANGELOCK_SYNC_POLL_INTERVAL=30s
 export CHANGELOCK_SYNC_FAIL_MODE=last-known-good
 export CHANGELOCK_SYNC_CACHE_DIR=/var/lib/changelock-sync
@@ -218,7 +245,7 @@ curl -sS http://127.0.0.1:8094/v1/sync/status \
 
 ```bash
 curl -sS http://127.0.0.1:8094/v1/sync/exceptions \
-  -H 'Authorization: Bearer service-internal-demo-token' \
+  -H 'Authorization: Bearer service-internal-prod-token' \
   -H 'X-Changelock-Cluster-Id: prod-eu'
 ```
 
@@ -227,5 +254,4 @@ curl -sS http://127.0.0.1:8094/v1/sync/exceptions \
 - no websocket or gRPC streaming
 - no active-active hub topology
 - no strong-consistency claim across clusters
-- no HSM/KMS integration
 - no anomaly-driven sync optimization

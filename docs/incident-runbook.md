@@ -1,5 +1,7 @@
 # Incident runbook
 
+Bearer token strings shown below are local static-token examples for drills and demos. Replace them with real production credentials before using these flows in a live environment.
+
 ## High severity
 1. Freeze production deployments.
 2. Revoke GitHub OIDC trust or cloud role session issuance if CI compromise suspected.

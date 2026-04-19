@@ -28,17 +28,21 @@ func (s *PostgresStore) ReplaceApprovedExceptions(ctx context.Context, exception
 INSERT INTO policy_exceptions (
   exception_id, exception_type, status, tenant_id, environment, namespace, repo,
   image_digest, cve_id, reason, ticket_id, requested_by, requested_at, approved_by,
-  approved_at, created_at, expires_at, active, last_updated_at, metadata
+  approved_at, created_at, expires_at, active, last_updated_at, signature, metadata
 )
 VALUES (
   $1, $2, $3, $4, $5, $6, $7,
   $8, $9, $10, $11, $12, $13, $14,
-  $15, $16, $17, $18, $19, $20::jsonb
+  $15, $16, $17, $18, $19, $20::jsonb, $21::jsonb
 )`
 
 	now := time.Now().UTC()
 	for _, synced := range exceptions {
 		exception := synced.ToPolicyException(now, 0)
+		signature, err := nullableJSON(exception.Signature)
+		if err != nil {
+			return fmt.Errorf("marshal exception signature %s: %w", exception.ExceptionID, err)
+		}
 		if _, err := tx.Exec(ctx, statement,
 			exception.ExceptionID,
 			exception.ExceptionType,
@@ -59,6 +63,7 @@ VALUES (
 			exception.ExpiresAt,
 			exception.Active,
 			exception.LastUpdatedAt,
+			signature,
 			string(exception.Metadata),
 		); err != nil {
 			return fmt.Errorf("replace approved exception %s: %w", exception.ExceptionID, err)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
+	"github.com/denisgrosek/changelock/internal/signing"
 )
 
 const syncClusterHeader = "X-Changelock-Cluster-Id"
@@ -49,6 +50,7 @@ type syncRuntime struct {
 	config      syncConfig
 	client      *http.Client
 	forwardSink *audit.HTTPSink
+	signing     *signingRuntime
 
 	mu     sync.RWMutex
 	status audit.SyncStatus
@@ -182,6 +184,7 @@ func newSyncRuntime(config syncConfig) *syncRuntime {
 			HubURL:            config.HubURL,
 			FailMode:          config.FailMode,
 			Health:            audit.SyncHealthDisabled,
+			SignerMode:        signing.ModeDisabled,
 			StaleAfterSeconds: int64((2 * config.PollInterval) / time.Second),
 		},
 	}
@@ -315,6 +318,17 @@ func (s *syncRuntime) syncOnce(ctx context.Context, store exceptionSyncStore) {
 		s.markFailure(err, s.statusSnapshot().CachePresent)
 		return
 	}
+	verification, err := s.verifySnapshot(ctx, snapshot)
+	if err != nil {
+		s.recordVerification(signing.VerificationResult{State: signing.StateFailed, Reason: err.Error()})
+		s.markFailure(err, s.statusSnapshot().CachePresent)
+		return
+	}
+	s.recordVerification(verification)
+	if s.signing != nil && s.signing.verifyOnRead(signing.PurposeSyncSnapshots) && verification.State != signing.StateVerified {
+		s.markFailure(errors.New(firstNonEmpty(verification.Reason, "sync snapshot verification failed")), s.statusSnapshot().CachePresent)
+		return
+	}
 	if snapshot.ClusterID != "" && snapshot.ClusterID != s.config.ClusterID {
 		s.markFailure(fmt.Errorf("hub snapshot cluster_id %q does not match local cluster_id %q", snapshot.ClusterID, s.config.ClusterID), s.statusSnapshot().CachePresent)
 		return
@@ -353,6 +367,15 @@ func (s *syncRuntime) loadCache(ctx context.Context, store exceptionSyncStore) e
 	if cache.Snapshot.Revision == "" {
 		cache.Snapshot.Revision = audit.ComputeExceptionSyncRevision(cache.Snapshot.Exceptions)
 	}
+	verification, err := s.verifySnapshot(ctx, cache.Snapshot)
+	if err != nil {
+		s.recordVerification(signing.VerificationResult{State: signing.StateFailed, Reason: err.Error()})
+		return err
+	}
+	s.recordVerification(verification)
+	if s.signing != nil && s.signing.verifyOnRead(signing.PurposeSyncSnapshots) && verification.State != signing.StateVerified {
+		return errors.New(firstNonEmpty(verification.Reason, "sync snapshot verification failed"))
+	}
 	if err := store.ReplaceApprovedExceptions(ctx, cache.Snapshot.Exceptions); err != nil {
 		return err
 	}
@@ -365,6 +388,13 @@ func (s *syncRuntime) loadCache(ctx context.Context, store exceptionSyncStore) e
 		}
 	})
 	return nil
+}
+
+func (s *syncRuntime) verifySnapshot(ctx context.Context, snapshot audit.ExceptionSyncSnapshot) (signing.VerificationResult, error) {
+	if s == nil || s.signing == nil {
+		return signing.VerificationResult{State: signing.StateDisabled}, nil
+	}
+	return s.signing.verifySyncSnapshot(ctx, snapshot)
 }
 
 func (s *syncRuntime) writeCache(snapshot audit.ExceptionSyncSnapshot, lastSuccessful time.Time) error {
@@ -404,6 +434,10 @@ func (s *syncRuntime) markSuccess(revision string, at time.Time, cachePresent bo
 		status.LastAttemptAt = &at
 		status.LastError = ""
 		status.CachePresent = cachePresent
+		status.SignerMode = signing.ModeDisabled
+		if s.signing != nil {
+			status.SignerMode = s.signing.mode()
+		}
 	})
 }
 
@@ -414,6 +448,10 @@ func (s *syncRuntime) markFailure(err error, cachePresent bool) {
 		status.LastAttemptAt = &now
 		status.LastError = strings.TrimSpace(err.Error())
 		status.CachePresent = cachePresent
+		status.SignerMode = signing.ModeDisabled
+		if s.signing != nil {
+			status.SignerMode = s.signing.mode()
+		}
 		if cachePresent && s.config.FailMode == audit.SyncFailModeLastKnownGood {
 			status.Health = audit.SyncHealthStale
 			return
@@ -426,6 +464,17 @@ func (s *syncRuntime) updateStatus(update func(*audit.SyncStatus)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	update(&s.status)
+}
+
+func (s *syncRuntime) recordVerification(result signing.VerificationResult) {
+	s.updateStatus(func(status *audit.SyncStatus) {
+		status.SignerMode = signing.ModeDisabled
+		if s.signing != nil {
+			status.SignerMode = s.signing.mode()
+		}
+		status.VerificationState = result.State
+		status.VerificationReason = result.Reason
+	})
 }
 
 func deriveSyncStatus(status audit.SyncStatus, config syncConfig, now time.Time) audit.SyncStatus {

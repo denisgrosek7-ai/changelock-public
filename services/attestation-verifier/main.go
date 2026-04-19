@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
+	"github.com/denisgrosek/changelock/internal/evidence"
 	"github.com/denisgrosek/changelock/internal/httpjson"
 	"github.com/denisgrosek/changelock/internal/metrics"
 	"github.com/denisgrosek/changelock/internal/verify"
 )
 
-var artifactVerifier verify.ArtifactVerifier = verify.NewCosignVerifier(envOrDefault("CHANGELOCK_COSIGN_BIN", "cosign"))
+var artifactVerifier verify.ArtifactVerifier = newArtifactVerifier()
 var auditWriter = audit.NewDefaultWriter()
 
 func main() {
@@ -80,6 +81,14 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func newArtifactVerifier() verify.ArtifactVerifier {
+	evidenceConfig, err := evidence.LoadConfigFromEnv(os.Getenv)
+	if err != nil {
+		panic(err)
+	}
+	return verify.NewCosignVerifierWithEvidence(envOrDefault("CHANGELOCK_COSIGN_BIN", "cosign"), evidenceConfig)
 }
 
 func requestIDFromHeader(r *http.Request) string {

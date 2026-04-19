@@ -2,7 +2,8 @@ export type Decision = "ALLOW" | "DENY" | "ERROR";
 export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED";
 export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
-export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "exceptions" | "inventory" | "vulnerabilities";
+export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
+export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
 
 export interface AuditHealth {
   status: string;
@@ -37,6 +38,188 @@ export interface SyncStatus {
   cache_present: boolean;
   stale_after_seconds?: number;
   summary?: string;
+}
+
+export interface RuntimeDriftFinding {
+  id: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  namespace: string;
+  workload_kind: string;
+  workload: string;
+  service_account?: string;
+  drift_result: string;
+  drift_classes?: string[];
+  drift_severity?: string;
+  remediation_mode?: string;
+  remediation_attempt?: number;
+  remediable: boolean;
+  status: string;
+  quarantine_reason?: string;
+  desired_state_verification_state?: string;
+  detected_at: string;
+  last_updated_at: string;
+  last_event_type: string;
+  reasons?: string[];
+  evidence?: Record<string, unknown>;
+}
+
+export interface RuntimeDriftFindingsResponse {
+  items: RuntimeDriftFinding[];
+}
+
+export interface RuntimeDriftStatus {
+  total_findings: number;
+  active_findings: number;
+  quarantined: number;
+  failed: number;
+  remediated: number;
+  detected: number;
+  counts_by_severity: Record<string, number>;
+  counts_by_status: Record<string, number>;
+  last_detected_at?: string;
+  last_updated_at?: string;
+}
+
+export interface RuntimeActiveState {
+  id: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  namespace: string;
+  workload_kind: string;
+  workload: string;
+  service_account?: string;
+  observed_digest?: string;
+  approved_digest?: string;
+  observed_config_hash?: string;
+  expected_config_hash?: string;
+  drift_result?: string;
+  drift_classes?: string[];
+  drift_severity?: string;
+  reconciliation_status: string;
+  remediation_mode?: string;
+  remediation_attempt?: number;
+  remediable: boolean;
+  quarantine_reason?: string;
+  quarantine_type?: string;
+  protected_target?: boolean;
+  protected_reason?: string;
+  desired_state_source_ref?: string;
+  desired_state_approval_id?: string;
+  desired_state_verification_state?: string;
+  last_error?: string;
+  last_reconciled_at: string;
+  reasons?: string[];
+  evidence?: Record<string, unknown>;
+}
+
+export interface RuntimeActiveStatesResponse {
+  items: RuntimeActiveState[];
+}
+
+export interface RuntimeClosedLoopStatus {
+  total_targets: number;
+  in_sync: number;
+  drift_detected: number;
+  remediated: number;
+  failed: number;
+  quarantined: number;
+  protected_blocked: number;
+  counts_by_status: Record<string, number>;
+  counts_by_quarantine_type: Record<string, number>;
+  last_reconciled_at?: string;
+}
+
+export interface SigningIdentityPolicy {
+  id: string;
+  name?: string;
+  provider_type: string;
+  issuer?: string;
+  signer_identity?: string;
+  subject?: string;
+  repository?: string;
+  workflow?: string;
+  ref?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  enabled: boolean;
+  distrusted_after?: string;
+  distrust_reason?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface SigningIdentityObservation {
+  id: string;
+  provider_type?: string;
+  issuer?: string;
+  signer_identity?: string;
+  subject?: string;
+  repository?: string;
+  workflow?: string;
+  ref?: string;
+  commit_sha?: string;
+  image_digest?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  event_count: number;
+  artifact_count: number;
+  verification_state?: string;
+  authorized: string;
+  matched_policy_id?: string;
+  distrusted_after?: string;
+  reason_code?: string;
+  reason_detail?: string;
+}
+
+export interface SigningIdentityFinding {
+  id: string;
+  type: string;
+  severity: string;
+  repository?: string;
+  workflow?: string;
+  ref?: string;
+  policy_id?: string;
+  observation_id?: string;
+  reason: string;
+  detected_at?: string;
+  advisory: boolean;
+}
+
+export interface SigningIdentityStatus {
+  enforcement_mode: string;
+  require_rekor: boolean;
+  total_policies: number;
+  enabled_policies: number;
+  observed_identities: number;
+  authorized: number;
+  unauthorized: number;
+  unknown: number;
+  findings: number;
+  workflow_drift_findings: number;
+  counts_by_reason_code: Record<string, number>;
+}
+
+export interface SigningIdentityObservationsResponse {
+  items: SigningIdentityObservation[];
+}
+
+export interface SigningIdentityFindingsResponse {
+  items: SigningIdentityFinding[];
+}
+
+export interface SigningIdentityPoliciesResponse {
+  policies: SigningIdentityPolicy[];
+}
+
+export interface SigningIdentityStatusResponse {
+  status: SigningIdentityStatus;
 }
 
 export interface ReasonCount {
@@ -260,6 +443,89 @@ export interface ActiveWorkloadRef {
   digest?: string;
 }
 
+export interface VEXScope {
+  image_digest?: string;
+  package_name?: string;
+  purl?: string;
+  repo?: string;
+  workload?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  namespace?: string;
+}
+
+export interface VEXMatch {
+  id: number;
+  source_format: string;
+  source_ref?: string;
+  vulnerability_id: string;
+  status: VEXStatus;
+  justification?: string;
+  action_statement?: string;
+  impact_statement?: string;
+  fixed_version?: string;
+  created_by?: string;
+  updated_by?: string;
+  expires_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VEXStatement {
+  id: number;
+  statement_key?: string;
+  source_format: string;
+  source_ref?: string;
+  vulnerability_id: string;
+  scope: VEXScope;
+  status: VEXStatus;
+  justification?: string;
+  action_statement?: string;
+  impact_statement?: string;
+  fixed_version?: string;
+  created_by?: string;
+  updated_by?: string;
+  expires_at?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  active: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VEXStatementsResponse {
+  statements: VEXStatement[];
+}
+
+export interface VEXStatementActionResponse {
+  status: string;
+  statement: VEXStatement;
+}
+
+export interface VEXStatusSummary {
+  active_count: number;
+  expiring_count: number;
+  revoked_count: number;
+  counts_by_status: Record<string, number>;
+  applied_filters?: Record<string, string>;
+}
+
+export interface VEXCreateInput {
+  source_format?: "api";
+  source_ref?: string;
+  vulnerability_id: string;
+  scope: VEXScope;
+  status: VEXStatus;
+  justification?: string;
+  action_statement?: string;
+  impact_statement?: string;
+  fixed_version?: string;
+  expires_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface VulnerabilityDecision {
   id: number;
   image_digest: string;
@@ -292,11 +558,23 @@ export interface VulnerabilityFinding {
   metadata?: Record<string, unknown>;
   first_seen_at: string;
   last_seen_at: string;
+  vex?: VEXMatch;
   decision?: VulnerabilityDecision;
 }
 
 export interface VulnerabilitiesResponse {
   findings: VulnerabilityFinding[];
+}
+
+export interface VulnerabilityNetResponse {
+  raw_count: number;
+  resolved_by_vex_count: number;
+  actionable_count: number;
+  under_investigation_count: number;
+  severity_threshold?: string;
+  threshold_breached: boolean;
+  findings: VulnerabilityFinding[];
+  applied_filters: Record<string, string>;
 }
 
 export interface VulnerabilityBlastRadiusItem {
@@ -344,4 +622,194 @@ export interface VulnerabilityRescanResponse {
   status: string;
   scanned_digests: string[];
   scan_runs: number;
+}
+
+export interface TrustScoreMetric {
+  id: string;
+  name: string;
+  weight: number;
+  score: number;
+  status: string;
+  reason_code: string;
+  reason_detail?: string;
+  evidence_refs?: string[];
+  advisory_only: boolean;
+  public_publishable: boolean;
+  mapping_refs?: string[];
+}
+
+export interface TrustScorecard {
+  id: string;
+  scope_type: string;
+  scope_ref: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  repo?: string;
+  calculated_at: string;
+  overall_grade: string;
+  overall_score: number;
+  signing_coverage: number;
+  transparency_coverage: number;
+  sbom_or_provenance_coverage: number;
+  actionable_vulnerability_count: number;
+  stale_exception_count: number;
+  publication_mode: string;
+  metrics: TrustScoreMetric[];
+  notes?: string[];
+}
+
+export interface TrustBadge {
+  id: string;
+  label: string;
+  state: string;
+  summary: string;
+  public_publishable: boolean;
+  svg?: string;
+}
+
+export interface AuditFinding {
+  id: string;
+  category: string;
+  severity: string;
+  status: string;
+  reason_code: string;
+  reason_detail?: string;
+  scope_ref?: string;
+  evidence_refs?: string[];
+  advisory_only: boolean;
+  public_publishable: boolean;
+  detected_at: string;
+}
+
+export interface StandardsMapping {
+  standard: string;
+  control: string;
+  status: string;
+  summary: string;
+  evidence_refs?: string[];
+}
+
+export interface PublishedTrustView {
+  generated_at: string;
+  scope_type: string;
+  scope_ref: string;
+  overall_grade: string;
+  overall_score: number;
+  badges: TrustBadge[];
+  metrics: TrustScoreMetric[];
+  mapping: StandardsMapping[];
+  notes?: string[];
+}
+
+export interface AuditReport {
+  id: string;
+  generated_at: string;
+  scope_type: string;
+  scope_ref: string;
+  scorecard: TrustScorecard;
+  findings: AuditFinding[];
+  badges: TrustBadge[];
+  standards_mapping: StandardsMapping[];
+  public_view?: PublishedTrustView;
+  limitations?: string[];
+  format?: string;
+  generated_by?: string;
+}
+
+export interface GuidanceGrouping {
+  key: string;
+  label: string;
+  category: string;
+  finding_count: number;
+  priority: string;
+  contextual_risk_score: number;
+  heuristic: boolean;
+}
+
+export interface GuidanceVEXDraftSuggestion {
+  id: string;
+  candidate_status: string;
+  justification: string;
+  impact_statement: string;
+  missing_evidence?: string[];
+  confidence: string;
+  confidence_basis?: string;
+  advisory_only: boolean;
+  requires_human_review: boolean;
+  docs_refs?: string[];
+}
+
+export interface BreakGlassGuidance {
+  scope_explanation: string;
+  narrower_alternative?: string;
+  cleanup_reminders?: string[];
+  proposed_containment_steps?: string[];
+  confidence: string;
+  confidence_basis?: string;
+  advisory_only: boolean;
+  requires_human_review: boolean;
+  docs_refs?: string[];
+}
+
+export interface GuidanceItem {
+  id: string;
+  category: string;
+  source_component?: string;
+  grouping: GuidanceGrouping;
+  related_reason_codes?: string[];
+  finding_refs?: string[];
+  evidence_refs?: string[];
+  docs_refs?: string[];
+  scope_type?: string;
+  scope_ref?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  repository?: string;
+  severity?: string;
+  priority: string;
+  confidence: string;
+  confidence_basis?: string;
+  explanation?: string;
+  recommendation_summary?: string;
+  recommendation_steps?: string[];
+  safer_alternative?: string;
+  impact_summary?: string;
+  data_limitations?: string[];
+  advisory_only: boolean;
+  requires_human_review: boolean;
+  generated_at: string;
+  generated_by: string;
+  template_version?: string;
+  heuristic: boolean;
+  vex_draft?: GuidanceVEXDraftSuggestion;
+  break_glass_guidance?: BreakGlassGuidance;
+}
+
+export interface GuidanceSummary {
+  total_items: number;
+  counts_by_category?: Record<string, number>;
+  counts_by_priority?: Record<string, number>;
+  guidance_mode: string;
+  ai_enabled: boolean;
+  deterministic_only: boolean;
+  limitations?: string[];
+}
+
+export interface GuidanceResponse {
+  generated_at: string;
+  scope_type?: string;
+  scope_ref?: string;
+  tenant_id?: string;
+  cluster_id?: string;
+  environment?: string;
+  repository?: string;
+  items: GuidanceItem[];
+  summary: GuidanceSummary;
+}
+
+export interface AIInsightsResponse {
+  summary: GuidanceSummary;
+  top_items: GuidanceItem[];
 }
