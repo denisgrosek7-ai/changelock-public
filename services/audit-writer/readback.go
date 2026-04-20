@@ -95,7 +95,29 @@ type readbackResponse struct {
 	PayloadSummary     string                   `json:"payload_summary"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            any                      `json:"payload"`
+	TopologyContext    *readbackTopologyContext `json:"topology_context,omitempty"`
 	Limitations        []string                 `json:"limitations"`
+}
+
+type readbackTopologyNodeSummary struct {
+	NodeID           string `json:"node_id,omitempty"`
+	Service          string `json:"service,omitempty"`
+	Namespace        string `json:"namespace,omitempty"`
+	Cluster          string `json:"cluster,omitempty"`
+	Environment      string `json:"environment,omitempty"`
+	PublicExposure   bool   `json:"public_exposure"`
+	SensitivityClass string `json:"sensitivity_class,omitempty"`
+}
+
+type readbackTopologyContext struct {
+	AdvisoryOnly         bool                         `json:"advisory_only"`
+	SubjectType          string                       `json:"subject_type"`
+	SubjectRef           string                       `json:"subject_ref"`
+	PrimaryAffectedNode  *readbackTopologyNodeSummary `json:"primary_affected_node,omitempty"`
+	BlastRadiusScore     int                          `json:"blast_radius_score"`
+	CriticalReachCount   int                          `json:"critical_reach_count"`
+	TopRiskPathSummaries []string                     `json:"top_risk_path_summaries,omitempty"`
+	Limitations          []string                     `json:"limitations,omitempty"`
 }
 
 type readbackGrantRequest struct {
@@ -656,31 +678,32 @@ func (s server) materializeReadback(ctx context.Context, resourceType string, re
 		return readbackResponse{}, readbackNotFound("")
 	}
 	filter := descriptor.Scope.toIncidentFilter()
+	topologyContext := s.materializeReadbackTopologyContext(ctx, descriptor, filter, audience)
 	switch resourceType {
 	case readbackResourceDefenseGap:
 		payload, envelope, err := s.materializeDefenseGapReadback(ctx, descriptor, filter, audience)
 		if err != nil {
 			return readbackResponse{}, err
 		}
-		return buildReadbackResponse(resourceType, resourceID, audience, payload, envelope, fmt.Sprintf("Defense-gap readback for %s.", descriptor.SubjectRef)), nil
+		return buildReadbackResponse(resourceType, resourceID, audience, payload, envelope, fmt.Sprintf("Defense-gap readback for %s.", descriptor.SubjectRef), topologyContext), nil
 	case readbackResourcePolicyReplay:
 		payload, envelope, err := s.materializePolicyReplayReadback(ctx, descriptor, filter, audience)
 		if err != nil {
 			return readbackResponse{}, err
 		}
-		return buildReadbackResponse(resourceType, resourceID, audience, payload, envelope, fmt.Sprintf("Policy replay readback for %s.", descriptor.SubjectRef)), nil
+		return buildReadbackResponse(resourceType, resourceID, audience, payload, envelope, fmt.Sprintf("Policy replay readback for %s.", descriptor.SubjectRef), topologyContext), nil
 	case readbackResourceSystemicWeak:
 		payload, envelope, err := s.materializeSystemicWeaknessReadback(ctx, descriptor, filter, audience)
 		if err != nil {
 			return readbackResponse{}, err
 		}
-		return buildReadbackResponse(resourceType, resourceID, audience, payload, envelope, fmt.Sprintf("Systemic weakness readback for %s.", descriptor.SubjectRef)), nil
+		return buildReadbackResponse(resourceType, resourceID, audience, payload, envelope, fmt.Sprintf("Systemic weakness readback for %s.", descriptor.SubjectRef), topologyContext), nil
 	default:
 		return readbackResponse{}, readbackNotFound("")
 	}
 }
 
-func buildReadbackResponse(resourceType string, resourceID string, audience string, payload any, envelope decisionEvidenceEnvelope, payloadSummary string) readbackResponse {
+func buildReadbackResponse(resourceType string, resourceID string, audience string, payload any, envelope decisionEvidenceEnvelope, payloadSummary string, topologyContext *readbackTopologyContext) readbackResponse {
 	return readbackResponse{
 		ResourceType:       resourceType,
 		ResourceID:         resourceID,
@@ -690,10 +713,152 @@ func buildReadbackResponse(resourceType string, resourceID string, audience stri
 		PayloadSummary:     payloadSummary,
 		EvidenceEnvelope:   envelope,
 		Payload:            payload,
+		TopologyContext:    topologyContext,
 		Limitations: append([]string{
 			"Readback is derived from the canonical advisory payload and its frozen evidence envelope hash, not from a separate report or archive truth layer.",
 		}, envelope.Limitations...),
 	}
+}
+
+func topologyFilterFromReadbackScope(scope readbackScope) (topologyFilter, error) {
+	analyticsFilter, err := audit.NormalizeAnalyticsFilter(audit.AnalyticsFilter{
+		Window:      "28d",
+		CompareTo:   "previous_window",
+		GroupBy:     "service",
+		ClusterID:   scope.ClusterID,
+		TenantID:    scope.TenantID,
+		Environment: scope.Environment,
+		Repo:        scope.Repository,
+	})
+	if err != nil {
+		return topologyFilter{}, err
+	}
+	return topologyFilter{
+		analytics: analyticsFilter,
+		event: audit.EventFilter{
+			ClusterID:   analyticsFilter.ClusterID,
+			TenantID:    analyticsFilter.TenantID,
+			Environment: analyticsFilter.Environment,
+			Repo:        analyticsFilter.Repo,
+			Limit:       topologyHistoryLimit,
+		},
+		Limit: 10,
+	}, nil
+}
+
+func (s server) materializeReadbackTopologyContext(ctx context.Context, descriptor readbackDescriptor, filter incidentFilter, audience string) *readbackTopologyContext {
+	topologyFilter, err := topologyFilterFromReadbackScope(descriptor.Scope)
+	if err != nil {
+		return &readbackTopologyContext{
+			AdvisoryOnly: true,
+			SubjectType:  descriptor.SubjectType,
+			SubjectRef:   descriptor.SubjectRef,
+			Limitations: []string{
+				"Topology context could not be normalized for this readback scope and remains advisory-only when present.",
+			},
+		}
+	}
+
+	var response topologyBlastRadiusResponse
+	switch descriptor.SubjectType {
+	case "incident":
+		incident, err := s.getIncidentByID(ctx, descriptor.SubjectRef, filter)
+		if err != nil {
+			return nil
+		}
+		response, err = s.buildIncidentBlastRadiusResponse(ctx, topologyFilter, incident)
+		if err != nil {
+			return nil
+		}
+	case "metric":
+		metricFilter := filter
+		metricFilter.ScorecardRef = descriptor.SubjectRef
+		incidents, err := s.listIncidents(ctx, metricFilter)
+		if err != nil {
+			return nil
+		}
+		response, err = s.buildMetricBlastRadiusResponse(ctx, topologyFilter, descriptor.SubjectRef, incidents)
+		if err != nil {
+			return nil
+		}
+	case "scope":
+		incidents, err := s.listIncidents(ctx, filter)
+		if err != nil {
+			return nil
+		}
+		response, err = s.buildScopedBlastRadiusResponse(ctx, topologyFilter, "scope", descriptor.SubjectRef, incidents)
+		if err != nil {
+			return nil
+		}
+	case "cluster":
+		incidents, err := s.listIncidents(ctx, filter)
+		if err != nil {
+			return nil
+		}
+		weaknesses := attachSystemicWeaknessReadback(buildSystemicWeaknessResponse(incidents, "readback scope"), filter)
+		for _, weakness := range weaknesses.Weaknesses {
+			if weakness.PatternKey != descriptor.SubjectRef {
+				continue
+			}
+			related := selectIncidentsByID(incidents, weakness.RelatedIncidentRefs)
+			response, err = s.buildScopedBlastRadiusResponse(ctx, topologyFilter, "systemic_weakness", descriptor.SubjectRef, related)
+			if err != nil {
+				return nil
+			}
+			break
+		}
+	default:
+		return nil
+	}
+	return buildReadbackTopologyContext(response, audience)
+}
+
+func buildReadbackTopologyContext(response topologyBlastRadiusResponse, audience string) *readbackTopologyContext {
+	if response.SubjectRef == "" && response.PrimaryAffectedNode == nil && response.BlastRadiusScore == 0 && len(response.Limitations) == 0 {
+		return nil
+	}
+	limitations := append([]string{}, response.Limitations...)
+	limitations = append(limitations, "Topology context is a derived advisory snapshot at readback time; it does not replace canonical incident, evidence, or report truth.")
+	return &readbackTopologyContext{
+		AdvisoryOnly:         true,
+		SubjectType:          response.SubjectType,
+		SubjectRef:           response.SubjectRef,
+		PrimaryAffectedNode:  projectReadbackTopologyNode(response.PrimaryAffectedNode, audience),
+		BlastRadiusScore:     response.BlastRadiusScore,
+		CriticalReachCount:   response.CriticalReachCount,
+		TopRiskPathSummaries: summarizeReadbackTopologyPaths(response.TopRiskPaths, 3),
+		Limitations:          uniqueStrings(limitations),
+	}
+}
+
+func projectReadbackTopologyNode(node *topologyNode, audience string) *readbackTopologyNodeSummary {
+	if node == nil {
+		return nil
+	}
+	projected := &readbackTopologyNodeSummary{
+		Service:          node.Service,
+		Environment:      node.Environment,
+		PublicExposure:   node.PublicExposure,
+		SensitivityClass: node.SensitivityClass,
+	}
+	if audience == incidentAudienceInternal {
+		projected.NodeID = node.NodeID
+		projected.Namespace = node.Namespace
+		projected.Cluster = node.Cluster
+	} else if audience == incidentAudienceAuditorSafe {
+		projected.Namespace = node.Namespace
+	}
+	return projected
+}
+
+func summarizeReadbackTopologyPaths(paths []topologyRiskPath, limit int) []string {
+	summaries := make([]string, 0, minInt(len(paths), limit))
+	for _, path := range paths[:minInt(len(paths), limit)] {
+		if summary := strings.TrimSpace(path.Summary); summary != "" {
+			summaries = append(summaries, summary)
+		}
+	}
+	return uniqueStrings(summaries)
 }
 
 func (s server) materializeDefenseGapReadback(ctx context.Context, descriptor readbackDescriptor, filter incidentFilter, audience string) (defenseGapAssessment, decisionEvidenceEnvelope, error) {

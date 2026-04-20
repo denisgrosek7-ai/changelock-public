@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/denisgrosek/changelock/internal/audit"
@@ -181,6 +182,36 @@ func TestRecommendationApprovalGuardAndVerification(t *testing.T) {
 	}
 	if len(verified.History) < 3 {
 		t.Fatalf("expected workflow history after accept/approval/execute/verify, got %#v", verified.History)
+	}
+}
+
+func TestTopologySignalRecommendationsAreGeneratedFromBackendTopologySignals(t *testing.T) {
+	handler := topologyTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/recommendations?tenant_id=acme&environment=prod&source_type=topology_signal&service=edge-gateway", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected topology recommendations 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response recommendationListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode topology recommendations: %v", err)
+	}
+	if len(response.Recommendations) == 0 {
+		t.Fatalf("expected at least one topology recommendation, got %#v", response)
+	}
+	item := response.Recommendations[0]
+	if item.SourceType != "topology_signal" || item.SubjectType != "service" {
+		t.Fatalf("expected topology-backed recommendation object, got %#v", item)
+	}
+	if item.ApprovalMode == "" || len(item.VerificationPlan) == 0 || len(item.EvidenceRefs) == 0 {
+		t.Fatalf("expected topology recommendation with approval, evidence, and verification, got %#v", item)
+	}
+	if !strings.Contains(strings.ToLower(item.Rationale), "blast radius") {
+		t.Fatalf("expected topology rationale to mention blast radius, got %#v", item)
 	}
 }
 
