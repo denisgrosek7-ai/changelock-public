@@ -736,6 +736,10 @@ func (s server) incidentByIDHandler(w http.ResponseWriter, r *http.Request) {
 		s.getIncidentPolicyReplayHandler(w, r, incidentID)
 	case r.Method == http.MethodGet && action == "blast-radius":
 		s.getIncidentBlastRadiusHandler(w, r, incidentID)
+	case r.Method == http.MethodGet && action == "forensic-state":
+		s.getIncidentForensicStateHandler(w, r, incidentID)
+	case r.Method == http.MethodPost && action == "replay":
+		s.replayIncidentForensicsHandler(w, r, incidentID)
 	case r.Method == http.MethodGet && action == "history":
 		s.getIncidentHistoryHandler(w, r, incidentID)
 	case r.Method == http.MethodGet && action == "timeline":
