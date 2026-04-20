@@ -240,6 +240,97 @@ export interface RuntimeEnforcementDecision {
   limitations?: string[];
 }
 
+export interface HardeningTrigger {
+  trigger_id: string;
+  source_finding: string;
+  trigger_type: string;
+  timestamp: string;
+  subject_ref: string;
+  severity: string;
+  confidence: string;
+  evidence_refs?: string[];
+}
+
+export interface HardeningAssessment {
+  assessment_id: string;
+  trigger_ref: string;
+  subject_ref: string;
+  blast_radius_score: number;
+  criticality: string;
+  current_sandbox_class: string;
+  forensic_first: boolean;
+  recommended_hardening_class: string;
+  reason_codes?: string[];
+  limitations?: string[];
+}
+
+export interface HardeningPolicyDecision {
+  decision_id: string;
+  assessment_ref: string;
+  policy_ref: string;
+  allowed_actions: string[];
+  approval_mode: string;
+  ttl: string;
+  rollback_required: boolean;
+  forensic_requirement: string;
+  decision_summary: string;
+}
+
+export interface HardeningAction {
+  action_id: string;
+  action_type: string;
+  subject_ref: string;
+  scope: string;
+  parameters?: Record<string, unknown>;
+  is_immediate: boolean;
+  is_reversible: boolean;
+}
+
+export interface HardeningExecutionRecord {
+  execution_id: string;
+  subject_ref: string;
+  trigger_ref: string;
+  decision_ref: string;
+  actions_applied?: HardeningAction[];
+  executed_at: string;
+  execution_result: string;
+  rollback_plan?: string[];
+  forensic_refs?: string[];
+  incident_refs?: string[];
+  recommendation_refs?: string[];
+  expires_at?: string;
+  limitations?: string[];
+}
+
+export interface DefensePostureState {
+  subject_ref: string;
+  current_mode: string;
+  active_restrictions?: string[];
+  trigger_summary?: string;
+  forensic_status?: string;
+  rollback_ready: boolean;
+  expires_at?: string;
+  linked_findings?: string[];
+  linked_topology_refs?: string[];
+  limitations?: string[];
+}
+
+export interface HardeningEvaluationResponse {
+  trigger: HardeningTrigger;
+  assessment: HardeningAssessment;
+  policy_decision: HardeningPolicyDecision;
+  actions: HardeningAction[];
+  posture: DefensePostureState;
+}
+
+export interface HardeningExecutionResponse {
+  trigger: HardeningTrigger;
+  assessment: HardeningAssessment;
+  policy_decision: HardeningPolicyDecision;
+  execution: HardeningExecutionRecord;
+  posture: DefensePostureState;
+}
+
 export interface RuntimeIntegrityState {
   subject_ref: string;
   identity_status: string;

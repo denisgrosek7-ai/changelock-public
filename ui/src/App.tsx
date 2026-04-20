@@ -40,6 +40,8 @@ import {
   getMetricBlastRadius,
   getMetricIncidents,
   getMetricPolicyReplay,
+  getHardeningActions,
+  getHardeningPosture,
   getRecommendations,
   getRuntimeActiveStates,
   getRuntimeClosedLoopStatus,
@@ -78,6 +80,7 @@ import {
 import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsInsightsPanel } from "./components/AnalyticsInsightsPanel";
 import { AnalyticsTrendsPanel } from "./components/AnalyticsTrendsPanel";
+import { DefensePosturePanel } from "./components/DefensePosturePanel";
 import { DriftStatsPanel } from "./components/DriftStatsPanel";
 import { EventDetails } from "./components/EventDetails";
 import { EventsTable } from "./components/EventsTable";
@@ -117,11 +120,13 @@ import type {
   AnalyticsDeltaResponse,
   AnalyticsScorecardsResponse,
   AnalyticsSegmentsResponse,
+  DefensePostureState,
   DriftStatsResponse,
   EventFilters,
   FederationGlobalView,
   ExceptionReport,
   ExceptionRequestInput,
+  HardeningExecutionRecord,
   HandoffSealResponse,
   PolicyException,
   RuntimeActiveState,
@@ -239,6 +244,8 @@ export default function App() {
   const [runtimeWorkloads, setRuntimeWorkloads] = useState<RuntimeWorkloadView[]>([]);
   const [runtimeIntegrityFindings, setRuntimeIntegrityFindings] = useState<RuntimeIntegrityFinding[]>([]);
   const [runtimeEnforcement, setRuntimeEnforcement] = useState<RuntimeEnforcementDecision[]>([]);
+  const [hardeningPosture, setHardeningPosture] = useState<DefensePostureState[]>([]);
+  const [hardeningActions, setHardeningActions] = useState<HardeningExecutionRecord[]>([]);
   const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
   const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
   const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
@@ -309,6 +316,8 @@ export default function App() {
           setRuntimeWorkloads([]);
           setRuntimeIntegrityFindings([]);
           setRuntimeEnforcement([]);
+          setHardeningPosture([]);
+          setHardeningActions([]);
           setRuntimeActiveStates([]);
           setRuntimeClosedLoopStatus(null);
           setRuntimeDriftFindings([]);
@@ -559,6 +568,8 @@ export default function App() {
             setRuntimeWorkloads([]);
             setRuntimeIntegrityFindings([]);
             setRuntimeEnforcement([]);
+            setHardeningPosture([]);
+            setHardeningActions([]);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -637,6 +648,8 @@ export default function App() {
             setRuntimeWorkloads([]);
             setRuntimeIntegrityFindings([]);
             setRuntimeEnforcement([]);
+            setHardeningPosture([]);
+            setHardeningActions([]);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -824,6 +837,22 @@ export default function App() {
                 repo: filters.repo,
                 limit: filters.limit,
               }).then((response) => setRuntimeEnforcement(response.items)),
+            );
+            promises.push(
+              getHardeningPosture({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setHardeningPosture),
+            );
+            promises.push(
+              getHardeningActions({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setHardeningActions),
             );
             promises.push(
               getRuntimeDriftFindings({
@@ -1506,6 +1535,7 @@ export default function App() {
             enforcement={runtimeEnforcement}
             loading={loading}
           />
+          <DefensePosturePanel posture={hardeningPosture} actions={hardeningActions} loading={loading} />
           <RuntimeDriftPanel
             findings={runtimeDriftFindings}
             status={runtimeDriftStatus}

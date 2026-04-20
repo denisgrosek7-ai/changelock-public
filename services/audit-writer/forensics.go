@@ -1279,6 +1279,8 @@ func classifyForensicsMarker(event audit.StoredEvent, previousSigner string, see
 	switch {
 	case event.EventType == audit.EventTypeDeployGateDecision && event.Decision == audit.DecisionDeny:
 		return "blocked_deployment", "Blocked deployment", "high"
+	case event.EventType == audit.EventTypeHardeningActionApplied || event.EventType == audit.EventTypeHardeningRollbackApplied || event.EventType == audit.EventTypeHardeningRecoveryCompleted:
+		return "runtime_hardening", "Runtime hardening action applied", "high"
 	case event.EventType == audit.EventTypeVEXStatementRecorded || event.EventType == audit.EventTypeVEXStatementRevoked:
 		return "vex_change", "VEX state changed", "medium"
 	case event.ExceptionID != "" && (event.IsException || strings.TrimSpace(event.ExceptionStatus) != ""):
