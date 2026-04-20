@@ -28,6 +28,7 @@ import {
   getEvents,
   getExceptionReport,
   getExceptions,
+  getFederationGlobalView,
   getHealth,
   getIncidentDefenseGaps,
   getIncidentBlastRadius,
@@ -73,6 +74,7 @@ import { EventDetails } from "./components/EventDetails";
 import { EventsTable } from "./components/EventsTable";
 import { ExceptionRequestForm } from "./components/ExceptionRequestForm";
 import { Filters } from "./components/Filters";
+import { FederationInsightsPanel } from "./components/FederationInsightsPanel";
 import { ForensicsInsightsPanel } from "./components/ForensicsInsightsPanel";
 import { HealthBadge } from "./components/HealthBadge";
 import { IncidentWorkbench } from "./components/IncidentWorkbench";
@@ -106,6 +108,7 @@ import type {
   AnalyticsSegmentsResponse,
   DriftStatsResponse,
   EventFilters,
+  FederationGlobalView,
   ExceptionReport,
   ExceptionRequestInput,
   HandoffSealResponse,
@@ -148,6 +151,7 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "analytics", label: "Governance", description: "Trends, violators, and control-plane operating pressure." },
   { key: "topology", label: "Topology", description: "Service-graph blast radius, drift, and containment guidance." },
   { key: "forensics", label: "Forensics", description: "Point-in-time reconstruction, VEX flashback, timeline, and counterfactual replay." },
+  { key: "federation", label: "Federation", description: "Cross-region proof reuse, trust decisions, policy sync, and anchor health." },
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
   { key: "inventory", label: "Components", description: "Investigate stored SBOM components by digest, package, or PURL." },
   { key: "vulnerabilities", label: "Vulnerabilities", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
@@ -205,6 +209,7 @@ export default function App() {
   const [forensicsTimeline, setForensicsTimeline] = useState<ForensicTimelineResponse | null>(null);
   const [forensicsVEXFlashback, setForensicsVEXFlashback] = useState<VEXFlashbackResponse | null>(null);
   const [forensicsReplay, setForensicsReplay] = useState<ForensicReplayResponse | null>(null);
+  const [federationView, setFederationView] = useState<FederationGlobalView | null>(null);
   const [forensicsTimestamp, setForensicsTimestamp] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
   const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
@@ -271,6 +276,7 @@ export default function App() {
           setForensicsTimeline(null);
           setForensicsVEXFlashback(null);
           setForensicsReplay(null);
+          setFederationView(null);
           setRuntimeActiveStates([]);
           setRuntimeClosedLoopStatus(null);
           setRuntimeDriftFindings([]);
@@ -308,6 +314,7 @@ export default function App() {
           setForensicsTimeline(null);
           setForensicsVEXFlashback(null);
           setForensicsReplay(null);
+          setFederationView(null);
 
           const promises: Array<Promise<void>> = [
             getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
@@ -596,6 +603,37 @@ export default function App() {
             setRuntimeDriftStatus(null);
             setIncidents([]);
             setPendingExceptions([]);
+          } else if (activeTab === "federation") {
+            promises.push(
+              getFederationGlobalView().then(setFederationView),
+            );
+            setEvents([]);
+            setSelectedEvent(null);
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setExecutiveReport(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
+            setForensicsState(null);
+            setForensicsDelta(null);
+            setForensicsTimeline(null);
+            setForensicsVEXFlashback(null);
+            setForensicsReplay(null);
+            setRecommendations([]);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
+            setIncidents([]);
+            setPendingExceptions([]);
           } else if (activeTab === "analytics") {
             promises.push(
               getTrends({
@@ -745,6 +783,7 @@ export default function App() {
             setTopologyGraph(null);
             setTopologyHeatmap(null);
             setTopologyDelta(null);
+            setFederationView(null);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -1241,6 +1280,12 @@ export default function App() {
         </section>
       ) : null}
 
+      {activeTab === "federation" ? (
+        <section className="analytics-grid">
+          <FederationInsightsPanel view={federationView} loading={loading} />
+        </section>
+      ) : null}
+
       {activeTab === "exceptions" ? (
         <>
           <section className="summary-grid">
@@ -1347,7 +1392,7 @@ export default function App() {
         />
       ) : null}
 
-      {activeTab !== "analytics" && activeTab !== "topology" && activeTab !== "runtime" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
+      {activeTab !== "analytics" && activeTab !== "topology" && activeTab !== "forensics" && activeTab !== "federation" && activeTab !== "runtime" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
         <section className="content-grid">
           <EventsTable
             events={events}
