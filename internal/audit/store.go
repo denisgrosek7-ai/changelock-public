@@ -71,6 +71,8 @@ type EventFilter struct {
 	Repo        string
 	Environment string
 	TenantID    string
+	Since       *time.Time
+	Until       *time.Time
 	Limit       int
 }
 
@@ -144,8 +146,20 @@ func NormalizeFilter(filter EventFilter) (EventFilter, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
-	if filter.Limit > 500 {
-		filter.Limit = 500
+	if filter.Limit > 5000 {
+		filter.Limit = 5000
+	}
+
+	if filter.Since != nil {
+		value := filter.Since.UTC()
+		filter.Since = &value
+	}
+	if filter.Until != nil {
+		value := filter.Until.UTC()
+		filter.Until = &value
+	}
+	if filter.Since != nil && filter.Until != nil && filter.Since.After(*filter.Until) {
+		return filter, fmt.Errorf("%w: since must be before until", ErrInvalidFilter)
 	}
 
 	return filter, nil

@@ -1336,6 +1336,71 @@ pre {
   padding: 18px;
 }
 
+.analytics-panel--wide {
+  grid-column: 1 / -1;
+}
+
+.analytics-scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.analytics-scorecard-card {
+  border: 1px solid rgba(18, 32, 47, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 14px;
+}
+
+.analytics-scorecard-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.analytics-scorecard-card p,
+.analytics-panel__helper {
+  margin: 8px 0 0;
+  color: #56697b;
+}
+
+.analytics-scorecard-card small {
+  display: block;
+  margin-top: 8px;
+  color: #607486;
+}
+
+.analytics-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.analytics-insights-grid h3 {
+  margin: 0 0 10px;
+}
+
+.analytics-chip-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.analytics-panel__footnotes {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.analytics-panel__footnotes p {
+  margin: 0;
+  color: #607486;
+  font-size: 13px;
+}
+
 .inventory-filters {
   align-items: stretch;
 }
@@ -1631,9 +1696,11 @@ pre {
 
   .analytics-metrics,
   .analytics-split,
+  .analytics-insights-grid,
   .exception-form,
   .overview-split,
   .overview-scorecard__metrics,
+  .analytics-scorecard-grid,
   .overview-executive__summary,
   .overview-executive__shield,
   .overview-executive__trends,

@@ -13,20 +13,20 @@ import (
 func TestRuntimeClosedLoopEndpoints(t *testing.T) {
 	store := audit.NewMemoryStore()
 	_, err := store.Ingest(t.Context(), audit.Event{
-		RequestID:             "rt-1",
-		Component:             "runtime-agent",
-		EventType:             audit.EventTypeRuntimeActiveStateObserved,
-		TenantID:              "acme",
-		ClusterID:             "prod-eu",
-		Namespace:             "acme-prod",
-		WorkloadKind:          "Deployment",
-		Workload:              "booking-api",
-		Digest:                "sha256:active",
-		Decision:              audit.DecisionDeny,
-		ReconciliationStatus:  "quarantined",
-		QuarantineType:        "vex",
-		QuarantineReason:      "net actionable critical vulnerability requires containment",
-		Timestamp:             time.Now().UTC(),
+		RequestID:            "rt-1",
+		Component:            "runtime-agent",
+		EventType:            audit.EventTypeRuntimeActiveStateObserved,
+		TenantID:             "acme",
+		ClusterID:            "prod-eu",
+		Namespace:            "acme-prod",
+		WorkloadKind:         "Deployment",
+		Workload:             "booking-api",
+		Digest:               "sha256:active",
+		Decision:             audit.DecisionDeny,
+		ReconciliationStatus: "quarantined",
+		QuarantineType:       "vex",
+		QuarantineReason:     "net actionable critical vulnerability requires containment",
+		Timestamp:            time.Now().UTC(),
 	})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v", err)

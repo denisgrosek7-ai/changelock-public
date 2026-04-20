@@ -98,7 +98,7 @@ func (s *MemoryStore) ListEvents(_ context.Context, filter EventFilter) ([]Store
 
 	records := make([]StoredEvent, 0, len(s.records))
 	for _, record := range s.records {
-		if !matchesFilter(record.Event, filter, true) {
+		if !matchesFilter(record, filter, true) {
 			continue
 		}
 		records = append(records, cloneStoredEvent(record))
@@ -129,7 +129,7 @@ func (s *MemoryStore) Summary(_ context.Context, filter EventFilter) (Summary, e
 	denyCounts := map[string]int64{}
 	now := s.now().UTC()
 	for _, record := range s.records {
-		if !matchesFilter(record.Event, filter, true) {
+		if !matchesFilter(record, filter, true) {
 			continue
 		}
 		summary.TotalEvents++
@@ -143,12 +143,12 @@ func (s *MemoryStore) Summary(_ context.Context, filter EventFilter) (Summary, e
 		}
 		summary.CountsByEventType[record.EventType]++
 
-		if matchesFilter(record.Event, filterWithoutDecision(filter), false) && record.Decision == DecisionDeny {
+		if matchesFilter(record, filterWithoutDecision(filter), false) && record.Decision == DecisionDeny {
 			for _, reason := range record.Reasons {
 				denyCounts[reason]++
 			}
 		}
-		if matchesFilter(record.Event, filterWithoutDecision(filter), false) &&
+		if matchesFilter(record, filterWithoutDecision(filter), false) &&
 			record.EventType == EventTypeRuntimeDriftResult &&
 			record.Decision == DecisionDeny &&
 			record.ReceivedAt.After(now.Add(-24*time.Hour)) {
@@ -782,7 +782,8 @@ func (s *MemoryStore) DriftStats(_ context.Context, filter DriftStatsFilter) (Dr
 	}, nil
 }
 
-func matchesFilter(event Event, filter EventFilter, includeDecision bool) bool {
+func matchesFilter(record StoredEvent, filter EventFilter, includeDecision bool) bool {
+	event := record.Event
 	if includeDecision && filter.Decision != "" && event.Decision != filter.Decision {
 		return false
 	}
@@ -802,6 +803,16 @@ func matchesFilter(event Event, filter EventFilter, includeDecision bool) bool {
 		return false
 	}
 	if filter.TenantID != "" && event.TenantID != filter.TenantID {
+		return false
+	}
+	eventTime := record.ReceivedAt.UTC()
+	if !event.Timestamp.IsZero() {
+		eventTime = event.Timestamp.UTC()
+	}
+	if filter.Since != nil && eventTime.Before(filter.Since.UTC()) {
+		return false
+	}
+	if filter.Until != nil && eventTime.After(filter.Until.UTC()) {
 		return false
 	}
 	return true

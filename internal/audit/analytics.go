@@ -25,9 +25,12 @@ type TrendBucket struct {
 }
 
 type TrendsResponse struct {
-	Buckets        []TrendBucket     `json:"buckets"`
-	Totals         map[string]int64  `json:"totals"`
-	AppliedFilters map[string]string `json:"applied_filters"`
+	Buckets        []TrendBucket               `json:"buckets"`
+	Totals         map[string]int64            `json:"totals"`
+	AppliedFilters map[string]string           `json:"applied_filters"`
+	MetricTrends   []AnalyticsMetricTrend      `json:"metric_trends,omitempty"`
+	Comparison     *AnalyticsComparisonContext `json:"comparison,omitempty"`
+	Limitations    []string                    `json:"limitations,omitempty"`
 }
 
 type TopViolatorsFilter struct {
@@ -156,5 +159,179 @@ func NormalizeDriftStatsFilter(filter DriftStatsFilter) (DriftStatsFilter, error
 	if filter.WindowDays > 365 {
 		filter.WindowDays = 365
 	}
+	return filter, nil
+}
+
+type AnalyticsFilter struct {
+	WindowDays  int
+	Window      string
+	CompareTo   string
+	GroupBy     string
+	Metric      string
+	ClusterID   string
+	TenantID    string
+	Environment string
+	Repo        string
+	Service     string
+	Team        string
+	Subject     string
+}
+
+type AnalyticsComparisonContext struct {
+	Window         string            `json:"window"`
+	CompareTo      string            `json:"compare_to"`
+	GroupBy        string            `json:"group_by"`
+	CurrentStart   time.Time         `json:"current_start"`
+	CurrentEnd     time.Time         `json:"current_end"`
+	BaselineStart  time.Time         `json:"baseline_start"`
+	BaselineEnd    time.Time         `json:"baseline_end"`
+	AppliedFilters map[string]string `json:"applied_filters"`
+}
+
+type AnalyticsMetricDefinition struct {
+	Key            string   `json:"key"`
+	Label          string   `json:"label"`
+	MetricClass    string   `json:"metric_class"`
+	Description    string   `json:"description"`
+	Formula        string   `json:"formula"`
+	Grain          string   `json:"grain"`
+	DefaultWindow  string   `json:"default_window"`
+	Segments       []string `json:"segments,omitempty"`
+	Exclusions     []string `json:"exclusions,omitempty"`
+	Owner          string   `json:"owner"`
+	Interpretation string   `json:"interpretation"`
+}
+
+type AnalyticsSegmentDelta struct {
+	SegmentKey    string  `json:"segment_key"`
+	SegmentLabel  string  `json:"segment_label"`
+	CurrentValue  float64 `json:"current_value"`
+	BaselineValue float64 `json:"baseline_value"`
+	DeltaValue    float64 `json:"delta_value"`
+	DeltaPercent  float64 `json:"delta_percent"`
+	Direction     string  `json:"direction"`
+}
+
+type AnalyticsMetricTrend struct {
+	Definition        AnalyticsMetricDefinition `json:"definition"`
+	CurrentValue      float64                   `json:"current_value"`
+	BaselineValue     float64                   `json:"baseline_value"`
+	DeltaValue        float64                   `json:"delta_value"`
+	DeltaPercent      float64                   `json:"delta_percent"`
+	Direction         string                    `json:"direction"`
+	Velocity          string                    `json:"velocity"`
+	Summary           string                    `json:"summary"`
+	SegmentHighlights []AnalyticsSegmentDelta   `json:"segment_highlights,omitempty"`
+	Limitations       []string                  `json:"limitations,omitempty"`
+}
+
+type AnalyticsDeltaResponse struct {
+	Definition  AnalyticsMetricDefinition  `json:"definition"`
+	Comparison  AnalyticsComparisonContext `json:"comparison"`
+	Segments    []AnalyticsSegmentDelta    `json:"segments"`
+	Summary     string                     `json:"summary"`
+	Limitations []string                   `json:"limitations,omitempty"`
+}
+
+type AnalyticsAnomaly struct {
+	Type                string   `json:"type"`
+	Title               string   `json:"title"`
+	MetricKey           string   `json:"metric_key"`
+	Reason              string   `json:"reason"`
+	Baseline            string   `json:"baseline"`
+	Deviation           string   `json:"deviation"`
+	Segment             string   `json:"segment"`
+	Severity            string   `json:"severity"`
+	RecommendedNextStep string   `json:"recommended_next_step"`
+	EvidenceRefs        []string `json:"evidence_refs,omitempty"`
+	Limitations         []string `json:"limitations,omitempty"`
+}
+
+type AnalyticsAnomaliesResponse struct {
+	Comparison  AnalyticsComparisonContext `json:"comparison"`
+	Items       []AnalyticsAnomaly         `json:"items"`
+	Limitations []string                   `json:"limitations,omitempty"`
+}
+
+type AnalyticsScorecardCard struct {
+	Definition    AnalyticsMetricDefinition `json:"definition"`
+	Status        string                    `json:"status"`
+	CurrentValue  float64                   `json:"current_value"`
+	BaselineValue float64                   `json:"baseline_value"`
+	DeltaValue    float64                   `json:"delta_value"`
+	DeltaPercent  float64                   `json:"delta_percent"`
+	Direction     string                    `json:"direction"`
+	Summary       string                    `json:"summary"`
+}
+
+type AnalyticsScorecardsResponse struct {
+	Comparison  AnalyticsComparisonContext `json:"comparison"`
+	Cards       []AnalyticsScorecardCard   `json:"cards"`
+	Limitations []string                   `json:"limitations,omitempty"`
+}
+
+type AnalyticsSegmentCatalogItem struct {
+	Group  string   `json:"group"`
+	Values []string `json:"values"`
+}
+
+type AnalyticsSegmentsResponse struct {
+	Comparison  AnalyticsComparisonContext    `json:"comparison"`
+	Items       []AnalyticsSegmentCatalogItem `json:"items"`
+	Limitations []string                      `json:"limitations,omitempty"`
+}
+
+func NormalizeAnalyticsFilter(filter AnalyticsFilter) (AnalyticsFilter, error) {
+	filter.Window = strings.ToLower(strings.TrimSpace(filter.Window))
+	filter.CompareTo = strings.ToLower(strings.TrimSpace(filter.CompareTo))
+	filter.GroupBy = strings.ToLower(strings.TrimSpace(filter.GroupBy))
+	filter.Metric = strings.ToLower(strings.TrimSpace(filter.Metric))
+	filter.ClusterID = strings.TrimSpace(filter.ClusterID)
+	filter.TenantID = strings.TrimSpace(filter.TenantID)
+	filter.Environment = strings.TrimSpace(filter.Environment)
+	filter.Repo = strings.TrimSpace(filter.Repo)
+	filter.Service = strings.TrimSpace(filter.Service)
+	filter.Team = strings.TrimSpace(filter.Team)
+	filter.Subject = strings.TrimSpace(filter.Subject)
+
+	if filter.Window == "" {
+		switch {
+		case filter.WindowDays >= 90:
+			filter.Window = "quarter"
+		case filter.WindowDays == 7:
+			filter.Window = "7d"
+		default:
+			filter.Window = "28d"
+		}
+	}
+	switch filter.Window {
+	case "7d":
+		filter.WindowDays = 7
+	case "28d":
+		filter.WindowDays = 28
+	case "quarter":
+		filter.WindowDays = 90
+	default:
+		return filter, fmt.Errorf("%w: unsupported analytics window %q", ErrInvalidFilter, filter.Window)
+	}
+
+	if filter.CompareTo == "" {
+		filter.CompareTo = "previous_window"
+	}
+	switch filter.CompareTo {
+	case "previous_window", "baseline":
+	default:
+		return filter, fmt.Errorf("%w: unsupported analytics compare_to %q", ErrInvalidFilter, filter.CompareTo)
+	}
+
+	if filter.GroupBy == "" {
+		filter.GroupBy = "service"
+	}
+	switch filter.GroupBy {
+	case "team", "service", "environment":
+	default:
+		return filter, fmt.Errorf("%w: unsupported analytics group_by %q", ErrInvalidFilter, filter.GroupBy)
+	}
+
 	return filter, nil
 }

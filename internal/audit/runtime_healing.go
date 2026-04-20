@@ -16,21 +16,21 @@ type RuntimeDesiredStateFilter struct {
 }
 
 type RuntimeDesiredStateView struct {
-	ID                       string    `json:"id"`
-	TenantID                 string    `json:"tenant_id,omitempty"`
-	ClusterID                string    `json:"cluster_id,omitempty"`
-	Namespace                string    `json:"namespace"`
-	WorkloadKind             string    `json:"workload_kind"`
-	Workload                 string    `json:"workload"`
-	ServiceAccount           string    `json:"service_account,omitempty"`
-	Labels                   map[string]string `json:"labels,omitempty"`
+	ID                       string                     `json:"id"`
+	TenantID                 string                     `json:"tenant_id,omitempty"`
+	ClusterID                string                     `json:"cluster_id,omitempty"`
+	Namespace                string                     `json:"namespace"`
+	WorkloadKind             string                     `json:"workload_kind"`
+	Workload                 string                     `json:"workload"`
+	ServiceAccount           string                     `json:"service_account,omitempty"`
+	Labels                   map[string]string          `json:"labels,omitempty"`
 	Containers               []RuntimeApprovedContainer `json:"containers,omitempty"`
-	ApprovedDigest           string    `json:"approved_digest,omitempty"`
-	ExpectedConfigHash       string    `json:"expected_config_hash,omitempty"`
-	DesiredStateSourceRef    string    `json:"desired_state_source_ref,omitempty"`
-	DesiredStateApprovalID   string    `json:"desired_state_approval_id,omitempty"`
-	DesiredStateVerification string    `json:"desired_state_verification_state,omitempty"`
-	LastApprovedAt           time.Time `json:"last_approved_at"`
+	ApprovedDigest           string                     `json:"approved_digest,omitempty"`
+	ExpectedConfigHash       string                     `json:"expected_config_hash,omitempty"`
+	DesiredStateSourceRef    string                     `json:"desired_state_source_ref,omitempty"`
+	DesiredStateApprovalID   string                     `json:"desired_state_approval_id,omitempty"`
+	DesiredStateVerification string                     `json:"desired_state_verification_state,omitempty"`
+	LastApprovedAt           time.Time                  `json:"last_approved_at"`
 }
 
 type RuntimeDriftFilter struct {

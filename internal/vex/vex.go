@@ -16,9 +16,9 @@ const (
 	SourceFormatCSAF      = "csaf"
 	SourceFormatCycloneDX = "cyclonedx"
 
-	StatusNotAffected       = "not_affected"
-	StatusAffected          = "affected"
-	StatusFixed             = "fixed"
+	StatusNotAffected        = "not_affected"
+	StatusAffected           = "affected"
+	StatusFixed              = "fixed"
 	StatusUnderInvestigation = "under_investigation"
 
 	LegacyDecisionNotAffected        = "NOT_AFFECTED"
@@ -108,11 +108,11 @@ type Filter struct {
 }
 
 type StatusSummary struct {
-	ActiveCount     int            `json:"active_count"`
-	ExpiringCount   int            `json:"expiring_count"`
-	RevokedCount    int            `json:"revoked_count"`
-	CountsByStatus  map[string]int `json:"counts_by_status"`
-	AppliedFilters  map[string]string `json:"applied_filters,omitempty"`
+	ActiveCount    int               `json:"active_count"`
+	ExpiringCount  int               `json:"expiring_count"`
+	RevokedCount   int               `json:"revoked_count"`
+	CountsByStatus map[string]int    `json:"counts_by_status"`
+	AppliedFilters map[string]string `json:"applied_filters,omitempty"`
 }
 
 type ImportResult struct {

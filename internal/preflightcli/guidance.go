@@ -19,12 +19,12 @@ type guidanceOptions struct {
 }
 
 type GuidanceOutput struct {
-	Command       string               `json:"command"`
-	Mode          string               `json:"mode"`
-	OverallResult Status               `json:"overall_result"`
-	ExitCode      int                  `json:"exit_code"`
-	Inputs        map[string]string    `json:"inputs,omitempty"`
-	Guidance      aiguidance.Response  `json:"guidance"`
+	Command       string              `json:"command"`
+	Mode          string              `json:"mode"`
+	OverallResult Status              `json:"overall_result"`
+	ExitCode      int                 `json:"exit_code"`
+	Inputs        map[string]string   `json:"inputs,omitempty"`
+	Guidance      aiguidance.Response `json:"guidance"`
 }
 
 func parseGuidanceOptions(args []string) (guidanceOptions, error) {

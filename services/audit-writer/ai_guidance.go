@@ -30,8 +30,8 @@ type aiVEXDraftRequest struct {
 }
 
 type aiVEXDraftResponse struct {
-	Item  guidance.Item                 `json:"item"`
-	Draft *guidance.VEXDraftSuggestion  `json:"draft,omitempty"`
+	Item  guidance.Item                `json:"item"`
+	Draft *guidance.VEXDraftSuggestion `json:"draft,omitempty"`
 }
 
 type aiBreakGlassGuidanceRequest struct {
@@ -40,8 +40,8 @@ type aiBreakGlassGuidanceRequest struct {
 }
 
 type aiBreakGlassGuidanceResponse struct {
-	Item     guidance.Item                  `json:"item"`
-	Guidance *guidance.BreakGlassGuidance   `json:"guidance,omitempty"`
+	Item     guidance.Item                `json:"item"`
+	Guidance *guidance.BreakGlassGuidance `json:"guidance,omitempty"`
 }
 
 func loadAIGuidanceConfigFromEnv() (guidance.Config, error) {

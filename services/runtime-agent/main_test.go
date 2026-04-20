@@ -25,10 +25,10 @@ func (f fakeStateReader) ReadObservedWorkload(_ context.Context, _ runtimestate.
 }
 
 type fakeRemediator struct {
-	patchCalls   int
-	restartCalls int
+	patchCalls      int
+	restartCalls    int
 	quarantineCalls int
-	err          error
+	err             error
 }
 
 func (f *fakeRemediator) PatchApprovedState(_ context.Context, _ runtimestate.ApprovedWorkloadState) error {
