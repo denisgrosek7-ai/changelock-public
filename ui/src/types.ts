@@ -3,7 +3,7 @@ export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | 
 export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
 export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
-export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "forensics" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
+export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "forensics" | "federation" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
 
 export interface AuditHealth {
   status: string;
@@ -1312,4 +1312,97 @@ export interface HandoffSealResponse {
   verification: VerificationResult;
   download_uri: string;
   verification_uri: string;
+}
+
+export interface FederatedIdentityBinding {
+  bridge_id: string;
+  provider: string;
+  issuer: string;
+  subject_pattern?: string;
+  normalized_identity: string;
+  private_key_imported: boolean;
+  limitations?: string[];
+}
+
+export interface FederationPeerTrustState {
+  identity_verified: boolean;
+  trust_anchor_fingerprints: string[];
+  channel_mode: string;
+  freshness_window_minutes: number;
+  limitations?: string[];
+}
+
+export interface FederationPeer {
+  peer_id: string;
+  organization: string;
+  region?: string;
+  cluster?: string;
+  trust_domain?: string;
+  endpoint?: string;
+  public_keys: string[];
+  capabilities?: string[];
+  policy_role: string;
+  status: string;
+  last_seen: string;
+  accepted_audiences?: string[];
+  disclosure_mode?: string;
+  identity_bindings?: FederatedIdentityBinding[];
+  metadata_hash: string;
+  metadata_signature: string;
+  trust_state: FederationPeerTrustState;
+  limitations?: string[];
+}
+
+export interface FederatedProofFreshness {
+  issued_at: string;
+  valid_until: string;
+  freshness_minutes: number;
+  stale: boolean;
+}
+
+export interface FederatedProofHistoryItem {
+  request_id: string;
+  peer_id: string;
+  subject_ref: string;
+  proof_type: string;
+  manifest_hash: string;
+  status: string;
+  decision?: string;
+  verified_at?: string;
+  freshness?: FederatedProofFreshness;
+  reasons?: string[];
+}
+
+export interface PolicyFederationState {
+  leader_peer?: string;
+  global_policy_root?: string;
+  local_policy_root?: string;
+  effective_policy_root?: string;
+  sync_status: string;
+  inherited_rules?: string[];
+  local_overrides?: string[];
+  divergence_reasons?: string[];
+  last_sync_at?: string;
+  remote_policy_version?: string;
+}
+
+export interface FederationAnchorRecord {
+  peer_id: string;
+  audit_root_hash: string;
+  published_at: string;
+  verification_status: string;
+  proof_ref?: string;
+  limitations?: string[];
+}
+
+export interface FederationGlobalView {
+  peers: FederationPeer[];
+  proof_history: FederatedProofHistoryItem[];
+  policy_state: PolicyFederationState;
+  anchors: FederationAnchorRecord[];
+  trust_health: string;
+  stale_peers?: string[];
+  policy_divergence?: string[];
+  verified_artifacts_reused: number;
+  limitations?: string[];
 }

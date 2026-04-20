@@ -775,6 +775,9 @@ func (s server) buildRecommendationCandidates(ctx context.Context, incidents []i
 	if forensicRecommendations, err := s.buildForensicsRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, forensicRecommendations...)
 	}
+	if federationRecommendations, err := s.buildFederationRecommendations(ctx, incidents, filter); err == nil {
+		candidates = append(candidates, federationRecommendations...)
+	}
 
 	anomalyContext, err := s.buildRecommendationAnomalyContext(ctx, filter)
 	if err == nil {
@@ -1811,6 +1814,33 @@ func (s server) verifyRecommendation(ctx context.Context, item recommendation, f
 			return recommendationStatusPartiallyEffective, "The strict replay delta cleared, but residual forensic drift still exists in the compared windows.", nil
 		default:
 			return recommendationStatusExecutedNoEffect, "Historical replay still diverges under the current control stack, so the forensic review remains active.", nil
+		}
+	case "federation_signal":
+		view, err := s.buildFederationGlobalView(ctx)
+		if err != nil {
+			return "", "", err
+		}
+		signalType, signalRef := parseFederationRecommendationSourceRef(item.SourceRef)
+		switch signalType {
+		case "peer":
+			for _, peerID := range view.StalePeers {
+				if peerID == signalRef {
+					return recommendationStatusExecutedNoEffect, "The federation peer is still stale and has not re-established a fresh trusted state.", nil
+				}
+			}
+			return recommendationStatusVerifiedSuccessful, "The federation peer is no longer stale and currently passes the local trust health view.", nil
+		case "policy":
+			if len(view.PolicyDivergence) == 0 {
+				return recommendationStatusVerifiedSuccessful, "Federation policy divergence no longer blocks the local effective policy state.", nil
+			}
+			return recommendationStatusExecutedNoEffect, "Federation policy divergence remains unresolved in the current local-overrides view.", nil
+		default:
+			for _, historyItem := range view.ProofHistory {
+				if historyItem.PeerID == signalRef && strings.HasPrefix(historyItem.Decision, "rejected") {
+					return recommendationStatusExecutedNoEffect, "The same federated proof path is still being rejected by the local trust decision engine.", nil
+				}
+			}
+			return recommendationStatusVerifiedSuccessful, "The previously rejected or stale federated proof path is no longer present in the current trust history.", nil
 		}
 	default:
 		return recommendationStatusExecutedNoEffect, "The recommendation source does not yet expose a richer verification rule, so the workflow remains advisory-only.", nil

@@ -27,6 +27,11 @@ const (
 	EventTypeSigningIdentityFinding          = "signing_identity_finding"
 	EventTypeHandoffSealed                   = "handoff_sealed"
 	EventTypeHandoffCosigned                 = "handoff_cosigned"
+	EventTypeFederationPeerRegistered        = "federation_peer_registered"
+	EventTypeFederationProofRequested        = "federation_proof_requested"
+	EventTypeFederationProofVerified         = "federation_proof_verified"
+	EventTypeFederationPolicySynced          = "federation_policy_synced"
+	EventTypeFederationAnchorPublished       = "federation_anchor_published"
 
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
@@ -139,6 +144,7 @@ type Event struct {
 	RecommendationVerificationResult  string           `json:"recommendation_verification_result,omitempty"`
 	Evidence                          *Evidence        `json:"evidence,omitempty"`
 	Handoff                           json.RawMessage  `json:"handoff,omitempty"`
+	Federation                        json.RawMessage  `json:"federation,omitempty"`
 }
 
 type VerifierSummary struct {

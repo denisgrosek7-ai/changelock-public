@@ -39,6 +39,13 @@ import type {
   ExceptionActionResponse,
   ExceptionReport,
   ExceptionRequestInput,
+  FederationAnchorRecord,
+  FederationGlobalView,
+  FederationPeer,
+  FederationPeerTrustState,
+  FederatedIdentityBinding,
+  FederatedProofFreshness,
+  FederatedProofHistoryItem,
   HandoffSealResponse,
   ExceptionsResponse,
   GuidanceGrouping,
@@ -51,6 +58,7 @@ import type {
   SBOMDocument,
   SBOMImageResponse,
   PolicyException,
+  PolicyFederationState,
   PublishedTrustView,
   ReasonCount,
   PointInTimeState,
@@ -1088,6 +1096,139 @@ function parseHandoffSealResponse(value: unknown): HandoffSealResponse {
     verification: parseVerificationResult(value.verification),
     download_uri: readString(value.download_uri, "handoff.download_uri"),
     verification_uri: readString(value.verification_uri, "handoff.verification_uri"),
+  };
+}
+
+function parseFederatedIdentityBinding(value: unknown): FederatedIdentityBinding {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation identity binding.");
+  }
+  return {
+    bridge_id: readString(value.bridge_id, "federation.identity_bindings[].bridge_id"),
+    provider: readString(value.provider, "federation.identity_bindings[].provider"),
+    issuer: readString(value.issuer, "federation.identity_bindings[].issuer"),
+    subject_pattern: readOptionalString(value.subject_pattern, "federation.identity_bindings[].subject_pattern"),
+    normalized_identity: readString(value.normalized_identity, "federation.identity_bindings[].normalized_identity"),
+    private_key_imported: readBoolean(value.private_key_imported, "federation.identity_bindings[].private_key_imported"),
+    limitations: readOptionalStringArray(value.limitations, "federation.identity_bindings[].limitations"),
+  };
+}
+
+function parseFederationPeerTrustState(value: unknown): FederationPeerTrustState {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation trust state.");
+  }
+  return {
+    identity_verified: readBoolean(value.identity_verified, "federation.trust_state.identity_verified"),
+    trust_anchor_fingerprints: readOptionalStringArray(value.trust_anchor_fingerprints, "federation.trust_state.trust_anchor_fingerprints") || [],
+    channel_mode: readString(value.channel_mode, "federation.trust_state.channel_mode"),
+    freshness_window_minutes: readNumber(value.freshness_window_minutes, "federation.trust_state.freshness_window_minutes"),
+    limitations: readOptionalStringArray(value.limitations, "federation.trust_state.limitations"),
+  };
+}
+
+function parseFederationPeer(value: unknown): FederationPeer {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation peer.");
+  }
+  return {
+    peer_id: readString(value.peer_id, "federation.peers[].peer_id"),
+    organization: readString(value.organization, "federation.peers[].organization"),
+    region: readOptionalString(value.region, "federation.peers[].region"),
+    cluster: readOptionalString(value.cluster, "federation.peers[].cluster"),
+    trust_domain: readOptionalString(value.trust_domain, "federation.peers[].trust_domain"),
+    endpoint: readOptionalString(value.endpoint, "federation.peers[].endpoint"),
+    public_keys: readOptionalStringArray(value.public_keys, "federation.peers[].public_keys") || [],
+    capabilities: readOptionalStringArray(value.capabilities, "federation.peers[].capabilities"),
+    policy_role: readString(value.policy_role, "federation.peers[].policy_role"),
+    status: readString(value.status, "federation.peers[].status"),
+    last_seen: readString(value.last_seen, "federation.peers[].last_seen"),
+    accepted_audiences: readOptionalStringArray(value.accepted_audiences, "federation.peers[].accepted_audiences"),
+    disclosure_mode: readOptionalString(value.disclosure_mode, "federation.peers[].disclosure_mode"),
+    identity_bindings: readOptionalArray(value.identity_bindings, "federation.peers[].identity_bindings").map(parseFederatedIdentityBinding),
+    metadata_hash: readString(value.metadata_hash, "federation.peers[].metadata_hash"),
+    metadata_signature: readString(value.metadata_signature, "federation.peers[].metadata_signature"),
+    trust_state: parseFederationPeerTrustState(value.trust_state),
+    limitations: readOptionalStringArray(value.limitations, "federation.peers[].limitations"),
+  };
+}
+
+function parseFederatedProofFreshness(value: unknown): FederatedProofFreshness {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation proof freshness.");
+  }
+  return {
+    issued_at: readString(value.issued_at, "federation.proof_history[].freshness.issued_at"),
+    valid_until: readString(value.valid_until, "federation.proof_history[].freshness.valid_until"),
+    freshness_minutes: readNumber(value.freshness_minutes, "federation.proof_history[].freshness.freshness_minutes"),
+    stale: readBoolean(value.stale, "federation.proof_history[].freshness.stale"),
+  };
+}
+
+function parseFederatedProofHistoryItem(value: unknown): FederatedProofHistoryItem {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation proof history item.");
+  }
+  return {
+    request_id: readString(value.request_id, "federation.proof_history[].request_id"),
+    peer_id: readString(value.peer_id, "federation.proof_history[].peer_id"),
+    subject_ref: readString(value.subject_ref, "federation.proof_history[].subject_ref"),
+    proof_type: readString(value.proof_type, "federation.proof_history[].proof_type"),
+    manifest_hash: readString(value.manifest_hash, "federation.proof_history[].manifest_hash"),
+    status: readString(value.status, "federation.proof_history[].status"),
+    decision: readOptionalString(value.decision, "federation.proof_history[].decision"),
+    verified_at: readOptionalString(value.verified_at, "federation.proof_history[].verified_at"),
+    freshness: value.freshness ? parseFederatedProofFreshness(value.freshness) : undefined,
+    reasons: readOptionalStringArray(value.reasons, "federation.proof_history[].reasons"),
+  };
+}
+
+function parsePolicyFederationState(value: unknown): PolicyFederationState {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation policy state.");
+  }
+  return {
+    leader_peer: readOptionalString(value.leader_peer, "federation.policy_state.leader_peer"),
+    global_policy_root: readOptionalString(value.global_policy_root, "federation.policy_state.global_policy_root"),
+    local_policy_root: readOptionalString(value.local_policy_root, "federation.policy_state.local_policy_root"),
+    effective_policy_root: readOptionalString(value.effective_policy_root, "federation.policy_state.effective_policy_root"),
+    sync_status: readString(value.sync_status, "federation.policy_state.sync_status"),
+    inherited_rules: readOptionalStringArray(value.inherited_rules, "federation.policy_state.inherited_rules"),
+    local_overrides: readOptionalStringArray(value.local_overrides, "federation.policy_state.local_overrides"),
+    divergence_reasons: readOptionalStringArray(value.divergence_reasons, "federation.policy_state.divergence_reasons"),
+    last_sync_at: readOptionalString(value.last_sync_at, "federation.policy_state.last_sync_at"),
+    remote_policy_version: readOptionalString(value.remote_policy_version, "federation.policy_state.remote_policy_version"),
+  };
+}
+
+function parseFederationAnchorRecord(value: unknown): FederationAnchorRecord {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation anchor record.");
+  }
+  return {
+    peer_id: readString(value.peer_id, "federation.anchors[].peer_id"),
+    audit_root_hash: readString(value.audit_root_hash, "federation.anchors[].audit_root_hash"),
+    published_at: readString(value.published_at, "federation.anchors[].published_at"),
+    verification_status: readString(value.verification_status, "federation.anchors[].verification_status"),
+    proof_ref: readOptionalString(value.proof_ref, "federation.anchors[].proof_ref"),
+    limitations: readOptionalStringArray(value.limitations, "federation.anchors[].limitations"),
+  };
+}
+
+function parseFederationGlobalView(value: unknown): FederationGlobalView {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid federation global view.");
+  }
+  return {
+    peers: readOptionalArray(value.peers, "federation.peers").map(parseFederationPeer),
+    proof_history: readOptionalArray(value.proof_history, "federation.proof_history").map(parseFederatedProofHistoryItem),
+    policy_state: parsePolicyFederationState(value.policy_state),
+    anchors: readOptionalArray(value.anchors, "federation.anchors").map(parseFederationAnchorRecord),
+    trust_health: readString(value.trust_health, "federation.trust_health"),
+    stale_peers: readOptionalStringArray(value.stale_peers, "federation.stale_peers"),
+    policy_divergence: readOptionalStringArray(value.policy_divergence, "federation.policy_divergence"),
+    verified_artifacts_reused: readNumber(value.verified_artifacts_reused, "federation.verified_artifacts_reused"),
+    limitations: readOptionalStringArray(value.limitations, "federation.limitations"),
   };
 }
 
@@ -3730,6 +3871,10 @@ export async function cosignHandoff(packageID: string, signerRole: string) {
 
 export async function downloadHandoffBundle(packageID: string) {
   return fetchBlob(`/v1/handoff/${encodeURIComponent(packageID)}/download`);
+}
+
+export async function getFederationGlobalView() {
+  return parseFederationGlobalView(await fetchJSON<unknown>("/v1/federation/global-view"));
 }
 
 export async function getRuntimeDriftFindings(filters: {
