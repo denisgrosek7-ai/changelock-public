@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -23,10 +21,14 @@ const (
 	validationStatusPass    = "pass"
 	validationStatusPartial = "partial"
 	validationStatusFail    = "fail"
+	validationStatusFlaky   = "flaky"
+	validationStatusUnknown = "unverifiable"
 
 	validationModePolicyDryRun    = "policy_dry_run"
 	validationModeControlledChaos = "controlled_chaos"
 	validationModeWhatIf          = "what_if"
+	validationModeRegression      = "regression_suite"
+	validationModeCompatibility   = "compatibility_validation"
 
 	validationScenarioSafeRelease         = "safe_release_positive"
 	validationScenarioUnsignedImage       = "unsigned_image_block"
@@ -35,6 +37,8 @@ const (
 	validationScenarioRuntimeContainment  = "runtime_drift_containment"
 	validationScenarioTopologyContainment = "topology_aware_quarantine"
 	validationScenarioVulnOverlay         = "vulnerability_overlay_response"
+	validationScenarioLatencyBudget       = "control_plane_latency_budget"
+	validationScenarioPlatformCompat      = "platform_compatibility_projection"
 )
 
 type validationHarnessFilter struct {
@@ -88,6 +92,8 @@ type validationHarnessRun struct {
 	PassedScenarios   int                               `json:"passed_scenarios"`
 	PartialScenarios  int                               `json:"partial_scenarios"`
 	FailedScenarios   int                               `json:"failed_scenarios"`
+	FlakyScenarios    int                               `json:"flaky_scenarios,omitempty"`
+	Unverifiable      int                               `json:"unverifiable_scenarios,omitempty"`
 	AverageResponseMS int                               `json:"average_response_ms"`
 	Results           []validationHarnessScenarioResult `json:"results"`
 	EvidenceRefs      []string                          `json:"evidence_refs,omitempty"`
@@ -100,6 +106,8 @@ type validationHarnessScoreResponse struct {
 	PassedScenarios   int                               `json:"passed_scenarios"`
 	PartialScenarios  int                               `json:"partial_scenarios"`
 	FailedScenarios   int                               `json:"failed_scenarios"`
+	FlakyScenarios    int                               `json:"flaky_scenarios,omitempty"`
+	Unverifiable      int                               `json:"unverifiable_scenarios,omitempty"`
 	AverageResponseMS int                               `json:"average_response_ms"`
 	LatestRunID       string                            `json:"latest_run_id,omitempty"`
 	CriticalGaps      []string                          `json:"critical_gaps,omitempty"`
@@ -123,6 +131,8 @@ type validationHarnessWhatIfResponse struct {
 	ProjectedPass      int                               `json:"projected_pass"`
 	ProjectedPartial   int                               `json:"projected_partial"`
 	ProjectedFail      int                               `json:"projected_fail"`
+	ProjectedFlaky     int                               `json:"projected_flaky,omitempty"`
+	ProjectedUnknown   int                               `json:"projected_unverifiable,omitempty"`
 	AverageResponseMS  int                               `json:"average_response_ms"`
 	Results            []validationHarnessScenarioResult `json:"results"`
 	CompatibilityRisks []string                          `json:"compatibility_risks,omitempty"`
@@ -145,7 +155,8 @@ type validationHarnessRunsResponse struct {
 }
 
 type validationHarnessStoredRecord struct {
-	Run validationHarnessRun `json:"run"`
+	Run    validationHarnessRun   `json:"run,omitempty"`
+	Bundle validationExecutionRun `json:"bundle,omitempty"`
 }
 
 type validationHarnessContext struct {
@@ -155,6 +166,7 @@ type validationHarnessContext struct {
 	findings       []runtimeIntegrityFinding
 	incidents      []investigationIncident
 	primaryService string
+	buildDuration  time.Duration
 	limitations    []string
 }
 
@@ -364,101 +376,38 @@ func parseValidationHarnessFilter(r *http.Request) (validationHarnessFilter, err
 }
 
 func validationScenarioCatalog() []validationHarnessScenario {
-	return []validationHarnessScenario{
-		{
-			ScenarioID:      validationScenarioSafeRelease,
-			Category:        "positive_test",
-			Title:           "Safe release regression",
-			Description:     "Validate that verified workloads with acceptable runtime posture still pass the current trust envelope.",
-			ValidationMode:  validationModePolicyDryRun,
-			ExpectedOutcome: "At least one in-scope workload remains verified, SBOM-backed, and below elevated drift.",
-			Controls:        []string{"runtime integrity profile", "runtime-to-SBOM verification", "attestation-linked sandboxing"},
-		},
-		{
-			ScenarioID:      validationScenarioUnsignedImage,
-			Category:        "negative_test",
-			Title:           "Unsigned image block",
-			Description:     "Validate that signature or provenance pressure still drives a deny path for suspicious image promotion.",
-			ValidationMode:  validationModePolicyDryRun,
-			ExpectedOutcome: "Policy or deploy-gate evidence shows a deny/error path rather than silent allow.",
-			Controls:        []string{"deploy-gate", "artifact verification", "policy decision path"},
-		},
-		{
-			ScenarioID:      validationScenarioPrivilegeEscalation,
-			Category:        "negative_test",
-			Title:           "Privilege escalation block",
-			Description:     "Validate that workload privilege envelopes remain hardened under current runtime policies.",
-			ValidationMode:  validationModePolicyDryRun,
-			ExpectedOutcome: "Profiles deny privilege escalation, privileged mode, and missing baseline hardening where applicable.",
-			Controls:        []string{"runtime integrity profile", "privilege envelope", "sandbox policy"},
-		},
-		{
-			ScenarioID:      validationScenarioIdentityForgery,
-			Category:        "negative_test",
-			Title:           "Identity forgery rejection",
-			Description:     "Validate that signer or runtime identity drift is either detected or bounded by explicit expected identity policy.",
-			ValidationMode:  validationModePolicyDryRun,
-			ExpectedOutcome: "Identity drift is detected when present or explicit expected signer policy exists in scope.",
-			Controls:        []string{"expected signers", "runtime identity drift detection", "signing policy"},
-		},
-		{
-			ScenarioID:       validationScenarioRuntimeContainment,
-			Category:         "chaos_rehearsal",
-			Title:            "Runtime drift containment",
-			Description:      "Validate that critical runtime drift leads to an explainable containment or forensic response path.",
-			ValidationMode:   validationModeControlledChaos,
-			ExpectedOutcome:  "Critical drift produces a policy-gated containment or forensic decision with lineage.",
-			Controls:         []string{"runtime finding engine", "enforcement evaluation", "forensics linkage"},
-			RequiresApproval: true,
-		},
-		{
-			ScenarioID:       validationScenarioTopologyContainment,
-			Category:         "chaos_rehearsal",
-			Title:            "Topology-aware quarantine sizing",
-			Description:      "Validate that quarantine planning uses blast-radius context before recommending isolation.",
-			ValidationMode:   validationModeControlledChaos,
-			ExpectedOutcome:  "Containment simulation reduces blast radius and keeps approval gating explicit.",
-			Controls:         []string{"topology blast radius", "quarantine simulation", "approval gating"},
-			RequiresApproval: true,
-		},
-		{
-			ScenarioID:      validationScenarioVulnOverlay,
-			Category:        "edge_case",
-			Title:           "Vulnerability injection overlay",
-			Description:     "Validate that critical vulnerability pressure produces a bounded remediation or triage recommendation path.",
-			ValidationMode:  validationModeControlledChaos,
-			ExpectedOutcome: "Recommendation overlay emits a remediation, sandbox, or VEX follow-up with verification steps.",
-			Controls:        []string{"forensics replay", "recommendation overlay", "VEX/remediation workflow"},
-		},
-	}
+	return validationLegacyScenarioCatalog()
 }
 
 func (s server) buildValidationHarnessScore(ctx context.Context, filter validationHarnessFilter) (validationHarnessScoreResponse, error) {
-	results, limitations, err := s.buildValidationHarnessResults(ctx, filter, nil, validationModePolicyDryRun)
+	run, err := s.buildStrictValidationRun(ctx, nil, filter, validationExecuteRequest{Mode: validationModePolicyDryRun}, nil, false)
 	if err != nil {
 		return validationHarnessScoreResponse{}, err
 	}
-	runs, _, err := s.listValidationHarnessRuns(ctx, filter)
+	runs, _, err := s.listStrictValidationRuns(ctx, filter)
 	if err != nil {
 		return validationHarnessScoreResponse{}, err
 	}
-	passed, partial, failed, average := validationResultSummary(results)
+	passed, partial, failed, flaky, unknown, average, _, _ := strictValidationSummary(run.Verdicts)
 	criticalGaps := []string{}
+	results := legacyValidationScenarioResultsFromVerdicts(run.Verdicts)
 	for _, item := range results {
-		if item.Status == validationStatusFail {
+		if item.Status == validationStatusFail || item.Status == validationStatusFlaky || item.Status == validationStatusUnknown {
 			criticalGaps = append(criticalGaps, item.Summary)
 		}
 	}
 	score := validationHarnessScoreResponse{
-		ConfidenceLevel:   validationConfidenceLevel(passed, partial, failed),
-		OverallStatus:     validationOverallStatus(passed, partial, failed),
+		ConfidenceLevel:   strictValidationConfidenceLevel(passed, partial, failed, flaky, unknown),
+		OverallStatus:     strictValidationOverallStatus(passed, partial, failed, flaky, unknown),
 		PassedScenarios:   passed,
 		PartialScenarios:  partial,
 		FailedScenarios:   failed,
+		FlakyScenarios:    flaky,
+		Unverifiable:      unknown,
 		AverageResponseMS: average,
 		CriticalGaps:      uniqueStrings(criticalGaps),
 		Results:           results,
-		Limitations:       limitations,
+		Limitations:       append([]string(nil), run.Limitations...),
 	}
 	if len(runs) > 0 {
 		score.LatestRunID = runs[0].RunID
@@ -467,182 +416,51 @@ func (s server) buildValidationHarnessScore(ctx context.Context, filter validati
 }
 
 func (s server) createValidationHarnessRun(ctx context.Context, principal auth.Principal, filter validationHarnessFilter, request validationHarnessRunRequest) (validationHarnessRun, error) {
-	startedAt := time.Now().UTC()
-	mode := normalizeValidationMode(request.Mode)
-	results, limitations, err := s.buildValidationHarnessResults(ctx, filter, request.ScenarioIDs, mode)
+	run, err := s.buildStrictValidationRun(ctx, &principal, filter, validationExecuteRequest{
+		ScenarioIDs: request.ScenarioIDs,
+		Mode:        request.Mode,
+	}, nil, true)
 	if err != nil {
 		return validationHarnessRun{}, err
 	}
-	passed, partial, failed, average := validationResultSummary(results)
-	evidenceRefs := []string{}
-	for _, item := range results {
-		evidenceRefs = append(evidenceRefs, item.EvidenceRefs...)
-	}
-	run := validationHarnessRun{
-		RunID:             shortDigest("VAL-", fmt.Sprintf("%s|%s|%s|%s|%s", mode, filter.TenantID, filter.Environment, filter.Repo, time.Now().UTC().Format(time.RFC3339Nano))),
-		Mode:              mode,
-		TenantID:          filter.TenantID,
-		Environment:       filter.Environment,
-		Repo:              filter.Repo,
-		Service:           filter.Service,
-		ScopeSummary:      validationScopeSummary(filter),
-		StartedAt:         startedAt,
-		CompletedAt:       time.Now().UTC(),
-		OverallStatus:     validationOverallStatus(passed, partial, failed),
-		CertificateID:     shortDigest("VALCERT-", strings.Join(uniqueStrings(evidenceRefs), "|")+mode+filter.Service),
-		CertificateStatus: validationCertificateStatus(passed, partial, failed),
-		PassedScenarios:   passed,
-		PartialScenarios:  partial,
-		FailedScenarios:   failed,
-		AverageResponseMS: average,
-		Results:           results,
-		EvidenceRefs:      uniqueStrings(evidenceRefs),
-		Limitations: uniqueStrings(append([]string{
-			"Validation harness runs are controlled dry-runs over canonical policy, runtime, topology, forensics, and recommendation surfaces; they do not imply destructive attack execution in production.",
-		}, limitations...)),
-	}
-	payload, err := json.Marshal(validationHarnessStoredRecord{Run: run})
-	if err != nil {
-		return validationHarnessRun{}, err
-	}
-	decision := audit.DecisionAllow
-	if failed > 0 {
-		decision = audit.DecisionDeny
-	}
-	_, err = s.store.Ingest(ctx, audit.Event{
-		Component:         validationHarnessComponent,
-		EventType:         audit.EventTypeValidationHarnessRunRecorded,
-		Decision:          decision,
-		Actor:             incidentActor(principal),
-		ClusterID:         filter.ClusterID,
-		TenantID:          filter.TenantID,
-		Environment:       filter.Environment,
-		Repo:              filter.Repo,
-		Reasons:           []string{fmt.Sprintf("validation harness %s", strings.ReplaceAll(run.OverallStatus, "_", " ")), run.ScopeSummary},
-		ValidationHarness: payload,
-	})
-	if err != nil {
-		return validationHarnessRun{}, err
-	}
-	return run, nil
+	return legacyValidationRunFromStrict(run), nil
 }
 
 func (s server) listValidationHarnessRuns(ctx context.Context, filter validationHarnessFilter) ([]validationHarnessRun, []string, error) {
-	events, err := s.store.ListEvents(ctx, audit.EventFilter{
-		Component:   validationHarnessComponent,
-		EventType:   audit.EventTypeValidationHarnessRunRecorded,
-		ClusterID:   filter.ClusterID,
-		TenantID:    filter.TenantID,
-		Environment: filter.Environment,
-		Repo:        filter.Repo,
-		Limit:       maxInt(filter.Limit*20, 100),
-	})
+	runs, limitations, err := s.listStrictValidationRuns(ctx, filter)
 	if err != nil {
 		return nil, nil, err
 	}
-	runs := []validationHarnessRun{}
-	for _, event := range events {
-		if len(event.ValidationHarness) == 0 || string(event.ValidationHarness) == "null" {
-			continue
-		}
-		var stored validationHarnessStoredRecord
-		if err := json.Unmarshal(event.ValidationHarness, &stored); err != nil {
-			continue
-		}
-		run := stored.Run
-		if filter.Service != "" && !strings.EqualFold(run.Service, filter.Service) {
-			continue
-		}
-		runs = append(runs, run)
+	legacy := make([]validationHarnessRun, 0, len(runs))
+	for _, run := range runs {
+		legacy = append(legacy, legacyValidationRunFromStrict(run))
 	}
-	sort.Slice(runs, func(i, j int) bool { return runs[i].CompletedAt.After(runs[j].CompletedAt) })
-	if len(runs) > filter.Limit {
-		runs = runs[:filter.Limit]
-	}
-	return runs, []string{
-		"Validation harness runs are stored as audit-backed dry-run outputs and remain separate from canonical incident, evidence, or runtime truth.",
-	}, nil
+	return legacy, limitations, nil
 }
 
 func (s server) buildValidationHarnessWhatIf(ctx context.Context, filter validationHarnessFilter, request validationHarnessWhatIfRequest) (validationHarnessWhatIfResponse, error) {
-	mode := validationModeWhatIf
-	results, limitations, err := s.buildValidationHarnessResults(ctx, filter, request.ScenarioIDs, mode)
+	run, err := s.buildStrictValidationRun(ctx, nil, filter, validationExecuteRequest{
+		ScenarioIDs: request.ScenarioIDs,
+		Mode:        validationModeCompatibility,
+	}, &request, false)
 	if err != nil {
 		return validationHarnessWhatIfResponse{}, err
 	}
-	contextView, err := s.buildValidationHarnessContext(ctx, filter)
-	if err != nil {
-		return validationHarnessWhatIfResponse{}, err
-	}
-	changeSet := validationWhatIfChangeSet(request)
-	compatibilityRisks := []string{}
-	for index := range results {
-		item := &results[index]
-		switch item.ScenarioID {
-		case validationScenarioUnsignedImage:
-			if request.RekorUnavailable {
-				item.Status = degradeValidationStatus(item.Status)
-				item.Summary = item.Summary + " Rekor or transparency unavailability would downgrade this validation from hard proof to degraded local verification."
-				item.Limitations = append(item.Limitations, "What-if projected a transparency outage; signed artifacts remain locally verifiable, but external freshness proof would be degraded.")
-				compatibilityRisks = append(compatibilityRisks, "Transparency outage can turn strong proof validation into a local-only decision path.")
-			}
-		case validationScenarioPrivilegeEscalation:
-			if request.KubernetesVersion != "" {
-				missingHardening := 0
-				for _, workload := range contextView.workloads {
-					if !workload.Profile.PrivilegeProfile.SeccompRuntimeDefault || !workload.Profile.PrivilegeProfile.ReadOnlyRootFilesystem {
-						missingHardening++
-					}
-				}
-				if missingHardening > 0 {
-					item.Status = validationStatusPartial
-					item.Summary = fmt.Sprintf("%s %d workload profile(s) may require manifest hardening before a stricter Kubernetes runtime baseline is adopted.", item.Summary, missingHardening)
-					compatibilityRisks = append(compatibilityRisks, "Stricter Kubernetes baselines may reject workloads that still lack seccomp-runtime-default or read-only rootfs coverage.")
-				}
-			}
-		case validationScenarioIdentityForgery:
-			if request.IdentityProviderUnavailable {
-				item.Status = degradeValidationStatus(item.Status)
-				item.Summary = item.Summary + " Identity provider outage would shift new validations into a degraded or manual-review path."
-				compatibilityRisks = append(compatibilityRisks, "Identity provider outage should halt automatic trust elevation for new workloads.")
-			}
-		case validationScenarioSafeRelease:
-			if request.TightenRuntimeRestrictions {
-				for _, workload := range contextView.workloads {
-					if workload.SandboxDecision.AssignedSandboxClass == runtimeSandboxClassStandard && workload.State.DriftLevel != runtimeDriftLevelStable {
-						item.Status = validationStatusPartial
-						item.Summary = item.Summary + " Tighter runtime restrictions would likely move some standard-sandbox workloads into review before rollout."
-						compatibilityRisks = append(compatibilityRisks, "Runtime tightening may create rollout friction for workloads that are still verified but not yet fully stable.")
-						break
-					}
-				}
-			}
-		case validationScenarioVulnOverlay:
-			if request.InjectCriticalVulnerability {
-				if item.Status == validationStatusFail {
-					item.Summary = item.Summary + " A simulated critical vulnerability would currently lack a bounded overlay workflow."
-				} else {
-					item.Status = validationStatusPass
-					item.Summary = item.Summary + " Simulated critical vulnerability pressure would trigger the existing remediation/VEX overlay path."
-				}
-				compatibilityRisks = append(compatibilityRisks, "Critical vulnerability injection increases remediation pressure and may widen runtime or release review queues.")
-			}
-		}
-	}
-	passed, partial, failed, average := validationResultSummary(results)
 	return validationHarnessWhatIfResponse{
-		Mode:               mode,
-		ChangeSet:          changeSet,
-		OverallStatus:      validationOverallStatus(passed, partial, failed),
-		ProjectedPass:      passed,
-		ProjectedPartial:   partial,
-		ProjectedFail:      failed,
-		AverageResponseMS:  average,
-		Results:            results,
-		CompatibilityRisks: uniqueStrings(compatibilityRisks),
+		Mode:               validationModeWhatIf,
+		ChangeSet:          append([]string(nil), run.ChangeSet...),
+		OverallStatus:      run.Certificate.OverallStatus,
+		ProjectedPass:      countStrictValidationStatus(run.Verdicts, validationStatusPass),
+		ProjectedPartial:   countStrictValidationStatus(run.Verdicts, validationStatusPartial),
+		ProjectedFail:      countStrictValidationStatus(run.Verdicts, validationStatusFail),
+		ProjectedFlaky:     countStrictValidationStatus(run.Verdicts, validationStatusFlaky),
+		ProjectedUnknown:   countStrictValidationStatus(run.Verdicts, validationStatusUnknown),
+		AverageResponseMS:  run.Certificate.TimingSummary.AverageLatencyMS,
+		Results:            legacyValidationScenarioResultsFromVerdicts(run.Verdicts),
+		CompatibilityRisks: append([]string(nil), run.CompatibilityRisks...),
 		Limitations: uniqueStrings(append([]string{
 			"What-if analysis is a backend-native projection over current policy, runtime, topology, forensics, and recommendation state; it is not historical truth or live production execution.",
-		}, limitations...)),
+		}, run.Limitations...)),
 	}, nil
 }
 
@@ -667,6 +485,7 @@ func (s server) buildValidationHarnessResults(ctx context.Context, filter valida
 }
 
 func (s server) buildValidationHarnessContext(ctx context.Context, filter validationHarnessFilter) (validationHarnessContext, error) {
+	startedAt := time.Now()
 	events, err := s.store.ListEvents(ctx, filter.event)
 	if err != nil {
 		return validationHarnessContext{}, err
@@ -718,6 +537,7 @@ func (s server) buildValidationHarnessContext(ctx context.Context, filter valida
 		findings:       findings,
 		incidents:      incidents,
 		primaryService: primaryService,
+		buildDuration:  time.Since(startedAt),
 		limitations: uniqueStrings(append([]string{
 			"Validation harness scope is derived from canonical audit events, incidents, runtime integrity state, topology context, and recommendation engines already present in the selected tenant/environment scope.",
 		}, append(workloadLimitations, findingLimitations...)...)),

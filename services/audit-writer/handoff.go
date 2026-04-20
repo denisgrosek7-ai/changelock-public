@@ -96,6 +96,7 @@ type handoffValidationContext struct {
 	Score        validationHarnessScoreResponse `json:"score"`
 	Runs         []validationHarnessRun         `json:"runs"`
 	Scenarios    []validationHarnessScenario    `json:"scenarios"`
+	Certificate  *validationCertificate         `json:"certificate,omitempty"`
 	Limitations  []string                       `json:"limitations,omitempty"`
 }
 
@@ -642,11 +643,17 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 		if err != nil {
 			return handoffStoredRecord{}, err
 		}
+		var latestCertificate *validationCertificate
+		if strictRuns, _, err := s.listStrictValidationRuns(ctx, validationFilter); err == nil && len(strictRuns) > 0 {
+			certificate := strictRuns[0].Certificate
+			latestCertificate = &certificate
+		}
 		validationContext = &handoffValidationContext{
 			AdvisoryOnly: true,
 			Score:        score,
 			Runs:         runs,
 			Scenarios:    validationScenarioCatalog(),
+			Certificate:  latestCertificate,
 			Limitations: []string{
 				"Validation harness context is exported as controlled dry-run evidence and advisory confidence output; it does not become canonical incident or runtime truth inside the sealed bundle.",
 			},
@@ -861,6 +868,13 @@ func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRe
 		normalized.Score.Limitations = append([]string(nil), validationContext.Score.Limitations...)
 		normalized.Runs = append([]validationHarnessRun(nil), validationContext.Runs...)
 		normalized.Scenarios = append([]validationHarnessScenario(nil), validationContext.Scenarios...)
+		if validationContext.Certificate != nil {
+			certificate := *validationContext.Certificate
+			certificate.ScenarioResults = append([]validationVerdict(nil), validationContext.Certificate.ScenarioResults...)
+			certificate.EvidenceRefs = append([]string(nil), validationContext.Certificate.EvidenceRefs...)
+			certificate.Limitations = append([]string(nil), validationContext.Certificate.Limitations...)
+			normalized.Certificate = &certificate
+		}
 		normalized.Limitations = append([]string(nil), validationContext.Limitations...)
 		validationContext = &normalized
 	}
