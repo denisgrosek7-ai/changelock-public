@@ -30,6 +30,7 @@ type Props = {
   loading: boolean;
   error: string | null;
   role?: string;
+  focusedIncidentID?: string | null;
   refreshKey?: number;
   metricDrilldown?: MetricIncidentDrilldown | null;
   onClearMetricDrilldown?: () => void;
@@ -311,6 +312,7 @@ export function IncidentWorkbench({
   loading,
   error,
   role,
+  focusedIncidentID,
   refreshKey,
   metricDrilldown,
   onClearMetricDrilldown,
@@ -418,6 +420,10 @@ export function IncidentWorkbench({
   const canResolve = role === "security_admin";
 
   useEffect(() => {
+    if (focusedIncidentID && incidents.some((incident) => incident.id === focusedIncidentID)) {
+      setSelectedIncidentID(focusedIncidentID);
+      return;
+    }
     if (!selectedIncidentID && incidents[0]) {
       setSelectedIncidentID(incidents[0].id);
       return;
@@ -425,7 +431,7 @@ export function IncidentWorkbench({
     if (selectedIncidentID && !incidents.some((incident) => incident.id === selectedIncidentID)) {
       setSelectedIncidentID(incidents[0]?.id || null);
     }
-  }, [incidents, selectedIncidentID]);
+  }, [focusedIncidentID, incidents, selectedIncidentID]);
 
   useEffect(() => {
     setSelectedPackageIDs((current) => {

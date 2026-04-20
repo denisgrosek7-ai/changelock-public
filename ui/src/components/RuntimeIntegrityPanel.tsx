@@ -11,16 +11,43 @@ type Props = {
   findings: RuntimeIntegrityFinding[];
   enforcement: RuntimeEnforcementDecision[];
   loading: boolean;
+  focusSubjectRef?: string | null;
+  focusFindingID?: string | null;
 };
 
 function countBy<T>(items: T[], predicate: (item: T) => boolean): number {
   return items.reduce((count, item) => count + (predicate(item) ? 1 : 0), 0);
 }
 
-export function RuntimeIntegrityPanel({ integrity, workloads, findings, enforcement, loading }: Props) {
+export function RuntimeIntegrityPanel({ integrity, workloads, findings, enforcement, loading, focusSubjectRef, focusFindingID }: Props) {
   if (loading && integrity.length === 0 && workloads.length === 0 && findings.length === 0 && enforcement.length === 0) {
     return <section className="panel panel-empty">Loading runtime integrity mesh…</section>;
   }
+
+  const visibleWorkloads = [...workloads].sort((left, right) => {
+    const leftFocused = focusSubjectRef && left.subject_ref === focusSubjectRef;
+    const rightFocused = focusSubjectRef && right.subject_ref === focusSubjectRef;
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.subject_ref.localeCompare(right.subject_ref);
+  });
+  const visibleFindings = [...findings].sort((left, right) => {
+    const leftFocused = (focusFindingID && left.finding_id === focusFindingID) || (focusSubjectRef && left.subject_ref === focusSubjectRef);
+    const rightFocused = (focusFindingID && right.finding_id === focusFindingID) || (focusSubjectRef && right.subject_ref === focusSubjectRef);
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.finding_id.localeCompare(right.finding_id);
+  });
+  const visibleEnforcement = [...enforcement].sort((left, right) => {
+    const leftFocused = focusSubjectRef && left.subject_ref === focusSubjectRef;
+    const rightFocused = focusSubjectRef && right.subject_ref === focusSubjectRef;
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.decision_id.localeCompare(right.decision_id);
+  });
 
   return (
     <section className="panel">
@@ -70,8 +97,8 @@ export function RuntimeIntegrityPanel({ integrity, workloads, findings, enforcem
               </tr>
             </thead>
             <tbody>
-              {workloads.slice(0, 8).map((item) => (
-                <tr key={item.subject_ref}>
+              {visibleWorkloads.slice(0, 8).map((item) => (
+                <tr key={item.subject_ref} className={focusSubjectRef === item.subject_ref ? "is-selected" : undefined}>
                   <td>
                     <strong>{item.workload || item.subject_ref}</strong>
                     <div className="table-meta">
@@ -108,8 +135,8 @@ export function RuntimeIntegrityPanel({ integrity, workloads, findings, enforcem
               </tr>
             </thead>
             <tbody>
-              {findings.slice(0, 8).map((item) => (
-                <tr key={item.finding_id}>
+              {visibleFindings.slice(0, 8).map((item) => (
+                <tr key={item.finding_id} className={(focusFindingID === item.finding_id || focusSubjectRef === item.subject_ref) ? "is-selected" : undefined}>
                   <td>
                     <strong>{item.finding_type}</strong>
                     <div className="table-meta">{item.summary}</div>
@@ -140,8 +167,8 @@ export function RuntimeIntegrityPanel({ integrity, workloads, findings, enforcem
               </tr>
             </thead>
             <tbody>
-              {enforcement.slice(0, 6).map((item) => (
-                <tr key={item.decision_id}>
+              {visibleEnforcement.slice(0, 6).map((item) => (
+                <tr key={item.decision_id} className={focusSubjectRef === item.subject_ref ? "is-selected" : undefined}>
                   <td>{item.action}</td>
                   <td>{item.subject_ref}</td>
                   <td>{item.approval_mode}</td>

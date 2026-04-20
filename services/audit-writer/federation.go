@@ -57,6 +57,8 @@ const (
 var (
 	errFederationPeerNotFound = errors.New("federation peer not found")
 	errFederationInvalidProof = errors.New("federated proof is invalid")
+	errFederationRateLimited  = errors.New("federation peer is rate limited")
+	errFederationCircuitOpen  = errors.New("federation peer circuit is open")
 )
 
 type federationScope struct {
@@ -370,6 +372,10 @@ func (s server) federationProofRequestHandler(w http.ResponseWriter, r *http.Req
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	if err := s.enforceFederationResilience(ctx, strings.TrimSpace(request.PeerID)); err != nil {
+		writeFederationError(w, err)
+		return
+	}
 	result, err := s.createFederatedProofExchange(ctx, principal, request)
 	if err != nil {
 		writeFederationError(w, err)
@@ -395,6 +401,10 @@ func (s server) federationProofVerifyHandler(w http.ResponseWriter, r *http.Requ
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
+	if err := s.enforceFederationResilience(ctx, strings.TrimSpace(request.PeerID)); err != nil {
+		writeFederationError(w, err)
+		return
+	}
 	result, err := s.verifyFederatedProof(ctx, principal, request)
 	if err != nil {
 		writeFederationError(w, err)
@@ -1236,6 +1246,10 @@ func writeFederationError(w http.ResponseWriter, err error) {
 		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, errHandoffInvalidBundle), errors.Is(err, errHandoffNotFound), errors.Is(err, errFederationInvalidProof):
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	case errors.Is(err, errFederationRateLimited):
+		httpjson.Write(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+	case errors.Is(err, errFederationCircuitOpen):
+		httpjson.Write(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 	default:
 		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

@@ -4,16 +4,35 @@ type Props = {
   posture: DefensePostureState[];
   actions: HardeningExecutionRecord[];
   loading: boolean;
+  focusSubjectRef?: string | null;
+  focusExecutionID?: string | null;
 };
 
 function countBy<T>(items: T[], predicate: (item: T) => boolean): number {
   return items.reduce((count, item) => count + (predicate(item) ? 1 : 0), 0);
 }
 
-export function DefensePosturePanel({ posture, actions, loading }: Props) {
+export function DefensePosturePanel({ posture, actions, loading, focusSubjectRef, focusExecutionID }: Props) {
   if (loading && posture.length === 0 && actions.length === 0) {
     return <section className="panel panel-empty">Loading runtime defense posture…</section>;
   }
+
+  const visiblePosture = [...posture].sort((left, right) => {
+    const leftFocused = focusSubjectRef && left.subject_ref === focusSubjectRef;
+    const rightFocused = focusSubjectRef && right.subject_ref === focusSubjectRef;
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.subject_ref.localeCompare(right.subject_ref);
+  });
+  const visibleActions = [...actions].sort((left, right) => {
+    const leftFocused = (focusExecutionID && left.execution_id === focusExecutionID) || (focusSubjectRef && left.subject_ref === focusSubjectRef);
+    const rightFocused = (focusExecutionID && right.execution_id === focusExecutionID) || (focusSubjectRef && right.subject_ref === focusSubjectRef);
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.execution_id.localeCompare(right.execution_id);
+  });
 
   return (
     <section className="panel">
@@ -59,8 +78,8 @@ export function DefensePosturePanel({ posture, actions, loading }: Props) {
               </tr>
             </thead>
             <tbody>
-              {posture.slice(0, 8).map((item) => (
-                <tr key={item.subject_ref}>
+              {visiblePosture.slice(0, 8).map((item) => (
+                <tr key={item.subject_ref} className={focusSubjectRef === item.subject_ref ? "is-selected" : undefined}>
                   <td>
                     <strong>{item.subject_ref}</strong>
                     <div className="table-meta">{item.trigger_summary || "No active trigger summary."}</div>
@@ -92,8 +111,8 @@ export function DefensePosturePanel({ posture, actions, loading }: Props) {
               </tr>
             </thead>
             <tbody>
-              {actions.slice(0, 6).map((item) => (
-                <tr key={item.execution_id}>
+              {visibleActions.slice(0, 6).map((item) => (
+                <tr key={item.execution_id} className={(focusExecutionID === item.execution_id || focusSubjectRef === item.subject_ref) ? "is-selected" : undefined}>
                   <td>
                     <strong>{item.execution_id}</strong>
                     <div className="table-meta">{new Date(item.executed_at).toLocaleString()}</div>

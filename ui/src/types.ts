@@ -4,6 +4,25 @@ export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
 export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
 export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "forensics" | "federation" | "validation" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
+export type CommandCenterPersona = "developer" | "security_engineer" | "platform_operator" | "auditor" | "executive";
+export type CommandCenterFocusKind =
+  | "incident"
+  | "recommendation"
+  | "runtime_subject"
+  | "runtime_finding"
+  | "hardening_execution"
+  | "validation_run"
+  | "validation_scenario"
+  | "federation_peer"
+  | "handoff_package";
+
+export interface CommandCenterFocusTarget {
+  tab: TabKey;
+  kind: CommandCenterFocusKind;
+  ref: string;
+  secondary_ref?: string;
+  resource_uri?: string;
+}
 
 export interface AuditHealth {
   status: string;
@@ -563,6 +582,67 @@ export interface Summary {
 export interface VerifierSummary {
   signature_valid: boolean;
   attestation_valid: boolean;
+}
+
+export interface SecurityTimelineEntry {
+  schema_version: string;
+  entry_id: string;
+  timestamp: string;
+  subject_ref: string;
+  subject_type: string;
+  subject_label: string;
+  source_subsystem: string;
+  event_type: string;
+  severity: string;
+  importance: string;
+  outcome: string;
+  title: string;
+  summary: string;
+  evidence_refs?: string[];
+  incident_ref?: string;
+  recommendation_ref?: string;
+  next_action?: string;
+  drilldown_tab?: TabKey;
+  drilldown_label?: string;
+  drilldown_target_kind?: CommandCenterFocusKind;
+  drilldown_target_ref?: string;
+  drilldown_target_secondary_ref?: string;
+  resource_uri?: string;
+  persona_hints?: CommandCenterPersona[];
+  limitations?: string[];
+}
+
+export interface SecurityTimelineResponse {
+  schema_version: string;
+  generated_at: string;
+  counts_by_source: Record<string, number>;
+  counts_by_severity: Record<string, number>;
+  entries: SecurityTimelineEntry[];
+  limitations?: string[];
+}
+
+export interface CommandCenterSearchResult {
+  schema_version: string;
+  result_id: string;
+  result_type: string;
+  title: string;
+  summary: string;
+  subtitle?: string;
+  source_subsystem: string;
+  severity: string;
+  target: CommandCenterFocusTarget;
+  incident_ref?: string;
+  recommendation_ref?: string;
+  evidence_refs?: string[];
+  persona_hints?: CommandCenterPersona[];
+  limitations?: string[];
+}
+
+export interface CommandCenterSearchResponse {
+  schema_version: string;
+  query: string;
+  results: CommandCenterSearchResult[];
+  limitations?: string[];
 }
 
 export interface StoredEvent {

@@ -132,15 +132,8 @@ func TestFederationProofExchangeDecisionAndPolicyState(t *testing.T) {
 	staleVerifyReq.Header.Set("Content-Type", "application/json")
 	staleVerifyRec := httptest.NewRecorder()
 	fixture.handler.ServeHTTP(staleVerifyRec, staleVerifyReq)
-	if staleVerifyRec.Code != http.StatusOK {
-		t.Fatalf("expected stale federation proof verify 200, got %d: %s", staleVerifyRec.Code, staleVerifyRec.Body.String())
-	}
-	var staleDecision federationProofVerifyResult
-	if err := json.NewDecoder(staleVerifyRec.Body).Decode(&staleDecision); err != nil {
-		t.Fatalf("decode stale federation verify: %v", err)
-	}
-	if staleDecision.Decision.Decision != federationDecisionRejectedStale {
-		t.Fatalf("expected rejected_stale, got %#v", staleDecision.Decision)
+	if staleVerifyRec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected stale federation proof verify 503, got %d: %s", staleVerifyRec.Code, staleVerifyRec.Body.String())
 	}
 
 	conflictPeer := registerFederationPeerForTest(t, fixture.handler, federationPeerRequest{

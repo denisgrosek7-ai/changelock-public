@@ -1,6 +1,21 @@
 package main
 
 const (
+	securityTimelineSchemaVersion         = "2a.security_timeline.v1"
+	securityTimelineEntrySchemaVersion    = "2a.security_timeline_entry.v1"
+	commandSearchResponseSchemaVersion    = "2a.command_search.v1"
+	commandSearchResultSchemaVersion      = "2a.command_search_result.v1"
+	integrationIdentitySchemaVersion      = "2b.identity.v1"
+	integrationTicketCatalogSchemaVersion = "2b.ticket_catalog.v1"
+	integrationTicketDraftSchemaVersion   = "2b.ticket_draft.v1"
+	integrationSIEMExportSchemaVersion    = "2b.siem_export.v1"
+	integrationEvidenceSchemaVersion      = "2b.evidence_export.v1"
+	handoffQualitySchemaVersion           = "2c.handoff_quality.v1"
+	federationResilienceSchemaVersion     = "2c.federation_resilience.v1"
+	validationReadinessSchemaVersion      = "2c.validation_readiness.v1"
+	selfAuditSummarySchemaVersion         = "2c.self_audit_summary.v1"
+	selfAuditEventsSchemaVersion          = "2c.self_audit_events.v1"
+	selfAuditEventSchemaVersion           = "2c.self_audit_event.v1"
 	readbackResponseSchemaVersion         = "9b.response.v1"
 	readbackGrantSchemaVersion            = "9b.grant.v1"
 	recommendationListSchemaVersion       = "9d.list.v1"

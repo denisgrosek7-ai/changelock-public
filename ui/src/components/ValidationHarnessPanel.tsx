@@ -13,13 +13,22 @@ type Props = {
   runs: ValidationHarnessRun[];
   whatIf: ValidationHarnessWhatIfResponse | null;
   loading: boolean;
+  focusRunID?: string | null;
   onRunHarness?: () => Promise<void>;
   onRunWhatIf?: () => Promise<void>;
 };
 
-export function ValidationHarnessPanel({ scenarios, score, runs, whatIf, loading, onRunHarness, onRunWhatIf }: Props) {
+export function ValidationHarnessPanel({ scenarios, score, runs, whatIf, loading, focusRunID, onRunHarness, onRunWhatIf }: Props) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<"run" | "what-if" | null>(null);
+  const visibleRuns = [...runs].sort((left, right) => {
+    const leftFocused = focusRunID && left.run_id === focusRunID;
+    const rightFocused = focusRunID && right.run_id === focusRunID;
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.run_id.localeCompare(right.run_id);
+  });
 
   async function runAction(kind: "run" | "what-if", action?: () => Promise<void>) {
     if (!action) {
@@ -169,8 +178,8 @@ export function ValidationHarnessPanel({ scenarios, score, runs, whatIf, loading
               </tr>
             </thead>
             <tbody>
-              {runs.slice(0, 5).map((run) => (
-                <tr key={run.run_id}>
+              {visibleRuns.slice(0, 5).map((run) => (
+                <tr key={run.run_id} className={focusRunID === run.run_id ? "is-selected" : undefined}>
                   <td>
                     <strong>{run.scope_summary}</strong>
                     <div className="table-meta">{run.mode}</div>

@@ -3,6 +3,7 @@ import type { FederationGlobalView } from "../types";
 type Props = {
   view: FederationGlobalView | null;
   loading: boolean;
+  focusPeerID?: string | null;
 };
 
 function renderEmpty(message: string) {
@@ -20,10 +21,27 @@ function formatTimestamp(value?: string) {
   return date.toLocaleString();
 }
 
-export function FederationInsightsPanel({ view, loading }: Props) {
+export function FederationInsightsPanel({ view, loading, focusPeerID }: Props) {
   if (loading) {
     return <section className="panel analytics-panel analytics-panel--wide">Loading federation trust state…</section>;
   }
+
+  const visiblePeers = view ? [...view.peers].sort((left, right) => {
+    const leftFocused = focusPeerID && left.peer_id === focusPeerID;
+    const rightFocused = focusPeerID && right.peer_id === focusPeerID;
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.peer_id.localeCompare(right.peer_id);
+  }) : [];
+  const visibleProofHistory = view ? [...view.proof_history].sort((left, right) => {
+    const leftFocused = focusPeerID && left.peer_id === focusPeerID;
+    const rightFocused = focusPeerID && right.peer_id === focusPeerID;
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? -1 : 1;
+    }
+    return left.request_id.localeCompare(right.request_id);
+  }) : [];
 
   return (
     <>
@@ -72,8 +90,8 @@ export function FederationInsightsPanel({ view, loading }: Props) {
               <span>Capabilities</span>
               <span>Trust channel</span>
             </div>
-            {view.peers.map((peer) => (
-              <div className="incident-package-table__row" key={peer.peer_id}>
+            {visiblePeers.map((peer) => (
+              <div className={`incident-package-table__row ${focusPeerID === peer.peer_id ? "is-selected" : ""}`} key={peer.peer_id}>
                 <span>
                   <strong>{peer.organization}</strong>
                   <small>{peer.peer_id} · {peer.region || peer.trust_domain || "unknown domain"}</small>
@@ -95,8 +113,8 @@ export function FederationInsightsPanel({ view, loading }: Props) {
         </div>
         {view && view.proof_history.length > 0 ? (
           <div className="incident-impact-list">
-            {view.proof_history.slice(0, 6).map((item) => (
-              <article className="incident-impact-card incident-defense-gap" key={item.request_id}>
+            {visibleProofHistory.slice(0, 6).map((item) => (
+              <article className={`incident-impact-card incident-defense-gap ${focusPeerID === item.peer_id ? "is-selected" : ""}`} key={item.request_id}>
                 <div className="incident-impact-card__header">
                   <strong>{item.peer_id}</strong>
                   <span className={`chip chip--${item.decision?.startsWith("accepted") ? "allow" : item.decision ? "deny" : "muted"}`}>

@@ -760,6 +760,9 @@ func (s server) buildStrictValidationRun(ctx context.Context, principal *auth.Pr
 		return validationExecutionRun{}, err
 	}
 	scenarioIDs := strictSelectedValidationScenarioIDs(request.ScenarioIDs, mode)
+	if len(scenarioIDs) > validationMaxScenarioSelection {
+		return validationExecutionRun{}, fmt.Errorf("%w: validation scenario selection exceeds bounded quota", audit.ErrInvalidFilter)
+	}
 	previousRuns, _, err := s.listStrictValidationRuns(ctx, filter)
 	if err != nil {
 		return validationExecutionRun{}, err
