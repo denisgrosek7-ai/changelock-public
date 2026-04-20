@@ -10,6 +10,7 @@ import {
   assignRecommendation,
   commentRecommendation,
   downloadHandoffBundle,
+  getCommandCenterSearch,
   getAnalyticsAnomalies,
   getAnalyticsDelta,
   getAnalyticsScorecards,
@@ -50,6 +51,7 @@ import {
   getRuntimeEnforcement,
   getRuntimeFindings,
   getRuntimeIntegrity,
+  getSecurityTimeline,
   getRuntimeWorkloads,
   getSummary,
   getSystemicWeaknesses,
@@ -80,6 +82,7 @@ import {
 import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsInsightsPanel } from "./components/AnalyticsInsightsPanel";
 import { AnalyticsTrendsPanel } from "./components/AnalyticsTrendsPanel";
+import { CommandCenterPanel } from "./components/CommandCenterPanel";
 import { DefensePosturePanel } from "./components/DefensePosturePanel";
 import { DriftStatsPanel } from "./components/DriftStatsPanel";
 import { EventDetails } from "./components/EventDetails";
@@ -120,6 +123,9 @@ import type {
   AnalyticsDeltaResponse,
   AnalyticsScorecardsResponse,
   AnalyticsSegmentsResponse,
+  CommandCenterPersona,
+  CommandCenterFocusTarget,
+  CommandCenterSearchResponse,
   DefensePostureState,
   DriftStatsResponse,
   EventFilters,
@@ -137,6 +143,7 @@ import type {
   RuntimeIntegrityFinding,
   RuntimeIntegrityState,
   RuntimeWorkloadView,
+  SecurityTimelineResponse,
   StoredEvent,
   Summary,
   SyncStatus,
@@ -193,6 +200,49 @@ function isOptionalFeatureMissing(error: unknown) {
   return error instanceof APIError && error.status === 404;
 }
 
+function defaultPersonaForRole(role?: string): CommandCenterPersona {
+  if (role === "operator") {
+    return "platform_operator";
+  }
+  if (role === "security_admin") {
+    return "security_engineer";
+  }
+  return "developer";
+}
+
+function isTabKey(value: string | null): value is TabKey {
+  return tabs.some((tab) => tab.key === value);
+}
+
+function readInitialNavigationState(): {
+  tab: TabKey;
+  query: string;
+  focusTarget: CommandCenterFocusTarget | null;
+} {
+  if (typeof window === "undefined") {
+    return { tab: "overview", query: "", focusTarget: null };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const tab = isTabKey(params.get("tab")) ? (params.get("tab") as TabKey) : "overview";
+  const kind = params.get("focus_kind");
+  const ref = params.get("focus_ref");
+  const focusTab = isTabKey(params.get("focus_tab")) ? (params.get("focus_tab") as TabKey) : tab;
+  return {
+    tab,
+    query: params.get("q") || "",
+    focusTarget:
+      kind && ref
+        ? {
+            tab: focusTab,
+            kind: kind as CommandCenterFocusTarget["kind"],
+            ref,
+            secondary_ref: params.get("focus_secondary_ref") || undefined,
+            resource_uri: params.get("resource_uri") || undefined,
+          }
+        : null,
+  };
+}
+
 function toDateTimeLocalValue(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -210,10 +260,21 @@ function toForensicsTimestamp(value: string) {
   return parsed.toISOString();
 }
 
+function firstNonEmptyValue(...values: Array<string | null | undefined>) {
+  return values.find((value) => typeof value === "string" && value.trim() !== "") || null;
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const initialNavigation = readInitialNavigationState();
+  const [activeTab, setActiveTab] = useState<TabKey>(initialNavigation.tab);
+  const [commandCenterPersona, setCommandCenterPersona] = useState<CommandCenterPersona>("developer");
+  const [commandCenterQuery, setCommandCenterQuery] = useState(initialNavigation.query);
+  const [commandCenterSearch, setCommandCenterSearch] = useState<CommandCenterSearchResponse | null>(null);
+  const [commandCenterSearchLoading, setCommandCenterSearchLoading] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<CommandCenterFocusTarget | null>(initialNavigation.focusTarget);
   const [filters, setFilters] = useState<EventFilters>(initialFilters);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [securityTimeline, setSecurityTimeline] = useState<SecurityTimelineResponse | null>(null);
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<StoredEvent | null>(null);
   const [health, setHealth] = useState<AuditHealth | null>(null);
@@ -263,6 +324,57 @@ export default function App() {
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [lastLoadedAt, setLastLoadedAt] = useState<string>("");
 
+  function handleOpenTab(tab: TabKey) {
+    setFocusTarget(null);
+    setActiveTab(tab);
+  }
+
+  function handleOpenFocusTarget(target: CommandCenterFocusTarget) {
+    setFocusTarget(target);
+    setActiveTab(target.tab);
+  }
+
+  function handleSubmitCommandCenterSearch() {
+    setCommandCenterSearchLoading(true);
+    setRefreshIndex((current) => current + 1);
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", activeTab);
+    if (commandCenterQuery.trim() !== "") {
+      params.set("q", commandCenterQuery.trim());
+    } else {
+      params.delete("q");
+    }
+    if (focusTarget) {
+      params.set("focus_tab", focusTarget.tab);
+      params.set("focus_kind", focusTarget.kind);
+      params.set("focus_ref", focusTarget.ref);
+      if (focusTarget.secondary_ref) {
+        params.set("focus_secondary_ref", focusTarget.secondary_ref);
+      } else {
+        params.delete("focus_secondary_ref");
+      }
+      if (focusTarget.resource_uri) {
+        params.set("resource_uri", focusTarget.resource_uri);
+      } else {
+        params.delete("resource_uri");
+      }
+    } else {
+      params.delete("focus_tab");
+      params.delete("focus_kind");
+      params.delete("focus_ref");
+      params.delete("focus_secondary_ref");
+      params.delete("resource_uri");
+    }
+    const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+    window.history.replaceState(null, "", next);
+  }, [activeTab, commandCenterQuery, focusTarget]);
+
   useEffect(() => {
     let ignore = false;
 
@@ -294,6 +406,9 @@ export default function App() {
         } else {
           setSyncStatus(null);
           setSummary(null);
+          setSecurityTimeline(null);
+          setCommandCenterSearch(null);
+          setCommandCenterSearchLoading(false);
           setEvents([]);
           setSelectedEvent(null);
           setTrends(null);
@@ -360,6 +475,9 @@ export default function App() {
           const promises: Array<Promise<void>> = [
             getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
           ];
+          if (activeTab !== "overview") {
+            setCommandCenterSearchLoading(false);
+          }
           if (isHumanRole(authResult.value.role)) {
             promises.push(
               getSyncStatus()
@@ -383,6 +501,38 @@ export default function App() {
           }
 
           if (activeTab === "overview") {
+            promises.push(
+              getSecurityTimeline({
+                component: filters.component,
+                decision: filters.decision,
+                environment: filters.environment,
+                tenant_id: scopedTenantID,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setSecurityTimeline).catch((timelineError) => {
+                if (isOptionalFeatureMissing(timelineError)) {
+                  setSecurityTimeline(null);
+                  return;
+                }
+                throw timelineError;
+              }),
+            );
+            if (commandCenterQuery.trim() !== "") {
+              promises.push(
+                getCommandCenterSearch({
+                  q: commandCenterQuery.trim(),
+                  environment: filters.environment,
+                  tenant_id: scopedTenantID,
+                  repo: filters.repo,
+                  limit: filters.limit,
+                })
+                  .then(setCommandCenterSearch)
+                  .finally(() => setCommandCenterSearchLoading(false)),
+              );
+            } else {
+              setCommandCenterSearch(null);
+              setCommandCenterSearchLoading(false);
+            }
             promises.push(
               getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
                 setEvents(response.events);
@@ -479,6 +629,8 @@ export default function App() {
             setPendingExceptions([]);
             setIncidents([]);
           } else if (activeTab === "events") {
+            setSecurityTimeline(null);
+            setCommandCenterSearchLoading(false);
             promises.push(
               (metricDrilldown
                 ? getMetricIncidents(metricDrilldown.metricKey, { ...filters, tenant_id: scopedTenantID }).then((response) => {
@@ -518,6 +670,8 @@ export default function App() {
             setRecommendations([]);
             setPendingExceptions([]);
           } else if (activeTab === "topology") {
+            setSecurityTimeline(null);
+            setCommandCenterSearchLoading(false);
             promises.push(
               getTopologyGraph({
                 window: "28d",
@@ -577,6 +731,8 @@ export default function App() {
             setIncidents([]);
             setPendingExceptions([]);
           } else if (activeTab === "forensics") {
+            setSecurityTimeline(null);
+            setCommandCenterSearchLoading(false);
             promises.push(
               getForensicsState({
                 tenant_id: scopedTenantID,
@@ -657,6 +813,7 @@ export default function App() {
             setIncidents([]);
             setPendingExceptions([]);
           } else if (activeTab === "federation") {
+            setSecurityTimeline(null);
             promises.push(
               getFederationGlobalView().then(setFederationView),
             );
@@ -688,6 +845,7 @@ export default function App() {
             setIncidents([]);
             setPendingExceptions([]);
           } else if (activeTab === "validation") {
+            setSecurityTimeline(null);
             promises.push(
               getValidationHarnessScenarios().then(setValidationScenarios),
             );
@@ -735,6 +893,7 @@ export default function App() {
             setIncidents([]);
             setPendingExceptions([]);
           } else if (activeTab === "analytics") {
+            setSecurityTimeline(null);
             promises.push(
               getTrends({
                 window: "28d",
@@ -806,6 +965,7 @@ export default function App() {
             setRecommendations([]);
             setPendingExceptions([]);
           } else if (activeTab === "runtime") {
+            setSecurityTimeline(null);
             promises.push(
               getRuntimeIntegrity({
                 tenant_id: scopedTenantID,
@@ -906,6 +1066,7 @@ export default function App() {
             setExecutiveReport(null);
             setPendingExceptions([]);
           } else if (activeTab === "exceptions") {
+            setSecurityTimeline(null);
             promises.push(getExceptionReport(baseFilters).then((report) => {
               setExceptionReport(report);
               setEvents(report.recent_used);
@@ -928,6 +1089,7 @@ export default function App() {
             setTopologyDelta(null);
             setRecommendations([]);
           } else if (activeTab === "inventory" || activeTab === "vulnerabilities" || activeTab === "signing" || activeTab === "scorecard" || activeTab === "guidance") {
+            setSecurityTimeline(null);
             setEvents([]);
             setSelectedEvent(null);
             setTrends(null);
@@ -952,6 +1114,7 @@ export default function App() {
             setIncidents([]);
             setPendingExceptions([]);
           } else {
+            setSecurityTimeline(null);
             promises.push(
               getEvents(activeTab, { ...filters, tenant_id: scopedTenantID }).then((response) => {
                 setEvents(response.events);
@@ -1019,6 +1182,10 @@ export default function App() {
   const enforcedTenantID = authStatus?.tenant_id || "";
   const canRequest = role === "operator" || role === "security_admin";
   const canApprove = role === "security_admin";
+
+  useEffect(() => {
+    setCommandCenterPersona(defaultPersonaForRole(role));
+  }, [role]);
 
   async function handleRequestException(input: ExceptionRequestInput) {
     setRequestSubmitting(true);
@@ -1350,7 +1517,7 @@ export default function App() {
           <button
             key={tab.key}
             className={`tab ${tab.key === activeTab ? "is-active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleOpenTab(tab.key)}
           >
             <span>{tab.label}</span>
           </button>
@@ -1394,6 +1561,23 @@ export default function App() {
 
       {activeTab === "overview" ? (
         <>
+          <CommandCenterPanel
+            persona={commandCenterPersona}
+            timeline={securityTimeline}
+            recommendations={recommendations}
+            executiveReport={executiveReport}
+            loading={loading}
+            searchQuery={commandCenterQuery}
+            searchResults={commandCenterSearch}
+            searchLoading={commandCenterSearchLoading}
+            focusTarget={focusTarget}
+            onPersonaChange={setCommandCenterPersona}
+            onOpenTab={handleOpenTab}
+            onOpenTarget={handleOpenFocusTarget}
+            onSearchQueryChange={setCommandCenterQuery}
+            onSearchSubmit={handleSubmitCommandCenterSearch}
+          />
+
           <OverviewDashboard
             health={health}
             summary={summary}
@@ -1413,7 +1597,7 @@ export default function App() {
                 incidents: [],
                 limitations: [],
               });
-              setActiveTab("events");
+              handleOpenTab("events");
             }}
           />
 
@@ -1471,7 +1655,11 @@ export default function App() {
 
       {activeTab === "federation" ? (
         <section className="analytics-grid">
-          <FederationInsightsPanel view={federationView} loading={loading} />
+          <FederationInsightsPanel
+            view={federationView}
+            loading={loading}
+            focusPeerID={focusTarget?.tab === "federation" && focusTarget.kind === "federation_peer" ? focusTarget.ref : null}
+          />
         </section>
       ) : null}
 
@@ -1483,6 +1671,7 @@ export default function App() {
             runs={validationRuns}
             whatIf={validationWhatIf}
             loading={loading}
+            focusRunID={focusTarget?.tab === "validation" && focusTarget.kind === "validation_run" ? focusTarget.ref : null}
             onRunHarness={handleRunValidationHarness}
             onRunWhatIf={handleRunValidationWhatIf}
           />
@@ -1534,8 +1723,24 @@ export default function App() {
             findings={runtimeIntegrityFindings}
             enforcement={runtimeEnforcement}
             loading={loading}
+            focusSubjectRef={
+              focusTarget?.tab === "runtime" && (focusTarget.kind === "runtime_subject" || focusTarget.kind === "runtime_finding" || focusTarget.kind === "hardening_execution")
+                ? firstNonEmptyValue(focusTarget.secondary_ref, focusTarget.kind === "runtime_subject" ? focusTarget.ref : null)
+                : null
+            }
+            focusFindingID={focusTarget?.tab === "runtime" && focusTarget.kind === "runtime_finding" ? focusTarget.ref : null}
           />
-          <DefensePosturePanel posture={hardeningPosture} actions={hardeningActions} loading={loading} />
+          <DefensePosturePanel
+            posture={hardeningPosture}
+            actions={hardeningActions}
+            loading={loading}
+            focusSubjectRef={
+              focusTarget?.tab === "runtime" && (focusTarget.kind === "runtime_subject" || focusTarget.kind === "hardening_execution")
+                ? firstNonEmptyValue(focusTarget.secondary_ref, focusTarget.kind === "runtime_subject" ? focusTarget.ref : null)
+                : null
+            }
+            focusExecutionID={focusTarget?.tab === "runtime" && focusTarget.kind === "hardening_execution" ? focusTarget.ref : null}
+          />
           <RuntimeDriftPanel
             findings={runtimeDriftFindings}
             status={runtimeDriftStatus}
@@ -1600,6 +1805,7 @@ export default function App() {
           onAssignRecommendation={handleAssignRecommendation}
           onCommentRecommendation={handleCommentRecommendation}
           onRequestRecommendationApproval={handleRequestRecommendationApproval}
+          focusedIncidentID={focusTarget?.tab === "events" && focusTarget.kind === "incident" ? focusTarget.ref : null}
         />
       ) : null}
 

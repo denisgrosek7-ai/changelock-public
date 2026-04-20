@@ -38,6 +38,11 @@ Current documentation entry points:
 - [GitHub Actions](integrations/github-actions.md)
 - [GitLab CI](integrations/gitlab-ci.md)
 - [Jenkins](integrations/jenkins.md)
+- [Enterprise Integration Baseline](integrations/enterprise-integration-baseline.md)
+- [Handoff Production Model](handoff-production-model.md)
+- [Federation Trust Model](federation-trust-model.md)
+- [Validation Production Model](validation-production-model.md)
+- [Self-Audit Model](self-audit-model.md)
 
 ## Operations runbooks
 
@@ -46,6 +51,7 @@ Current documentation entry points:
 - [Failure-Mode Suite](operations/failure-mode-suite.md)
 - [Cost And Performance Budget](operations/cost-performance-budget.md)
 - [Reliability Gates](operations/reliability-gates.md)
+- [HA And Upgrade-Safe Deployment](operations/ha-upgrade-safe-deployment.md)
 - [Upgrade](operations/upgrade.md)
 - [Backup And Restore](operations/backup-restore.md)
 - [Break-Glass](operations/break-glass.md)

@@ -218,6 +218,11 @@ Operator surface:
 - [`docs/integrations/github-actions.md`](docs/integrations/github-actions.md)
 - [`docs/integrations/gitlab-ci.md`](docs/integrations/gitlab-ci.md)
 - [`docs/integrations/jenkins.md`](docs/integrations/jenkins.md)
+- [`docs/integrations/enterprise-integration-baseline.md`](docs/integrations/enterprise-integration-baseline.md)
+- [`docs/handoff-production-model.md`](docs/handoff-production-model.md)
+- [`docs/federation-trust-model.md`](docs/federation-trust-model.md)
+- [`docs/validation-production-model.md`](docs/validation-production-model.md)
+- [`docs/self-audit-model.md`](docs/self-audit-model.md)
 
 ## Operations Guides
 
@@ -226,6 +231,7 @@ Operator surface:
 - [`docs/operations/failure-mode-suite.md`](docs/operations/failure-mode-suite.md)
 - [`docs/operations/cost-performance-budget.md`](docs/operations/cost-performance-budget.md)
 - [`docs/operations/reliability-gates.md`](docs/operations/reliability-gates.md)
+- [`docs/operations/ha-upgrade-safe-deployment.md`](docs/operations/ha-upgrade-safe-deployment.md)
 - [`docs/operations/upgrade.md`](docs/operations/upgrade.md)
 - [`docs/operations/rollback.md`](docs/operations/rollback.md)
 - [`docs/operations/backup-restore.md`](docs/operations/backup-restore.md)

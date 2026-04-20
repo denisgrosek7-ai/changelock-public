@@ -33,6 +33,9 @@ import type {
   AuditReport,
   AuthStatus,
   BreakGlassGuidance,
+  CommandCenterFocusTarget,
+  CommandCenterSearchResponse,
+  CommandCenterSearchResult,
   DriftStatsResponse,
   EventFilters,
   EventsResponse,
@@ -57,6 +60,8 @@ import type {
   SBOMComponentsResponse,
   SBOMDocument,
   SBOMImageResponse,
+  SecurityTimelineEntry,
+  SecurityTimelineResponse,
   PolicyException,
   PolicyFederationState,
   PublishedTrustView,
@@ -391,6 +396,111 @@ function parseSummary(value: unknown): Summary {
     counts_by_event_type: countsByEventType,
     top_deny_reasons: denyReasons.map(parseReasonCount),
     recent_runtime_drift_deny: readNumber(value.recent_runtime_drift_deny, "recent_runtime_drift_deny"),
+  };
+}
+
+function parseSecurityTimelineEntry(value: unknown): SecurityTimelineEntry {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid security timeline entry.");
+  }
+  const drilldownTab = readOptionalString(value.drilldown_tab, "entries[].drilldown_tab");
+  return {
+    schema_version: readString(value.schema_version, "entries[].schema_version"),
+    entry_id: readString(value.entry_id, "entries[].entry_id"),
+    timestamp: readString(value.timestamp, "entries[].timestamp"),
+    subject_ref: readString(value.subject_ref, "entries[].subject_ref"),
+    subject_type: readString(value.subject_type, "entries[].subject_type"),
+    subject_label: readString(value.subject_label, "entries[].subject_label"),
+    source_subsystem: readString(value.source_subsystem, "entries[].source_subsystem"),
+    event_type: readString(value.event_type, "entries[].event_type"),
+    severity: readString(value.severity, "entries[].severity"),
+    importance: readString(value.importance, "entries[].importance"),
+    outcome: readString(value.outcome, "entries[].outcome"),
+    title: readString(value.title, "entries[].title"),
+    summary: readString(value.summary, "entries[].summary"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "entries[].evidence_refs"),
+    incident_ref: readOptionalString(value.incident_ref, "entries[].incident_ref"),
+    recommendation_ref: readOptionalString(value.recommendation_ref, "entries[].recommendation_ref"),
+    next_action: readOptionalString(value.next_action, "entries[].next_action"),
+    drilldown_tab: drilldownTab as TabKey | undefined,
+    drilldown_label: readOptionalString(value.drilldown_label, "entries[].drilldown_label"),
+    drilldown_target_kind: readOptionalString(value.drilldown_target_kind, "entries[].drilldown_target_kind") as SecurityTimelineEntry["drilldown_target_kind"],
+    drilldown_target_ref: readOptionalString(value.drilldown_target_ref, "entries[].drilldown_target_ref"),
+    drilldown_target_secondary_ref: readOptionalString(value.drilldown_target_secondary_ref, "entries[].drilldown_target_secondary_ref"),
+    resource_uri: readOptionalString(value.resource_uri, "entries[].resource_uri"),
+    persona_hints: readOptionalStringArray(value.persona_hints, "entries[].persona_hints") as SecurityTimelineEntry["persona_hints"],
+    limitations: readOptionalStringArray(value.limitations, "entries[].limitations"),
+  };
+}
+
+function parseSecurityTimelineResponse(value: unknown): SecurityTimelineResponse {
+  if (!isRecord(value) || !Array.isArray(value.entries)) {
+    throw new Error("Audit API returned invalid security timeline response.");
+  }
+  const countsBySourceRaw = readOptionalRecord(value.counts_by_source, "counts_by_source") || {};
+  const countsBySeverityRaw = readOptionalRecord(value.counts_by_severity, "counts_by_severity") || {};
+  const countsBySource: Record<string, number> = {};
+  const countsBySeverity: Record<string, number> = {};
+  for (const [key, count] of Object.entries(countsBySourceRaw)) {
+    countsBySource[key] = readNumber(count, `counts_by_source.${key}`);
+  }
+  for (const [key, count] of Object.entries(countsBySeverityRaw)) {
+    countsBySeverity[key] = readNumber(count, `counts_by_severity.${key}`);
+  }
+  return {
+    schema_version: readString(value.schema_version, "schema_version"),
+    generated_at: readString(value.generated_at, "generated_at"),
+    counts_by_source: countsBySource,
+    counts_by_severity: countsBySeverity,
+    entries: value.entries.map(parseSecurityTimelineEntry),
+    limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseCommandCenterFocusTarget(value: unknown): CommandCenterFocusTarget {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid command-center focus target.");
+  }
+  return {
+    tab: readString(value.tab, "command_center.target.tab") as TabKey,
+    kind: readString(value.kind, "command_center.target.kind") as CommandCenterFocusTarget["kind"],
+    ref: readString(value.ref, "command_center.target.ref"),
+    secondary_ref: readOptionalString(value.secondary_ref, "command_center.target.secondary_ref"),
+    resource_uri: readOptionalString(value.resource_uri, "command_center.target.resource_uri"),
+  };
+}
+
+function parseCommandCenterSearchResult(value: unknown): CommandCenterSearchResult {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid command-center search result.");
+  }
+  return {
+    schema_version: readString(value.schema_version, "command_center.results[].schema_version"),
+    result_id: readString(value.result_id, "command_center.results[].result_id"),
+    result_type: readString(value.result_type, "command_center.results[].result_type"),
+    title: readString(value.title, "command_center.results[].title"),
+    summary: readString(value.summary, "command_center.results[].summary"),
+    subtitle: readOptionalString(value.subtitle, "command_center.results[].subtitle"),
+    source_subsystem: readString(value.source_subsystem, "command_center.results[].source_subsystem"),
+    severity: readString(value.severity, "command_center.results[].severity"),
+    target: parseCommandCenterFocusTarget(value.target),
+    incident_ref: readOptionalString(value.incident_ref, "command_center.results[].incident_ref"),
+    recommendation_ref: readOptionalString(value.recommendation_ref, "command_center.results[].recommendation_ref"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "command_center.results[].evidence_refs"),
+    persona_hints: readOptionalStringArray(value.persona_hints, "command_center.results[].persona_hints") as CommandCenterSearchResult["persona_hints"],
+    limitations: readOptionalStringArray(value.limitations, "command_center.results[].limitations"),
+  };
+}
+
+function parseCommandCenterSearchResponse(value: unknown): CommandCenterSearchResponse {
+  if (!isRecord(value) || !Array.isArray(value.results)) {
+    throw new Error("Audit API returned invalid command-center search response.");
+  }
+  return {
+    schema_version: readString(value.schema_version, "command_center.schema_version"),
+    query: readString(value.query, "command_center.query"),
+    results: value.results.map(parseCommandCenterSearchResult),
+    limitations: readOptionalStringArray(value.limitations, "command_center.limitations"),
   };
 }
 
@@ -3466,6 +3576,31 @@ export async function getSyncStatus() {
 
 export async function getSummary(filters: Pick<EventFilters, "environment" | "tenant_id">) {
   return parseSummary(await fetchJSON<unknown>("/v1/reports/summary", { params: filters }));
+}
+
+export async function getSecurityTimeline(filters: Pick<EventFilters, "component" | "decision" | "environment" | "tenant_id" | "repo" | "limit">) {
+  return parseSecurityTimelineResponse(await fetchJSON<unknown>("/v1/command-center/timeline", {
+    params: {
+      component: filters.component,
+      decision: filters.decision,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      repo: filters.repo,
+      limit: filters.limit,
+    },
+  }));
+}
+
+export async function getCommandCenterSearch(filters: Pick<EventFilters, "environment" | "tenant_id" | "repo" | "limit"> & { q: string }) {
+  return parseCommandCenterSearchResponse(await fetchJSON<unknown>("/v1/command-center/search", {
+    params: {
+      q: filters.q,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      repo: filters.repo,
+      limit: filters.limit,
+    },
+  }));
 }
 
 export async function getEvents(tab: TabKey, filters: EventFilters) {
