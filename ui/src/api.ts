@@ -1,5 +1,9 @@
 import type {
+  AdvisoryReadbackRef,
+  AdvisoryReadbackResponse,
+  AdvisoryShareGrant,
   DefenseGapAssessment,
+  DecisionEvidenceEnvelope,
   ExecutiveDefenseReport,
   IncidentExport,
   IncidentPackage,
@@ -1855,6 +1859,88 @@ function parsePackageSystemicPattern(value: unknown): IncidentPackage["packageIn
   };
 }
 
+function parseAdvisoryReadbackRef(value: unknown): AdvisoryReadbackRef {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid readback ref.");
+  }
+  return {
+    resourceType: readString(value.resource_type, "readback.resource_type") as AdvisoryReadbackRef["resourceType"],
+    resourceID: readString(value.resource_id, "readback.resource_id"),
+    resourceURI: readString(value.resource_uri, "readback.resource_uri"),
+    evidenceHash: readString(value.evidence_hash, "readback.evidence_hash"),
+  };
+}
+
+function parseDecisionEvidenceEnvelope(value: unknown): DecisionEvidenceEnvelope {
+  if (!isRecord(value) || !isRecord(value.verdict_context) || !isRecord(value.snapshot_refs)) {
+    throw new Error("Audit API returned invalid decision evidence envelope.");
+  }
+  const verdictContext = value.verdict_context as Record<string, unknown>;
+  const snapshotRefs = value.snapshot_refs as Record<string, unknown>;
+  return {
+    schemaVersion: readString(value.schema_version, "evidence_envelope.schema_version"),
+    resourceType: readString(value.resource_type, "evidence_envelope.resource_type"),
+    resourceID: readString(value.resource_id, "evidence_envelope.resource_id"),
+    evidenceHash: readString(value.evidence_hash, "evidence_envelope.evidence_hash"),
+    generatedAt: readString(value.generated_at, "evidence_envelope.generated_at"),
+    subjectType: readString(value.subject_type, "evidence_envelope.subject_type"),
+    subjectRef: readString(value.subject_ref, "evidence_envelope.subject_ref"),
+    verdictContext: {
+      summary: readOptionalString(verdictContext.summary, "evidence_envelope.verdict_context.summary"),
+      currentOutcome: readOptionalString(verdictContext.current_outcome, "evidence_envelope.verdict_context.current_outcome"),
+      proposedOutcome: readOptionalString(verdictContext.proposed_outcome, "evidence_envelope.verdict_context.proposed_outcome"),
+      delta: readOptionalString(verdictContext.delta, "evidence_envelope.verdict_context.delta"),
+      patternKey: readOptionalString(verdictContext.pattern_key, "evidence_envelope.verdict_context.pattern_key"),
+      gapTypes: readOptionalStringArray(verdictContext.gap_types, "evidence_envelope.verdict_context.gap_types") || [],
+    },
+    snapshotRefs: {
+      policySnapshotRef: readString(snapshotRefs.policy_snapshot_ref, "evidence_envelope.snapshot_refs.policy_snapshot_ref"),
+      evaluatorInputHash: readString(snapshotRefs.evaluator_input_hash, "evidence_envelope.snapshot_refs.evaluator_input_hash"),
+      evaluatorOutputHash: readString(snapshotRefs.evaluator_output_hash, "evidence_envelope.snapshot_refs.evaluator_output_hash"),
+      evidenceRefs: readOptionalStringArray(snapshotRefs.evidence_refs, "evidence_envelope.snapshot_refs.evidence_refs") || [],
+    },
+    redactionProfileVersion: readString(value.redaction_profile_version, "evidence_envelope.redaction_profile_version"),
+    projectionSchemaVersion: readString(value.projection_schema_version, "evidence_envelope.projection_schema_version"),
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "evidence_envelope.advisory_only"),
+    limitations: readOptionalStringArray(value.limitations, "evidence_envelope.limitations") || [],
+  };
+}
+
+function parseAdvisoryReadbackResponse<TPayload>(
+  value: unknown,
+  parsePayload: (payload: unknown) => TPayload,
+): AdvisoryReadbackResponse<TPayload> {
+  if (!isRecord(value) || !isRecord(value.evidence_envelope)) {
+    throw new Error("Audit API returned invalid readback response.");
+  }
+  return {
+    resourceType: readString(value.resource_type, "resource_type"),
+    resourceID: readString(value.resource_id, "resource_id"),
+    permanentURI: readString(value.permanent_uri, "permanent_uri"),
+    projectionAudience: (readOptionalString(value.projection_audience, "projection_audience") || "internal") as IncidentExport["audience"],
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "advisory_only"),
+    payloadSummary: readString(value.payload_summary, "payload_summary"),
+    evidenceEnvelope: parseDecisionEvidenceEnvelope(value.evidence_envelope),
+    payload: parsePayload(value.payload),
+    limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parseAdvisoryShareGrant(value: unknown): AdvisoryShareGrant {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid advisory share grant.");
+  }
+  return {
+    grantID: readString(value.grant_id, "grant_id"),
+    shareURL: readString(value.share_url, "share_url"),
+    resourceType: readString(value.resource_type, "resource_type"),
+    resourceID: readString(value.resource_id, "resource_id"),
+    audience: (readOptionalString(value.audience, "audience") || "internal") as AdvisoryShareGrant["audience"],
+    expiresAt: readString(value.expires_at, "expires_at"),
+    purpose: readOptionalString(value.purpose, "purpose"),
+  };
+}
+
 function parseReplayBlastRadius(value: unknown): PolicyReplayAssessment["blastRadius"] {
   if (!isRecord(value)) {
     throw new Error("Audit API returned invalid replay blast radius.");
@@ -1904,6 +1990,7 @@ function parseDefenseGapAssessment(value: unknown): DefenseGapAssessment {
       summary: readString((value.systemic_pattern as Record<string, unknown>).summary, "systemic_pattern.summary"),
       relatedIncidentRefs: readOptionalStringArray((value.systemic_pattern as Record<string, unknown>).related_incident_refs, "systemic_pattern.related_incident_refs") || [],
     },
+    readback: parseAdvisoryReadbackRef(value.readback),
     limitations: readOptionalStringArray(value.limitations, "limitations") || [],
   };
 }
@@ -1959,6 +2046,7 @@ function parsePolicyReplayAssessment(value: unknown): PolicyReplayAssessment {
       workloadCount: readNumber((value.blast_radius as Record<string, unknown>).workload_count, "blast_radius.workload_count"),
       topScopes: readOptionalStringArray((value.blast_radius as Record<string, unknown>).top_scopes, "blast_radius.top_scopes") || [],
     },
+    readback: parseAdvisoryReadbackRef(value.readback),
     limitations: readOptionalStringArray(value.limitations, "limitations") || [],
   };
 }
@@ -1978,6 +2066,7 @@ function parseSystemicWeakness(value: unknown): SystemicWeaknessResponse["weakne
     executiveRecommendation: readString(value.executive_recommendation, "weaknesses[].executive_recommendation"),
     relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "weaknesses[].related_incident_refs") || [],
     evidenceRefs: readOptionalStringArray(value.evidence_refs, "weaknesses[].evidence_refs") || [],
+    readback: parseAdvisoryReadbackRef(value.readback),
     limitations: readOptionalStringArray(value.limitations, "weaknesses[].limitations") || [],
   };
 }
@@ -2402,6 +2491,46 @@ export async function getSystemicWeaknesses(filters: EventFilters & { scorecard_
       tenant_id: filters.tenant_id,
       limit: filters.limit,
       scorecard_ref: filters.scorecard_ref,
+    },
+  }));
+}
+
+export async function getDefenseGapReadback(resourceID: string) {
+  return parseAdvisoryReadbackResponse(
+    await fetchJSON<unknown>(`/v1/readback/defense-gap/${encodeURIComponent(resourceID)}`),
+    parseDefenseGapAssessment,
+  );
+}
+
+export async function getPolicyReplayReadback(resourceID: string) {
+  return parseAdvisoryReadbackResponse(
+    await fetchJSON<unknown>(`/v1/readback/policy-replay/${encodeURIComponent(resourceID)}`),
+    parsePolicyReplayAssessment,
+  );
+}
+
+export async function getSystemicWeaknessReadback(resourceID: string) {
+  return parseAdvisoryReadbackResponse(
+    await fetchJSON<unknown>(`/v1/readback/systemic-weakness/${encodeURIComponent(resourceID)}`),
+    parseSystemicWeakness,
+  );
+}
+
+export async function createAdvisoryReadbackGrant(
+  resourceType: "defense-gap" | "policy-replay" | "systemic-weakness",
+  resourceID: string,
+  audience: IncidentExport["audience"],
+  purpose?: string,
+  expiresInMinutes = 60,
+) {
+  return parseAdvisoryShareGrant(await fetchJSON<unknown>("/v1/readback/grants", {
+    method: "POST",
+    body: {
+      resource_type: resourceType,
+      resource_id: resourceID,
+      audience,
+      expires_in_minutes: expiresInMinutes,
+      purpose,
     },
   }));
 }

@@ -23,15 +23,16 @@ import (
 )
 
 type server struct {
-	store          audit.Store
-	backend        string
-	allowedOrigins map[string]struct{}
-	requestTimeout time.Duration
-	authConfig     auth.Config
-	vulnOps        *vulnOpsRuntime
-	syncRuntime    *syncRuntime
-	signing        *signingRuntime
-	internalToken  string
+	store                    audit.Store
+	backend                  string
+	allowedOrigins           map[string]struct{}
+	requestTimeout           time.Duration
+	authConfig               auth.Config
+	vulnOps                  *vulnOpsRuntime
+	syncRuntime              *syncRuntime
+	signing                  *signingRuntime
+	internalToken            string
+	readbackGrantSecretValue string
 }
 
 type ingestResponse struct {
@@ -190,15 +191,16 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 		syncRuntime.signing = signingRuntime
 	}
 	srv := server{
-		store:          store,
-		backend:        backend,
-		allowedOrigins: allowedOriginsFromEnv(),
-		requestTimeout: envDurationOrDefault("CHANGELOCK_REPORTS_TIMEOUT", 5*time.Second),
-		authConfig:     authConfig,
-		vulnOps:        vulnOps,
-		syncRuntime:    syncRuntime,
-		signing:        signingRuntime,
-		internalToken:  strings.TrimSpace(os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")),
+		store:                    store,
+		backend:                  backend,
+		allowedOrigins:           allowedOriginsFromEnv(),
+		requestTimeout:           envDurationOrDefault("CHANGELOCK_REPORTS_TIMEOUT", 5*time.Second),
+		authConfig:               authConfig,
+		vulnOps:                  vulnOps,
+		syncRuntime:              syncRuntime,
+		signing:                  signingRuntime,
+		internalToken:            strings.TrimSpace(os.Getenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN")),
+		readbackGrantSecretValue: readbackGrantSecret(),
 	}
 
 	mux := http.NewServeMux()
@@ -234,10 +236,18 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/ai/policy-replay", srv.policyReplayAssessmentsHandler)
 	mux.HandleFunc("/v1/ai/systemic-weaknesses", srv.systemicWeaknessesHandler)
 	mux.HandleFunc("/v1/ai/executive-defense-report", srv.executiveDefenseReportHandler)
+	mux.HandleFunc("/v1/readback/grants", srv.readbackGrantHandler)
+	mux.HandleFunc("/v1/readback/defense-gap/", srv.readbackDefenseGapHandler)
+	mux.HandleFunc("/v1/readback/policy-replay/", srv.readbackPolicyReplayHandler)
+	mux.HandleFunc("/v1/readback/systemic-weakness/", srv.readbackSystemicWeaknessHandler)
 	mux.HandleFunc("/v1/scorecard/metrics/", srv.scorecardMetricIncidentsHandler)
 	mux.HandleFunc("/v1/incidents/package", srv.incidentPackageHandler)
 	mux.HandleFunc("/v1/incidents", srv.incidentsHandler)
 	mux.HandleFunc("/v1/incidents/", srv.incidentByIDHandler)
+	mux.HandleFunc("/r/defense-gap/", srv.readbackDefenseGapHandler)
+	mux.HandleFunc("/r/policy-replay/", srv.readbackPolicyReplayHandler)
+	mux.HandleFunc("/r/systemic-weakness/", srv.readbackSystemicWeaknessHandler)
+	mux.HandleFunc("/s/", srv.readbackShareHandler)
 	mux.HandleFunc("/v1/vex/status", srv.vexStatusHandler)
 	mux.HandleFunc("/v1/vex/ingest", srv.vexIngestHandler)
 	mux.HandleFunc("/v1/vex", srv.vexStatementsHandler)

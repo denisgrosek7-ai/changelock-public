@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 
 import {
+  apiBaseURL,
+  createAdvisoryReadbackGrant,
+  getDefenseGapReadback,
+  getPolicyReplayReadback,
+} from "../api";
+import {
   buildIncidents,
+  type AdvisoryReadbackRef,
   type DefenseGapAssessment,
   type ExecutiveDefenseReport,
   type IncidentExport,
@@ -148,6 +155,27 @@ function renderDefenseGapActions(title: string, values: string[]) {
   );
 }
 
+function absoluteReadbackURL(path: string) {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  const base = apiBaseURL();
+  if (/^https?:\/\//i.test(base)) {
+    return new URL(path, base).toString();
+  }
+  const normalizedBase = `${window.location.origin}${base.startsWith("/") ? base : `/${base}`}`.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
+async function writeClipboard(text: string) {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  throw new Error("Clipboard API is not available in this browser.");
+}
+
 export function IncidentWorkbench({
   incidents: serverIncidents = [],
   events,
@@ -212,6 +240,9 @@ export function IncidentWorkbench({
   const [metricDefenseGapError, setMetricDefenseGapError] = useState<string | null>(null);
   const [incidentReplayError, setIncidentReplayError] = useState<string | null>(null);
   const [metricReplayError, setMetricReplayError] = useState<string | null>(null);
+  const [readbackActionLoading, setReadbackActionLoading] = useState(false);
+  const [readbackActionError, setReadbackActionError] = useState<string | null>(null);
+  const [readbackActionStatus, setReadbackActionStatus] = useState<string | null>(null);
   const exportPayload = selectedIncident ? exportPayloads[`${selectedIncident.id}:${reportAudience}`] : undefined;
   const incidentDefenseGaps = selectedIncident ? incidentDefenseAssessments[selectedIncident.id] : undefined;
   const metricDefenseGaps = metricDrilldown ? metricDefenseAssessments[metricDrilldown.metricKey] : undefined;
@@ -504,6 +535,63 @@ export function IncidentWorkbench({
 
   function printHandoff() {
     window.print();
+  }
+
+  async function copyReadbackPermalink(ref: AdvisoryReadbackRef) {
+    setReadbackActionLoading(true);
+    setReadbackActionError(null);
+    setReadbackActionStatus(null);
+    try {
+      await writeClipboard(absoluteReadbackURL(ref.resourceURI));
+      setReadbackActionStatus("Permalink copied.");
+    } catch (copyError) {
+      setReadbackActionError(copyError instanceof Error ? copyError.message : "Unable to copy readback permalink.");
+    } finally {
+      setReadbackActionLoading(false);
+    }
+  }
+
+  async function openReadback(ref: AdvisoryReadbackRef) {
+    setReadbackActionLoading(true);
+    setReadbackActionError(null);
+    setReadbackActionStatus(null);
+    try {
+      let payload;
+      switch (ref.resourceType) {
+        case "defense-gap":
+          payload = await getDefenseGapReadback(ref.resourceID);
+          break;
+        case "policy-replay":
+          payload = await getPolicyReplayReadback(ref.resourceID);
+          break;
+        default:
+          throw new Error("Inline readback preview is not available for this advisory type in the workbench.");
+      }
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setReadbackActionStatus("Readback opened in a new tab.");
+    } catch (loadError) {
+      setReadbackActionError(loadError instanceof Error ? loadError.message : "Unable to open readback resource.");
+    } finally {
+      setReadbackActionLoading(false);
+    }
+  }
+
+  async function openAuditorSafeShare(ref: AdvisoryReadbackRef) {
+    setReadbackActionLoading(true);
+    setReadbackActionError(null);
+    setReadbackActionStatus(null);
+    try {
+      const grant = await createAdvisoryReadbackGrant(ref.resourceType, ref.resourceID, "auditor_safe", "incident-workbench");
+      window.open(absoluteReadbackURL(grant.shareURL), "_blank", "noopener,noreferrer");
+      setReadbackActionStatus("Auditor-safe readback opened.");
+    } catch (grantError) {
+      setReadbackActionError(grantError instanceof Error ? grantError.message : "Unable to create auditor-safe share link.");
+    } finally {
+      setReadbackActionLoading(false);
+    }
   }
 
   function togglePackageSelection(incidentID: string) {
@@ -1092,9 +1180,27 @@ export function IncidentWorkbench({
               </section>
             ) : null}
 
+            {readbackActionError ? <p className="details-copy details-copy--error">{readbackActionError}</p> : null}
+            {readbackActionStatus ? <p className="incident-inline-copy">{readbackActionStatus}</p> : null}
+
             {metricDrilldown ? (
               <section className="incident-case-section incident-case-section--wide">
-                <h3>Metric defense gaps</h3>
+                <div className="incident-report-section__header">
+                  <h3>Metric defense gaps</h3>
+                  {metricDefenseGaps?.readback ? (
+                    <div className="chip-row">
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => copyReadbackPermalink(metricDefenseGaps.readback)}>
+                        Copy permalink
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openReadback(metricDefenseGaps.readback)}>
+                        Open readback
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openAuditorSafeShare(metricDefenseGaps.readback)}>
+                        Auditor-safe share
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {metricDefenseGapLoading ? (
                   <div className="summary-list-empty">Loading defense-gap assessment for the selected metric…</div>
                 ) : metricDefenseGapError ? (
@@ -1134,7 +1240,22 @@ export function IncidentWorkbench({
 
             {metricDrilldown ? (
               <section className="incident-case-section incident-case-section--wide">
-                <h3>Policy replay and coverage gaps</h3>
+                <div className="incident-report-section__header">
+                  <h3>Policy replay and coverage gaps</h3>
+                  {metricReplay?.readback ? (
+                    <div className="chip-row">
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => copyReadbackPermalink(metricReplay.readback)}>
+                        Copy permalink
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openReadback(metricReplay.readback)}>
+                        Open readback
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openAuditorSafeShare(metricReplay.readback)}>
+                        Auditor-safe share
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {metricReplayLoading ? (
                   <div className="summary-list-empty">Loading replay assessment for the selected metric…</div>
                 ) : metricReplayError ? (
@@ -1256,7 +1377,22 @@ export function IncidentWorkbench({
                 )}
               </section>
               <section className="incident-case-section incident-case-section--wide">
-                <h3>Defense gaps</h3>
+                <div className="incident-report-section__header">
+                  <h3>Defense gaps</h3>
+                  {incidentDefenseGaps?.readback ? (
+                    <div className="chip-row">
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => copyReadbackPermalink(incidentDefenseGaps.readback)}>
+                        Copy permalink
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openReadback(incidentDefenseGaps.readback)}>
+                        Open readback
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openAuditorSafeShare(incidentDefenseGaps.readback)}>
+                        Auditor-safe share
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {defenseGapLoading ? (
                   <div className="summary-list-empty">Loading defense-gap assessment for this case…</div>
                 ) : defenseGapError ? (
@@ -1298,7 +1434,22 @@ export function IncidentWorkbench({
                 )}
               </section>
               <section className="incident-case-section incident-case-section--wide">
-                <h3>Policy replay and coverage gaps</h3>
+                <div className="incident-report-section__header">
+                  <h3>Policy replay and coverage gaps</h3>
+                  {incidentReplay?.readback ? (
+                    <div className="chip-row">
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => copyReadbackPermalink(incidentReplay.readback)}>
+                        Copy permalink
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openReadback(incidentReplay.readback)}>
+                        Open readback
+                      </button>
+                      <button type="button" className="button button-secondary" disabled={readbackActionLoading} onClick={() => openAuditorSafeShare(incidentReplay.readback)}>
+                        Auditor-safe share
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {incidentReplayLoading ? (
                   <div className="summary-list-empty">Loading replay assessment for this case…</div>
                 ) : incidentReplayError ? (
