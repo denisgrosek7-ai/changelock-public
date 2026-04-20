@@ -59,6 +59,9 @@ func TestAnalyticsDeltaAndAuxiliaryEndpoints(t *testing.T) {
 	if len(trends.MetricTrends) != len(analyticsMetricDefinitions()) {
 		t.Fatalf("expected metric trends in trends response, got %#v", trends)
 	}
+	if trends.SchemaVersion != audit.TrendsSchemaVersion {
+		t.Fatalf("expected schema-versioned trends response, got %#v", trends)
+	}
 	if trends.Comparison == nil || trends.Comparison.GroupBy != "service" {
 		t.Fatalf("expected comparison context on trends response, got %#v", trends.Comparison)
 	}
@@ -70,6 +73,9 @@ func TestAnalyticsDeltaAndAuxiliaryEndpoints(t *testing.T) {
 	}
 	if len(delta.Segments) == 0 {
 		t.Fatalf("expected segment deltas, got %#v", delta)
+	}
+	if delta.SchemaVersion != audit.AnalyticsDeltaSchemaVersion {
+		t.Fatalf("expected schema-versioned analytics delta, got %#v", delta)
 	}
 
 	var topologyDelta audit.AnalyticsDeltaResponse
@@ -86,17 +92,26 @@ func TestAnalyticsDeltaAndAuxiliaryEndpoints(t *testing.T) {
 	if len(anomalies.Items) == 0 {
 		t.Fatalf("expected explainable anomalies, got %#v", anomalies)
 	}
+	if anomalies.SchemaVersion != audit.AnalyticsAnomaliesSchemaVersion {
+		t.Fatalf("expected schema-versioned analytics anomalies, got %#v", anomalies)
+	}
 
 	var scorecards audit.AnalyticsScorecardsResponse
 	run("/v1/analytics/scorecards?window=28d&tenant_id=acme", &scorecards)
 	if len(scorecards.Cards) != len(analyticsMetricDefinitions()) {
 		t.Fatalf("expected scorecards for all analytics metrics, got %#v", scorecards)
 	}
+	if scorecards.SchemaVersion != audit.AnalyticsScorecardsSchemaVersion {
+		t.Fatalf("expected schema-versioned analytics scorecards, got %#v", scorecards)
+	}
 
 	var segments audit.AnalyticsSegmentsResponse
 	run("/v1/analytics/segments?window=28d&tenant_id=acme", &segments)
 	if len(segments.Items) != 3 {
 		t.Fatalf("expected team/service/environment segment catalog, got %#v", segments)
+	}
+	if segments.SchemaVersion != audit.AnalyticsSegmentsSchemaVersion {
+		t.Fatalf("expected schema-versioned analytics segments, got %#v", segments)
 	}
 }
 

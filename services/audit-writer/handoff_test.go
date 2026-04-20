@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,6 +35,9 @@ func TestHandoffSealDownloadAndVerify(t *testing.T) {
 	}
 	if sealResponse.PackageID == "" || sealResponse.Bundle.ManifestHash == "" {
 		t.Fatalf("expected package and manifest identity, got %#v", sealResponse)
+	}
+	if sealResponse.SchemaVersion != handoffSealResponseSchemaVersion {
+		t.Fatalf("expected schema-versioned handoff seal response, got %#v", sealResponse)
 	}
 	if sealResponse.Manifest.PackageType != handoffPackageTypeIncidentPackage {
 		t.Fatalf("expected incident package handoff, got %#v", sealResponse.Manifest)
@@ -93,6 +97,9 @@ func TestHandoffSealDownloadAndVerify(t *testing.T) {
 	if !verification.ManifestValid || !verification.ArtifactHashesValid || !verification.SignaturesValid || !verification.TimestampValid || !verification.TransparencyValid {
 		t.Fatalf("expected fully valid verification result, got %#v", verification)
 	}
+	if verification.SchemaVersion != handoffVerificationSchemaVersion {
+		t.Fatalf("expected schema-versioned handoff verification, got %#v", verification)
+	}
 
 	downloadReq := httptest.NewRequest(http.MethodGet, "/v1/handoff/"+sealResponse.PackageID+"/download", nil)
 	downloadReq.Header.Set("Authorization", "Bearer viewer-demo-token")
@@ -128,6 +135,9 @@ func TestHandoffSealDownloadAndVerify(t *testing.T) {
 	}
 	if bundleVerification.OverallStatus != handoffVerificationValid {
 		t.Fatalf("expected valid offline bundle verification, got %#v", bundleVerification)
+	}
+	if bundleVerification.SchemaVersion != handoffVerificationSchemaVersion {
+		t.Fatalf("expected schema-versioned bundle verification, got %#v", bundleVerification)
 	}
 }
 
@@ -208,5 +218,80 @@ func TestHandoffCosignKeepsManifestHashBoundToSamePackage(t *testing.T) {
 	}
 	if verification.OverallStatus != handoffVerificationValid || len(verification.SignerIdentities) != 2 {
 		t.Fatalf("expected valid cosigned handoff verification, got %#v", verification)
+	}
+}
+
+func TestHandoffVerifyReportsTimestampTransparencyAndArtifactFailures(t *testing.T) {
+	t.Setenv("CHANGELOCK_HANDOFF_SIGNING_SEED", "handoff-seed")
+
+	fixture := forensicsTestFixture(t)
+
+	sealReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/handoff/seal?tenant_id=acme&environment=prod",
+		bytes.NewBufferString(`{"audience":"internal"}`),
+	)
+	sealReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	sealReq.Header.Set("Content-Type", "application/json")
+	sealRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(sealRec, sealReq)
+	if sealRec.Code != http.StatusOK {
+		t.Fatalf("expected handoff seal 200, got %d: %s", sealRec.Code, sealRec.Body.String())
+	}
+	var sealed handoffSealResponse
+	if err := json.NewDecoder(sealRec.Body).Decode(&sealed); err != nil {
+		t.Fatalf("decode sealed handoff: %v", err)
+	}
+
+	downloadReq := httptest.NewRequest(http.MethodGet, "/v1/handoff/"+sealed.PackageID+"/download", nil)
+	downloadReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	downloadRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(downloadRec, downloadReq)
+	if downloadRec.Code != http.StatusOK {
+		t.Fatalf("expected handoff download 200, got %d: %s", downloadRec.Code, downloadRec.Body.String())
+	}
+
+	record, err := parseHandoffBundle(downloadRec.Body.Bytes())
+	if err != nil {
+		t.Fatalf("parse handoff bundle: %v", err)
+	}
+	record.Timestamp.SubjectHash = "sha256:tampered-timestamp"
+	record.Transparency.InclusionProof.RootHash = "sha256:tampered-transparency"
+	if len(record.Files) == 0 {
+		t.Fatalf("expected sealed bundle files, got %#v", record)
+	}
+	record.Files[0].Content += "\ncorrupted"
+
+	tamperedBundle, err := buildHandoffBundle(record)
+	if err != nil {
+		t.Fatalf("build tampered handoff bundle: %v", err)
+	}
+
+	verifyReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/handoff/verify",
+		bytes.NewBufferString(`{"bundle_base64":"`+base64.StdEncoding.EncodeToString(tamperedBundle)+`"}`),
+	)
+	verifyReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	verifyReq.Header.Set("Content-Type", "application/json")
+	verifyRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(verifyRec, verifyReq)
+	if verifyRec.Code != http.StatusOK {
+		t.Fatalf("expected degraded handoff verify 200, got %d: %s", verifyRec.Code, verifyRec.Body.String())
+	}
+
+	var verification verificationResult
+	if err := json.NewDecoder(verifyRec.Body).Decode(&verification); err != nil {
+		t.Fatalf("decode degraded handoff verification: %v", err)
+	}
+	if verification.OverallStatus != handoffVerificationInvalid {
+		t.Fatalf("expected invalid verification after timestamp/transparency/artifact corruption, got %#v", verification)
+	}
+	if verification.TimestampValid || verification.TransparencyValid || verification.ArtifactHashesValid {
+		t.Fatalf("expected invalid timestamp, transparency, and artifact hashes, got %#v", verification)
+	}
+	limitations := strings.ToLower(strings.Join(verification.Limitations, " "))
+	if !strings.Contains(limitations, "timestamp") || !strings.Contains(limitations, "transparency") || !strings.Contains(limitations, "artifact") {
+		t.Fatalf("expected explicit degraded verification limitations, got %#v", verification.Limitations)
 	}
 }

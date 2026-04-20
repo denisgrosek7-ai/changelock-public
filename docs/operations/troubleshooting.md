@@ -1,5 +1,11 @@
 # Troubleshooting
 
+Related docs:
+
+- [Support Bundle Schema](support-bundle-schema.md)
+- [Rollback Guide](rollback.md)
+- [Upgrade Guide](upgrade.md)
+
 ## Webhook timeout or failed admission
 
 Check:

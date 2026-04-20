@@ -1,5 +1,13 @@
 # Architecture
 
+Current documentation entry points:
+
+- [Documentation Truth Policy](documentation-truth-policy.md)
+- [API Versioning Policy](api-versioning-policy.md)
+- [Phase Index](architecture/phase-index.md)
+- [Canonical Architecture Spec](architecture/canonical-architecture-spec.md)
+- [Policy Language Reference](policy-language-reference.md)
+
 ## Trust boundaries
 1. Developer workstation
 2. Source control / CI
@@ -24,3 +32,21 @@
 - Full EDR
 - Secrets manager
 - Cloud posture scanner
+
+## Integration guides
+
+- [GitHub Actions](integrations/github-actions.md)
+- [GitLab CI](integrations/gitlab-ci.md)
+- [Jenkins](integrations/jenkins.md)
+
+## Operations runbooks
+
+- [Benchmark Baseline](operations/benchmark-baseline.md)
+- [SLO Guidance](operations/sla-slo.md)
+- [Failure-Mode Suite](operations/failure-mode-suite.md)
+- [Cost And Performance Budget](operations/cost-performance-budget.md)
+- [Reliability Gates](operations/reliability-gates.md)
+- [Upgrade](operations/upgrade.md)
+- [Backup And Restore](operations/backup-restore.md)
+- [Break-Glass](operations/break-glass.md)
+- [Support And Debug Bundle](operations/support-debug-bundle.md)

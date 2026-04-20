@@ -961,6 +961,7 @@ func (s server) trendsHandler(w http.ResponseWriter, r *http.Request) {
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
 	}
+	response.SchemaVersion = audit.TrendsSchemaVersion
 
 	httpjson.Write(w, http.StatusOK, response)
 }
@@ -1001,6 +1002,7 @@ func (s server) topViolatorsHandler(w http.ResponseWriter, r *http.Request) {
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
 	}
+	response.SchemaVersion = audit.TopViolatorsSchemaVersion
 
 	httpjson.Write(w, http.StatusOK, response)
 }
@@ -1041,6 +1043,7 @@ func (s server) driftStatsHandler(w http.ResponseWriter, r *http.Request) {
 		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
 	}
+	response.SchemaVersion = audit.DriftStatsSchemaVersion
 
 	httpjson.Write(w, http.StatusOK, response)
 }

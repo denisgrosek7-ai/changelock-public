@@ -107,9 +107,11 @@ type Bundle struct {
 	Runtime           RuntimePolicy
 	Tenant            Tenant
 	RepositoryConfigs map[string]RepositoryPolicy
+	RepositoryEntries []RepositoryPolicy
 	CriticalPaths     []CriticalPathEntry
 	BundleID          string
 	BundleHash        string
+	LintFindings      []LintFinding
 }
 
 func DefaultPoliciesDir() string {
@@ -149,6 +151,7 @@ func LoadBundle(policiesDir, tenant string) (*Bundle, error) {
 		return nil, fmt.Errorf("load repository policy: %w", err)
 	}
 	for _, repository := range repositories.Repositories {
+		bundle.RepositoryEntries = append(bundle.RepositoryEntries, repository)
 		bundle.RepositoryConfigs[repository.Name] = repository
 	}
 
@@ -158,6 +161,10 @@ func LoadBundle(policiesDir, tenant string) (*Bundle, error) {
 	}
 	bundle.BundleID = bundleID(bundle.Tenant.Metadata.Name, tenant)
 	bundle.BundleHash = identity.CanonicalFileSetHash(rawFiles)
+	bundle.LintFindings = lintBundle(bundle)
+	if err := lintError(bundle.LintFindings); err != nil {
+		return nil, err
+	}
 
 	return bundle, nil
 }

@@ -419,6 +419,7 @@ func (s server) buildAnalyticsTrendsResponse(ctx context.Context, filter audit.A
 	if err != nil {
 		return audit.TrendsResponse{}, err
 	}
+	base.SchemaVersion = audit.TrendsSchemaVersion
 	metricTrends := make([]audit.AnalyticsMetricTrend, 0, len(analyticsMetricDefinitions()))
 	for _, definition := range analyticsMetricDefinitions() {
 		result, segments, metricLimitations, err := s.computeAnalyticsMetricResult(ctx, filter, facts, comparison, definition.Key)
@@ -460,10 +461,11 @@ func (s server) buildAnalyticsDeltaResponse(ctx context.Context, filter audit.An
 	}
 
 	return audit.AnalyticsDeltaResponse{
-		Definition: definition,
-		Comparison: comparison,
-		Segments:   segments,
-		Summary:    result.Summary,
+		SchemaVersion: audit.AnalyticsDeltaSchemaVersion,
+		Definition:    definition,
+		Comparison:    comparison,
+		Segments:      segments,
+		Summary:       result.Summary,
 		Limitations: append(append(append(limitations, result.Limitations...), metricLimitations...),
 			"Delta comparisons always declare the comparison window, grouping dimension, and canonical filter scope used for the metric.",
 		),
@@ -478,8 +480,9 @@ func (s server) buildAnalyticsAnomaliesResponse(ctx context.Context, filter audi
 
 	items := buildAnalyticsAnomalies(facts, comparison, filter.GroupBy)
 	return audit.AnalyticsAnomaliesResponse{
-		Comparison: comparison,
-		Items:      items,
+		SchemaVersion: audit.AnalyticsAnomaliesSchemaVersion,
+		Comparison:    comparison,
+		Items:         items,
 		Limitations: append(limitations,
 			"Anomalies are explainable deltas over rolling baselines and do not act as a black-box scoring engine.",
 		),
@@ -511,8 +514,9 @@ func (s server) buildAnalyticsScorecardsResponse(ctx context.Context, filter aud
 	}
 
 	return audit.AnalyticsScorecardsResponse{
-		Comparison: comparison,
-		Cards:      cards,
+		SchemaVersion: audit.AnalyticsScorecardsSchemaVersion,
+		Comparison:    comparison,
+		Cards:         cards,
 		Limitations: append(limitations,
 			"Scorecards remain decomposable and evidence-backed; they are not a new executive truth source.",
 		),
@@ -712,8 +716,9 @@ func (s server) buildAnalyticsSegmentsResponse(ctx context.Context, filter audit
 		})
 	}
 	return audit.AnalyticsSegmentsResponse{
-		Comparison: comparison,
-		Items:      items,
+		SchemaVersion: audit.AnalyticsSegmentsSchemaVersion,
+		Comparison:    comparison,
+		Items:         items,
 		Limitations: append(limitations,
 			"Segment catalog is derived from the currently filtered canonical event scope and may omit segments outside the selected window.",
 		),
@@ -750,7 +755,7 @@ func (s server) loadAnalyticsFacts(ctx context.Context, filter audit.AnalyticsFi
 }
 
 func buildAnalyticsComparisonContext(filter audit.AnalyticsFilter, now time.Time) audit.AnalyticsComparisonContext {
-	now = now.UTC()
+	now = now.UTC().Truncate(time.Minute).Add(time.Minute - time.Nanosecond)
 	currentEnd := now
 	currentStart := now.Add(-time.Duration(filter.WindowDays) * 24 * time.Hour)
 	baselineEnd := currentStart

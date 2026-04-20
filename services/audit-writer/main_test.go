@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -18,11 +19,38 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type pingFailureStore struct {
+	audit.Store
+	err error
+}
+
+func (s pingFailureStore) Ping(_ context.Context) error {
+	return s.err
+}
+
 func TestMain(m *testing.M) {
 	_ = os.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeDisabled)
 	_ = os.Unsetenv("CHANGELOCK_AUTH_TOKENS_JSON")
 	_ = os.Setenv("CHANGELOCK_INTERNAL_SERVICE_TOKEN", "service-internal-demo-token")
 	os.Exit(m.Run())
+}
+
+func TestReadyHandlerReturnsServiceUnavailableWhenStorePingFails(t *testing.T) {
+	handler := newHandlerWithAuth(pingFailureStore{
+		Store: audit.NewMemoryStore(),
+		err:   errors.New("audit store degraded"),
+	}, "memory", mustStaticAuthConfig(t))
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from /ready, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "audit store degraded") {
+		t.Fatalf("expected readiness error details, got %s", rec.Body.String())
+	}
 }
 
 func machineAuthHeader(req *http.Request) {

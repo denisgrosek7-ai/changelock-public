@@ -42,6 +42,7 @@ type validationObservedOutcome struct {
 }
 
 type validationScenario struct {
+	SchemaVersion     string                    `json:"schema_version"`
 	ScenarioID        string                    `json:"scenario_id"`
 	Name              string                    `json:"name"`
 	Category          string                    `json:"category"`
@@ -62,6 +63,7 @@ type validationScenario struct {
 }
 
 type validationExecution struct {
+	SchemaVersion     string    `json:"schema_version"`
 	RunID             string    `json:"run_id"`
 	ExecutionID       string    `json:"execution_id"`
 	ScenarioID        string    `json:"scenario_id"`
@@ -83,6 +85,7 @@ type validationExecution struct {
 }
 
 type validationVerdict struct {
+	SchemaVersion   string                    `json:"schema_version"`
 	RunID           string                    `json:"run_id"`
 	VerdictID       string                    `json:"verdict_id"`
 	ExecutionID     string                    `json:"execution_id"`
@@ -115,6 +118,7 @@ type validationEnvironmentSummary struct {
 }
 
 type validationCertificate struct {
+	SchemaVersion      string                       `json:"schema_version"`
 	RunID              string                       `json:"run_id"`
 	CertificateID      string                       `json:"certificate_id"`
 	Scope              string                       `json:"scope"`
@@ -131,6 +135,7 @@ type validationCertificate struct {
 }
 
 type validationExecutionRun struct {
+	SchemaVersion      string                `json:"schema_version"`
 	RunID              string                `json:"run_id"`
 	Mode               string                `json:"mode"`
 	Scope              string                `json:"scope"`
@@ -151,13 +156,15 @@ type validationExecuteRequest struct {
 }
 
 type validationScenarioListResponse struct {
-	Scenarios   []validationScenario `json:"scenarios"`
-	Limitations []string             `json:"limitations,omitempty"`
+	SchemaVersion string               `json:"schema_version"`
+	Scenarios     []validationScenario `json:"scenarios"`
+	Limitations   []string             `json:"limitations,omitempty"`
 }
 
 type validationExecutionListResponse struct {
-	Executions  []validationExecution `json:"executions"`
-	Limitations []string              `json:"limitations,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Executions    []validationExecution `json:"executions"`
+	Limitations   []string              `json:"limitations,omitempty"`
 }
 
 type validationExecutionEvaluation struct {
@@ -186,7 +193,8 @@ func (s server) validationScenariosHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	httpjson.Write(w, http.StatusOK, validationScenarioListResponse{
-		Scenarios: validationScenarioRegistry(),
+		SchemaVersion: validationScenarioListSchemaVersion,
+		Scenarios:     validationScenarioRegistry(),
 		Limitations: []string{
 			"Validation scenarios are declarative, bounded harness definitions; they validate ChangeLock controls in isolated shadow, twin, or compatibility-lab semantics rather than injecting destructive payloads into production truth.",
 		},
@@ -257,7 +265,11 @@ func (s server) validationExecutionsHandler(w http.ResponseWriter, r *http.Reque
 		writeValidationHarnessError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, validationExecutionListResponse{Executions: executions, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, validationExecutionListResponse{
+		SchemaVersion: validationExecutionListSchemaVersion,
+		Executions:    executions,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) validationExecutionByIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -456,7 +468,7 @@ func (s server) strictScenarioModeHandler(w http.ResponseWriter, r *http.Request
 }
 
 func validationScenarioRegistry() []validationScenario {
-	return []validationScenario{
+	scenarios := []validationScenario{
 		{
 			ScenarioID:      validationScenarioSafeRelease,
 			Name:            "Safe release regression",
@@ -635,6 +647,10 @@ func validationScenarioRegistry() []validationScenario {
 			BlastRadiusLimit:  "simulation_scope",
 		},
 	}
+	for i := range scenarios {
+		scenarios[i].SchemaVersion = validationScenarioSchemaVersion
+	}
+	return scenarios
 }
 
 func validationScenarioIDsForCategories(categories ...string) []string {
@@ -774,6 +790,7 @@ func (s server) buildStrictValidationRun(ctx context.Context, principal *auth.Pr
 	verdicts = applyValidationFlakiness(verdicts, previousRuns)
 	certificate := strictValidationCertificate(runID, filter, executions, verdicts, mode)
 	run := validationExecutionRun{
+		SchemaVersion:      validationRunSchemaVersion,
 		RunID:              runID,
 		Mode:               mode,
 		Scope:              validationScopeSummary(filter),
@@ -1081,6 +1098,7 @@ func strictValidationExecutionFromEvaluation(runID string, filter validationHarn
 		"Keep only audit-backed verdict, evidence refs, and bounded compatibility notes.",
 	}
 	return validationExecution{
+		SchemaVersion:     validationExecutionSchemaVersion,
 		RunID:             runID,
 		ExecutionID:       shortDigest("VALEXEC-", runID+"|"+evaluation.Scenario.ScenarioID),
 		ScenarioID:        evaluation.Scenario.ScenarioID,
@@ -1106,6 +1124,7 @@ func strictValidationExecutionFromEvaluation(runID string, filter validationHarn
 
 func strictValidationVerdictFromEvaluation(runID, executionID string, evaluation validationExecutionEvaluation) validationVerdict {
 	return validationVerdict{
+		SchemaVersion:   validationVerdictSchemaVersion,
 		RunID:           runID,
 		VerdictID:       shortDigest("VALVERDICT-", runID+"|"+evaluation.Scenario.ScenarioID),
 		ExecutionID:     executionID,
@@ -1134,11 +1153,12 @@ func strictValidationCertificate(runID string, filter validationHarnessFilter, e
 		namespace = executions[0].Namespace
 	}
 	return validationCertificate{
+		SchemaVersion:   validationCertificateSchemaVersion,
 		RunID:           runID,
 		CertificateID:   shortDigest("VALCERT-", runID+"|"+scope),
 		Scope:           scope,
 		ScenarioSet:     validationScenarioIDsFromVerdicts(verdicts),
-		IssuedAt:        time.Now().UTC(),
+		IssuedAt:        validationCertificateIssuedAt(executions),
 		OverallStatus:   strictValidationOverallStatus(passed, partial, failed, flaky, unknown),
 		ScenarioResults: append([]validationVerdict(nil), verdicts...),
 		TimingSummary: validationTimingSummary{
@@ -1165,6 +1185,19 @@ func strictValidationCertificate(runID string, filter validationHarnessFilter, e
 			"Validation certificate is scope-bound and simulation-aware; it certifies controlled validation coverage, not absolute system security.",
 		},
 	}
+}
+
+func validationCertificateIssuedAt(executions []validationExecution) time.Time {
+	var issuedAt time.Time
+	for _, execution := range executions {
+		if execution.CompletedAt.After(issuedAt) {
+			issuedAt = execution.CompletedAt.UTC()
+		}
+	}
+	if issuedAt.IsZero() {
+		return time.Unix(0, 0).UTC()
+	}
+	return issuedAt
 }
 
 func strictValidationSummary(verdicts []validationVerdict) (int, int, int, int, int, int, int, int) {
@@ -1400,6 +1433,7 @@ func (s server) listStrictValidationRuns(ctx context.Context, filter validationH
 		default:
 			continue
 		}
+		stampValidationRunSchemaVersions(&run)
 		if filter.Service != "" && !strings.EqualFold(run.Certificate.EnvironmentSummary.Service, filter.Service) && !strings.EqualFold(run.Scope, filter.Service) {
 			continue
 		}
@@ -1430,6 +1464,7 @@ func strictValidationRunFromLegacy(run validationHarnessRun) validationExecution
 			Limitations:        append([]string(nil), result.Limitations...),
 		}
 		executions = append(executions, validationExecution{
+			SchemaVersion:  validationExecutionSchemaVersion,
 			RunID:          run.RunID,
 			ExecutionID:    executionID,
 			ScenarioID:     result.ScenarioID,
@@ -1444,6 +1479,7 @@ func strictValidationRunFromLegacy(run validationHarnessRun) validationExecution
 			EvidenceRefs:   append([]string(nil), result.EvidenceRefs...),
 		})
 		verdicts = append(verdicts, validationVerdict{
+			SchemaVersion:   validationVerdictSchemaVersion,
 			RunID:           run.RunID,
 			VerdictID:       shortDigest("VALVERDICT-", run.RunID+"|"+result.ScenarioID),
 			ExecutionID:     executionID,
@@ -1455,6 +1491,7 @@ func strictValidationRunFromLegacy(run validationHarnessRun) validationExecution
 		})
 	}
 	certificate := validationCertificate{
+		SchemaVersion:   validationCertificateSchemaVersion,
 		RunID:           run.RunID,
 		CertificateID:   run.CertificateID,
 		Scope:           run.ScopeSummary,
@@ -1479,13 +1516,31 @@ func strictValidationRunFromLegacy(run validationHarnessRun) validationExecution
 		Limitations:  append([]string(nil), run.Limitations...),
 	}
 	return validationExecutionRun{
-		RunID:       run.RunID,
-		Mode:        run.Mode,
-		Scope:       run.ScopeSummary,
-		Executions:  executions,
-		Verdicts:    verdicts,
-		Certificate: certificate,
-		Limitations: append([]string(nil), run.Limitations...),
+		SchemaVersion: validationRunSchemaVersion,
+		RunID:         run.RunID,
+		Mode:          run.Mode,
+		Scope:         run.ScopeSummary,
+		Executions:    executions,
+		Verdicts:      verdicts,
+		Certificate:   certificate,
+		Limitations:   append([]string(nil), run.Limitations...),
+	}
+}
+
+func stampValidationRunSchemaVersions(run *validationExecutionRun) {
+	if run == nil {
+		return
+	}
+	run.SchemaVersion = validationRunSchemaVersion
+	for i := range run.Executions {
+		run.Executions[i].SchemaVersion = validationExecutionSchemaVersion
+	}
+	for i := range run.Verdicts {
+		run.Verdicts[i].SchemaVersion = validationVerdictSchemaVersion
+	}
+	run.Certificate.SchemaVersion = validationCertificateSchemaVersion
+	for i := range run.Certificate.ScenarioResults {
+		run.Certificate.ScenarioResults[i].SchemaVersion = validationVerdictSchemaVersion
 	}
 }
 
