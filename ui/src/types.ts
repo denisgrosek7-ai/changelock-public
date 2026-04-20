@@ -3,7 +3,7 @@ export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | 
 export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
 export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
-export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "forensics" | "federation" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
+export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "forensics" | "federation" | "validation" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
 
 export interface AuditHealth {
   status: string;
@@ -288,6 +288,77 @@ export interface RuntimeFindingsResponse {
 
 export interface RuntimeEnforcementListResponse {
   items: RuntimeEnforcementDecision[];
+  limitations?: string[];
+}
+
+export interface ValidationHarnessScenario {
+  scenario_id: string;
+  category: string;
+  title: string;
+  description: string;
+  validation_mode: string;
+  expected_outcome: string;
+  controls: string[];
+  requires_approval: boolean;
+  limitations?: string[];
+}
+
+export interface ValidationHarnessScenarioResult {
+  scenario_id: string;
+  status: string;
+  response_time_ms: number;
+  summary: string;
+  triggered_controls?: string[];
+  evidence_refs?: string[];
+  forensic_context_uri?: string;
+  limitations?: string[];
+}
+
+export interface ValidationHarnessRun {
+  run_id: string;
+  mode: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  scope_summary: string;
+  started_at: string;
+  completed_at: string;
+  overall_status: string;
+  certificate_id: string;
+  certificate_status: string;
+  passed_scenarios: number;
+  partial_scenarios: number;
+  failed_scenarios: number;
+  average_response_ms: number;
+  results: ValidationHarnessScenarioResult[];
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface ValidationHarnessScore {
+  confidence_level: string;
+  overall_status: string;
+  passed_scenarios: number;
+  partial_scenarios: number;
+  failed_scenarios: number;
+  average_response_ms: number;
+  latest_run_id?: string;
+  critical_gaps?: string[];
+  results: ValidationHarnessScenarioResult[];
+  limitations?: string[];
+}
+
+export interface ValidationHarnessWhatIfResponse {
+  mode: string;
+  change_set: string[];
+  overall_status: string;
+  projected_pass: number;
+  projected_partial: number;
+  projected_fail: number;
+  average_response_ms: number;
+  results: ValidationHarnessScenarioResult[];
+  compatibility_risks?: string[];
   limitations?: string[];
 }
 

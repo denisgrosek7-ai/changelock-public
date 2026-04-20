@@ -38,6 +38,7 @@ const (
 	EventTypeFederationProofVerified          = "federation_proof_verified"
 	EventTypeFederationPolicySynced           = "federation_policy_synced"
 	EventTypeFederationAnchorPublished        = "federation_anchor_published"
+	EventTypeValidationHarnessRunRecorded     = "validation_harness_run_recorded"
 
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
@@ -152,6 +153,7 @@ type Event struct {
 	Handoff                           json.RawMessage  `json:"handoff,omitempty"`
 	Federation                        json.RawMessage  `json:"federation,omitempty"`
 	RuntimeIntegrity                  json.RawMessage  `json:"runtime_integrity,omitempty"`
+	ValidationHarness                 json.RawMessage  `json:"validation_harness,omitempty"`
 }
 
 type VerifierSummary struct {

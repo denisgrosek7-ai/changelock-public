@@ -70,6 +70,7 @@ type handoffSealRequest struct {
 	IncidentIDs            []string `json:"incident_ids,omitempty"`
 	IncludeForensics       bool     `json:"include_forensics,omitempty"`
 	IncludeRuntime         bool     `json:"include_runtime,omitempty"`
+	IncludeValidation      bool     `json:"include_validation,omitempty"`
 	IncludeRecommendations bool     `json:"include_recommendations,omitempty"`
 	CoSignMode             string   `json:"co_sign_mode,omitempty"`
 }
@@ -88,6 +89,15 @@ type handoffRuntimeContext struct {
 	Workloads    []runtimeWorkloadView     `json:"workloads"`
 	Findings     []runtimeIntegrityFinding `json:"findings"`
 	Limitations  []string                  `json:"limitations,omitempty"`
+}
+
+type handoffValidationContext struct {
+	AdvisoryOnly bool                           `json:"advisory_only"`
+	Score        validationHarnessScoreResponse `json:"score"`
+	Runs         []validationHarnessRun         `json:"runs"`
+	Scenarios    []validationHarnessScenario    `json:"scenarios"`
+	Certificate  *validationCertificate         `json:"certificate,omitempty"`
+	Limitations  []string                       `json:"limitations,omitempty"`
 }
 
 type sealedManifest struct {
@@ -609,6 +619,46 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 			}, append(workloadLimitations, findingLimitations...)...)),
 		}
 	}
+	var validationContext *handoffValidationContext
+	if request.IncludeValidation {
+		validationFilter := validationHarnessFilter{
+			ClusterID:   filter.event.ClusterID,
+			TenantID:    filter.event.TenantID,
+			Environment: filter.event.Environment,
+			Repo:        filter.event.Repo,
+			Limit:       5,
+			event: audit.EventFilter{
+				ClusterID:   filter.event.ClusterID,
+				TenantID:    filter.event.TenantID,
+				Environment: filter.event.Environment,
+				Repo:        filter.event.Repo,
+				Limit:       500,
+			},
+		}
+		score, err := s.buildValidationHarnessScore(ctx, validationFilter)
+		if err != nil {
+			return handoffStoredRecord{}, err
+		}
+		runs, _, err := s.listValidationHarnessRuns(ctx, validationFilter)
+		if err != nil {
+			return handoffStoredRecord{}, err
+		}
+		var latestCertificate *validationCertificate
+		if strictRuns, _, err := s.listStrictValidationRuns(ctx, validationFilter); err == nil && len(strictRuns) > 0 {
+			certificate := strictRuns[0].Certificate
+			latestCertificate = &certificate
+		}
+		validationContext = &handoffValidationContext{
+			AdvisoryOnly: true,
+			Score:        score,
+			Runs:         runs,
+			Scenarios:    validationScenarioCatalog(),
+			Certificate:  latestCertificate,
+			Limitations: []string{
+				"Validation harness context is exported as controlled dry-run evidence and advisory confidence output; it does not become canonical incident or runtime truth inside the sealed bundle.",
+			},
+		}
+	}
 
 	var recommendations []recommendation
 	if request.IncludeRecommendations {
@@ -628,7 +678,7 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 		})
 	}
 
-	artifactFiles, err := buildHandoffContentFiles(packagePayload, readbackRefs, forensicState, runtimeContext, recommendations)
+	artifactFiles, err := buildHandoffContentFiles(packagePayload, readbackRefs, forensicState, runtimeContext, validationContext, recommendations)
 	if err != nil {
 		return handoffStoredRecord{}, err
 	}
@@ -797,7 +847,7 @@ func ensurePrincipalHandoffScope(principal auth.Principal, record handoffStoredR
 	return nil
 }
 
-func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRefs []sealedManifestReadbackRef, forensicState *pointInTimeState, runtimeContext *handoffRuntimeContext, recommendations []recommendation) ([]handoffBundleFile, error) {
+func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRefs []sealedManifestReadbackRef, forensicState *pointInTimeState, runtimeContext *handoffRuntimeContext, validationContext *handoffValidationContext, recommendations []recommendation) ([]handoffBundleFile, error) {
 	packagePayload = normalizeIncidentPackageForHandoff(packagePayload)
 	readbackRefs = normalizeSealedManifestReadbackRefs(readbackRefs)
 	if forensicState != nil {
@@ -810,6 +860,23 @@ func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRe
 		normalized.Findings = append([]runtimeIntegrityFinding(nil), runtimeContext.Findings...)
 		normalized.Limitations = append([]string(nil), runtimeContext.Limitations...)
 		runtimeContext = &normalized
+	}
+	if validationContext != nil {
+		normalized := *validationContext
+		normalized.Score.Results = append([]validationHarnessScenarioResult(nil), validationContext.Score.Results...)
+		normalized.Score.CriticalGaps = append([]string(nil), validationContext.Score.CriticalGaps...)
+		normalized.Score.Limitations = append([]string(nil), validationContext.Score.Limitations...)
+		normalized.Runs = append([]validationHarnessRun(nil), validationContext.Runs...)
+		normalized.Scenarios = append([]validationHarnessScenario(nil), validationContext.Scenarios...)
+		if validationContext.Certificate != nil {
+			certificate := *validationContext.Certificate
+			certificate.ScenarioResults = append([]validationVerdict(nil), validationContext.Certificate.ScenarioResults...)
+			certificate.EvidenceRefs = append([]string(nil), validationContext.Certificate.EvidenceRefs...)
+			certificate.Limitations = append([]string(nil), validationContext.Certificate.Limitations...)
+			normalized.Certificate = &certificate
+		}
+		normalized.Limitations = append([]string(nil), validationContext.Limitations...)
+		validationContext = &normalized
 	}
 	recommendations = normalizeRecommendationsForHandoff(recommendations)
 	files := []handoffBundleFile{}
@@ -867,6 +934,19 @@ func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRe
 			Role:         "runtime_context",
 			Content:      string(runtimeBytes),
 			AdvisoryOnly: true,
+		})
+	}
+	if validationContext != nil {
+		validationBytes, err := canonicalJSON(validationContext)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, handoffBundleFile{
+			Path:         "evidence/validation_harness.json",
+			MediaType:    "application/json",
+			Role:         "validation_harness",
+			AdvisoryOnly: true,
+			Content:      string(validationBytes),
 		})
 	}
 	if len(recommendations) > 0 {
