@@ -3,14 +3,18 @@ import { useEffect, useState } from "react";
 import {
   APIError,
   acknowledgeIncident,
+  acknowledgeRecommendation,
   addIncidentNote,
   apiBaseURL,
   apiTokenConfigured,
+  assignRecommendation,
+  commentRecommendation,
   getAnalyticsAnomalies,
   getAnalyticsDelta,
   getAnalyticsScorecards,
   getAnalyticsSegments,
   approveException,
+  acceptRecommendation,
   assignIncident,
   getAuthStatus,
   getDriftStats,
@@ -27,6 +31,7 @@ import {
   getMetricDefenseGaps,
   getMetricIncidents,
   getMetricPolicyReplay,
+  getRecommendations,
   getRuntimeActiveStates,
   getRuntimeClosedLoopStatus,
   getRuntimeDriftFindings,
@@ -37,11 +42,15 @@ import {
   getTopViolators,
   getTrends,
   rejectException,
+  rejectRecommendation,
   reopenIncident,
   resolveIncident,
   requestException,
+  requestRecommendationApproval,
   revokeException,
+  verifyRecommendation,
   watchIncident,
+  executeRecommendation,
 } from "./api";
 import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsInsightsPanel } from "./components/AnalyticsInsightsPanel";
@@ -68,6 +77,7 @@ import type {
   IncidentExport,
   IncidentPackage,
   PolicyReplayAssessment,
+  Recommendation,
   IncidentReportAudience,
   InvestigationIncident,
   MetricIncidentDrilldown,
@@ -152,6 +162,7 @@ export default function App() {
   const [incidents, setIncidents] = useState<InvestigationIncident[]>([]);
   const [systemicWeaknesses, setSystemicWeaknesses] = useState<SystemicWeaknessResponse | null>(null);
   const [executiveReport, setExecutiveReport] = useState<ExecutiveDefenseReport | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [pendingExceptions, setPendingExceptions] = useState<PolicyException[]>([]);
   const [metricDrilldown, setMetricDrilldown] = useState<MetricIncidentDrilldown | null>(null);
   const [loading, setLoading] = useState(true);
@@ -335,6 +346,20 @@ export default function App() {
                 throw executiveError;
               }),
             );
+            promises.push(
+              getRecommendations({
+                environment: filters.environment,
+                tenant_id: scopedTenantID,
+                repo: filters.repo,
+                limit: "6",
+              }).then(setRecommendations).catch((recommendationError) => {
+                if (isOptionalFeatureMissing(recommendationError)) {
+                  setRecommendations([]);
+                  return;
+                }
+                throw recommendationError;
+              }),
+            );
             setPendingExceptions([]);
             setIncidents([]);
           } else if (activeTab === "events") {
@@ -371,6 +396,7 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setRecommendations([]);
             setPendingExceptions([]);
           } else if (activeTab === "analytics") {
             promises.push(
@@ -441,6 +467,7 @@ export default function App() {
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
+            setRecommendations([]);
             setPendingExceptions([]);
           } else if (activeTab === "runtime") {
             promises.push(
@@ -480,6 +507,7 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setRecommendations([]);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
@@ -502,6 +530,7 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setRecommendations([]);
           } else if (activeTab === "inventory" || activeTab === "vulnerabilities" || activeTab === "signing" || activeTab === "scorecard" || activeTab === "guidance") {
             setEvents([]);
             setSelectedEvent(null);
@@ -519,6 +548,7 @@ export default function App() {
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
+            setRecommendations([]);
             setIncidents([]);
             setPendingExceptions([]);
           } else {
@@ -542,6 +572,7 @@ export default function App() {
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
+            setRecommendations([]);
             setIncidents([]);
             setPendingExceptions([]);
           }
@@ -706,6 +737,64 @@ export default function App() {
     });
   }
 
+  async function handleLoadRecommendations(input: {
+    incidentIDs?: string[];
+    packageIncidentIDs?: string[];
+    sourceType?: string;
+    limit?: string;
+  }): Promise<Recommendation[]> {
+    return getRecommendations({
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+      limit: input.limit || filters.limit,
+      source_type: input.sourceType,
+    }, {
+      incidentIDs: input.incidentIDs,
+      packageIncidentIDs: input.packageIncidentIDs,
+    });
+  }
+
+  async function handleAcknowledgeRecommendation(recommendationID: string) {
+    await acknowledgeRecommendation(recommendationID);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleAcceptRecommendation(recommendationID: string) {
+    await acceptRecommendation(recommendationID);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleRejectRecommendation(recommendationID: string, reason: string) {
+    await rejectRecommendation(recommendationID, reason);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleExecuteRecommendation(recommendationID: string, input?: { template_id?: string; summary?: string }) {
+    await executeRecommendation(recommendationID, input);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleVerifyRecommendation(recommendationID: string) {
+    await verifyRecommendation(recommendationID);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleAssignRecommendation(recommendationID: string, owner: string, reason?: string) {
+    await assignRecommendation(recommendationID, owner, reason);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleCommentRecommendation(recommendationID: string, comment: string) {
+    await commentRecommendation(recommendationID, comment);
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleRequestRecommendationApproval(recommendationID: string, summary?: string) {
+    await requestRecommendationApproval(recommendationID, summary);
+    setRefreshIndex((value) => value + 1);
+  }
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -828,6 +917,7 @@ export default function App() {
             exceptionReport={exceptionReport}
             systemicWeaknesses={systemicWeaknesses}
             executiveReport={executiveReport}
+            recommendations={recommendations}
             syncStatus={syncStatus}
             loading={loading}
             onSelectTrustMetric={(metricKey, label) => {
@@ -940,6 +1030,7 @@ export default function App() {
           loading={loading}
           error={error}
           role={role}
+          refreshKey={refreshIndex}
           metricDrilldown={metricDrilldown}
           onClearMetricDrilldown={() => setMetricDrilldown(null)}
           onLoadExport={handleLoadIncidentExport}
@@ -949,12 +1040,21 @@ export default function App() {
           onLoadMetricDefenseGaps={handleLoadMetricDefenseGaps}
           onLoadIncidentPolicyReplay={handleLoadIncidentPolicyReplay}
           onLoadMetricPolicyReplay={handleLoadMetricPolicyReplay}
+          onLoadRecommendations={handleLoadRecommendations}
           onAcknowledge={handleAcknowledgeIncident}
           onWatch={handleWatchIncident}
           onAssign={handleAssignIncident}
           onResolve={handleResolveIncident}
           onReopen={handleReopenIncident}
           onAddNote={handleIncidentNote}
+          onAcknowledgeRecommendation={handleAcknowledgeRecommendation}
+          onAcceptRecommendation={handleAcceptRecommendation}
+          onRejectRecommendation={handleRejectRecommendation}
+          onExecuteRecommendation={handleExecuteRecommendation}
+          onVerifyRecommendation={handleVerifyRecommendation}
+          onAssignRecommendation={handleAssignRecommendation}
+          onCommentRecommendation={handleCommentRecommendation}
+          onRequestRecommendationApproval={handleRequestRecommendationApproval}
         />
       ) : null}
 
