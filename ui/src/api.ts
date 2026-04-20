@@ -10,6 +10,17 @@ import type {
 } from "./incidents";
 import type {
   ActiveWorkloadRef,
+  AnalyticsAnomaliesResponse,
+  AnalyticsAnomaly,
+  AnalyticsComparisonContext,
+  AnalyticsDeltaResponse,
+  AnalyticsMetricDefinition,
+  AnalyticsMetricTrend,
+  AnalyticsScorecardCard,
+  AnalyticsScorecardsResponse,
+  AnalyticsSegmentCatalogItem,
+  AnalyticsSegmentDelta,
+  AnalyticsSegmentsResponse,
   AIInsightsResponse,
   AuditFinding,
   AuditHealth,
@@ -458,6 +469,77 @@ function parseTrendsResponse(value: unknown): TrendsResponse {
     buckets: value.buckets.map(parseTrendBucket),
     totals,
     applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+    metric_trends: readOptionalArray(value.metric_trends, "metric_trends").map(parseAnalyticsMetricTrend),
+    comparison: value.comparison ? parseAnalyticsComparisonContext(value.comparison) : undefined,
+    limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseAnalyticsComparisonContext(value: unknown): AnalyticsComparisonContext {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics comparison context.");
+  }
+  return {
+    window: readString(value.window, "comparison.window"),
+    compare_to: readString(value.compare_to, "comparison.compare_to"),
+    group_by: readString(value.group_by, "comparison.group_by"),
+    current_start: readString(value.current_start, "comparison.current_start"),
+    current_end: readString(value.current_end, "comparison.current_end"),
+    baseline_start: readString(value.baseline_start, "comparison.baseline_start"),
+    baseline_end: readString(value.baseline_end, "comparison.baseline_end"),
+    applied_filters: (readOptionalRecord(value.applied_filters, "comparison.applied_filters") as Record<string, string>) || {},
+  };
+}
+
+function parseAnalyticsMetricDefinition(value: unknown): AnalyticsMetricDefinition {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics metric definition.");
+  }
+  return {
+    key: readString(value.key, "definition.key"),
+    label: readString(value.label, "definition.label"),
+    metric_class: readString(value.metric_class, "definition.metric_class"),
+    description: readString(value.description, "definition.description"),
+    formula: readString(value.formula, "definition.formula"),
+    grain: readString(value.grain, "definition.grain"),
+    default_window: readString(value.default_window, "definition.default_window"),
+    segments: readOptionalStringArray(value.segments, "definition.segments"),
+    exclusions: readOptionalStringArray(value.exclusions, "definition.exclusions"),
+    owner: readString(value.owner, "definition.owner"),
+    interpretation: readString(value.interpretation, "definition.interpretation"),
+  };
+}
+
+function parseAnalyticsSegmentDelta(value: unknown): AnalyticsSegmentDelta {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics segment delta.");
+  }
+  return {
+    segment_key: readString(value.segment_key, "segments[].segment_key"),
+    segment_label: readString(value.segment_label, "segments[].segment_label"),
+    current_value: readNumber(value.current_value, "segments[].current_value"),
+    baseline_value: readNumber(value.baseline_value, "segments[].baseline_value"),
+    delta_value: readNumber(value.delta_value, "segments[].delta_value"),
+    delta_percent: readNumber(value.delta_percent, "segments[].delta_percent"),
+    direction: readString(value.direction, "segments[].direction"),
+  };
+}
+
+function parseAnalyticsMetricTrend(value: unknown): AnalyticsMetricTrend {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics metric trend.");
+  }
+  return {
+    definition: parseAnalyticsMetricDefinition(value.definition),
+    current_value: readNumber(value.current_value, "metric_trends[].current_value"),
+    baseline_value: readNumber(value.baseline_value, "metric_trends[].baseline_value"),
+    delta_value: readNumber(value.delta_value, "metric_trends[].delta_value"),
+    delta_percent: readNumber(value.delta_percent, "metric_trends[].delta_percent"),
+    direction: readString(value.direction, "metric_trends[].direction"),
+    velocity: readString(value.velocity, "metric_trends[].velocity"),
+    summary: readString(value.summary, "metric_trends[].summary"),
+    segment_highlights: readOptionalArray(value.segment_highlights, "metric_trends[].segment_highlights").map(parseAnalyticsSegmentDelta),
+    limitations: readOptionalStringArray(value.limitations, "metric_trends[].limitations"),
   };
 }
 
@@ -511,6 +593,97 @@ function parseDriftStatsResponse(value: unknown): DriftStatsResponse {
         ? null
         : readNumber(value.mean_time_to_resolve_seconds, "mean_time_to_resolve_seconds"),
     applied_filters: readOptionalRecord(value.applied_filters, "applied_filters") as Record<string, string> || {},
+  };
+}
+
+function parseAnalyticsDeltaResponse(value: unknown): AnalyticsDeltaResponse {
+  if (!isRecord(value) || !Array.isArray(value.segments)) {
+    throw new Error("Audit API returned invalid analytics delta response.");
+  }
+  return {
+    definition: parseAnalyticsMetricDefinition(value.definition),
+    comparison: parseAnalyticsComparisonContext(value.comparison),
+    segments: value.segments.map(parseAnalyticsSegmentDelta),
+    summary: readString(value.summary, "summary"),
+    limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseAnalyticsAnomaly(value: unknown): AnalyticsAnomaly {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics anomaly.");
+  }
+  return {
+    type: readString(value.type, "items[].type"),
+    title: readString(value.title, "items[].title"),
+    metric_key: readString(value.metric_key, "items[].metric_key"),
+    reason: readString(value.reason, "items[].reason"),
+    baseline: readString(value.baseline, "items[].baseline"),
+    deviation: readString(value.deviation, "items[].deviation"),
+    segment: readString(value.segment, "items[].segment"),
+    severity: readString(value.severity, "items[].severity"),
+    recommended_next_step: readString(value.recommended_next_step, "items[].recommended_next_step"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "items[].evidence_refs"),
+    limitations: readOptionalStringArray(value.limitations, "items[].limitations"),
+  };
+}
+
+function parseAnalyticsAnomaliesResponse(value: unknown): AnalyticsAnomaliesResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid analytics anomalies response.");
+  }
+  return {
+    comparison: parseAnalyticsComparisonContext(value.comparison),
+    items: value.items.map(parseAnalyticsAnomaly),
+    limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseAnalyticsScorecardCard(value: unknown): AnalyticsScorecardCard {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics scorecard card.");
+  }
+  return {
+    definition: parseAnalyticsMetricDefinition(value.definition),
+    status: readString(value.status, "cards[].status"),
+    current_value: readNumber(value.current_value, "cards[].current_value"),
+    baseline_value: readNumber(value.baseline_value, "cards[].baseline_value"),
+    delta_value: readNumber(value.delta_value, "cards[].delta_value"),
+    delta_percent: readNumber(value.delta_percent, "cards[].delta_percent"),
+    direction: readString(value.direction, "cards[].direction"),
+    summary: readString(value.summary, "cards[].summary"),
+  };
+}
+
+function parseAnalyticsScorecardsResponse(value: unknown): AnalyticsScorecardsResponse {
+  if (!isRecord(value) || !Array.isArray(value.cards)) {
+    throw new Error("Audit API returned invalid analytics scorecards response.");
+  }
+  return {
+    comparison: parseAnalyticsComparisonContext(value.comparison),
+    cards: value.cards.map(parseAnalyticsScorecardCard),
+    limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseAnalyticsSegmentCatalogItem(value: unknown): AnalyticsSegmentCatalogItem {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid analytics segment catalog item.");
+  }
+  return {
+    group: readString(value.group, "items[].group"),
+    values: readOptionalStringArray(value.values, "items[].values") || [],
+  };
+}
+
+function parseAnalyticsSegmentsResponse(value: unknown): AnalyticsSegmentsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid analytics segments response.");
+  }
+  return {
+    comparison: parseAnalyticsComparisonContext(value.comparison),
+    items: value.items.map(parseAnalyticsSegmentCatalogItem),
+    limitations: readOptionalStringArray(value.limitations, "limitations"),
   };
 }
 
@@ -2359,14 +2532,82 @@ export async function revokeException(exceptionID: string) {
 }
 
 export async function getTrends(filters: {
+  window?: string;
   window_days?: string;
+  compare_to?: string;
+  group_by?: string;
+  metric?: string;
   granularity?: string;
   tenant_id?: string;
   environment?: string;
   repo?: string;
+  service?: string;
+  team?: string;
+  subject?: string;
   event_type?: string;
 }) {
   return parseTrendsResponse(await fetchJSON<unknown>("/v1/analytics/trends", { params: filters }));
+}
+
+export async function getAnalyticsDelta(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  group_by?: string;
+  metric?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  team?: string;
+  subject?: string;
+}) {
+  return parseAnalyticsDeltaResponse(await fetchJSON<unknown>("/v1/analytics/delta", { params: filters }));
+}
+
+export async function getAnalyticsAnomalies(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  group_by?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  team?: string;
+  subject?: string;
+}) {
+  return parseAnalyticsAnomaliesResponse(await fetchJSON<unknown>("/v1/analytics/anomalies", { params: filters }));
+}
+
+export async function getAnalyticsScorecards(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  group_by?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  team?: string;
+  subject?: string;
+}) {
+  return parseAnalyticsScorecardsResponse(await fetchJSON<unknown>("/v1/analytics/scorecards", { params: filters }));
+}
+
+export async function getAnalyticsSegments(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  group_by?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  team?: string;
+  subject?: string;
+}) {
+  return parseAnalyticsSegmentsResponse(await fetchJSON<unknown>("/v1/analytics/segments", { params: filters }));
 }
 
 export async function getTopViolators(filters: {

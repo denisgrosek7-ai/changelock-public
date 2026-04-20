@@ -6,6 +6,10 @@ import {
   addIncidentNote,
   apiBaseURL,
   apiTokenConfigured,
+  getAnalyticsAnomalies,
+  getAnalyticsDelta,
+  getAnalyticsScorecards,
+  getAnalyticsSegments,
   approveException,
   assignIncident,
   getAuthStatus,
@@ -40,6 +44,7 @@ import {
   watchIncident,
 } from "./api";
 import { AIInsightsPanel } from "./components/AIInsightsPanel";
+import { AnalyticsInsightsPanel } from "./components/AnalyticsInsightsPanel";
 import { AnalyticsTrendsPanel } from "./components/AnalyticsTrendsPanel";
 import { DriftStatsPanel } from "./components/DriftStatsPanel";
 import { EventDetails } from "./components/EventDetails";
@@ -71,6 +76,10 @@ import type {
 import type {
   AuditHealth,
   AuthStatus,
+  AnalyticsAnomaliesResponse,
+  AnalyticsDeltaResponse,
+  AnalyticsScorecardsResponse,
+  AnalyticsSegmentsResponse,
   DriftStatsResponse,
   EventFilters,
   ExceptionReport,
@@ -131,6 +140,10 @@ export default function App() {
   const [trends, setTrends] = useState<TrendsResponse | null>(null);
   const [topViolators, setTopViolators] = useState<TopViolatorsResponse | null>(null);
   const [driftStats, setDriftStats] = useState<DriftStatsResponse | null>(null);
+  const [analyticsDelta, setAnalyticsDelta] = useState<AnalyticsDeltaResponse | null>(null);
+  const [analyticsAnomalies, setAnalyticsAnomalies] = useState<AnalyticsAnomaliesResponse | null>(null);
+  const [analyticsScorecards, setAnalyticsScorecards] = useState<AnalyticsScorecardsResponse | null>(null);
+  const [analyticsSegments, setAnalyticsSegments] = useState<AnalyticsSegmentsResponse | null>(null);
   const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
   const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
   const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
@@ -183,6 +196,10 @@ export default function App() {
           setTrends(null);
           setTopViolators(null);
           setDriftStats(null);
+          setAnalyticsDelta(null);
+          setAnalyticsAnomalies(null);
+          setAnalyticsScorecards(null);
+          setAnalyticsSegments(null);
           setRuntimeActiveStates([]);
           setRuntimeClosedLoopStatus(null);
           setRuntimeDriftFindings([]);
@@ -350,14 +367,54 @@ export default function App() {
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
             setPendingExceptions([]);
           } else if (activeTab === "analytics") {
             promises.push(
               getTrends({
+                window: "28d",
                 window_days: "30",
+                compare_to: "previous_window",
+                group_by: "service",
                 granularity: "day",
                 ...baseFilters,
               }).then(setTrends),
+            );
+            promises.push(
+              getAnalyticsDelta({
+                window: "28d",
+                compare_to: "previous_window",
+                group_by: "service",
+                metric: "policy_friction_rate",
+                ...baseFilters,
+              }).then(setAnalyticsDelta),
+            );
+            promises.push(
+              getAnalyticsAnomalies({
+                window: "28d",
+                compare_to: "previous_window",
+                group_by: "service",
+                ...baseFilters,
+              }).then(setAnalyticsAnomalies),
+            );
+            promises.push(
+              getAnalyticsScorecards({
+                window: "28d",
+                compare_to: "previous_window",
+                group_by: "service",
+                ...baseFilters,
+              }).then(setAnalyticsScorecards),
+            );
+            promises.push(
+              getAnalyticsSegments({
+                window: "28d",
+                compare_to: "previous_window",
+                group_by: "service",
+                ...baseFilters,
+              }).then(setAnalyticsSegments),
             );
             promises.push(
               getTopViolators({
@@ -381,6 +438,10 @@ export default function App() {
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
             setRuntimeDriftStatus(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setExecutiveReport(null);
+            setPendingExceptions([]);
           } else if (activeTab === "runtime") {
             promises.push(
               getRuntimeDriftFindings({
@@ -415,6 +476,10 @@ export default function App() {
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
             setExecutiveReport(null);
@@ -433,12 +498,20 @@ export default function App() {
               }).then((response) => setPendingExceptions(response.exceptions)),
             );
             setExecutiveReport(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
           } else if (activeTab === "inventory" || activeTab === "vulnerabilities" || activeTab === "signing" || activeTab === "scorecard" || activeTab === "guidance") {
             setEvents([]);
             setSelectedEvent(null);
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -458,6 +531,10 @@ export default function App() {
             setTrends(null);
             setTopViolators(null);
             setDriftStats(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -776,6 +853,14 @@ export default function App() {
 
       {activeTab === "analytics" ? (
         <section className="analytics-grid">
+          <AnalyticsInsightsPanel
+            trends={trends}
+            delta={analyticsDelta}
+            anomalies={analyticsAnomalies}
+            scorecards={analyticsScorecards}
+            segments={analyticsSegments}
+            loading={loading}
+          />
           <AnalyticsTrendsPanel trends={trends} loading={loading} />
           <TopViolatorsPanel data={topViolators} loading={loading} />
           <DriftStatsPanel data={driftStats} loading={loading} />

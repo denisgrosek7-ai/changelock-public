@@ -372,6 +372,113 @@ export interface TrendsResponse {
   buckets: TrendBucket[];
   totals: Record<string, number>;
   applied_filters: Record<string, string>;
+  metric_trends?: AnalyticsMetricTrend[];
+  comparison?: AnalyticsComparisonContext;
+  limitations?: string[];
+}
+
+export interface AnalyticsComparisonContext {
+  window: string;
+  compare_to: string;
+  group_by: string;
+  current_start: string;
+  current_end: string;
+  baseline_start: string;
+  baseline_end: string;
+  applied_filters: Record<string, string>;
+}
+
+export interface AnalyticsMetricDefinition {
+  key: string;
+  label: string;
+  metric_class: string;
+  description: string;
+  formula: string;
+  grain: string;
+  default_window: string;
+  segments?: string[];
+  exclusions?: string[];
+  owner: string;
+  interpretation: string;
+}
+
+export interface AnalyticsSegmentDelta {
+  segment_key: string;
+  segment_label: string;
+  current_value: number;
+  baseline_value: number;
+  delta_value: number;
+  delta_percent: number;
+  direction: string;
+}
+
+export interface AnalyticsMetricTrend {
+  definition: AnalyticsMetricDefinition;
+  current_value: number;
+  baseline_value: number;
+  delta_value: number;
+  delta_percent: number;
+  direction: string;
+  velocity: string;
+  summary: string;
+  segment_highlights?: AnalyticsSegmentDelta[];
+  limitations?: string[];
+}
+
+export interface AnalyticsDeltaResponse {
+  definition: AnalyticsMetricDefinition;
+  comparison: AnalyticsComparisonContext;
+  segments: AnalyticsSegmentDelta[];
+  summary: string;
+  limitations?: string[];
+}
+
+export interface AnalyticsAnomaly {
+  type: string;
+  title: string;
+  metric_key: string;
+  reason: string;
+  baseline: string;
+  deviation: string;
+  segment: string;
+  severity: string;
+  recommended_next_step: string;
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface AnalyticsAnomaliesResponse {
+  comparison: AnalyticsComparisonContext;
+  items: AnalyticsAnomaly[];
+  limitations?: string[];
+}
+
+export interface AnalyticsScorecardCard {
+  definition: AnalyticsMetricDefinition;
+  status: string;
+  current_value: number;
+  baseline_value: number;
+  delta_value: number;
+  delta_percent: number;
+  direction: string;
+  summary: string;
+}
+
+export interface AnalyticsScorecardsResponse {
+  comparison: AnalyticsComparisonContext;
+  cards: AnalyticsScorecardCard[];
+  limitations?: string[];
+}
+
+export interface AnalyticsSegmentCatalogItem {
+  group: string;
+  values: string[];
+}
+
+export interface AnalyticsSegmentsResponse {
+  comparison: AnalyticsComparisonContext;
+  items: AnalyticsSegmentCatalogItem[];
+  limitations?: string[];
 }
 
 export interface TopViolator {

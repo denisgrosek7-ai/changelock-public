@@ -217,6 +217,10 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/exceptions/", srv.exceptionByIDHandler)
 	mux.HandleFunc("/v1/exceptions/validate", srv.validateExceptionHandler)
 	mux.HandleFunc("/v1/analytics/trends", srv.trendsHandler)
+	mux.HandleFunc("/v1/analytics/delta", srv.analyticsDeltaHandler)
+	mux.HandleFunc("/v1/analytics/anomalies", srv.analyticsAnomaliesHandler)
+	mux.HandleFunc("/v1/analytics/scorecards", srv.analyticsScorecardsHandler)
+	mux.HandleFunc("/v1/analytics/segments", srv.analyticsSegmentsHandler)
 	mux.HandleFunc("/v1/analytics/top-violators", srv.topViolatorsHandler)
 	mux.HandleFunc("/v1/analytics/drift-stats", srv.driftStatsHandler)
 	mux.HandleFunc("/v1/vulnerabilities/active", srv.activeVulnerabilitiesHandler)
@@ -860,6 +864,23 @@ func (s server) trendsHandler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	response, err := s.store.Trends(ctx, filter)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, audit.ErrInvalidFilter) {
+			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	analyticsFilter, err := parseAnalyticsFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	response, err = s.buildAnalyticsTrendsResponse(ctx, analyticsFilter, response)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, audit.ErrInvalidFilter) {

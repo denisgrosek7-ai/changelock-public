@@ -1851,6 +1851,10 @@ func TestViewerCanReadAnalyticsButCannotRequestExceptions(t *testing.T) {
 
 	for _, path := range []string{
 		"/v1/analytics/trends",
+		"/v1/analytics/delta",
+		"/v1/analytics/anomalies",
+		"/v1/analytics/scorecards",
+		"/v1/analytics/segments",
 		"/v1/analytics/top-violators",
 		"/v1/analytics/drift-stats",
 	} {

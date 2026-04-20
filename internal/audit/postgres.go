@@ -292,6 +292,14 @@ func buildWhereClause(filter EventFilter, includeDecision bool) (string, []any) 
 	appendCondition(filter.Repo, "repo")
 	appendCondition(filter.Environment, "environment")
 	appendCondition(filter.TenantID, "tenant_id")
+	if filter.Since != nil {
+		args = append(args, filter.Since.UTC())
+		conditions = append(conditions, fmt.Sprintf("received_at >= $%d", len(args)))
+	}
+	if filter.Until != nil {
+		args = append(args, filter.Until.UTC())
+		conditions = append(conditions, fmt.Sprintf("received_at <= $%d", len(args)))
+	}
 
 	if len(conditions) == 0 {
 		return "", args
