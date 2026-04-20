@@ -135,6 +135,11 @@ import type {
   VerifierSummary,
   StandardsMapping,
   SealedManifest,
+  ValidationHarnessRun,
+  ValidationHarnessScenario,
+  ValidationHarnessScenarioResult,
+  ValidationHarnessScore,
+  ValidationHarnessWhatIfResponse,
 } from "./types";
 
 type RuntimeConfig = {
@@ -3209,6 +3214,102 @@ function parseRuntimeEnforcementListResponse(value: unknown): RuntimeEnforcement
   };
 }
 
+function parseValidationHarnessScenario(value: unknown): ValidationHarnessScenario {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid validation harness scenario.");
+  }
+  return {
+    scenario_id: readString(value.scenario_id, "validation.scenario_id"),
+    category: readString(value.category, "validation.category"),
+    title: readString(value.title, "validation.title"),
+    description: readString(value.description, "validation.description"),
+    validation_mode: readString(value.validation_mode, "validation.validation_mode"),
+    expected_outcome: readString(value.expected_outcome, "validation.expected_outcome"),
+    controls: readOptionalStringArray(value.controls, "validation.controls") || [],
+    requires_approval: readBoolean(value.requires_approval, "validation.requires_approval"),
+    limitations: readOptionalStringArray(value.limitations, "validation.limitations"),
+  };
+}
+
+function parseValidationHarnessScenarioResult(value: unknown): ValidationHarnessScenarioResult {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid validation harness scenario result.");
+  }
+  return {
+    scenario_id: readString(value.scenario_id, "validation_result.scenario_id"),
+    status: readString(value.status, "validation_result.status"),
+    response_time_ms: readNumber(value.response_time_ms, "validation_result.response_time_ms"),
+    summary: readString(value.summary, "validation_result.summary"),
+    triggered_controls: readOptionalStringArray(value.triggered_controls, "validation_result.triggered_controls"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "validation_result.evidence_refs"),
+    forensic_context_uri: readOptionalString(value.forensic_context_uri, "validation_result.forensic_context_uri"),
+    limitations: readOptionalStringArray(value.limitations, "validation_result.limitations"),
+  };
+}
+
+function parseValidationHarnessRun(value: unknown): ValidationHarnessRun {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid validation harness run.");
+  }
+  return {
+    run_id: readString(value.run_id, "validation_run.run_id"),
+    mode: readString(value.mode, "validation_run.mode"),
+    tenant_id: readOptionalString(value.tenant_id, "validation_run.tenant_id"),
+    environment: readOptionalString(value.environment, "validation_run.environment"),
+    repo: readOptionalString(value.repo, "validation_run.repo"),
+    service: readOptionalString(value.service, "validation_run.service"),
+    scope_summary: readString(value.scope_summary, "validation_run.scope_summary"),
+    started_at: readString(value.started_at, "validation_run.started_at"),
+    completed_at: readString(value.completed_at, "validation_run.completed_at"),
+    overall_status: readString(value.overall_status, "validation_run.overall_status"),
+    certificate_id: readString(value.certificate_id, "validation_run.certificate_id"),
+    certificate_status: readString(value.certificate_status, "validation_run.certificate_status"),
+    passed_scenarios: readNumber(value.passed_scenarios, "validation_run.passed_scenarios"),
+    partial_scenarios: readNumber(value.partial_scenarios, "validation_run.partial_scenarios"),
+    failed_scenarios: readNumber(value.failed_scenarios, "validation_run.failed_scenarios"),
+    average_response_ms: readNumber(value.average_response_ms, "validation_run.average_response_ms"),
+    results: readOptionalArray(value.results, "validation_run.results").map(parseValidationHarnessScenarioResult),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "validation_run.evidence_refs"),
+    limitations: readOptionalStringArray(value.limitations, "validation_run.limitations"),
+  };
+}
+
+function parseValidationHarnessScore(value: unknown): ValidationHarnessScore {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid validation harness score.");
+  }
+  return {
+    confidence_level: readString(value.confidence_level, "validation_score.confidence_level"),
+    overall_status: readString(value.overall_status, "validation_score.overall_status"),
+    passed_scenarios: readNumber(value.passed_scenarios, "validation_score.passed_scenarios"),
+    partial_scenarios: readNumber(value.partial_scenarios, "validation_score.partial_scenarios"),
+    failed_scenarios: readNumber(value.failed_scenarios, "validation_score.failed_scenarios"),
+    average_response_ms: readNumber(value.average_response_ms, "validation_score.average_response_ms"),
+    latest_run_id: readOptionalString(value.latest_run_id, "validation_score.latest_run_id"),
+    critical_gaps: readOptionalStringArray(value.critical_gaps, "validation_score.critical_gaps"),
+    results: readOptionalArray(value.results, "validation_score.results").map(parseValidationHarnessScenarioResult),
+    limitations: readOptionalStringArray(value.limitations, "validation_score.limitations"),
+  };
+}
+
+function parseValidationHarnessWhatIfResponse(value: unknown): ValidationHarnessWhatIfResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid validation harness what-if response.");
+  }
+  return {
+    mode: readString(value.mode, "validation_what_if.mode"),
+    change_set: readOptionalStringArray(value.change_set, "validation_what_if.change_set") || [],
+    overall_status: readString(value.overall_status, "validation_what_if.overall_status"),
+    projected_pass: readNumber(value.projected_pass, "validation_what_if.projected_pass"),
+    projected_partial: readNumber(value.projected_partial, "validation_what_if.projected_partial"),
+    projected_fail: readNumber(value.projected_fail, "validation_what_if.projected_fail"),
+    average_response_ms: readNumber(value.average_response_ms, "validation_what_if.average_response_ms"),
+    results: readOptionalArray(value.results, "validation_what_if.results").map(parseValidationHarnessScenarioResult),
+    compatibility_risks: readOptionalStringArray(value.compatibility_risks, "validation_what_if.compatibility_risks"),
+    limitations: readOptionalStringArray(value.limitations, "validation_what_if.limitations"),
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
@@ -4081,6 +4182,8 @@ export async function sealHandoff(
     audience: string;
     incident_ids?: string[];
     include_forensics?: boolean;
+    include_runtime?: boolean;
+    include_validation?: boolean;
     include_recommendations?: boolean;
     co_sign_mode?: string;
   },
@@ -4122,6 +4225,90 @@ export async function downloadHandoffBundle(packageID: string) {
 
 export async function getFederationGlobalView() {
   return parseFederationGlobalView(await fetchJSON<unknown>("/v1/federation/global-view"));
+}
+
+export async function getValidationHarnessScenarios() {
+  const payload = await fetchJSON<unknown>("/v1/validation/harness/scenarios");
+  if (!isRecord(payload) || !Array.isArray(payload.scenarios)) {
+    throw new Error("Audit API returned invalid validation harness scenarios response.");
+  }
+  return payload.scenarios.map(parseValidationHarnessScenario);
+}
+
+export async function getValidationHarnessScore(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  limit?: string;
+}) {
+  return parseValidationHarnessScore(await fetchJSON<unknown>("/v1/validation/harness/score", { params: filters }));
+}
+
+export async function getValidationHarnessRuns(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  limit?: string;
+}) {
+  const payload = await fetchJSON<unknown>("/v1/validation/harness/runs", { params: filters });
+  if (!isRecord(payload) || !Array.isArray(payload.runs)) {
+    throw new Error("Audit API returned invalid validation harness runs response.");
+  }
+  return payload.runs.map(parseValidationHarnessRun);
+}
+
+export async function runValidationHarness(
+  filters: {
+    cluster_id?: string;
+    tenant_id?: string;
+    environment?: string;
+    repo?: string;
+    service?: string;
+    limit?: string;
+  },
+  input?: {
+    scenario_ids?: string[];
+    mode?: string;
+  },
+) {
+  return parseValidationHarnessRun(
+    await fetchJSON<unknown>("/v1/validation/harness/runs", {
+      method: "POST",
+      params: filters,
+      body: input || {},
+    }),
+  );
+}
+
+export async function runValidationHarnessWhatIf(
+  filters: {
+    cluster_id?: string;
+    tenant_id?: string;
+    environment?: string;
+    repo?: string;
+    service?: string;
+    limit?: string;
+  },
+  input?: {
+    scenario_ids?: string[];
+    kubernetes_version?: string;
+    tighten_runtime_restrictions?: boolean;
+    identity_provider_unavailable?: boolean;
+    rekor_unavailable?: boolean;
+    inject_critical_vulnerability?: boolean;
+  },
+) {
+  return parseValidationHarnessWhatIfResponse(
+    await fetchJSON<unknown>("/v1/validation/harness/what-if", {
+      method: "POST",
+      params: filters,
+      body: input || {},
+    }),
+  );
 }
 
 export async function getRuntimeDriftFindings(filters: {

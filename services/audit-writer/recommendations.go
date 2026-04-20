@@ -781,6 +781,9 @@ func (s server) buildRecommendationCandidates(ctx context.Context, incidents []i
 	if federationRecommendations, err := s.buildFederationRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, federationRecommendations...)
 	}
+	if validationRecommendations, err := s.buildValidationRecommendations(ctx, incidents, filter); err == nil {
+		candidates = append(candidates, validationRecommendations...)
+	}
 
 	anomalyContext, err := s.buildRecommendationAnomalyContext(ctx, filter)
 	if err == nil {
@@ -1284,6 +1287,93 @@ func (s server) buildRuntimeRecommendations(ctx context.Context, incidents []inv
 	return recommendations, nil
 }
 
+func (s server) buildValidationRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
+	validationFilter := validationHarnessFilter{
+		ClusterID:   filter.event.ClusterID,
+		TenantID:    filter.event.TenantID,
+		Environment: filter.event.Environment,
+		Repo:        filter.event.Repo,
+		Service:     filter.Service,
+		Limit:       maxInt(filter.Limit, 6),
+		event: audit.EventFilter{
+			ClusterID:   filter.event.ClusterID,
+			TenantID:    filter.event.TenantID,
+			Environment: filter.event.Environment,
+			Repo:        filter.event.Repo,
+			Limit:       maxInt(filter.Limit*20, 500),
+		},
+	}
+	score, err := s.buildValidationHarnessScore(ctx, validationFilter)
+	if err != nil {
+		return nil, err
+	}
+	if score.FailedScenarios == 0 && score.PartialScenarios == 0 {
+		return nil, nil
+	}
+	recommendations := []recommendation{}
+	for _, result := range score.Results {
+		if result.Status == validationStatusPass {
+			continue
+		}
+		template := recommendationTemplateCatalog[2]
+		if result.Status == validationStatusFail {
+			template = recommendationTemplateCatalog[6]
+		}
+		if strings.Contains(result.ScenarioID, "containment") {
+			template = recommendationTemplateCatalog[1]
+		}
+		title := fmt.Sprintf("Close validation gap for %s", strings.ReplaceAll(result.ScenarioID, "_", " "))
+		if result.Status == validationStatusFail {
+			title = fmt.Sprintf("Repair failed validation scenario: %s", strings.ReplaceAll(result.ScenarioID, "_", " "))
+		}
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:   recommendationID("validation", result.ScenarioID, template.TemplateID),
+			SourceType:         "validation_signal",
+			SourceRef:          result.ScenarioID,
+			SubjectType:        "validation_harness",
+			SubjectRef:         firstNonEmpty(validationFilter.Service, validationScopeSummary(validationFilter)),
+			Team:               firstIncidentTenant(incidents),
+			Service:            firstNonEmpty(validationFilter.Service, filter.Service),
+			Repo:               firstNonEmpty(filter.event.Repo, firstIncidentRepo(incidents)),
+			Environment:        firstNonEmpty(filter.event.Environment, firstIncidentEnvironment(incidents)),
+			RecommendationType: template.RecommendationType,
+			Title:              title,
+			Description:        result.Summary,
+			RecommendedAction:  firstNonEmpty(firstString(result.TriggeredControls), template.TemplateID),
+			Rationale: fmt.Sprintf(
+				"Validation harness currently reports %s for scenario %s. The gap should be closed before treating the control path as verified.",
+				result.Status,
+				result.ScenarioID,
+			),
+			EvidenceRefs:        uniqueStrings(result.EvidenceRefs),
+			ReadbackRefs:        append([]advisoryReadbackRef(nil), result.ReadbackRefs...),
+			RelatedIncidentRefs: incidentIDs(incidents),
+			PriorityBand:        mapValidationRecommendationPriority(result.Status),
+			ImpactScore:         minInt(95, 50+len(result.EvidenceRefs)*4+score.FailedScenarios*8),
+			EffortScore:         recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:     mapValidationRecommendationConfidence(result.Status, score.ConfidenceLevel),
+			ApprovalMode:        template.ApprovalMode,
+			Status:              recommendationStatusShown,
+			CreatedAt:           recommendationCreatedAt(nil, nil, nil),
+			ExpiresAt:           recommendationExpiry(nil),
+			VerificationPlan: []string{
+				fmt.Sprintf("Re-run validation harness scenario %s and confirm it moves out of %s into pass.", result.ScenarioID, result.Status),
+				"Confirm the corresponding runtime, topology, forensics, or policy evidence path no longer appears as a validation gap in the current scope.",
+			},
+			ActionTemplate: template,
+			Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+			AdvisoryOnly:   true,
+			Limitations: uniqueStrings(append([]string{
+				"Validation recommendation is an overlay derived from 9j dry-run results and does not mutate canonical incident, evidence, or runtime truth.",
+			}, append(score.Limitations, result.Limitations...)...)),
+		})
+		if len(recommendations) == 2 {
+			break
+		}
+	}
+	return recommendations, nil
+}
+
 func recommendationRuntimeFilter(filter recommendationFilter) runtimeIntegrityFilter {
 	limit := maxInt(filter.Limit, 25)
 	workload := strings.TrimSpace(filter.Service)
@@ -1363,6 +1453,34 @@ func runtimeRecommendationConfidence(finding runtimeIntegrityFinding) int {
 	default:
 		return 72
 	}
+}
+
+func mapValidationRecommendationPriority(status string) string {
+	switch status {
+	case validationStatusFail:
+		return "NOW"
+	case validationStatusPartial:
+		return "TODAY"
+	default:
+		return "THIS_WEEK"
+	}
+}
+
+func mapValidationRecommendationConfidence(status, confidenceLevel string) int {
+	score := 68
+	switch status {
+	case validationStatusFail:
+		score += 10
+	case validationStatusPass:
+		score -= 8
+	}
+	switch confidenceLevel {
+	case "high":
+		score += 8
+	case "low":
+		score -= 6
+	}
+	return minInt(90, maxInt(score, 45))
 }
 
 func runtimeRecommendationSubjectName(subjectRef string) string {
@@ -2059,6 +2177,39 @@ func (s server) verifyRecommendation(ctx context.Context, item recommendation, f
 			}
 			return recommendationStatusVerifiedSuccessful, "The previously rejected or stale federated proof path is no longer present in the current trust history.", nil
 		}
+	case "validation_signal":
+		score, err := s.buildValidationHarnessScore(ctx, validationHarnessFilter{
+			ClusterID:   filter.event.ClusterID,
+			TenantID:    filter.event.TenantID,
+			Environment: filter.event.Environment,
+			Repo:        filter.event.Repo,
+			Service:     item.Service,
+			Limit:       maxInt(filter.Limit, 6),
+			event: audit.EventFilter{
+				ClusterID:   filter.event.ClusterID,
+				TenantID:    filter.event.TenantID,
+				Environment: filter.event.Environment,
+				Repo:        filter.event.Repo,
+				Limit:       maxInt(filter.Limit*20, 500),
+			},
+		})
+		if err != nil {
+			return "", "", err
+		}
+		for _, result := range score.Results {
+			if result.ScenarioID != item.SourceRef {
+				continue
+			}
+			switch result.Status {
+			case validationStatusPass:
+				return recommendationStatusVerifiedSuccessful, "The same validation harness scenario now passes in the current scope.", nil
+			case validationStatusPartial:
+				return recommendationStatusPartiallyEffective, "The validation harness scenario improved but still remains only partially verified.", nil
+			default:
+				return recommendationStatusExecutedNoEffect, "The validation harness still reports the same scenario as a gap in the current scope.", nil
+			}
+		}
+		return recommendationStatusVerifiedSuccessful, "The validation harness no longer reports the same scenario as a current gap.", nil
 	default:
 		return recommendationStatusExecutedNoEffect, "The recommendation source does not yet expose a richer verification rule, so the workflow remains advisory-only.", nil
 	}

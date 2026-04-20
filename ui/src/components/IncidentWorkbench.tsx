@@ -40,6 +40,8 @@ type Props = {
     incidentIDs: string[];
     audience: IncidentReportAudience;
     includeForensics?: boolean;
+    includeRuntime?: boolean;
+    includeValidation?: boolean;
     includeRecommendations?: boolean;
     coSignMode?: string;
   }) => Promise<HandoffSealResponse>;
@@ -811,6 +813,8 @@ export function IncidentWorkbench({
         incidentIDs: packagePayload.selectionMode === "explicit" ? packagePayload.incidentRefs : [],
         audience: packagePayload.audience,
         includeForensics: true,
+        includeRuntime: true,
+        includeValidation: true,
         includeRecommendations: true,
         coSignMode: "system_only",
       });

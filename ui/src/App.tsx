@@ -52,6 +52,9 @@ import {
   getSummary,
   getSystemicWeaknesses,
   getSyncStatus,
+  getValidationHarnessRuns,
+  getValidationHarnessScenarios,
+  getValidationHarnessScore,
   getTopologyDelta,
   getTopologyGraph,
   getTopologyHeatmap,
@@ -69,6 +72,8 @@ import {
   watchIncident,
   executeRecommendation,
   runForensicsReplay,
+  runValidationHarness,
+  runValidationHarnessWhatIf,
 } from "./api";
 import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsInsightsPanel } from "./components/AnalyticsInsightsPanel";
@@ -88,6 +93,7 @@ import { RuntimeDriftPanel } from "./components/RuntimeDriftPanel";
 import { RuntimeIntegrityPanel } from "./components/RuntimeIntegrityPanel";
 import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
 import { SigningIdentityPanel } from "./components/SigningIdentityPanel";
+import { ValidationHarnessPanel } from "./components/ValidationHarnessPanel";
 import { TopologyInsightsPanel } from "./components/TopologyInsightsPanel";
 import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
 import { TrustScorecardPanel } from "./components/TrustScorecardPanel";
@@ -140,6 +146,10 @@ import type {
   TopologyGraphResponse,
   TopologyHeatmapResponse,
   TrendsResponse,
+  ValidationHarnessRun,
+  ValidationHarnessScenario,
+  ValidationHarnessScore,
+  ValidationHarnessWhatIfResponse,
   VEXFlashbackResponse,
 } from "./types";
 
@@ -161,6 +171,7 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "topology", label: "Topology", description: "Service-graph blast radius, drift, and containment guidance." },
   { key: "forensics", label: "Forensics", description: "Point-in-time reconstruction, VEX flashback, timeline, and counterfactual replay." },
   { key: "federation", label: "Federation", description: "Cross-region proof reuse, trust decisions, policy sync, and anchor health." },
+  { key: "validation", label: "Validation", description: "Controlled policy dry-runs, bounded chaos rehearsal, and what-if confidence checks." },
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
   { key: "inventory", label: "Components", description: "Investigate stored SBOM components by digest, package, or PURL." },
   { key: "vulnerabilities", label: "Vulnerabilities", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
@@ -219,6 +230,10 @@ export default function App() {
   const [forensicsVEXFlashback, setForensicsVEXFlashback] = useState<VEXFlashbackResponse | null>(null);
   const [forensicsReplay, setForensicsReplay] = useState<ForensicReplayResponse | null>(null);
   const [federationView, setFederationView] = useState<FederationGlobalView | null>(null);
+  const [validationScenarios, setValidationScenarios] = useState<ValidationHarnessScenario[]>([]);
+  const [validationScore, setValidationScore] = useState<ValidationHarnessScore | null>(null);
+  const [validationRuns, setValidationRuns] = useState<ValidationHarnessRun[]>([]);
+  const [validationWhatIf, setValidationWhatIf] = useState<ValidationHarnessWhatIfResponse | null>(null);
   const [forensicsTimestamp, setForensicsTimestamp] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [runtimeIntegrityStates, setRuntimeIntegrityStates] = useState<RuntimeIntegrityState[]>([]);
   const [runtimeWorkloads, setRuntimeWorkloads] = useState<RuntimeWorkloadView[]>([]);
@@ -659,6 +674,53 @@ export default function App() {
             setRuntimeDriftStatus(null);
             setIncidents([]);
             setPendingExceptions([]);
+          } else if (activeTab === "validation") {
+            promises.push(
+              getValidationHarnessScenarios().then(setValidationScenarios),
+            );
+            promises.push(
+              getValidationHarnessScore({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setValidationScore),
+            );
+            promises.push(
+              getValidationHarnessRuns({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setValidationRuns),
+            );
+            setEvents([]);
+            setSelectedEvent(null);
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setExecutiveReport(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
+            setForensicsState(null);
+            setForensicsDelta(null);
+            setForensicsTimeline(null);
+            setForensicsVEXFlashback(null);
+            setForensicsReplay(null);
+            setRecommendations([]);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
+            setIncidents([]);
+            setPendingExceptions([]);
           } else if (activeTab === "analytics") {
             promises.push(
               getTrends({
@@ -1023,6 +1085,8 @@ export default function App() {
     incidentIDs: string[];
     audience: IncidentReportAudience;
     includeForensics?: boolean;
+    includeRuntime?: boolean;
+    includeValidation?: boolean;
     includeRecommendations?: boolean;
     coSignMode?: string;
   }): Promise<HandoffSealResponse> {
@@ -1030,6 +1094,8 @@ export default function App() {
       audience: input.audience,
       incident_ids: input.incidentIDs,
       include_forensics: input.includeForensics,
+      include_runtime: input.includeRuntime,
+      include_validation: input.includeValidation,
       include_recommendations: input.includeRecommendations,
       co_sign_mode: input.coSignMode,
     }, {
@@ -1156,6 +1222,34 @@ export default function App() {
   async function handleRequestRecommendationApproval(recommendationID: string, summary?: string) {
     await requestRecommendationApproval(recommendationID, summary);
     setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleRunValidationHarness() {
+    const scopedTenantID = enforcedTenantID || filters.tenant_id;
+    await runValidationHarness({
+      tenant_id: scopedTenantID,
+      environment: filters.environment,
+      repo: filters.repo,
+      limit: filters.limit,
+    }, {
+      mode: "policy_dry_run",
+    });
+    setRefreshIndex((value) => value + 1);
+  }
+
+  async function handleRunValidationWhatIf() {
+    const scopedTenantID = enforcedTenantID || filters.tenant_id;
+    const response = await runValidationHarnessWhatIf({
+      tenant_id: scopedTenantID,
+      environment: filters.environment,
+      repo: filters.repo,
+      limit: filters.limit,
+    }, {
+      inject_critical_vulnerability: true,
+      rekor_unavailable: true,
+      tighten_runtime_restrictions: true,
+    });
+    setValidationWhatIf(response);
   }
 
   return (
@@ -1349,6 +1443,20 @@ export default function App() {
       {activeTab === "federation" ? (
         <section className="analytics-grid">
           <FederationInsightsPanel view={federationView} loading={loading} />
+        </section>
+      ) : null}
+
+      {activeTab === "validation" ? (
+        <section className="analytics-grid">
+          <ValidationHarnessPanel
+            scenarios={validationScenarios}
+            score={validationScore}
+            runs={validationRuns}
+            whatIf={validationWhatIf}
+            loading={loading}
+            onRunHarness={handleRunValidationHarness}
+            onRunWhatIf={handleRunValidationWhatIf}
+          />
         </section>
       ) : null}
 
