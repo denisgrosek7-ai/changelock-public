@@ -593,6 +593,10 @@ func (s server) readbackSystemicWeaknessHandler(w http.ResponseWriter, r *http.R
 }
 
 func (s server) readbackHandler(w http.ResponseWriter, r *http.Request, resourceType string) {
+	if strings.HasSuffix(strings.TrimSpace(r.URL.Path), "/forensic-context") {
+		s.readbackForensicContextHandler(w, r, resourceType)
+		return
+	}
 	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return

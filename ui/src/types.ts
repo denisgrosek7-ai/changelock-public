@@ -3,7 +3,7 @@ export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | 
 export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
 export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
-export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
+export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "forensics" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
 
 export interface AuditHealth {
   status: string;
@@ -1043,4 +1043,168 @@ export interface GuidanceResponse {
 export interface AIInsightsResponse {
   summary: GuidanceSummary;
   top_items: GuidanceItem[];
+}
+
+export interface HistoricalVulnerabilityFinding {
+  cve_id: string;
+  image_digest?: string;
+  severity?: string;
+  status?: string;
+  known_at_t: boolean;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  evidence_refs?: string[];
+}
+
+export interface HistoricalVEXState {
+  statement_id: number;
+  vulnerability_id: string;
+  status: string;
+  justification?: string;
+  created_at: string;
+  revoked_at?: string;
+  source_ref?: string;
+}
+
+export interface ForensicsPolicyContext {
+  policy_bundle_hash?: string;
+  active_rules: string[];
+  rule_versions: string[];
+}
+
+export interface ForensicsInventoryContext {
+  running_subjects: string[];
+  artifact_digests: string[];
+  sbom_refs: string[];
+}
+
+export interface ForensicsVulnerabilityContext {
+  known_findings: HistoricalVulnerabilityFinding[];
+  unknown_later_disclosed_refs: string[];
+  vex_state?: HistoricalVEXState[];
+}
+
+export interface ForensicsIdentityContext {
+  signers: string[];
+  trust_roots: string[];
+  identity_drift_flags: string[];
+}
+
+export interface ForensicsExceptionContext {
+  active_exceptions: string[];
+  break_glass_state: boolean;
+}
+
+export interface ForensicsIncidentSummary {
+  incident_id: string;
+  state: string;
+  severity: string;
+  scope_ref?: string;
+}
+
+export interface ForensicsIncidentContext {
+  relevant_incidents: ForensicsIncidentSummary[];
+}
+
+export interface ForensicsTopologyContext {
+  advisory_only: boolean;
+  primary_service?: string;
+  blast_radius_score: number;
+  critical_reach_count: number;
+  top_risk_paths?: string[];
+  heatmap?: TopologyNode[];
+  limitations?: string[];
+}
+
+export interface PointInTimeState {
+  mode: string;
+  timestamp: string;
+  tenant_id?: string;
+  environment?: string;
+  subject_summary?: string;
+  policy_context: ForensicsPolicyContext;
+  inventory_context: ForensicsInventoryContext;
+  vulnerability_context: ForensicsVulnerabilityContext;
+  identity_context: ForensicsIdentityContext;
+  exception_context: ForensicsExceptionContext;
+  incident_context: ForensicsIncidentContext;
+  topology_context?: ForensicsTopologyContext;
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface TimeDeltaSet {
+  added?: string[];
+  removed?: string[];
+  modified?: string[];
+}
+
+export interface TimeDeltaResult {
+  mode: string;
+  comparison: {
+    t1: string;
+    t2: string;
+    source: string;
+    analytics_comparison?: AnalyticsComparisonContext;
+  };
+  policy_delta: TimeDeltaSet;
+  inventory_delta: TimeDeltaSet;
+  vulnerability_delta: TimeDeltaSet;
+  identity_delta: TimeDeltaSet;
+  exception_delta: TimeDeltaSet;
+  incident_delta: TimeDeltaSet;
+  topology_delta?: TopologyDeltaItem[];
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface VEXFlashbackResponse {
+  mode: string;
+  timestamp: string;
+  image_digest?: string;
+  cve_id?: string;
+  historical_vulnerability_state: HistoricalVulnerabilityFinding[];
+  disclosed_after_t_refs?: string[];
+  vex_flashback: HistoricalVEXState[];
+  historical_decision_basis: string;
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface ForensicTimelineMarker {
+  marker_id: string;
+  timestamp: string;
+  marker_type: string;
+  title: string;
+  severity: string;
+  subject_ref?: string;
+  evidence_refs?: string[];
+}
+
+export interface ForensicTimelineResponse {
+  mode: string;
+  comparison: {
+    t1: string;
+    t2: string;
+    source: string;
+    analytics_comparison?: AnalyticsComparisonContext;
+  };
+  markers: ForensicTimelineMarker[];
+  limitations?: string[];
+}
+
+export interface ForensicReplayResponse {
+  mode: string;
+  counterfactual: boolean;
+  replay_mode: string;
+  historical_timestamp: string;
+  historical_verdict: string;
+  replay_verdict: string;
+  verdict_delta: string;
+  policy_delta_applied?: string[];
+  vulnerability_delta_applied?: string[];
+  identity_delta_applied?: string[];
+  explanations?: string[];
+  evidence_refs?: string[];
+  limitations?: string[];
 }

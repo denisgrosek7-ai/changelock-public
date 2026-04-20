@@ -13,6 +13,10 @@ import {
   getAnalyticsDelta,
   getAnalyticsScorecards,
   getAnalyticsSegments,
+  getForensicsDelta,
+  getForensicsState,
+  getForensicsTimeline,
+  getForensicsVEXFlashback,
   approveException,
   acceptRecommendation,
   assignIncident,
@@ -56,6 +60,7 @@ import {
   verifyRecommendation,
   watchIncident,
   executeRecommendation,
+  runForensicsReplay,
 } from "./api";
 import { AIInsightsPanel } from "./components/AIInsightsPanel";
 import { AnalyticsInsightsPanel } from "./components/AnalyticsInsightsPanel";
@@ -65,6 +70,7 @@ import { EventDetails } from "./components/EventDetails";
 import { EventsTable } from "./components/EventsTable";
 import { ExceptionRequestForm } from "./components/ExceptionRequestForm";
 import { Filters } from "./components/Filters";
+import { ForensicsInsightsPanel } from "./components/ForensicsInsightsPanel";
 import { HealthBadge } from "./components/HealthBadge";
 import { IncidentWorkbench } from "./components/IncidentWorkbench";
 import { OverviewDashboard } from "./components/OverviewDashboard";
@@ -108,12 +114,17 @@ import type {
   Summary,
   SyncStatus,
   TabKey,
+  ForensicReplayResponse,
+  ForensicTimelineResponse,
+  PointInTimeState,
+  TimeDeltaResult,
   TopViolatorsResponse,
   TopologyBlastRadiusResponse,
   TopologyDeltaResponse,
   TopologyGraphResponse,
   TopologyHeatmapResponse,
   TrendsResponse,
+  VEXFlashbackResponse,
 } from "./types";
 
 const initialFilters: EventFilters = {
@@ -132,6 +143,7 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "runtime", label: "Runtime", description: "Drift findings and the workloads that need reconciliation." },
   { key: "analytics", label: "Governance", description: "Trends, violators, and control-plane operating pressure." },
   { key: "topology", label: "Topology", description: "Service-graph blast radius, drift, and containment guidance." },
+  { key: "forensics", label: "Forensics", description: "Point-in-time reconstruction, VEX flashback, timeline, and counterfactual replay." },
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
   { key: "inventory", label: "Components", description: "Investigate stored SBOM components by digest, package, or PURL." },
   { key: "vulnerabilities", label: "Vulnerabilities", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
@@ -146,6 +158,23 @@ function isHumanRole(role?: string) {
 
 function isOptionalFeatureMissing(error: unknown) {
   return error instanceof APIError && error.status === 404;
+}
+
+function toDateTimeLocalValue(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function toForensicsTimestamp(value: string) {
+  const parsed = value ? new Date(value) : new Date();
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().toISOString();
+  }
+  return parsed.toISOString();
 }
 
 export default function App() {
@@ -167,6 +196,12 @@ export default function App() {
   const [topologyGraph, setTopologyGraph] = useState<TopologyGraphResponse | null>(null);
   const [topologyHeatmap, setTopologyHeatmap] = useState<TopologyHeatmapResponse | null>(null);
   const [topologyDelta, setTopologyDelta] = useState<TopologyDeltaResponse | null>(null);
+  const [forensicsState, setForensicsState] = useState<PointInTimeState | null>(null);
+  const [forensicsDelta, setForensicsDelta] = useState<TimeDeltaResult | null>(null);
+  const [forensicsTimeline, setForensicsTimeline] = useState<ForensicTimelineResponse | null>(null);
+  const [forensicsVEXFlashback, setForensicsVEXFlashback] = useState<VEXFlashbackResponse | null>(null);
+  const [forensicsReplay, setForensicsReplay] = useState<ForensicReplayResponse | null>(null);
+  const [forensicsTimestamp, setForensicsTimestamp] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
   const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
   const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
@@ -227,6 +262,11 @@ export default function App() {
           setTopologyGraph(null);
           setTopologyHeatmap(null);
           setTopologyDelta(null);
+          setForensicsState(null);
+          setForensicsDelta(null);
+          setForensicsTimeline(null);
+          setForensicsVEXFlashback(null);
+          setForensicsReplay(null);
           setRuntimeActiveStates([]);
           setRuntimeClosedLoopStatus(null);
           setRuntimeDriftFindings([]);
@@ -256,6 +296,14 @@ export default function App() {
             environment: filters.environment,
             repo: filters.repo,
           };
+          const forensicTimestampISO = toForensicsTimestamp(forensicsTimestamp);
+          const forensicWindowEnd = new Date().toISOString();
+
+          setForensicsState(null);
+          setForensicsDelta(null);
+          setForensicsTimeline(null);
+          setForensicsVEXFlashback(null);
+          setForensicsReplay(null);
 
           const promises: Array<Promise<void>> = [
             getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
@@ -447,6 +495,80 @@ export default function App() {
                 repo: filters.repo,
                 limit: filters.limit,
               }).then(setTopologyDelta),
+            );
+            setEvents([]);
+            setSelectedEvent(null);
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setExecutiveReport(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
+            setRecommendations([]);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
+            setIncidents([]);
+            setPendingExceptions([]);
+          } else if (activeTab === "forensics") {
+            promises.push(
+              getForensicsState({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                timestamp: forensicTimestampISO,
+                limit: filters.limit,
+              }).then(setForensicsState),
+            );
+            promises.push(
+              getForensicsDelta({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                t1: forensicTimestampISO,
+                t2: forensicWindowEnd,
+                limit: filters.limit,
+              }).then(setForensicsDelta),
+            );
+            promises.push(
+              getForensicsTimeline({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                t1: forensicTimestampISO,
+                t2: forensicWindowEnd,
+                limit: filters.limit,
+              }).then(setForensicsTimeline),
+            );
+            promises.push(
+              getForensicsVEXFlashback({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                timestamp: forensicTimestampISO,
+                limit: filters.limit,
+              }).then(setForensicsVEXFlashback),
+            );
+            promises.push(
+              runForensicsReplay(
+                {
+                  tenant_id: scopedTenantID,
+                  environment: filters.environment,
+                  repo: filters.repo,
+                },
+                {
+                  timestamp: forensicTimestampISO,
+                  replay_mode: "modern_full_stack_replay",
+                },
+              ).then(setForensicsReplay),
             );
             setEvents([]);
             setSelectedEvent(null);
@@ -690,7 +812,7 @@ export default function App() {
     return () => {
       ignore = true;
     };
-  }, [activeTab, filters.component, filters.decision, filters.environment, filters.limit, filters.repo, filters.tenant_id, metricDrilldown?.metricKey, refreshIndex]);
+  }, [activeTab, filters.component, filters.decision, filters.environment, filters.limit, filters.repo, filters.tenant_id, forensicsTimestamp, metricDrilldown?.metricKey, refreshIndex]);
 
   const activeTabMeta = tabs.find((tab) => tab.key === activeTab) || tabs[0];
   const role = authStatus?.role;
@@ -1059,6 +1181,21 @@ export default function App() {
             heatmap={topologyHeatmap}
             delta={topologyDelta}
             loading={loading}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "forensics" ? (
+        <section className="analytics-grid">
+          <ForensicsInsightsPanel
+            state={forensicsState}
+            delta={forensicsDelta}
+            timeline={forensicsTimeline}
+            flashback={forensicsVEXFlashback}
+            replay={forensicsReplay}
+            loading={loading}
+            timestamp={forensicsTimestamp}
+            onTimestampChange={setForensicsTimestamp}
           />
         </section>
       ) : null}

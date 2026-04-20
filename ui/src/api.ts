@@ -52,6 +52,11 @@ import type {
   PolicyException,
   PublishedTrustView,
   ReasonCount,
+  PointInTimeState,
+  TimeDeltaResult,
+  ForensicTimelineResponse,
+  VEXFlashbackResponse,
+  ForensicReplayResponse,
   RuntimeDriftFinding,
   RuntimeActiveState,
   RuntimeActiveStatesResponse,
@@ -3209,6 +3214,91 @@ export async function getTopologyDelta(filters: {
   limit?: string;
 }) {
   return parseTopologyDeltaResponse(await fetchJSON<unknown>("/v1/topology/delta", { params: filters }));
+}
+
+export async function getForensicsState(filters: {
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  workload?: string;
+  incident_id?: string;
+  image_digest?: string;
+  cve_id?: string;
+  timestamp?: string;
+  limit?: string;
+}) {
+  return fetchJSON<PointInTimeState>("/v1/forensics/state", { params: filters });
+}
+
+export async function getForensicsDelta(filters: {
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  workload?: string;
+  incident_id?: string;
+  image_digest?: string;
+  cve_id?: string;
+  t1?: string;
+  t2?: string;
+  limit?: string;
+}) {
+  return fetchJSON<TimeDeltaResult>("/v1/forensics/delta", { params: filters });
+}
+
+export async function getForensicsTimeline(filters: {
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  workload?: string;
+  incident_id?: string;
+  image_digest?: string;
+  cve_id?: string;
+  t1?: string;
+  t2?: string;
+  limit?: string;
+}) {
+  return fetchJSON<ForensicTimelineResponse>("/v1/forensics/timeline", { params: filters });
+}
+
+export async function getForensicsVEXFlashback(filters: {
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  service?: string;
+  workload?: string;
+  incident_id?: string;
+  image_digest?: string;
+  cve_id?: string;
+  timestamp?: string;
+  limit?: string;
+}) {
+  return fetchJSON<VEXFlashbackResponse>("/v1/forensics/vex-flashback", { params: filters });
+}
+
+export async function runForensicsReplay(
+  filters: {
+    tenant_id?: string;
+    environment?: string;
+    repo?: string;
+  },
+  body: {
+    timestamp: string;
+    replay_mode: string;
+    incident_id?: string;
+    service?: string;
+    workload?: string;
+    image_digest?: string;
+    cve_id?: string;
+  },
+) {
+  return fetchJSON<ForensicReplayResponse>("/v1/forensics/replay", {
+    method: "POST",
+    params: filters,
+    body,
+  });
 }
 
 export async function getIncidentBlastRadius(

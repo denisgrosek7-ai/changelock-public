@@ -1377,6 +1377,21 @@ pre {
   margin-bottom: 18px;
 }
 
+.filters-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 14rem;
+}
+
+.filters-inline-field input {
+  border: 1px solid rgba(18, 32, 47, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: inherit;
+  padding: 10px 12px;
+}
+
 .analytics-scorecard-card {
   border: 1px solid rgba(18, 32, 47, 0.08);
   border-radius: 16px;

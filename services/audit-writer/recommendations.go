@@ -772,6 +772,9 @@ func (s server) buildRecommendationCandidates(ctx context.Context, incidents []i
 	if topologyRecommendations, err := s.buildTopologyRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, topologyRecommendations...)
 	}
+	if forensicRecommendations, err := s.buildForensicsRecommendations(ctx, incidents, filter); err == nil {
+		candidates = append(candidates, forensicRecommendations...)
+	}
 
 	anomalyContext, err := s.buildRecommendationAnomalyContext(ctx, filter)
 	if err == nil {
@@ -1075,6 +1078,189 @@ func (s server) buildTopologyRecommendations(ctx context.Context, incidents []in
 		}
 	}
 	return recommendations, nil
+}
+
+func (s server) buildForensicsRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
+	forensicFilter, err := recommendationForensicsFilter(filter, incidents)
+	if err != nil {
+		return nil, err
+	}
+	delta, err := s.buildForensicsDeltaResponse(ctx, forensicFilter)
+	if err != nil {
+		return nil, err
+	}
+	historicalFilter := withForensicsTimestamp(forensicFilter, delta.Comparison.T1)
+	replay, err := s.buildForensicsReplay(ctx, historicalFilter, forensicsReplayModernFullStack)
+	if err != nil {
+		return nil, err
+	}
+	if replay.VerdictDelta == "no_change" && len(delta.TopologyDelta) == 0 && len(delta.IdentityDelta.Modified) == 0 && len(delta.VulnerabilityDelta.Added) == 0 {
+		return nil, nil
+	}
+
+	related := incidents
+	subjectType := "scope"
+	subjectRef := forensicSubjectSummary(forensicFilter)
+	if forensicFilter.IncidentID != "" {
+		subjectType = "incident"
+		subjectRef = forensicFilter.IncidentID
+		related = selectIncidentsByID(incidents, []string{forensicFilter.IncidentID})
+	} else if forensicFilter.Service != "" {
+		subjectType = "service"
+		subjectRef = forensicFilter.Service
+		related = incidentsForTopologyService(incidents, forensicFilter.Service)
+	}
+
+	template := recommendationTemplateCatalog[1]
+	if replay.VerdictDelta != "no_change" {
+		template = recommendationTemplateCatalog[2]
+	}
+	if len(delta.TopologyDelta) > 0 || len(delta.IdentityDelta.Modified) > 0 {
+		template = recommendationTemplateCatalog[6]
+	}
+
+	title := fmt.Sprintf("Review historical control drift for %s", subjectRef)
+	description := fmt.Sprintf(
+		"Historical state at %s reconstructed as %s, while modern replay evaluates as %s.",
+		delta.Comparison.T1.Format(time.RFC3339),
+		strings.ToLower(replay.HistoricalVerdict),
+		strings.ToLower(replay.ReplayVerdict),
+	)
+	recommendedAction := firstNonEmpty(
+		firstString(replay.Explanations),
+		"Replay the historical state in a bounded sandbox and route follow-up remediation before widening any exceptions.",
+	)
+	rationale := forensicRecommendationRationale(replay, delta)
+	evidenceRefs := uniqueStrings(append(append([]string{}, replay.EvidenceRefs...), delta.EvidenceRefs...))
+	priorityBand := "TODAY"
+	if replay.VerdictDelta != "no_change" || len(delta.VulnerabilityDelta.Added) > 0 {
+		priorityBand = "NOW"
+	}
+	confidence := 72
+	if len(delta.TopologyDelta) > 0 {
+		confidence += 6
+	}
+	if len(replay.ReadbackRefs) > 0 {
+		confidence += 4
+	}
+
+	return []recommendation{{
+		RecommendationID:    recommendationID("forensic", subjectRef, template.TemplateID),
+		SourceType:          "forensic_signal",
+		SourceRef:           forensicRecommendationSourceRef(subjectRef, delta.Comparison.T1),
+		SubjectType:         subjectType,
+		SubjectRef:          subjectRef,
+		Team:                firstIncidentTenant(related),
+		Service:             firstNonEmpty(forensicFilter.Service, subjectRef),
+		Repo:                firstIncidentRepo(related),
+		Environment:         firstNonEmpty(filter.event.Environment, firstIncidentEnvironment(related)),
+		RecommendationType:  template.RecommendationType,
+		Title:               title,
+		Description:         description,
+		RecommendedAction:   recommendedAction,
+		Rationale:           rationale,
+		EvidenceRefs:        evidenceRefs,
+		ReadbackRefs:        replay.ReadbackRefs,
+		RelatedIncidentRefs: incidentIDs(related),
+		PriorityBand:        priorityBand,
+		ImpactScore:         minInt(96, 52+len(delta.VulnerabilityDelta.Added)*8+len(delta.TopologyDelta)*10),
+		EffortScore:         recommendationEffortScore(template.TemplateID),
+		ConfidenceScore:     minInt(90, confidence),
+		ApprovalMode:        template.ApprovalMode,
+		Status:              recommendationStatusShown,
+		CreatedAt:           recommendationCreatedAt(timePointer(delta.Comparison.T2), nil, nil),
+		ExpiresAt:           recommendationExpiry(timePointer(delta.Comparison.T2)),
+		VerificationPlan: []string{
+			fmt.Sprintf("Re-run forensics replay for %s and confirm the replay verdict no longer diverges from the historical verdict at %s.", subjectRef, delta.Comparison.T1.Format(time.RFC3339)),
+			"Confirm historical delta pressure narrows: fewer later disclosures, identity drifts, or topology changes should remain in the same compare window.",
+		},
+		ActionTemplate: template,
+		Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+		AdvisoryOnly:   true,
+		Limitations: uniqueStrings(append(append([]string{
+			"Forensic recommendation remains an overlay derived from reconstructed historical state and counterfactual replay; it does not mutate canonical incident or evidence truth.",
+		}, replay.Limitations...), delta.Limitations...)),
+	}}, nil
+}
+
+func recommendationForensicsFilter(filter recommendationFilter, incidents []investigationIncident) (forensicsFilter, error) {
+	analyticsFilter, err := audit.NormalizeAnalyticsFilter(audit.AnalyticsFilter{
+		Window:      "28d",
+		CompareTo:   "previous_window",
+		GroupBy:     "service",
+		ClusterID:   filter.event.ClusterID,
+		TenantID:    filter.event.TenantID,
+		Environment: filter.event.Environment,
+		Repo:        filter.event.Repo,
+		Service:     filter.Service,
+		Team:        filter.Team,
+	})
+	if err != nil {
+		return forensicsFilter{}, err
+	}
+	incidentID := firstString(filter.IncidentIDs)
+	service := strings.TrimSpace(filter.Service)
+	if service == "" {
+		service = firstIncidentServiceRef(incidents)
+	}
+	return forensicsFilter{
+		event: audit.EventFilter{
+			ClusterID:   analyticsFilter.ClusterID,
+			TenantID:    analyticsFilter.TenantID,
+			Environment: analyticsFilter.Environment,
+			Repo:        analyticsFilter.Repo,
+			Limit:       forensicsHistoryLimit,
+		},
+		analytics:  analyticsFilter,
+		Timestamp:  time.Now().UTC(),
+		IncidentID: incidentID,
+		Service:    service,
+		Limit:      20,
+	}, nil
+}
+
+func firstIncidentServiceRef(incidents []investigationIncident) string {
+	for _, incident := range incidents {
+		if service := firstNonEmpty(incident.ScopeRef, firstString(incident.AffectedWorkloads)); strings.TrimSpace(service) != "" {
+			return service
+		}
+	}
+	return ""
+}
+
+func forensicRecommendationSourceRef(subjectRef string, timestamp time.Time) string {
+	subjectRef = strings.ReplaceAll(strings.TrimSpace(subjectRef), "@", "_")
+	return fmt.Sprintf("%s@%d", firstNonEmpty(subjectRef, "forensic-scope"), timestamp.UTC().Unix())
+}
+
+func parseForensicRecommendationSourceRef(sourceRef string, fallback time.Time) time.Time {
+	sourceRef = strings.TrimSpace(sourceRef)
+	parts := strings.Split(sourceRef, "@")
+	if len(parts) == 2 {
+		if unix := parseIntOrDefault(parts[1], 0); unix > 0 {
+			return time.Unix(int64(unix), 0).UTC()
+		}
+	}
+	return fallback.UTC()
+}
+
+func forensicRecommendationRationale(replay forensicReplayResponse, delta timeDeltaResult) string {
+	parts := []string{
+		fmt.Sprintf("Historical verdict %s vs replay verdict %s.", strings.ToLower(replay.HistoricalVerdict), strings.ToLower(replay.ReplayVerdict)),
+	}
+	if len(replay.Explanations) > 0 {
+		parts = append(parts, firstString(replay.Explanations))
+	}
+	if len(delta.VulnerabilityDelta.Added) > 0 {
+		parts = append(parts, fmt.Sprintf("%d later-disclosed vulnerability signal(s) change the historical known-state.", len(delta.VulnerabilityDelta.Added)))
+	}
+	if len(delta.IdentityDelta.Modified) > 0 {
+		parts = append(parts, fmt.Sprintf("%d identity drift signal(s) were added between the compared forensic windows.", len(delta.IdentityDelta.Modified)))
+	}
+	if len(delta.TopologyDelta) > 0 {
+		parts = append(parts, "Topology blast-radius drift is also present in the same forensic comparison window.")
+	}
+	return strings.TrimSpace(strings.Join(uniqueStrings(parts), " "))
 }
 
 func recommendationTopologyFilter(filter recommendationFilter) (topologyFilter, error) {
@@ -1600,6 +1786,32 @@ func (s server) verifyRecommendation(ctx context.Context, item recommendation, f
 			return recommendationStatusVerifiedSuccessful, "The topology signal no longer maps to an active blast-radius path in the current scope.", nil
 		}
 		return recommendationStatusPartiallyEffective, "The strongest drift signal cleared, but the service still retains some topology-mapped reach.", nil
+	case "forensic_signal":
+		forensicFilter, err := recommendationForensicsFilter(filter, incidents)
+		if err != nil {
+			return "", "", err
+		}
+		forensicFilter.Timestamp = parseForensicRecommendationSourceRef(item.SourceRef, item.CreatedAt)
+		forensicFilter.Service = firstNonEmpty(item.Service, forensicFilter.Service)
+		if item.SubjectType == "incident" {
+			forensicFilter.IncidentID = item.SubjectRef
+		}
+		delta, err := s.buildForensicsDeltaResponse(ctx, forensicFilter)
+		if err != nil {
+			return "", "", err
+		}
+		replay, err := s.buildForensicsReplay(ctx, withForensicsTimestamp(forensicFilter, delta.Comparison.T1), forensicsReplayModernFullStack)
+		if err != nil {
+			return "", "", err
+		}
+		switch {
+		case replay.VerdictDelta == "no_change" && len(delta.VulnerabilityDelta.Added) == 0 && len(delta.IdentityDelta.Modified) == 0 && len(delta.TopologyDelta) == 0:
+			return recommendationStatusVerifiedSuccessful, "Historical replay no longer diverges from the current control stack and the compared forensic windows no longer show residual drift.", nil
+		case replay.VerdictDelta == "no_change":
+			return recommendationStatusPartiallyEffective, "The strict replay delta cleared, but residual forensic drift still exists in the compared windows.", nil
+		default:
+			return recommendationStatusExecutedNoEffect, "Historical replay still diverges under the current control stack, so the forensic review remains active.", nil
+		}
 	default:
 		return recommendationStatusExecutedNoEffect, "The recommendation source does not yet expose a richer verification rule, so the workflow remains advisory-only.", nil
 	}
