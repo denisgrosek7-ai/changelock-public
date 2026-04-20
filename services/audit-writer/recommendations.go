@@ -1,0 +1,1736 @@
+package main
+
+import (
+	"context"
+	"crypto/sha1"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/denisgrosek/changelock/internal/audit"
+	"github.com/denisgrosek/changelock/internal/auth"
+	"github.com/denisgrosek/changelock/internal/httpjson"
+)
+
+const (
+	recommendationComponent = "recommendation-manager"
+
+	recommendationEventAcknowledged    = "recommendation_acknowledged"
+	recommendationEventAccepted        = "recommendation_accepted"
+	recommendationEventRejected        = "recommendation_rejected"
+	recommendationEventExecuted        = "recommendation_executed"
+	recommendationEventVerified        = "recommendation_verified"
+	recommendationEventAssigned        = "recommendation_assigned"
+	recommendationEventCommented       = "recommendation_commented"
+	recommendationEventApprovalRequest = "recommendation_approval_requested"
+
+	recommendationStatusShown              = "shown"
+	recommendationStatusAcknowledged       = "acknowledged"
+	recommendationStatusAccepted           = "accepted"
+	recommendationStatusRejected           = "rejected"
+	recommendationStatusExecuted           = "executed"
+	recommendationStatusExpired            = "expired"
+	recommendationStatusSuperseded         = "superseded"
+	recommendationStatusVerifiedSuccessful = "verified_successful"
+	recommendationStatusExecutedNoEffect   = "executed_no_effect"
+	recommendationStatusPartiallyEffective = "partially_effective"
+	recommendationStatusRegressed          = "regressed"
+
+	recommendationApprovalAutoSafe    = "auto_safe"
+	recommendationApprovalHumanReview = "approval_required"
+)
+
+type recommendationListResponse struct {
+	Recommendations []recommendation `json:"recommendations"`
+}
+
+type recommendationActionsResponse struct {
+	Templates []recommendationActionTemplate `json:"templates"`
+}
+
+type recommendation struct {
+	RecommendationID    string                       `json:"recommendation_id"`
+	SourceType          string                       `json:"source_type"`
+	SourceRef           string                       `json:"source_ref"`
+	SubjectType         string                       `json:"subject_type"`
+	SubjectRef          string                       `json:"subject_ref"`
+	Team                string                       `json:"team,omitempty"`
+	Service             string                       `json:"service,omitempty"`
+	Repo                string                       `json:"repo,omitempty"`
+	Environment         string                       `json:"environment,omitempty"`
+	RecommendationType  string                       `json:"recommendation_type"`
+	Title               string                       `json:"title"`
+	Description         string                       `json:"description"`
+	RecommendedAction   string                       `json:"recommended_action"`
+	Rationale           string                       `json:"rationale"`
+	EvidenceRefs        []string                     `json:"evidence_refs"`
+	ReadbackRefs        []advisoryReadbackRef        `json:"readback_refs"`
+	RelatedIncidentRefs []string                     `json:"related_incident_refs"`
+	PriorityBand        string                       `json:"priority_band"`
+	ImpactScore         int                          `json:"impact_score"`
+	EffortScore         int                          `json:"effort_score"`
+	ConfidenceScore     int                          `json:"confidence_score"`
+	ApprovalMode        string                       `json:"approval_mode"`
+	Status              string                       `json:"status"`
+	CreatedAt           time.Time                    `json:"created_at"`
+	ExpiresAt           *time.Time                   `json:"expires_at,omitempty"`
+	SupersededBy        string                       `json:"superseded_by,omitempty"`
+	VerificationPlan    []string                     `json:"verification_plan"`
+	FeedbackSummary     string                       `json:"feedback_summary,omitempty"`
+	ActionTemplate      recommendationActionTemplate `json:"action_template"`
+	Owner               string                       `json:"owner,omitempty"`
+	Comments            []recommendationComment      `json:"comments,omitempty"`
+	History             []recommendationHistoryEntry `json:"history,omitempty"`
+	Outcome             recommendationOutcome        `json:"outcome"`
+	AdvisoryOnly        bool                         `json:"advisory_only"`
+	Limitations         []string                     `json:"limitations"`
+}
+
+type recommendationActionTemplate struct {
+	TemplateID         string   `json:"template_id"`
+	Title              string   `json:"title"`
+	Description        string   `json:"description"`
+	RecommendationType string   `json:"recommendation_type"`
+	ApprovalMode       string   `json:"approval_mode"`
+	RequiredInputs     []string `json:"required_inputs"`
+	AllowedAudiences   []string `json:"allowed_audiences"`
+	Idempotent         bool     `json:"idempotent"`
+	CancelSemantics    string   `json:"cancel_semantics"`
+}
+
+type recommendationOutcome struct {
+	Status     string     `json:"status"`
+	Summary    string     `json:"summary,omitempty"`
+	VerifiedAt *time.Time `json:"verified_at,omitempty"`
+}
+
+type recommendationComment struct {
+	ID        string     `json:"id"`
+	Comment   string     `json:"comment"`
+	Actor     string     `json:"actor,omitempty"`
+	Timestamp *time.Time `json:"timestamp,omitempty"`
+}
+
+type recommendationHistoryEntry struct {
+	ID        string     `json:"id"`
+	EventType string     `json:"event_type"`
+	Title     string     `json:"title"`
+	Summary   string     `json:"summary"`
+	Actor     string     `json:"actor,omitempty"`
+	Timestamp *time.Time `json:"timestamp,omitempty"`
+}
+
+type recommendationFilter struct {
+	event              audit.EventFilter
+	IncidentIDs        []string
+	PackageIncidentIDs []string
+	SourceType         string
+	SubjectType        string
+	RecommendationType string
+	Team               string
+	Service            string
+	Status             string
+	Limit              int
+}
+
+type recommendationActionRequest struct {
+	RecommendationID string `json:"recommendation_id,omitempty"`
+	TemplateID       string `json:"template_id,omitempty"`
+	Summary          string `json:"summary,omitempty"`
+}
+
+type recommendationRejectRequest struct {
+	Reason string `json:"reason"`
+}
+
+type recommendationAssignRequest struct {
+	Owner  string `json:"owner"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type recommendationCommentRequest struct {
+	Comment string `json:"comment"`
+}
+
+type recommendationApprovalRequest struct {
+	Summary string `json:"summary,omitempty"`
+}
+
+type recommendationSyntheticState struct {
+	actionSummary string
+}
+
+var recommendationTemplateCatalog = []recommendationActionTemplate{
+	{
+		TemplateID:         "create_ticket",
+		Title:              "Create ticket",
+		Description:        "Prepare a tracked remediation ticket with evidence and ownership routing.",
+		RecommendationType: "workflow",
+		ApprovalMode:       recommendationApprovalAutoSafe,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         true,
+		CancelSemantics:    "Ticket draft can be superseded by a newer recommendation or closed manually.",
+	},
+	{
+		TemplateID:         "open_sandbox",
+		Title:              "Open sandbox",
+		Description:        "Prepare a bounded validation sandbox for investigating the weakest control path safely.",
+		RecommendationType: "investigation",
+		ApprovalMode:       recommendationApprovalAutoSafe,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         true,
+		CancelSemantics:    "Sandbox validation can be cancelled if the recommendation is superseded or verified no longer needed.",
+	},
+	{
+		TemplateID:         "generate_remediation_draft",
+		Title:              "Generate remediation draft",
+		Description:        "Draft a bounded hardening plan from the linked evidence, replay, and defense-gap context.",
+		RecommendationType: "remediation",
+		ApprovalMode:       recommendationApprovalAutoSafe,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         true,
+		CancelSemantics:    "Drafts can be regenerated after new evidence or trends change the recommended fix path.",
+	},
+	{
+		TemplateID:         "draft_vex",
+		Title:              "Draft VEX",
+		Description:        "Prepare a VEX-style triage draft for evidence-backed vulnerability clarification.",
+		RecommendationType: "documentation",
+		ApprovalMode:       recommendationApprovalAutoSafe,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         true,
+		CancelSemantics:    "Draft can be discarded without changing canonical truth.",
+	},
+	{
+		TemplateID:         "request_exception",
+		Title:              "Request exception",
+		Description:        "Open a bounded exception request when remediation cannot safely complete in the current window.",
+		RecommendationType: "governance",
+		ApprovalMode:       recommendationApprovalHumanReview,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         false,
+		CancelSemantics:    "Approval is required before any exception request is executed.",
+	},
+	{
+		TemplateID:         "notify_owner",
+		Title:              "Notify owner",
+		Description:        "Route the recommendation to the current owner or responder team.",
+		RecommendationType: "workflow",
+		ApprovalMode:       recommendationApprovalAutoSafe,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         true,
+		CancelSemantics:    "Notifications can be repeated when ownership changes.",
+	},
+	{
+		TemplateID:         "create_security_review",
+		Title:              "Create security review",
+		Description:        "Escalate repeated weakness patterns into a formal security review path.",
+		RecommendationType: "governance",
+		ApprovalMode:       recommendationApprovalHumanReview,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         false,
+		CancelSemantics:    "Review request requires human approval before execution.",
+	},
+	{
+		TemplateID:         "compare_artifact_versions",
+		Title:              "Compare artifact versions",
+		Description:        "Prepare an artifact-to-artifact delta investigation package.",
+		RecommendationType: "investigation",
+		ApprovalMode:       recommendationApprovalAutoSafe,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         true,
+		CancelSemantics:    "Comparison drafts can be rerun as new versions arrive.",
+	},
+	{
+		TemplateID:         "archive_stale_exception",
+		Title:              "Archive stale exception",
+		Description:        "Queue a stale exception for review and retirement.",
+		RecommendationType: "governance",
+		ApprovalMode:       recommendationApprovalHumanReview,
+		RequiredInputs:     []string{"recommendation_id"},
+		AllowedAudiences:   []string{incidentAudienceInternal},
+		Idempotent:         false,
+		CancelSemantics:    "Review request must be approved before retirement is executed.",
+	},
+}
+
+var errRecommendationApprovalRequired = errors.New("recommendation approval required before execution")
+
+func (s server) recommendationsHandler(w http.ResponseWriter, r *http.Request) {
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	if r.Method != http.MethodGet {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	filter, err := parseRecommendationFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+	recommendations, err := s.listRecommendations(ctx, filter)
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, recommendationListResponse{Recommendations: recommendations})
+}
+
+func (s server) recommendationActionsHandler(w http.ResponseWriter, r *http.Request) {
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+
+	path := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/recommendation-actions"))
+	if path == "" || path == "/" {
+		if r.Method != http.MethodGet {
+			httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		httpjson.Write(w, http.StatusOK, recommendationActionsResponse{Templates: recommendationTemplateCatalog})
+		return
+	}
+	if r.Method != http.MethodPost {
+		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	templateID := strings.TrimSpace(strings.TrimPrefix(path, "/"))
+	if templateID == "" {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "recommendation action not found"})
+		return
+	}
+	template, ok := recommendationTemplateByID(templateID)
+	if !ok {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "recommendation action not found"})
+		return
+	}
+	var request recommendationActionRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	recommendationID := strings.TrimSpace(request.RecommendationID)
+	if recommendationID == "" {
+		recommendationID = strings.TrimSpace(r.URL.Query().Get("recommendation_id"))
+	}
+	if recommendationID == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "recommendation_id is required"})
+		return
+	}
+	filter, err := parseRecommendationFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+	recommendation, err := s.getRecommendationByID(ctx, recommendationID, filter)
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	updated, err := s.executeRecommendation(ctx, principal, recommendation, template, "")
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) recommendationByIDHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/recommendations/"))
+	if path == "" {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "recommendation not found"})
+		return
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) > 2 {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "recommendation not found"})
+		return
+	}
+	recommendationID := strings.TrimSpace(parts[0])
+	action := ""
+	if len(parts) == 2 {
+		action = strings.TrimSpace(parts[1])
+	}
+	if recommendationID == "" {
+		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "recommendation not found"})
+		return
+	}
+
+	if r.Method == http.MethodGet && action == "" {
+		s.getRecommendationHandler(w, r, recommendationID)
+		return
+	}
+
+	switch action {
+	case "acknowledge":
+		if r.Method == http.MethodPost {
+			s.acknowledgeRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "accept":
+		if r.Method == http.MethodPost {
+			s.acceptRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "reject":
+		if r.Method == http.MethodPost {
+			s.rejectRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "execute":
+		if r.Method == http.MethodPost {
+			s.executeRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "verify":
+		if r.Method == http.MethodPost {
+			s.verifyRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "assign":
+		if r.Method == http.MethodPost {
+			s.assignRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "comment":
+		if r.Method == http.MethodPost {
+			s.commentRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	case "approval-request":
+		if r.Method == http.MethodPost {
+			s.approvalRequestRecommendationHandler(w, r, recommendationID)
+			return
+		}
+	}
+
+	httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+func (s server) getRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return
+	}
+	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return
+	}
+	filter, err := parseRecommendationFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+	recommendation, err := s.getRecommendationByID(ctx, recommendationID, filter)
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, recommendation)
+}
+
+func (s server) acknowledgeRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	s.mutateRecommendationStatusHandler(w, r, recommendationID, recommendationEventAcknowledged, recommendationStatusAcknowledged, nil)
+}
+
+func (s server) acceptRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	s.mutateRecommendationStatusHandler(w, r, recommendationID, recommendationEventAccepted, recommendationStatusAccepted, nil)
+}
+
+func (s server) rejectRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, recommendation, _, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	var request recommendationRejectRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	reason := strings.TrimSpace(request.Reason)
+	if reason == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "reason is required"})
+		return
+	}
+	updated, err := s.recordRecommendationMutation(ctx, principal, recommendation, recommendationEventRejected, func(event *audit.Event) {
+		event.RecommendationStatus = recommendationStatusRejected
+		event.RecommendationFeedbackSummary = reason
+	})
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) executeRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, recommendation, _, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	var request recommendationActionRequest
+	if err := httpjson.Decode(r, &request); err != nil && !errors.Is(err, io.EOF) {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	template := recommendation.ActionTemplate
+	if strings.TrimSpace(request.TemplateID) != "" {
+		var found bool
+		template, found = recommendationTemplateByID(request.TemplateID)
+		if !found {
+			httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "recommendation action not found"})
+			return
+		}
+	}
+	updated, err := s.executeRecommendation(ctx, principal, recommendation, template, strings.TrimSpace(request.Summary))
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) verifyRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, recommendation, filter, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	resultStatus, summary, err := s.verifyRecommendation(ctx, recommendation, filter)
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	updated, err := s.recordRecommendationMutation(ctx, principal, recommendation, recommendationEventVerified, func(event *audit.Event) {
+		event.RecommendationStatus = resultStatus
+		event.RecommendationVerificationResult = resultStatus
+		event.RecommendationFeedbackSummary = summary
+	})
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) assignRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, recommendation, _, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	var request recommendationAssignRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	owner := strings.TrimSpace(request.Owner)
+	if owner == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "owner is required"})
+		return
+	}
+	updated, err := s.recordRecommendationMutation(ctx, principal, recommendation, recommendationEventAssigned, func(event *audit.Event) {
+		event.RecommendationOwner = owner
+		event.RecommendationFeedbackSummary = strings.TrimSpace(request.Reason)
+	})
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) commentRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, recommendation, _, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	var request recommendationCommentRequest
+	if err := httpjson.Decode(r, &request); err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	comment := strings.TrimSpace(request.Comment)
+	if comment == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "comment is required"})
+		return
+	}
+	updated, err := s.recordRecommendationMutation(ctx, principal, recommendation, recommendationEventCommented, func(event *audit.Event) {
+		event.RecommendationComment = comment
+	})
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) approvalRequestRecommendationHandler(w http.ResponseWriter, r *http.Request, recommendationID string) {
+	principal, recommendation, _, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	var request recommendationApprovalRequest
+	if err := httpjson.Decode(r, &request); err != nil && !errors.Is(err, io.EOF) {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	updated, err := s.recordRecommendationMutation(ctx, principal, recommendation, recommendationEventApprovalRequest, func(event *audit.Event) {
+		event.RecommendationFeedbackSummary = strings.TrimSpace(firstNonEmpty(request.Summary, "Approval requested for a sensitive workflow action."))
+	})
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) mutateRecommendationStatusHandler(w http.ResponseWriter, r *http.Request, recommendationID string, eventType string, status string, mutate func(*audit.Event)) {
+	principal, recommendation, _, ctx, cancel, ok := s.authorizeRecommendationMutation(w, r, recommendationID)
+	if !ok {
+		return
+	}
+	defer cancel()
+	updated, err := s.recordRecommendationMutation(ctx, principal, recommendation, eventType, func(event *audit.Event) {
+		event.RecommendationStatus = status
+		if mutate != nil {
+			mutate(event)
+		}
+	})
+	if err != nil {
+		writeRecommendationError(w, err)
+		return
+	}
+	httpjson.Write(w, http.StatusOK, updated)
+}
+
+func (s server) authorizeRecommendationMutation(w http.ResponseWriter, r *http.Request, recommendationID string) (auth.Principal, recommendation, recommendationFilter, context.Context, context.CancelFunc, bool) {
+	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleOperator, auth.RoleSecurityAdmin)
+	if !ok {
+		return auth.Principal{}, recommendation{}, recommendationFilter{}, nil, nil, false
+	}
+	r = authorizedRequest
+	r, err := applyPrincipalTenantToRequest(principal, r)
+	if err != nil {
+		httpjson.Write(w, auth.StatusCode(err), map[string]string{"error": err.Error()})
+		return auth.Principal{}, recommendation{}, recommendationFilter{}, nil, nil, false
+	}
+	filter, err := parseRecommendationFilter(r)
+	if err != nil {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return auth.Principal{}, recommendation{}, recommendationFilter{}, nil, nil, false
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	currentRecommendation, err := s.getRecommendationByID(ctx, recommendationID, filter)
+	if err != nil {
+		cancel()
+		writeRecommendationError(w, err)
+		return auth.Principal{}, recommendation{}, recommendationFilter{}, nil, nil, false
+	}
+	return principal, currentRecommendation, filter, ctx, cancel, true
+}
+
+func parseRecommendationFilter(r *http.Request) (recommendationFilter, error) {
+	base, err := parseFilter(r)
+	if err != nil {
+		return recommendationFilter{}, err
+	}
+	requestedLimit := base.Limit
+	base.Decision = ""
+	base.Component = ""
+	base.EventType = ""
+	if base.Limit <= 0 {
+		base.Limit = 25
+	}
+	if base.Limit < 100 {
+		base.Limit = 500
+	}
+	query := r.URL.Query()
+	filter := recommendationFilter{
+		event:              base,
+		IncidentIDs:        uniqueStrings(query["incident_id"]),
+		PackageIncidentIDs: uniqueStrings(query["package_incident_id"]),
+		SourceType:         strings.TrimSpace(query.Get("source_type")),
+		SubjectType:        strings.TrimSpace(query.Get("subject_type")),
+		RecommendationType: strings.TrimSpace(query.Get("recommendation_type")),
+		Team:               strings.TrimSpace(query.Get("team")),
+		Service:            strings.TrimSpace(query.Get("service")),
+		Status:             strings.TrimSpace(query.Get("status")),
+		Limit:              minInt(requestedLimit, 50),
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 12
+	}
+	return filter, nil
+}
+
+func (s server) listRecommendations(ctx context.Context, filter recommendationFilter) ([]recommendation, error) {
+	incidents, err := s.listIncidents(ctx, incidentFilter{event: filter.event})
+	if err != nil {
+		return nil, err
+	}
+	candidates, err := s.buildRecommendationCandidates(ctx, incidents, filter)
+	if err != nil {
+		return nil, err
+	}
+	events, err := s.listRecommendationMutationEvents(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	recommendations := applyRecommendationMutations(candidates, events)
+	recommendations = filterRecommendations(recommendations, filter)
+	sortRecommendations(recommendations)
+	if len(recommendations) > filter.Limit {
+		recommendations = recommendations[:filter.Limit]
+	}
+	return recommendations, nil
+}
+
+func (s server) getRecommendationByID(ctx context.Context, recommendationID string, filter recommendationFilter) (recommendation, error) {
+	recommendations, err := s.listRecommendations(ctx, recommendationFilter{
+		event:              filter.event,
+		IncidentIDs:        filter.IncidentIDs,
+		PackageIncidentIDs: filter.PackageIncidentIDs,
+		SourceType:         filter.SourceType,
+		SubjectType:        filter.SubjectType,
+		RecommendationType: filter.RecommendationType,
+		Team:               filter.Team,
+		Service:            filter.Service,
+		Status:             filter.Status,
+		Limit:              200,
+	})
+	if err != nil {
+		return recommendation{}, err
+	}
+	for _, item := range recommendations {
+		if item.RecommendationID == recommendationID {
+			return item, nil
+		}
+	}
+	return recommendation{}, errIncidentNotFound
+}
+
+func (s server) buildRecommendationCandidates(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
+	selectedIncidentIDs := filter.IncidentIDs
+	packageIncidentIDs := filter.PackageIncidentIDs
+	incidentScope := selectIncidentsByID(incidents, selectedIncidentIDs)
+	packageScope := selectIncidentsByID(incidents, packageIncidentIDs)
+
+	candidates := make([]recommendation, 0, 12)
+	if len(packageIncidentIDs) > 0 {
+		candidates = append(candidates, buildPackageRecommendations(packageScope, filter)...)
+		return candidates, nil
+	}
+	if len(selectedIncidentIDs) > 0 {
+		candidates = append(candidates, buildIncidentRecommendations(incidentScope, incidents, filter)...)
+		return candidates, nil
+	}
+
+	topIncidents := incidents[:minInt(len(incidents), 5)]
+	candidates = append(candidates, buildIncidentRecommendations(topIncidents, incidents, filter)...)
+	candidates = append(candidates, buildSystemicRecommendations(incidents, filter)...)
+
+	anomalyContext, err := s.buildRecommendationAnomalyContext(ctx, filter)
+	if err == nil {
+		candidates = applyAnomalyContextToRecommendations(candidates, anomalyContext.Items)
+		if len(candidates) == 0 && len(anomalyContext.Items) > 0 {
+			candidates = append(candidates, buildAnomalyRecommendations(anomalyContext, incidents, filter)...)
+		}
+	}
+	return candidates, nil
+}
+
+func buildIncidentRecommendations(selected []investigationIncident, all []investigationIncident, filter recommendationFilter) []recommendation {
+	if len(selected) == 0 {
+		return nil
+	}
+	recommendations := make([]recommendation, 0, len(selected))
+	for _, incident := range selected {
+		defenseAssessment := attachDefenseGapReadback(buildIncidentDefenseGapAssessment(incident, all), filter.toIncidentFilter())
+		replayAssessment := attachPolicyReplayReadback(buildIncidentPolicyReplayAssessment(incident, all), filter.toIncidentFilter())
+		topGap := firstDefenseGap(defenseAssessment.DefenseGaps)
+		template := recommendationTemplateCatalog[2]
+		recommendationType := "remediation"
+		if topGap.GapType == "containment_gap" || incident.Status == "active" && incident.State == incidentStateReopened {
+			template = recommendationTemplateCatalog[1]
+			recommendationType = "investigation"
+		}
+		readbackRefs := []advisoryReadbackRef{}
+		if defenseAssessment.Readback.ResourceID != "" {
+			readbackRefs = append(readbackRefs, defenseAssessment.Readback)
+		}
+		if replayAssessment.Readback.ResourceID != "" {
+			readbackRefs = append(readbackRefs, replayAssessment.Readback)
+		}
+		title := fmt.Sprintf("Reduce %s pressure for %s", strings.ReplaceAll(topGap.GapType, "_", " "), incident.ID)
+		if topGap.Title != "" {
+			title = topGap.Title
+		}
+		description := firstNonEmpty(incident.Summary, incident.LikelyCause, incident.RecommendedAction)
+		recommendedAction := firstString(append(append(append(append([]string{}, topGap.RecommendedActions.Hardening...), topGap.RecommendedActions.Containment...), topGap.RecommendedActions.GovernanceFix...), incident.RecommendedAction))
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:    recommendationID("incident", incident.ID, template.TemplateID),
+			SourceType:          "incident",
+			SourceRef:           incident.ID,
+			SubjectType:         "incident",
+			SubjectRef:          incident.ID,
+			Team:                incident.TenantID,
+			Service:             firstString(append(append([]string{incident.ScopeRef}, incident.AffectedWorkloads...), incident.AffectedRepos...)),
+			Repo:                incident.Repository,
+			Environment:         incident.Environment,
+			RecommendationType:  recommendationType,
+			Title:               title,
+			Description:         description,
+			RecommendedAction:   recommendedAction,
+			Rationale:           strings.TrimSpace(fmt.Sprintf("%s %s", topGap.WhyItMatters, firstNonEmpty(replayAssessment.ReplayResults[0].Delta, ""))),
+			EvidenceRefs:        limitStrings(uniqueStrings(append(append([]string{}, topGap.EvidenceRefs...), incident.EvidenceRefs...)), 10),
+			ReadbackRefs:        readbackRefs,
+			RelatedIncidentRefs: []string{incident.ID},
+			PriorityBand:        recommendationPriorityBand(incident.Priority),
+			ImpactScore:         recommendationImpactScore(incident.Severity, len(incident.AffectedWorkloads), len(incident.AffectedEnvironments)),
+			EffortScore:         recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:     recommendationConfidenceScore(topGap.Confidence),
+			ApprovalMode:        template.ApprovalMode,
+			Status:              recommendationStatusShown,
+			CreatedAt:           recommendationCreatedAt(incident.UpdatedAt, incident.LastActivityAt, incident.OpenedAt),
+			ExpiresAt:           recommendationExpiry(incident.UpdatedAt),
+			VerificationPlan: []string{
+				"Confirm the next deployment or runtime review no longer reproduces the same deny, replay delta, or defense-gap path.",
+				"Verify the linked incident either resolves cleanly or moves out of active pressure without widening exception scope.",
+			},
+			ActionTemplate: template,
+			Outcome: recommendationOutcome{
+				Status: recommendationStatusShown,
+			},
+			AdvisoryOnly: true,
+			Limitations: []string{
+				"Recommendation workflow is an operator overlay and does not mutate canonical incident, lifecycle, evidence, or report truth.",
+				"Recommended action remains evidence-backed and advisory until a human accepts or executes the workflow step.",
+			},
+		})
+	}
+	return recommendations
+}
+
+func buildPackageRecommendations(selected []investigationIncident, filter recommendationFilter) []recommendation {
+	if len(selected) == 0 {
+		return nil
+	}
+	pkg := buildIncidentPackage(selected, incidentIDs(selected), filter.toIncidentFilter(), incidentAudienceInternal)
+	scopeReplay := attachPolicyReplayReadback(buildScopePolicyReplayAssessment(selected), filter.toIncidentFilter())
+	weaknessScope := attachSystemicWeaknessReadback(buildSystemicWeaknessResponse(selected, pkg.SelectionSummary), filter.toIncidentFilter())
+	readbackRefs := []advisoryReadbackRef{}
+	if scopeReplay.Readback.ResourceID != "" {
+		readbackRefs = append(readbackRefs, scopeReplay.Readback)
+	}
+	if len(weaknessScope.Weaknesses) > 0 && weaknessScope.Weaknesses[0].Readback.ResourceID != "" {
+		readbackRefs = append(readbackRefs, weaknessScope.Weaknesses[0].Readback)
+	}
+	evidenceRefs := packageEvidenceRefs(pkg.PackageIntel)
+	template := recommendationTemplateCatalog[0]
+	return []recommendation{{
+		RecommendationID:    recommendationID("package", packageRecommendationSourceRef(pkg.IncidentRefs), template.TemplateID),
+		SourceType:          "package",
+		SourceRef:           packageRecommendationSourceRef(pkg.IncidentRefs),
+		SubjectType:         "package",
+		SubjectRef:          packageRecommendationSourceRef(pkg.IncidentRefs),
+		Team:                firstPackageTenant(selected),
+		Service:             pkg.SelectionSummary,
+		Repo:                firstPackageRepo(selected),
+		Environment:         firstPackageEnvironment(selected),
+		RecommendationType:  "workflow",
+		Title:               "Open a package-level hardening work item",
+		Description:         pkg.PackageSummary,
+		RecommendedAction:   firstString(append(append(append([]string{}, pkg.PackageIntel.RecommendedActions.ImmediateContainment...), pkg.PackageIntel.RecommendedActions.NearTermHardening...), pkg.PackageIntel.RecommendedActions.GovernanceFix...)),
+		Rationale:           strings.TrimSpace(fmt.Sprintf("%s %s", pkg.PackageIntel.DefenseGapSummary.Rationale, pkg.PackageIntel.PolicyReplaySummary.ShadowModeImpact)),
+		EvidenceRefs:        evidenceRefs,
+		ReadbackRefs:        readbackRefs,
+		RelatedIncidentRefs: pkg.IncidentRefs,
+		PriorityBand:        packageRecommendationPriority(pkg.PackageIntel),
+		ImpactScore:         minInt(95, 45+pkg.IncidentCount*8),
+		EffortScore:         recommendationEffortScore(template.TemplateID),
+		ConfidenceScore:     packageRecommendationConfidence(pkg.PackageIntel),
+		ApprovalMode:        template.ApprovalMode,
+		Status:              recommendationStatusShown,
+		CreatedAt:           recommendationCreatedAt(timePointer(pkg.GeneratedAt), nil, nil),
+		ExpiresAt:           recommendationExpiry(timePointer(pkg.GeneratedAt)),
+		VerificationPlan: []string{
+			"Verify that the related incident set shrinks or resolves after the package-level remediation path is executed.",
+			"Confirm package defense-gap pressure and replay delta both move down in the same scoped bundle.",
+		},
+		ActionTemplate: template,
+		Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+		AdvisoryOnly:   true,
+		Limitations: []string{
+			"Package recommendation remains query-derived from the included incident IDs and current package intelligence summary.",
+			"Package workflow state does not replace the canonical case history or export lineage for any included incident.",
+		},
+	}}
+}
+
+func buildSystemicRecommendations(incidents []investigationIncident, filter recommendationFilter) []recommendation {
+	response := attachSystemicWeaknessReadback(buildSystemicWeaknessResponse(incidents, "current filtered scope"), filter.toIncidentFilter())
+	if len(response.Weaknesses) == 0 {
+		return nil
+	}
+	recommendations := make([]recommendation, 0, minInt(len(response.Weaknesses), 3))
+	for _, weakness := range response.Weaknesses[:minInt(len(response.Weaknesses), 3)] {
+		template := recommendationTemplateCatalog[0]
+		if len(weakness.ProcessFragility) > 0 {
+			template = recommendationTemplateCatalog[6]
+		}
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:    recommendationID("systemic", weakness.PatternKey, template.TemplateID),
+			SourceType:          "systemic_weakness",
+			SourceRef:           weakness.PatternKey,
+			SubjectType:         "cluster",
+			SubjectRef:          weakness.PatternKey,
+			Team:                firstIncidentTenant(incidents),
+			Service:             "current filtered scope",
+			Repo:                firstIncidentRepo(incidents),
+			Environment:         firstIncidentEnvironment(incidents),
+			RecommendationType:  "governance",
+			Title:               weakness.Title,
+			Description:         weakness.Summary,
+			RecommendedAction:   weakness.ExecutiveRecommendation,
+			Rationale:           weakness.RootCauseHypothesis,
+			EvidenceRefs:        weakness.EvidenceRefs,
+			ReadbackRefs:        []advisoryReadbackRef{weakness.Readback},
+			RelatedIncidentRefs: weakness.RelatedIncidentRefs,
+			PriorityBand:        recommendationPriorityBand(weakness.Priority),
+			ImpactScore:         systemicImpactScore(weakness),
+			EffortScore:         recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:     78,
+			ApprovalMode:        template.ApprovalMode,
+			Status:              recommendationStatusShown,
+			CreatedAt:           recommendationCreatedAt(timePointer(response.GeneratedAt), nil, nil),
+			ExpiresAt:           recommendationExpiry(timePointer(response.GeneratedAt)),
+			VerificationPlan: []string{
+				"Track whether the same weakness pattern disappears or narrows in the next systemic weakness refresh.",
+				"Confirm the linked incidents stop clustering under the same root-cause hypothesis before closing the workflow.",
+			},
+			ActionTemplate: template,
+			Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+			AdvisoryOnly:   true,
+			Limitations:    append([]string{}, weakness.Limitations...),
+		})
+	}
+	return recommendations
+}
+
+func buildAnomalyRecommendations(response audit.AnalyticsAnomaliesResponse, incidents []investigationIncident, filter recommendationFilter) []recommendation {
+	if len(response.Items) == 0 {
+		return nil
+	}
+	scopeReplay := attachPolicyReplayReadback(buildScopePolicyReplayAssessment(incidents), filter.toIncidentFilter())
+	readbackRefs := []advisoryReadbackRef{}
+	if scopeReplay.Readback.ResourceID != "" {
+		readbackRefs = append(readbackRefs, scopeReplay.Readback)
+	}
+	recommendations := make([]recommendation, 0, minInt(len(response.Items), 2))
+	for _, item := range response.Items[:minInt(len(response.Items), 2)] {
+		template := recommendationTemplateCatalog[1]
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:   recommendationID("anomaly", item.Type+":"+item.Segment, template.TemplateID),
+			SourceType:         "anomaly",
+			SourceRef:          item.Type + ":" + item.Segment,
+			SubjectType:        "segment",
+			SubjectRef:         item.Segment,
+			Team:               firstIncidentTenant(incidents),
+			Service:            item.Segment,
+			Repo:               filter.event.Repo,
+			Environment:        filter.event.Environment,
+			RecommendationType: "investigation",
+			Title:              item.Title,
+			Description:        item.Reason,
+			RecommendedAction:  item.RecommendedNextStep,
+			Rationale:          fmt.Sprintf("%s %s", item.Baseline, item.Deviation),
+			EvidenceRefs:       item.EvidenceRefs,
+			ReadbackRefs:       readbackRefs,
+			PriorityBand:       recommendationPriorityBand(item.Severity),
+			ImpactScore:        anomalyImpactScore(item.Severity),
+			EffortScore:        recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:    72,
+			ApprovalMode:       template.ApprovalMode,
+			Status:             recommendationStatusShown,
+			CreatedAt:          recommendationCreatedAt(timePointer(response.Comparison.CurrentEnd), nil, nil),
+			ExpiresAt:          recommendationExpiry(timePointer(response.Comparison.CurrentEnd)),
+			VerificationPlan: []string{
+				"Re-run the same analytics window and confirm the anomaly no longer crosses the explainable threshold.",
+				"Check that the underlying friction, exception, signer, or drift pressure moves back toward baseline.",
+			},
+			ActionTemplate: template,
+			Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+			AdvisoryOnly:   true,
+			Limitations:    append([]string{}, item.Limitations...),
+		})
+	}
+	return recommendations
+}
+
+func (s server) buildRecommendationAnomalyContext(ctx context.Context, filter recommendationFilter) (audit.AnalyticsAnomaliesResponse, error) {
+	analyticsFilter := audit.AnalyticsFilter{
+		Window:      "28d",
+		CompareTo:   "previous_window",
+		GroupBy:     "service",
+		ClusterID:   filter.event.ClusterID,
+		TenantID:    filter.event.TenantID,
+		Environment: filter.event.Environment,
+		Repo:        filter.event.Repo,
+		Service:     filter.Service,
+		Team:        filter.Team,
+	}
+	analyticsFilter, err := audit.NormalizeAnalyticsFilter(analyticsFilter)
+	if err != nil {
+		return audit.AnalyticsAnomaliesResponse{}, err
+	}
+	return s.buildAnalyticsAnomaliesResponse(ctx, analyticsFilter)
+}
+
+func applyAnomalyContextToRecommendations(recommendations []recommendation, anomalies []audit.AnalyticsAnomaly) []recommendation {
+	if len(recommendations) == 0 || len(anomalies) == 0 {
+		return recommendations
+	}
+	for i := range recommendations {
+		for _, anomaly := range anomalies {
+			if recommendationMatchesAnomaly(recommendations[i], anomaly) {
+				recommendations[i].PriorityBand = bumpPriorityBand(recommendations[i].PriorityBand)
+				recommendations[i].ImpactScore = minInt(100, recommendations[i].ImpactScore+8)
+				recommendations[i].Rationale = strings.TrimSpace(fmt.Sprintf("%s Recent anomaly context: %s — %s.", recommendations[i].Rationale, anomaly.Title, anomaly.Deviation))
+				recommendations[i].Limitations = append(recommendations[i].Limitations, "Priority was elevated by an explainable anomaly signal from the same canonical scope.")
+				break
+			}
+		}
+	}
+	return recommendations
+}
+
+func recommendationMatchesAnomaly(item recommendation, anomaly audit.AnalyticsAnomaly) bool {
+	segment := strings.ToLower(strings.TrimSpace(anomaly.Segment))
+	for _, candidate := range []string{item.Service, item.Environment, item.Team, item.Repo} {
+		if strings.ToLower(strings.TrimSpace(candidate)) == segment && segment != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s server) listRecommendationMutationEvents(ctx context.Context, filter recommendationFilter) ([]audit.StoredEvent, error) {
+	eventFilter := filter.event
+	eventFilter.Component = recommendationComponent
+	eventFilter.Limit = 1000
+	events, err := s.store.ListEvents(ctx, eventFilter)
+	if err != nil {
+		return nil, err
+	}
+	mutations := make([]audit.StoredEvent, 0, len(events))
+	for _, event := range events {
+		if isRecommendationMutationEvent(event) {
+			mutations = append(mutations, event)
+		}
+	}
+	sort.Slice(mutations, func(i, j int) bool {
+		return eventTimestamp(mutations[i]).Before(eventTimestamp(mutations[j]))
+	})
+	return mutations, nil
+}
+
+func applyRecommendationMutations(candidates []recommendation, events []audit.StoredEvent) []recommendation {
+	index := map[string]*recommendation{}
+	for i := range candidates {
+		index[candidates[i].RecommendationID] = &candidates[i]
+	}
+	for _, event := range events {
+		recommendationID := strings.TrimSpace(event.RecommendationID)
+		if recommendationID == "" {
+			continue
+		}
+		target, ok := index[recommendationID]
+		if !ok {
+			synthetic := recommendationFromMutationEvent(event)
+			index[recommendationID] = &synthetic
+			candidates = append(candidates, synthetic)
+			target = &candidates[len(candidates)-1]
+		}
+		applyRecommendationMutation(target, event)
+	}
+	return candidates
+}
+
+func recommendationFromMutationEvent(event audit.StoredEvent) recommendation {
+	timestamp := eventTimestamp(event)
+	template, ok := recommendationTemplateByID(event.RecommendationTemplateID)
+	if !ok {
+		template = recommendationTemplateCatalog[0]
+	}
+	readbackRefs := make([]advisoryReadbackRef, 0, len(event.RecommendationReadbackRefs))
+	for _, value := range event.RecommendationReadbackRefs {
+		parts := strings.Split(strings.TrimSpace(value), "|")
+		if len(parts) != 4 {
+			continue
+		}
+		readbackRefs = append(readbackRefs, advisoryReadbackRef{
+			ResourceType: parts[0],
+			ResourceID:   parts[1],
+			ResourceURI:  parts[2],
+			EvidenceHash: parts[3],
+		})
+	}
+	return recommendation{
+		RecommendationID:    strings.TrimSpace(event.RecommendationID),
+		SourceType:          strings.TrimSpace(event.RecommendationSourceType),
+		SourceRef:           strings.TrimSpace(event.RecommendationSourceRef),
+		SubjectType:         strings.TrimSpace(event.RecommendationSubjectType),
+		SubjectRef:          strings.TrimSpace(event.RecommendationSubjectRef),
+		Team:                strings.TrimSpace(event.TenantID),
+		Service:             strings.TrimSpace(event.Workload),
+		Repo:                strings.TrimSpace(event.Repo),
+		Environment:         strings.TrimSpace(event.Environment),
+		RecommendationType:  strings.TrimSpace(event.RecommendationType),
+		Title:               strings.TrimSpace(event.RecommendationTitle),
+		Description:         strings.TrimSpace(event.RecommendationDescription),
+		RecommendedAction:   strings.TrimSpace(event.RecommendationAction),
+		Rationale:           strings.TrimSpace(event.RecommendationRationale),
+		EvidenceRefs:        cloneStrings(event.RecommendationEvidenceRefs),
+		ReadbackRefs:        readbackRefs,
+		RelatedIncidentRefs: cloneStrings(event.RecommendationRelatedIncidentRefs),
+		PriorityBand:        strings.TrimSpace(event.RecommendationPriorityBand),
+		ImpactScore:         event.RecommendationImpactScore,
+		EffortScore:         event.RecommendationEffortScore,
+		ConfidenceScore:     event.RecommendationConfidenceScore,
+		ApprovalMode:        firstNonEmpty(strings.TrimSpace(event.RecommendationApprovalMode), template.ApprovalMode),
+		Status:              firstNonEmpty(strings.TrimSpace(event.RecommendationStatus), recommendationStatusShown),
+		CreatedAt:           timestamp,
+		ExpiresAt:           event.RecommendationExpiresAt,
+		SupersededBy:        strings.TrimSpace(event.RecommendationSupersededBy),
+		VerificationPlan:    cloneStrings(event.RecommendationVerificationPlan),
+		FeedbackSummary:     strings.TrimSpace(event.RecommendationFeedbackSummary),
+		ActionTemplate:      template,
+		Owner:               strings.TrimSpace(event.RecommendationOwner),
+		Outcome: recommendationOutcome{
+			Status: strings.TrimSpace(firstNonEmpty(event.RecommendationVerificationResult, event.RecommendationStatus, recommendationStatusShown)),
+		},
+		AdvisoryOnly: true,
+		Limitations: []string{
+			"The original recommendation context is no longer active in the current scope, so this overlay entry is replayed from stored workflow mutations only.",
+		},
+	}
+}
+
+func applyRecommendationMutation(item *recommendation, event audit.StoredEvent) {
+	if item == nil {
+		return
+	}
+	timestamp := eventTimestamp(event)
+	if item.CreatedAt.IsZero() || timestamp.Before(item.CreatedAt) {
+		item.CreatedAt = timestamp
+	}
+	if strings.TrimSpace(event.RecommendationOwner) != "" {
+		item.Owner = strings.TrimSpace(event.RecommendationOwner)
+	}
+	if event.RecommendationExpiresAt != nil {
+		item.ExpiresAt = event.RecommendationExpiresAt
+	}
+	if strings.TrimSpace(event.RecommendationSupersededBy) != "" {
+		item.SupersededBy = strings.TrimSpace(event.RecommendationSupersededBy)
+	}
+	if strings.TrimSpace(event.RecommendationFeedbackSummary) != "" {
+		item.FeedbackSummary = strings.TrimSpace(event.RecommendationFeedbackSummary)
+		item.Outcome.Summary = item.FeedbackSummary
+	}
+	if strings.TrimSpace(event.RecommendationStatus) != "" {
+		item.Status = strings.TrimSpace(event.RecommendationStatus)
+	}
+	if strings.TrimSpace(event.RecommendationVerificationResult) != "" {
+		item.Outcome.Status = strings.TrimSpace(event.RecommendationVerificationResult)
+		item.Outcome.VerifiedAt = timePointer(timestamp)
+	}
+	if strings.TrimSpace(event.RecommendationTemplateID) != "" {
+		if template, ok := recommendationTemplateByID(event.RecommendationTemplateID); ok {
+			item.ActionTemplate = template
+			item.ApprovalMode = template.ApprovalMode
+		}
+	}
+	if strings.TrimSpace(event.RecommendationComment) != "" {
+		item.Comments = append(item.Comments, recommendationComment{
+			ID:        fmt.Sprintf("comment-%d", timestamp.UnixNano()),
+			Comment:   strings.TrimSpace(event.RecommendationComment),
+			Actor:     strings.TrimSpace(event.Actor),
+			Timestamp: timePointer(timestamp),
+		})
+	}
+	item.History = append(item.History, recommendationHistoryEntry{
+		ID:        fmt.Sprintf("%s-%d", event.EventType, timestamp.UnixNano()),
+		EventType: event.EventType,
+		Title:     recommendationMutationTitle(event),
+		Summary:   recommendationMutationSummary(event),
+		Actor:     strings.TrimSpace(event.Actor),
+		Timestamp: timePointer(timestamp),
+	})
+}
+
+func (s server) recordRecommendationMutation(ctx context.Context, principal auth.Principal, item recommendation, eventType string, mutate func(*audit.Event)) (recommendation, error) {
+	event := audit.Event{
+		Component:                         recommendationComponent,
+		EventType:                         eventType,
+		Decision:                          audit.DecisionAllow,
+		Actor:                             incidentActor(principal),
+		ClusterID:                         "",
+		TenantID:                          item.Team,
+		Repo:                              item.Repo,
+		Environment:                       item.Environment,
+		Workload:                          item.Service,
+		RecommendationID:                  item.RecommendationID,
+		RecommendationSourceType:          item.SourceType,
+		RecommendationSourceRef:           item.SourceRef,
+		RecommendationSubjectType:         item.SubjectType,
+		RecommendationSubjectRef:          item.SubjectRef,
+		RecommendationType:                item.RecommendationType,
+		RecommendationTitle:               item.Title,
+		RecommendationDescription:         item.Description,
+		RecommendationAction:              item.RecommendedAction,
+		RecommendationRationale:           item.Rationale,
+		RecommendationEvidenceRefs:        item.EvidenceRefs,
+		RecommendationReadbackRefs:        serializeReadbackRefs(item.ReadbackRefs),
+		RecommendationRelatedIncidentRefs: item.RelatedIncidentRefs,
+		RecommendationPriorityBand:        item.PriorityBand,
+		RecommendationImpactScore:         item.ImpactScore,
+		RecommendationEffortScore:         item.EffortScore,
+		RecommendationConfidenceScore:     item.ConfidenceScore,
+		RecommendationApprovalMode:        item.ApprovalMode,
+		RecommendationStatus:              item.Status,
+		RecommendationTemplateID:          item.ActionTemplate.TemplateID,
+		RecommendationVerificationPlan:    item.VerificationPlan,
+		RecommendationFeedbackSummary:     item.FeedbackSummary,
+		RecommendationOwner:               item.Owner,
+		RecommendationSupersededBy:        item.SupersededBy,
+		RecommendationExpiresAt:           item.ExpiresAt,
+	}
+	if mutate != nil {
+		mutate(&event)
+	}
+	if _, err := s.store.Ingest(ctx, event); err != nil {
+		return recommendation{}, err
+	}
+	return s.getRecommendationByID(ctx, item.RecommendationID, recommendationFilter{
+		event: audit.EventFilter{
+			TenantID:    item.Team,
+			Environment: item.Environment,
+			Repo:        item.Repo,
+			Limit:       500,
+		},
+		Limit: 200,
+	})
+}
+
+func (s server) executeRecommendation(ctx context.Context, principal auth.Principal, item recommendation, template recommendationActionTemplate, summary string) (recommendation, error) {
+	if template.ApprovalMode == recommendationApprovalHumanReview && item.Status != recommendationStatusAccepted {
+		return recommendation{}, errRecommendationApprovalRequired
+	}
+	feedback := recommendationExecutionSummary(item, template, summary)
+	return s.recordRecommendationMutation(ctx, principal, item, recommendationEventExecuted, func(event *audit.Event) {
+		event.RecommendationStatus = recommendationStatusExecuted
+		event.RecommendationTemplateID = template.TemplateID
+		event.RecommendationFeedbackSummary = feedback
+	})
+}
+
+func (s server) verifyRecommendation(ctx context.Context, item recommendation, filter recommendationFilter) (string, string, error) {
+	incidents, err := s.listIncidents(ctx, incidentFilter{event: filter.event})
+	if err != nil {
+		return "", "", err
+	}
+	switch item.SourceType {
+	case "incident":
+		for _, incident := range incidents {
+			if incident.ID != item.SubjectRef {
+				continue
+			}
+			switch incident.State {
+			case incidentStateResolved:
+				return recommendationStatusVerifiedSuccessful, "The linked incident is resolved and no longer carries active pressure in the current scope.", nil
+			case incidentStateWatching, incidentStateAcknowledged:
+				return recommendationStatusPartiallyEffective, "The linked incident is still present but pressure has narrowed into a watched or acknowledged state.", nil
+			case incidentStateReopened:
+				return recommendationStatusRegressed, "The linked incident reopened, so the executed recommendation did not hold the line.", nil
+			default:
+				return recommendationStatusExecutedNoEffect, "The linked incident remains active in the current scope, so the executed step has not reduced the main signal yet.", nil
+			}
+		}
+		return recommendationStatusVerifiedSuccessful, "The linked incident is no longer present in the current scope.", nil
+	case "package":
+		related := selectIncidentsByID(incidents, item.RelatedIncidentRefs)
+		if len(related) == 0 {
+			return recommendationStatusVerifiedSuccessful, "All package-linked incidents dropped out of the current scope after the workflow action.", nil
+		}
+		resolved := 0
+		for _, incident := range related {
+			if incident.State == incidentStateResolved {
+				resolved++
+			}
+		}
+		if resolved == len(related) {
+			return recommendationStatusVerifiedSuccessful, "Every incident linked to the package recommendation is now resolved.", nil
+		}
+		if resolved > 0 {
+			return recommendationStatusPartiallyEffective, fmt.Sprintf("%d of %d package-linked incidents are resolved, but the package still carries residual pressure.", resolved, len(related)), nil
+		}
+		return recommendationStatusExecutedNoEffect, "The package still carries the same linked incident set in the current scope.", nil
+	case "systemic_weakness":
+		response := buildSystemicWeaknessResponse(incidents, "current filtered scope")
+		for _, weakness := range response.Weaknesses {
+			if weakness.PatternKey != item.SourceRef {
+				continue
+			}
+			if len(weakness.RelatedIncidentRefs) < len(item.RelatedIncidentRefs) {
+				return recommendationStatusPartiallyEffective, "The same weakness pattern is still present, but it now covers fewer incidents than before.", nil
+			}
+			return recommendationStatusExecutedNoEffect, "The same systemic weakness pattern is still present at the same scale.", nil
+		}
+		return recommendationStatusVerifiedSuccessful, "The previously linked systemic weakness pattern is no longer present in the current scope.", nil
+	case "anomaly":
+		response, err := s.buildRecommendationAnomalyContext(ctx, filter)
+		if err != nil {
+			return "", "", err
+		}
+		for _, anomaly := range response.Items {
+			if item.SourceRef == anomaly.Type+":"+anomaly.Segment {
+				if anomaly.Severity == "high" {
+					return recommendationStatusRegressed, "The same anomaly is still firing at high severity in the current comparison window.", nil
+				}
+				return recommendationStatusExecutedNoEffect, "The same anomaly is still present in the current comparison window.", nil
+			}
+		}
+		return recommendationStatusVerifiedSuccessful, "The anomaly signal is no longer present in the current comparison window.", nil
+	default:
+		return recommendationStatusExecutedNoEffect, "The recommendation source does not yet expose a richer verification rule, so the workflow remains advisory-only.", nil
+	}
+}
+
+func filterRecommendations(values []recommendation, filter recommendationFilter) []recommendation {
+	if len(values) == 0 {
+		return values
+	}
+	filtered := make([]recommendation, 0, len(values))
+	for _, item := range values {
+		if filter.SourceType != "" && item.SourceType != filter.SourceType {
+			continue
+		}
+		if filter.SubjectType != "" && item.SubjectType != filter.SubjectType {
+			continue
+		}
+		if filter.RecommendationType != "" && item.RecommendationType != filter.RecommendationType {
+			continue
+		}
+		if filter.Team != "" && item.Team != filter.Team {
+			continue
+		}
+		if filter.Service != "" && item.Service != filter.Service && item.Repo != filter.Service {
+			continue
+		}
+		if filter.Status != "" && item.Status != filter.Status && item.Outcome.Status != filter.Status {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+func sortRecommendations(values []recommendation) {
+	sort.Slice(values, func(i, j int) bool {
+		if priorityRank(values[i].PriorityBand) != priorityRank(values[j].PriorityBand) {
+			return priorityRank(values[i].PriorityBand) > priorityRank(values[j].PriorityBand)
+		}
+		if values[i].ImpactScore != values[j].ImpactScore {
+			return values[i].ImpactScore > values[j].ImpactScore
+		}
+		if values[i].ConfidenceScore != values[j].ConfidenceScore {
+			return values[i].ConfidenceScore > values[j].ConfidenceScore
+		}
+		return values[i].RecommendationID < values[j].RecommendationID
+	})
+}
+
+func recommendationTemplateByID(templateID string) (recommendationActionTemplate, bool) {
+	for _, template := range recommendationTemplateCatalog {
+		if template.TemplateID == strings.TrimSpace(templateID) {
+			return template, true
+		}
+	}
+	return recommendationActionTemplate{}, false
+}
+
+func firstDefenseGap(values []defenseGapFinding) defenseGapFinding {
+	if len(values) == 0 {
+		return buildDefenseGapFinding("policy_coverage", "limited", nil, nil, "Current scoped incident")
+	}
+	return values[0]
+}
+
+func selectIncidentsByID(values []investigationIncident, ids []string) []investigationIncident {
+	if len(ids) == 0 {
+		return values
+	}
+	selected := make([]investigationIncident, 0, len(ids))
+	index := map[string]investigationIncident{}
+	for _, incident := range values {
+		index[incident.ID] = incident
+	}
+	for _, id := range ids {
+		if incident, ok := index[id]; ok {
+			selected = append(selected, incident)
+		}
+	}
+	return selected
+}
+
+func firstIncidentTenant(values []investigationIncident) string {
+	for _, item := range values {
+		if strings.TrimSpace(item.TenantID) != "" {
+			return strings.TrimSpace(item.TenantID)
+		}
+	}
+	return ""
+}
+
+func firstIncidentRepo(values []investigationIncident) string {
+	for _, item := range values {
+		if strings.TrimSpace(item.Repository) != "" {
+			return strings.TrimSpace(item.Repository)
+		}
+	}
+	return ""
+}
+
+func firstIncidentEnvironment(values []investigationIncident) string {
+	for _, item := range values {
+		if strings.TrimSpace(item.Environment) != "" {
+			return strings.TrimSpace(item.Environment)
+		}
+	}
+	return ""
+}
+
+func firstPackageTenant(values []investigationIncident) string {
+	return firstIncidentTenant(values)
+}
+
+func firstPackageRepo(values []investigationIncident) string {
+	return firstIncidentRepo(values)
+}
+
+func firstPackageEnvironment(values []investigationIncident) string {
+	return firstIncidentEnvironment(values)
+}
+
+func packageEvidenceRefs(intelligence packageIntelligence) []string {
+	values := make([]string, 0, 16)
+	for _, finding := range intelligence.DefenseGapSummary.TopFindings {
+		values = append(values, finding.EvidenceRefs...)
+	}
+	for _, gap := range intelligence.PolicyReplaySummary.TopCoverageGaps {
+		values = append(values, gap.EvidenceRefs...)
+	}
+	for _, pattern := range intelligence.SystemicWeakness.TopPatterns {
+		values = append(values, pattern.EvidenceRefs...)
+	}
+	return limitStrings(uniqueStrings(values), 12)
+}
+
+func packageRecommendationSourceRef(incidentRefs []string) string {
+	sum := sha1.Sum([]byte(strings.Join(uniqueStrings(incidentRefs), "\x1f")))
+	return "PKG-" + strings.ToUpper(fmt.Sprintf("%x", sum[:]))[:10]
+}
+
+func recommendationID(sourceType, sourceRef, templateID string) string {
+	sum := sha1.Sum([]byte(strings.Join([]string{sourceType, sourceRef, templateID}, "\x1f")))
+	return "REC-" + strings.ToUpper(fmt.Sprintf("%x", sum[:]))[:12]
+}
+
+func recommendationPriorityBand(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "critical", "now":
+		return "NOW"
+	case "high", "today":
+		return "TODAY"
+	case "medium", "this_week", "watch":
+		return "THIS_WEEK"
+	default:
+		return "BACKLOG"
+	}
+}
+
+func bumpPriorityBand(value string) string {
+	switch recommendationPriorityBand(value) {
+	case "BACKLOG":
+		return "THIS_WEEK"
+	case "THIS_WEEK":
+		return "TODAY"
+	default:
+		return "NOW"
+	}
+}
+
+func priorityRank(value string) int {
+	switch recommendationPriorityBand(value) {
+	case "NOW":
+		return 4
+	case "TODAY":
+		return 3
+	case "THIS_WEEK":
+		return 2
+	default:
+		return 1
+	}
+}
+
+func recommendationImpactScore(severity string, workloads int, environments int) int {
+	score := 40
+	switch strings.ToLower(strings.TrimSpace(severity)) {
+	case "critical":
+		score = 92
+	case "high":
+		score = 82
+	case "medium":
+		score = 64
+	default:
+		score = 45
+	}
+	score += minInt(10, workloads*3)
+	score += minInt(8, environments*2)
+	return minInt(score, 100)
+}
+
+func systemicImpactScore(value systemicWeakness) int {
+	score := 60 + minInt(20, len(value.RelatedIncidentRefs)*4)
+	if strings.ToLower(strings.TrimSpace(value.Priority)) == "critical" {
+		score += 10
+	}
+	return minInt(score, 100)
+}
+
+func anomalyImpactScore(severity string) int {
+	switch strings.ToLower(strings.TrimSpace(severity)) {
+	case "high":
+		return 85
+	case "medium":
+		return 68
+	default:
+		return 55
+	}
+}
+
+func recommendationEffortScore(templateID string) int {
+	switch templateID {
+	case "create_ticket", "notify_owner":
+		return 20
+	case "open_sandbox", "compare_artifact_versions":
+		return 35
+	case "generate_remediation_draft", "draft_vex":
+		return 45
+	case "request_exception", "create_security_review", "archive_stale_exception":
+		return 60
+	default:
+		return 40
+	}
+}
+
+func recommendationConfidenceScore(value string) int {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "high":
+		return 90
+	case "medium":
+		return 72
+	default:
+		return 55
+	}
+}
+
+func packageRecommendationPriority(intelligence packageIntelligence) string {
+	if len(intelligence.DefenseGapSummary.TopGapTypes) == 0 {
+		return "THIS_WEEK"
+	}
+	if intelligence.DefenseGapSummary.ConfidenceMix["high"] > 0 || intelligence.PolicyReplaySummary.Delta.ImpactedCases >= 3 {
+		return "NOW"
+	}
+	return "TODAY"
+}
+
+func packageRecommendationConfidence(intelligence packageIntelligence) int {
+	if intelligence.DefenseGapSummary.ConfidenceMix["high"] > 0 {
+		return 86
+	}
+	if intelligence.DefenseGapSummary.ConfidenceMix["medium"] > 0 {
+		return 72
+	}
+	return 58
+}
+
+func recommendationCreatedAt(candidates ...*time.Time) time.Time {
+	for _, candidate := range candidates {
+		if candidate != nil && !candidate.IsZero() {
+			return candidate.UTC()
+		}
+	}
+	return time.Now().UTC()
+}
+
+func recommendationExpiry(candidate *time.Time) *time.Time {
+	if candidate == nil || candidate.IsZero() {
+		return nil
+	}
+	value := candidate.UTC().Add(7 * 24 * time.Hour)
+	return &value
+}
+
+func serializeReadbackRefs(values []advisoryReadbackRef) []string {
+	serialized := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value.ResourceID) == "" {
+			continue
+		}
+		serialized = append(serialized, strings.Join([]string{
+			value.ResourceType,
+			value.ResourceID,
+			value.ResourceURI,
+			value.EvidenceHash,
+		}, "|"))
+	}
+	return serialized
+}
+
+func recommendationMutationTitle(event audit.StoredEvent) string {
+	switch event.EventType {
+	case recommendationEventAcknowledged:
+		return "Recommendation acknowledged"
+	case recommendationEventAccepted:
+		return "Recommendation accepted"
+	case recommendationEventRejected:
+		return "Recommendation rejected"
+	case recommendationEventExecuted:
+		return "Action executed"
+	case recommendationEventVerified:
+		return "Outcome verified"
+	case recommendationEventAssigned:
+		return "Owner assigned"
+	case recommendationEventCommented:
+		return "Comment added"
+	case recommendationEventApprovalRequest:
+		return "Approval requested"
+	default:
+		return "Recommendation updated"
+	}
+}
+
+func recommendationMutationSummary(event audit.StoredEvent) string {
+	switch event.EventType {
+	case recommendationEventRejected:
+		return firstNonEmpty(strings.TrimSpace(event.RecommendationFeedbackSummary), "The recommendation was rejected.")
+	case recommendationEventExecuted:
+		return firstNonEmpty(strings.TrimSpace(event.RecommendationFeedbackSummary), "A workflow action was executed for this recommendation.")
+	case recommendationEventVerified:
+		return firstNonEmpty(strings.TrimSpace(event.RecommendationFeedbackSummary), "Recommendation impact was verified against current canonical signals.")
+	case recommendationEventAssigned:
+		if strings.TrimSpace(event.RecommendationOwner) != "" {
+			return fmt.Sprintf("Assigned to %s.", strings.TrimSpace(event.RecommendationOwner))
+		}
+	case recommendationEventCommented:
+		return firstNonEmpty(strings.TrimSpace(event.RecommendationComment), "A workflow comment was recorded.")
+	case recommendationEventApprovalRequest:
+		return firstNonEmpty(strings.TrimSpace(event.RecommendationFeedbackSummary), "Approval was requested for a sensitive workflow action.")
+	}
+	if strings.TrimSpace(event.RecommendationFeedbackSummary) != "" {
+		return strings.TrimSpace(event.RecommendationFeedbackSummary)
+	}
+	return recommendationMutationTitle(event)
+}
+
+func recommendationExecutionSummary(item recommendation, template recommendationActionTemplate, summary string) string {
+	if strings.TrimSpace(summary) != "" {
+		return strings.TrimSpace(summary)
+	}
+	switch template.TemplateID {
+	case "create_ticket":
+		return fmt.Sprintf("Prepared a ticket-ready remediation brief for %s with %d evidence refs and %d linked incidents.", item.SubjectRef, len(item.EvidenceRefs), len(item.RelatedIncidentRefs))
+	case "open_sandbox":
+		return fmt.Sprintf("Prepared a bounded sandbox workflow for %s so the weakest control path can be reproduced safely before production changes.", item.SubjectRef)
+	case "generate_remediation_draft":
+		return fmt.Sprintf("Generated a remediation draft for %s using the linked evidence, replay, and recommendation rationale.", item.SubjectRef)
+	case "draft_vex":
+		return fmt.Sprintf("Prepared a VEX-style triage draft for %s from the current evidence bundle.", item.SubjectRef)
+	case "notify_owner":
+		return fmt.Sprintf("Prepared an owner notification for %s so the recommendation can be routed without mutating canonical truth.", item.SubjectRef)
+	default:
+		return fmt.Sprintf("Executed %s for %s.", template.Title, item.SubjectRef)
+	}
+}
+
+func isRecommendationMutationEvent(event audit.StoredEvent) bool {
+	if strings.TrimSpace(event.Component) != recommendationComponent {
+		return false
+	}
+	switch event.EventType {
+	case recommendationEventAcknowledged, recommendationEventAccepted, recommendationEventRejected, recommendationEventExecuted, recommendationEventVerified, recommendationEventAssigned, recommendationEventCommented, recommendationEventApprovalRequest:
+		return true
+	default:
+		return false
+	}
+}
+
+func writeRecommendationError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	if errors.Is(err, errIncidentNotFound) {
+		status = http.StatusNotFound
+	} else if errors.Is(err, errRecommendationApprovalRequired) {
+		status = http.StatusConflict
+	} else if errors.Is(err, audit.ErrInvalidFilter) {
+		status = http.StatusBadRequest
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		status = http.StatusGatewayTimeout
+	}
+	httpjson.Write(w, status, map[string]string{"error": err.Error()})
+}
+
+func (f recommendationFilter) toIncidentFilter() incidentFilter {
+	return incidentFilter{event: f.event}
+}

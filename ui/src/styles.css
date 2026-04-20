@@ -1026,6 +1026,36 @@ pre {
   margin-top: 10px;
 }
 
+.incident-recommendations {
+  display: grid;
+  gap: 12px;
+}
+
+.incident-recommendation-card {
+  border: 1px solid rgba(18, 32, 47, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.incident-recommendation-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.incident-recommendation-card__header p {
+  margin: 6px 0 0;
+}
+
+.incident-recommendation-card__meta {
+  display: grid;
+  gap: 4px;
+}
+
 .incident-timeline {
   list-style: none;
   margin: 12px 0 0;

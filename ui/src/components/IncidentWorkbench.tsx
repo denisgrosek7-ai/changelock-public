@@ -18,6 +18,7 @@ import {
   type IncidentReportAudience,
   type InvestigationIncident,
   type MetricIncidentDrilldown,
+  type Recommendation,
 } from "../incidents";
 import type { StoredEvent } from "../types";
 import type { TopologyBlastRadiusResponse } from "../types";
@@ -30,6 +31,7 @@ type Props = {
   loading: boolean;
   error: string | null;
   role?: string;
+  refreshKey?: number;
   metricDrilldown?: MetricIncidentDrilldown | null;
   onClearMetricDrilldown?: () => void;
   onLoadExport?: (incidentID: string, audience: IncidentReportAudience) => Promise<IncidentExport>;
@@ -41,6 +43,12 @@ type Props = {
   onLoadMetricPolicyReplay?: (metricKey: string) => Promise<PolicyReplayAssessment>;
   onLoadIncidentBlastRadius?: (incidentID: string) => Promise<TopologyBlastRadiusResponse>;
   onLoadMetricBlastRadius?: (metricKey: string) => Promise<TopologyBlastRadiusResponse>;
+  onLoadRecommendations?: (input: {
+    incidentIDs?: string[];
+    packageIncidentIDs?: string[];
+    sourceType?: string;
+    limit?: string;
+  }) => Promise<Recommendation[]>;
   onAcknowledge?: (incidentID: string, summary?: string) => Promise<void>;
   onWatch?: (incidentID: string, summary?: string) => Promise<void>;
   onAssign?: (incidentID: string, owner: string, reason: string) => Promise<void>;
@@ -56,6 +64,14 @@ type Props = {
   ) => Promise<void>;
   onReopen?: (incidentID: string, reason?: string) => Promise<void>;
   onAddNote?: (incidentID: string, note: string) => Promise<void>;
+  onAcknowledgeRecommendation?: (recommendationID: string) => Promise<void>;
+  onAcceptRecommendation?: (recommendationID: string) => Promise<void>;
+  onRejectRecommendation?: (recommendationID: string, reason: string) => Promise<void>;
+  onExecuteRecommendation?: (recommendationID: string, input?: { template_id?: string; summary?: string }) => Promise<void>;
+  onVerifyRecommendation?: (recommendationID: string) => Promise<void>;
+  onAssignRecommendation?: (recommendationID: string, owner: string, reason?: string) => Promise<void>;
+  onCommentRecommendation?: (recommendationID: string, comment: string) => Promise<void>;
+  onRequestRecommendationApproval?: (recommendationID: string, summary?: string) => Promise<void>;
 };
 
 type ReportMode = "report" | "json";
@@ -101,6 +117,27 @@ function trendClass(value: "improving" | "watch" | "worsening") {
 
 function shieldBandClass(value: "strong" | "watch" | "at_risk") {
   return value === "strong" ? "allow" : value === "watch" ? "warning" : "deny";
+}
+
+function recommendationPriorityClass(value: Recommendation["priorityBand"]) {
+  return value === "NOW" ? "deny" : value === "TODAY" ? "warning" : value === "THIS_WEEK" ? "muted" : "allow";
+}
+
+function recommendationStatusClass(value: Recommendation["status"]) {
+  if (value === "verified_successful") {
+    return "allow";
+  }
+  if (value === "partially_effective" || value === "executed" || value === "accepted" || value === "acknowledged") {
+    return "warning";
+  }
+  if (value === "regressed" || value === "executed_no_effect" || value === "rejected") {
+    return "deny";
+  }
+  return "muted";
+}
+
+function recommendationApprovalClass(value: Recommendation["approvalMode"]) {
+  return value === "approval_required" ? "warning" : "allow";
 }
 
 function humanizeKey(value: string) {
@@ -260,6 +297,7 @@ export function IncidentWorkbench({
   loading,
   error,
   role,
+  refreshKey,
   metricDrilldown,
   onClearMetricDrilldown,
   onLoadExport,
@@ -271,12 +309,21 @@ export function IncidentWorkbench({
   onLoadMetricPolicyReplay,
   onLoadIncidentBlastRadius,
   onLoadMetricBlastRadius,
+  onLoadRecommendations,
   onAcknowledge,
   onWatch,
   onAssign,
   onResolve,
   onReopen,
   onAddNote,
+  onAcknowledgeRecommendation,
+  onAcceptRecommendation,
+  onRejectRecommendation,
+  onExecuteRecommendation,
+  onVerifyRecommendation,
+  onAssignRecommendation,
+  onCommentRecommendation,
+  onRequestRecommendationApproval,
 }: Props) {
   const incidents = serverIncidents.length > 0 ? serverIncidents : buildIncidents(events);
   const [selectedIncidentID, setSelectedIncidentID] = useState<string | null>(null);
@@ -329,6 +376,15 @@ export function IncidentWorkbench({
   const [readbackActionLoading, setReadbackActionLoading] = useState(false);
   const [readbackActionError, setReadbackActionError] = useState<string | null>(null);
   const [readbackActionStatus, setReadbackActionStatus] = useState<string | null>(null);
+  const [incidentRecommendations, setIncidentRecommendations] = useState<Record<string, Recommendation[]>>({});
+  const [packageRecommendations, setPackageRecommendations] = useState<Recommendation[]>([]);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [packageRecommendationLoading, setPackageRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [packageRecommendationError, setPackageRecommendationError] = useState<string | null>(null);
+  const [recommendationActionLoading, setRecommendationActionLoading] = useState(false);
+  const [recommendationActionError, setRecommendationActionError] = useState<string | null>(null);
+  const [recommendationActionStatus, setRecommendationActionStatus] = useState<string | null>(null);
   const exportPayload = selectedIncident ? exportPayloads[`${selectedIncident.id}:${reportAudience}`] : undefined;
   const incidentDefenseGaps = selectedIncident ? incidentDefenseAssessments[selectedIncident.id] : undefined;
   const metricDefenseGaps = metricDrilldown ? metricDefenseAssessments[metricDrilldown.metricKey] : undefined;
@@ -336,6 +392,7 @@ export function IncidentWorkbench({
   const metricReplay = metricDrilldown ? metricReplayAssessments[metricDrilldown.metricKey] : undefined;
   const incidentBlastRadius = selectedIncident ? incidentBlastRadiusAssessments[selectedIncident.id] : undefined;
   const metricBlastRadius = metricDrilldown ? metricBlastRadiusAssessments[metricDrilldown.metricKey] : undefined;
+  const selectedIncidentRecommendations = selectedIncident ? incidentRecommendations[selectedIncident.id] || [] : [];
   const canManage = role === "operator" || role === "security_admin";
   const canResolve = role === "security_admin";
 
@@ -387,6 +444,13 @@ export function IncidentWorkbench({
     setReportAudience("internal");
     setHandoffMode(false);
   }, [selectedIncident?.id]);
+
+  useEffect(() => {
+    setIncidentRecommendations({});
+    setPackageRecommendations([]);
+    setRecommendationError(null);
+    setPackageRecommendationError(null);
+  }, [refreshKey]);
 
   useEffect(() => {
     const active = Boolean(exportPayload) && reportMode === "report" && handoffMode;
@@ -554,6 +618,39 @@ export function IncidentWorkbench({
   }, [incidentBlastRadiusAssessments, onLoadIncidentBlastRadius, selectedIncident]);
 
   useEffect(() => {
+    if (!selectedIncident || !onLoadRecommendations || incidentRecommendations[selectedIncident.id]) {
+      return;
+    }
+    let ignore = false;
+    setRecommendationLoading(true);
+    setRecommendationError(null);
+    void onLoadRecommendations({
+      incidentIDs: [selectedIncident.id],
+      limit: "6",
+    })
+      .then((payload) => {
+        if (ignore) {
+          return;
+        }
+        setIncidentRecommendations((current) => ({ ...current, [selectedIncident.id]: payload }));
+      })
+      .catch((loadError) => {
+        if (ignore) {
+          return;
+        }
+        setRecommendationError(loadError instanceof Error ? loadError.message : "Unable to load recommendations.");
+      })
+      .finally(() => {
+        if (!ignore) {
+          setRecommendationLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [incidentRecommendations, onLoadRecommendations, refreshKey, selectedIncident]);
+
+  useEffect(() => {
     if (!metricDrilldown?.metricKey || !onLoadMetricBlastRadius || metricBlastRadiusAssessments[metricDrilldown.metricKey]) {
       return;
     }
@@ -582,6 +679,41 @@ export function IncidentWorkbench({
       ignore = true;
     };
   }, [metricBlastRadiusAssessments, metricDrilldown, onLoadMetricBlastRadius]);
+
+  useEffect(() => {
+    if (selectedPackageIDs.length === 0 || !onLoadRecommendations) {
+      setPackageRecommendations([]);
+      return;
+    }
+    let ignore = false;
+    setPackageRecommendationLoading(true);
+    setPackageRecommendationError(null);
+    void onLoadRecommendations({
+      packageIncidentIDs: selectedPackageIDs,
+      sourceType: "package",
+      limit: "4",
+    })
+      .then((payload) => {
+        if (ignore) {
+          return;
+        }
+        setPackageRecommendations(payload);
+      })
+      .catch((loadError) => {
+        if (ignore) {
+          return;
+        }
+        setPackageRecommendationError(loadError instanceof Error ? loadError.message : "Unable to load package recommendations.");
+      })
+      .finally(() => {
+        if (!ignore) {
+          setPackageRecommendationLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [onLoadRecommendations, refreshKey, selectedPackageIDs]);
 
   async function runAction(action: () => Promise<void>) {
     setActionSubmitting(true);
@@ -740,6 +872,125 @@ export function IncidentWorkbench({
     } finally {
       setReadbackActionLoading(false);
     }
+  }
+
+  async function runRecommendationAction(action: () => Promise<void>, successMessage: string) {
+    setRecommendationActionLoading(true);
+    setRecommendationActionError(null);
+    setRecommendationActionStatus(null);
+    try {
+      await action();
+      setRecommendationActionStatus(successMessage);
+    } catch (actionError) {
+      setRecommendationActionError(actionError instanceof Error ? actionError.message : "Recommendation workflow action failed.");
+    } finally {
+      setRecommendationActionLoading(false);
+    }
+  }
+
+  function renderRecommendationList(items: Recommendation[], scope: "incident" | "package") {
+    if (items.length === 0) {
+      return <div className="summary-list-empty">No recommendation workflow items are visible for this {scope} scope.</div>;
+    }
+
+    return (
+      <div className="incident-recommendations">
+        {items.map((item) => (
+          <article className="incident-recommendation-card" key={item.recommendationID}>
+            <div className="incident-recommendation-card__header">
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.recommendedAction}</p>
+              </div>
+              <div className="chip-row">
+                <span className={`chip chip--${recommendationPriorityClass(item.priorityBand)}`}>{item.priorityBand.replace(/_/g, " ")}</span>
+                <span className={`chip chip--${recommendationStatusClass(item.status)}`}>{item.status.replace(/_/g, " ")}</span>
+                <span className={`chip chip--${recommendationApprovalClass(item.approvalMode)}`}>{item.approvalMode === "approval_required" ? "approval required" : "auto-safe"}</span>
+              </div>
+            </div>
+
+            <p>{item.description}</p>
+            <small>{item.rationale}</small>
+
+            <div className="incident-recommendation-card__meta">
+              <small><strong>Action template:</strong> {item.actionTemplate.title}</small>
+              <small><strong>Impact / effort / confidence:</strong> {item.impactScore} / {item.effortScore} / {item.confidenceScore}</small>
+              {item.owner ? <small><strong>Owner:</strong> {item.owner}</small> : null}
+            </div>
+
+            {item.evidenceRefs.length > 0 ? (
+              <div>
+                <span className="summary-label">Evidence refs</span>
+                {renderChipList(item.evidenceRefs, "No evidence refs linked.", `${item.recommendationID}-evidence`, 5)}
+              </div>
+            ) : null}
+
+            {item.verificationPlan.length > 0 ? (
+              <div>
+                <span className="summary-label">Verification plan</span>
+                {renderValueList(item.verificationPlan, "No verification plan attached.", 3)}
+              </div>
+            ) : null}
+
+            {item.feedbackSummary ? <p className="incident-inline-copy">{item.feedbackSummary}</p> : null}
+
+            {item.readbackRefs.length > 0 ? (
+              <div className="chip-row">
+                {item.readbackRefs.slice(0, 2).map((ref) => (
+                  <button type="button" className="button button-secondary" key={`${item.recommendationID}-${ref.resourceID}`} onClick={() => window.open(absoluteReadbackURL(ref.resourceURI), "_blank", "noopener,noreferrer")}>
+                    Open {ref.resourceType}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {canManage ? (
+              <div className="chip-row">
+                {onAcknowledgeRecommendation ? (
+                  <button type="button" className="button button-secondary" disabled={recommendationActionLoading} onClick={() => void runRecommendationAction(() => onAcknowledgeRecommendation(item.recommendationID), "Recommendation acknowledged.")}>
+                    Acknowledge
+                  </button>
+                ) : null}
+                {onAcceptRecommendation ? (
+                  <button type="button" className="button button-secondary" disabled={recommendationActionLoading} onClick={() => void runRecommendationAction(() => onAcceptRecommendation(item.recommendationID), "Recommendation accepted.")}>
+                    Accept
+                  </button>
+                ) : null}
+                {onExecuteRecommendation ? (
+                  <button type="button" className="button button-secondary" disabled={recommendationActionLoading} onClick={() => void runRecommendationAction(() => onExecuteRecommendation(item.recommendationID, { template_id: item.actionTemplate.templateID }), `${item.actionTemplate.title} executed.`)}>
+                    {item.actionTemplate.title}
+                  </button>
+                ) : null}
+                {onVerifyRecommendation ? (
+                  <button type="button" className="button button-secondary" disabled={recommendationActionLoading} onClick={() => void runRecommendationAction(() => onVerifyRecommendation(item.recommendationID), "Recommendation verification completed.")}>
+                    Verify impact
+                  </button>
+                ) : null}
+                {item.approvalMode === "approval_required" && onRequestRecommendationApproval ? (
+                  <button type="button" className="button button-secondary" disabled={recommendationActionLoading} onClick={() => void runRecommendationAction(() => onRequestRecommendationApproval(item.recommendationID), "Approval request recorded.")}>
+                    Request approval
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {item.history.length > 0 ? (
+              <div>
+                <span className="summary-label">Workflow history</span>
+                <ul className="summary-list summary-list--compact">
+                  {item.history.slice(0, 3).map((entry) => (
+                    <li key={entry.id}>
+                      <span>{entry.title}</span>
+                      <small>{entry.summary}</small>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    );
   }
 
   function togglePackageSelection(incidentID: string) {
@@ -1086,10 +1337,24 @@ export function IncidentWorkbench({
                     <span>{packagePayload.incidentCount} incidents</span>
                     <span>{packagePayload.selectionMode === "explicit" ? "explicit incident bundle" : "query-derived package"}</span>
                   </div>
-                </section>
+	                </section>
 
-                <section className="incident-report-section">
-                  <div className="incident-report-section__header">
+	                <section className="incident-report-section">
+	                  <div className="incident-report-section__header">
+	                    <span className="summary-label">Recommendation workflow overlay</span>
+	                    <strong>{packageRecommendations.length} package recommendation{packageRecommendations.length === 1 ? "" : "s"}</strong>
+	                  </div>
+	                  {packageRecommendationLoading ? (
+	                    <div className="summary-list-empty">Loading package recommendations…</div>
+	                  ) : packageRecommendationError ? (
+	                    <p className="details-copy details-copy--error">{packageRecommendationError}</p>
+	                  ) : (
+	                    renderRecommendationList(packageRecommendations, "package")
+	                  )}
+	                </section>
+
+	                <section className="incident-report-section">
+	                  <div className="incident-report-section__header">
                     <span className="summary-label">Aggregate summary</span>
                     <strong>Package-wide posture</strong>
                   </div>
@@ -1328,8 +1593,10 @@ export function IncidentWorkbench({
               </section>
             ) : null}
 
-            {readbackActionError ? <p className="details-copy details-copy--error">{readbackActionError}</p> : null}
-            {readbackActionStatus ? <p className="incident-inline-copy">{readbackActionStatus}</p> : null}
+	            {readbackActionError ? <p className="details-copy details-copy--error">{readbackActionError}</p> : null}
+	            {readbackActionStatus ? <p className="incident-inline-copy">{readbackActionStatus}</p> : null}
+	            {recommendationActionError ? <p className="details-copy details-copy--error">{recommendationActionError}</p> : null}
+	            {recommendationActionStatus ? <p className="incident-inline-copy">{recommendationActionStatus}</p> : null}
 
             {metricDrilldown ? (
               <section className="incident-case-section incident-case-section--wide">
@@ -1503,9 +1770,22 @@ export function IncidentWorkbench({
               </article>
             </div>
 
-            <div className="incident-case-grid">
-              <section className="incident-case-section">
-                <h3>What is happening</h3>
+	            <div className="incident-case-grid">
+	              <section className="incident-case-section incident-case-section--wide">
+	                <div className="incident-report-section__header">
+	                  <h3>Recommendation workflow overlay</h3>
+	                  <span className="chip chip--muted">{selectedIncidentRecommendations.length} active</span>
+	                </div>
+	                {recommendationLoading ? (
+	                  <div className="summary-list-empty">Loading recommendation workflow for this case…</div>
+	                ) : recommendationError ? (
+	                  <p className="details-copy details-copy--error">{recommendationError}</p>
+	                ) : (
+	                  renderRecommendationList(selectedIncidentRecommendations, "incident")
+	                )}
+	              </section>
+	              <section className="incident-case-section">
+	                <h3>What is happening</h3>
                 <p>{selectedIncident.statusNarrative}</p>
               </section>
               <section className="incident-case-section">
