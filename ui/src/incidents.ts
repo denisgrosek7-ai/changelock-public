@@ -214,6 +214,67 @@ export type PackageIntelligence = {
   recommendedActions: PackageRecommendedActions;
 };
 
+export type AdvisoryReadbackRef = {
+  resourceType: "defense-gap" | "policy-replay" | "systemic-weakness";
+  resourceID: string;
+  resourceURI: string;
+  evidenceHash: string;
+};
+
+export type DecisionVerdictContext = {
+  summary?: string;
+  currentOutcome?: string;
+  proposedOutcome?: string;
+  delta?: string;
+  patternKey?: string;
+  gapTypes: string[];
+};
+
+export type DecisionSnapshotRefs = {
+  policySnapshotRef: string;
+  evaluatorInputHash: string;
+  evaluatorOutputHash: string;
+  evidenceRefs: string[];
+};
+
+export type DecisionEvidenceEnvelope = {
+  schemaVersion: string;
+  resourceType: string;
+  resourceID: string;
+  evidenceHash: string;
+  generatedAt: string;
+  subjectType: string;
+  subjectRef: string;
+  verdictContext: DecisionVerdictContext;
+  snapshotRefs: DecisionSnapshotRefs;
+  redactionProfileVersion: string;
+  projectionSchemaVersion: string;
+  advisoryOnly: boolean;
+  limitations: string[];
+};
+
+export type AdvisoryReadbackResponse<TPayload = unknown> = {
+  resourceType: string;
+  resourceID: string;
+  permanentURI: string;
+  projectionAudience: IncidentReportAudience;
+  advisoryOnly: boolean;
+  payloadSummary: string;
+  evidenceEnvelope: DecisionEvidenceEnvelope;
+  payload: TPayload;
+  limitations: string[];
+};
+
+export type AdvisoryShareGrant = {
+  grantID: string;
+  shareURL: string;
+  resourceType: string;
+  resourceID: string;
+  audience: IncidentReportAudience;
+  expiresAt: string;
+  purpose?: string;
+};
+
 export type DefenseGapRecommendations = {
   containment: string[];
   hardening: string[];
@@ -245,6 +306,7 @@ export type DefenseGapAssessment = {
   advisoryOnly: boolean;
   defenseGaps: DefenseGapFinding[];
   systemicPattern: DefenseGapPattern;
+  readback: AdvisoryReadbackRef;
   limitations: string[];
 };
 
@@ -287,6 +349,7 @@ export type PolicyReplayAssessment = {
   replayResults: PolicyReplayResult[];
   coverageGaps: CoverageGapFinding[];
   blastRadius: ReplayBlastRadius;
+  readback: AdvisoryReadbackRef;
   limitations: string[];
 };
 
@@ -301,6 +364,7 @@ export type SystemicWeakness = {
   executiveRecommendation: string;
   relatedIncidentRefs: string[];
   evidenceRefs: string[];
+  readback: AdvisoryReadbackRef;
   limitations: string[];
 };
 
