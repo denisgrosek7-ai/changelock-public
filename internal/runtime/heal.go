@@ -19,12 +19,12 @@ const (
 type ReconciliationStatus string
 
 const (
-	ReconciliationStatusInSync       ReconciliationStatus = "in_sync"
-	ReconciliationStatusDrift        ReconciliationStatus = "drift_detected"
-	ReconciliationStatusRemediating  ReconciliationStatus = "remediating"
-	ReconciliationStatusRemediated   ReconciliationStatus = "remediated"
-	ReconciliationStatusFailed       ReconciliationStatus = "failed"
-	ReconciliationStatusQuarantined  ReconciliationStatus = "quarantined"
+	ReconciliationStatusInSync      ReconciliationStatus = "in_sync"
+	ReconciliationStatusDrift       ReconciliationStatus = "drift_detected"
+	ReconciliationStatusRemediating ReconciliationStatus = "remediating"
+	ReconciliationStatusRemediated  ReconciliationStatus = "remediated"
+	ReconciliationStatusFailed      ReconciliationStatus = "failed"
+	ReconciliationStatusQuarantined ReconciliationStatus = "quarantined"
 )
 
 type RemediationOutcome struct {
