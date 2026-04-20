@@ -734,6 +734,8 @@ func (s server) incidentByIDHandler(w http.ResponseWriter, r *http.Request) {
 		s.getIncidentDefenseGapsHandler(w, r, incidentID)
 	case r.Method == http.MethodGet && action == "policy-replay":
 		s.getIncidentPolicyReplayHandler(w, r, incidentID)
+	case r.Method == http.MethodGet && action == "blast-radius":
+		s.getIncidentBlastRadiusHandler(w, r, incidentID)
 	case r.Method == http.MethodGet && action == "history":
 		s.getIncidentHistoryHandler(w, r, incidentID)
 	case r.Method == http.MethodGet && action == "timeline":
@@ -815,6 +817,18 @@ func (s server) scorecardMetricIncidentsHandler(w http.ResponseWriter, r *http.R
 		httpjson.Write(w, http.StatusOK, attachPolicyReplayReadback(buildMetricPolicyReplayAssessment(definition.Key, incidents), filter))
 	case "systemic-weaknesses":
 		httpjson.Write(w, http.StatusOK, attachSystemicWeaknessReadback(buildSystemicWeaknessResponse(incidents, definition.Label), filter))
+	case "blast-radius":
+		topologyFilter, parseErr := parseTopologyFilter(r)
+		if parseErr != nil {
+			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": parseErr.Error()})
+			return
+		}
+		response, buildErr := s.buildMetricBlastRadiusResponse(ctx, topologyFilter, definition.Key, incidents)
+		if buildErr != nil {
+			writeIncidentError(w, buildErr)
+			return
+		}
+		httpjson.Write(w, http.StatusOK, response)
 	default:
 		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "metric not found"})
 	}

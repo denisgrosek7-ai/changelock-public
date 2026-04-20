@@ -3,7 +3,7 @@ export type ExceptionStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | 
 export type VulnerabilityDecisionValue = "NOT_AFFECTED" | "ACCEPTED_RISK" | "FIX_REQUIRED" | "UNDER_INVESTIGATION";
 export type VulnerabilityStatus = "OPEN" | "RESOLVED" | "SUPPRESSED";
 export type VEXStatus = "not_affected" | "affected" | "fixed" | "under_investigation";
-export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
+export type TabKey = "overview" | "events" | "denies" | "runtime" | "analytics" | "topology" | "exceptions" | "inventory" | "vulnerabilities" | "signing" | "scorecard" | "guidance";
 
 export interface AuditHealth {
   status: string;
@@ -478,6 +478,130 @@ export interface AnalyticsSegmentCatalogItem {
 export interface AnalyticsSegmentsResponse {
   comparison: AnalyticsComparisonContext;
   items: AnalyticsSegmentCatalogItem[];
+  limitations?: string[];
+}
+
+export interface TopologyNode {
+  node_id: string;
+  service: string;
+  workload?: string;
+  namespace?: string;
+  cluster?: string;
+  environment?: string;
+  team?: string;
+  repo?: string;
+  artifact_digest?: string;
+  public_exposure: boolean;
+  sensitivity_class: string;
+  node_risk_score: number;
+  blast_radius_score: number;
+  critical_reach_count: number;
+  public_entry_flag: boolean;
+  sensitive_asset_reach_flag: boolean;
+  propagation_class: string;
+  trust_boundary_crossings: number;
+  last_seen: string;
+  evidence_refs?: string[];
+}
+
+export interface TopologyEdge {
+  source: string;
+  target: string;
+  edge_type: string;
+  connectivity_class: string;
+  evidence_source: string;
+  confidence: string;
+  last_seen?: string;
+  environment_scope?: string;
+  evidence_refs?: string[];
+}
+
+export interface TopologyGraphView {
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
+}
+
+export interface TopologyGraphSummary {
+  declared_nodes: number;
+  declared_edges: number;
+  observed_nodes: number;
+  observed_edges: number;
+  effective_nodes: number;
+  effective_edges: number;
+  public_entry_nodes: number;
+  critical_nodes: number;
+  high_blast_radius: number;
+}
+
+export interface TopologyGraphResponse {
+  declared_graph: TopologyGraphView;
+  observed_graph: TopologyGraphView;
+  effective_graph: TopologyGraphView;
+  summary: TopologyGraphSummary;
+  applied_filters: Record<string, string>;
+  limitations?: string[];
+}
+
+export interface TopologyServicesResponse {
+  items: TopologyNode[];
+  applied_filters: Record<string, string>;
+  limitations?: string[];
+}
+
+export interface TopologyHeatmapResponse {
+  items: TopologyNode[];
+  applied_filters: Record<string, string>;
+  limitations?: string[];
+}
+
+export interface TopologyRiskPath {
+  nodes: string[];
+  edge_types: string[];
+  summary: string;
+}
+
+export interface TopologyContainmentOption {
+  option_id: string;
+  title: string;
+  summary: string;
+  restriction_plan: string[];
+  closed_edge_types: string[];
+  estimated_score_reduction: number;
+  approval_mode: string;
+  evidence_refs?: string[];
+}
+
+export interface TopologyBlastRadiusResponse {
+  subject_ref: string;
+  subject_type: string;
+  affected_nodes: TopologyNode[];
+  primary_affected_node?: TopologyNode;
+  reachable_nodes: TopologyNode[];
+  critical_reach_count: number;
+  blast_radius_score: number;
+  trust_boundary_crossings: number;
+  declared_edge_count: number;
+  observed_edge_count: number;
+  top_risk_paths: TopologyRiskPath[];
+  containment_options: TopologyContainmentOption[];
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface TopologyDeltaItem {
+  node_id: string;
+  service: string;
+  current_blast_radius_score: number;
+  baseline_blast_radius_score: number;
+  delta: number;
+  edge_additions: number;
+  critical_reach_delta: number;
+  drift_signals?: string[];
+}
+
+export interface TopologyDeltaResponse {
+  comparison: AnalyticsComparisonContext;
+  items: TopologyDeltaItem[];
   limitations?: string[];
 }
 
