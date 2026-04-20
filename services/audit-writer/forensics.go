@@ -1179,7 +1179,32 @@ func forensicSeverity(event audit.StoredEvent) string {
 
 func orderEventsAscending(events []audit.StoredEvent) []audit.StoredEvent {
 	sorted := append([]audit.StoredEvent(nil), events...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Timestamp.Before(sorted[j].Timestamp) })
+	sort.Slice(sorted, func(i, j int) bool {
+		leftTime := eventTimestamp(sorted[i])
+		rightTime := eventTimestamp(sorted[j])
+		if !leftTime.Equal(rightTime) {
+			return leftTime.Before(rightTime)
+		}
+		if sorted[i].ID != sorted[j].ID {
+			return sorted[i].ID < sorted[j].ID
+		}
+		if strings.TrimSpace(sorted[i].DecisionHash) != strings.TrimSpace(sorted[j].DecisionHash) {
+			return strings.TrimSpace(sorted[i].DecisionHash) < strings.TrimSpace(sorted[j].DecisionHash)
+		}
+		if strings.TrimSpace(sorted[i].RequestID) != strings.TrimSpace(sorted[j].RequestID) {
+			return strings.TrimSpace(sorted[i].RequestID) < strings.TrimSpace(sorted[j].RequestID)
+		}
+		if strings.TrimSpace(sorted[i].EventType) != strings.TrimSpace(sorted[j].EventType) {
+			return strings.TrimSpace(sorted[i].EventType) < strings.TrimSpace(sorted[j].EventType)
+		}
+		if strings.TrimSpace(sorted[i].Component) != strings.TrimSpace(sorted[j].Component) {
+			return strings.TrimSpace(sorted[i].Component) < strings.TrimSpace(sorted[j].Component)
+		}
+		if strings.TrimSpace(sorted[i].Digest) != strings.TrimSpace(sorted[j].Digest) {
+			return strings.TrimSpace(sorted[i].Digest) < strings.TrimSpace(sorted[j].Digest)
+		}
+		return strings.TrimSpace(sorted[i].IncidentID) < strings.TrimSpace(sorted[j].IncidentID)
+	})
 	return sorted
 }
 
