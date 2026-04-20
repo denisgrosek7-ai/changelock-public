@@ -122,8 +122,8 @@ func parseCSAF(request IngestRequest) ([]CreateRequest, error) {
 		} `json:"product_identification_helper"`
 	}
 	type vulnerability struct {
-		CVE           string `json:"cve"`
-		IDs           []struct {
+		CVE string `json:"cve"`
+		IDs []struct {
 			Text string `json:"text"`
 		} `json:"ids"`
 		Notes         []csafNote        `json:"notes"`
@@ -203,10 +203,10 @@ func parseCSAF(request IngestRequest) ([]CreateRequest, error) {
 
 func parseCycloneDX(request IngestRequest) ([]CreateRequest, error) {
 	type component struct {
-		BOMRef     string     `json:"bom-ref"`
-		Name       string     `json:"name"`
-		PURL       string     `json:"purl"`
-		Version    string     `json:"version"`
+		BOMRef     string              `json:"bom-ref"`
+		Name       string              `json:"name"`
+		PURL       string              `json:"purl"`
+		Version    string              `json:"version"`
 		Properties []cyclonedxProperty `json:"properties"`
 	}
 	type analysis struct {
@@ -216,19 +216,19 @@ func parseCycloneDX(request IngestRequest) ([]CreateRequest, error) {
 		Response      []string `json:"response"`
 	}
 	type vulnerability struct {
-		ID             string `json:"id"`
-		Affects        []struct {
+		ID      string `json:"id"`
+		Affects []struct {
 			Ref string `json:"ref"`
 		} `json:"affects"`
 		Analysis       analysis `json:"analysis"`
 		Recommendation string   `json:"recommendation"`
 	}
 	var document struct {
-		BOMFormat      string          `json:"bomFormat"`
-		Metadata       struct {
+		BOMFormat string `json:"bomFormat"`
+		Metadata  struct {
 			Component component `json:"component"`
 		} `json:"metadata"`
-		Components     []component     `json:"components"`
+		Components      []component     `json:"components"`
 		Vulnerabilities []vulnerability `json:"vulnerabilities"`
 	}
 	if err := json.Unmarshal(request.Payload, &document); err != nil {
@@ -334,7 +334,9 @@ func extractDigest(values ...string) string {
 	return ""
 }
 
-func firstText(values []struct{ Text string `json:"text"` }) string {
+func firstText(values []struct {
+	Text string `json:"text"`
+}) string {
 	for _, value := range values {
 		if strings.TrimSpace(value.Text) != "" {
 			return strings.TrimSpace(value.Text)

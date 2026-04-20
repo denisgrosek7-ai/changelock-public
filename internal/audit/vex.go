@@ -16,31 +16,31 @@ const (
 )
 
 type VEXMatch struct {
-	ID              int64     `json:"id"`
-	SourceFormat    string    `json:"source_format"`
-	SourceRef       string    `json:"source_ref,omitempty"`
-	VulnerabilityID string    `json:"vulnerability_id"`
-	Status          string    `json:"status"`
-	Justification   string    `json:"justification,omitempty"`
-	ActionStatement string    `json:"action_statement,omitempty"`
-	ImpactStatement string    `json:"impact_statement,omitempty"`
-	FixedVersion    string    `json:"fixed_version,omitempty"`
-	CreatedBy       string    `json:"created_by,omitempty"`
-	UpdatedBy       string    `json:"updated_by,omitempty"`
+	ID              int64      `json:"id"`
+	SourceFormat    string     `json:"source_format"`
+	SourceRef       string     `json:"source_ref,omitempty"`
+	VulnerabilityID string     `json:"vulnerability_id"`
+	Status          string     `json:"status"`
+	Justification   string     `json:"justification,omitempty"`
+	ActionStatement string     `json:"action_statement,omitempty"`
+	ImpactStatement string     `json:"impact_statement,omitempty"`
+	FixedVersion    string     `json:"fixed_version,omitempty"`
+	CreatedBy       string     `json:"created_by,omitempty"`
+	UpdatedBy       string     `json:"updated_by,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type VulnerabilityNetResponse struct {
-	RawCount                 int                    `json:"raw_count"`
-	ResolvedByVEXCount       int                    `json:"resolved_by_vex_count"`
-	ActionableCount          int                    `json:"actionable_count"`
-	UnderInvestigationCount  int                    `json:"under_investigation_count"`
-	SeverityThreshold        string                 `json:"severity_threshold,omitempty"`
-	ThresholdBreached        bool                   `json:"threshold_breached"`
-	Findings                 []VulnerabilityFinding `json:"findings"`
-	AppliedFilters           map[string]string      `json:"applied_filters"`
+	RawCount                int                    `json:"raw_count"`
+	ResolvedByVEXCount      int                    `json:"resolved_by_vex_count"`
+	ActionableCount         int                    `json:"actionable_count"`
+	UnderInvestigationCount int                    `json:"under_investigation_count"`
+	SeverityThreshold       string                 `json:"severity_threshold,omitempty"`
+	ThresholdBreached       bool                   `json:"threshold_breached"`
+	Findings                []VulnerabilityFinding `json:"findings"`
+	AppliedFilters          map[string]string      `json:"applied_filters"`
 }
 
 func cloneVEXMatch(match *VEXMatch) *VEXMatch {

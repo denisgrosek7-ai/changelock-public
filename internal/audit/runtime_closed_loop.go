@@ -7,14 +7,14 @@ import (
 )
 
 type RuntimeActiveStateFilter struct {
-	ClusterID             string
-	TenantID              string
-	Namespace             string
-	WorkloadKind          string
-	Workload              string
-	ReconciliationStatus  string
-	QuarantineType        string
-	Limit                 int
+	ClusterID            string
+	TenantID             string
+	Namespace            string
+	WorkloadKind         string
+	Workload             string
+	ReconciliationStatus string
+	QuarantineType       string
+	Limit                int
 }
 
 type RuntimeActiveStateView struct {
@@ -50,16 +50,16 @@ type RuntimeActiveStateView struct {
 }
 
 type RuntimeClosedLoopStatus struct {
-	TotalTargets          int64            `json:"total_targets"`
-	InSync                int64            `json:"in_sync"`
-	DriftDetected         int64            `json:"drift_detected"`
-	Remediated            int64            `json:"remediated"`
-	Failed                int64            `json:"failed"`
-	Quarantined           int64            `json:"quarantined"`
-	ProtectedBlocked      int64            `json:"protected_blocked"`
-	CountsByStatus        map[string]int64 `json:"counts_by_status"`
-	CountsByQuarantine    map[string]int64 `json:"counts_by_quarantine_type"`
-	LastReconciledAt      *time.Time       `json:"last_reconciled_at,omitempty"`
+	TotalTargets       int64            `json:"total_targets"`
+	InSync             int64            `json:"in_sync"`
+	DriftDetected      int64            `json:"drift_detected"`
+	Remediated         int64            `json:"remediated"`
+	Failed             int64            `json:"failed"`
+	Quarantined        int64            `json:"quarantined"`
+	ProtectedBlocked   int64            `json:"protected_blocked"`
+	CountsByStatus     map[string]int64 `json:"counts_by_status"`
+	CountsByQuarantine map[string]int64 `json:"counts_by_quarantine_type"`
+	LastReconciledAt   *time.Time       `json:"last_reconciled_at,omitempty"`
 }
 
 func DeriveRuntimeActiveStates(events []StoredEvent, filter RuntimeActiveStateFilter) []RuntimeActiveStateView {
