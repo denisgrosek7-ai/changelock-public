@@ -1030,6 +1030,26 @@ func TestIncidentPackageEndpointBuildsDerivedBundle(t *testing.T) {
 	if len(packageResponse.RedactionSummary) == 0 || len(packageResponse.Limitations) == 0 {
 		t.Fatalf("expected redaction summary and limitations, got %#v", packageResponse)
 	}
+	if !packageResponse.PackageIntel.AdvisoryOnly || packageResponse.PackageIntel.GeneratedAt.IsZero() {
+		t.Fatalf("expected package intelligence header, got %#v", packageResponse.PackageIntel)
+	}
+	if len(packageResponse.PackageIntel.DefenseGapSummary.TopGapTypes) == 0 || len(packageResponse.PackageIntel.DefenseGapSummary.TopFindings) == 0 {
+		t.Fatalf("expected aggregated package defense gaps, got %#v", packageResponse.PackageIntel.DefenseGapSummary)
+	}
+	if packageResponse.PackageIntel.PolicyReplaySummary.Delta.ImpactedCases != 2 || len(packageResponse.PackageIntel.PolicyReplaySummary.TopCoverageGaps) == 0 {
+		t.Fatalf("expected replay summary and coverage gaps, got %#v", packageResponse.PackageIntel.PolicyReplaySummary)
+	}
+	if len(packageResponse.PackageIntel.SystemicWeakness.TopPatterns) == 0 || strings.TrimSpace(packageResponse.PackageIntel.SystemicWeakness.RootCauseHypothesis) == "" {
+		t.Fatalf("expected systemic weakness summary, got %#v", packageResponse.PackageIntel.SystemicWeakness)
+	}
+	if len(packageResponse.PackageIntel.RecommendedActions.ImmediateContainment) == 0 || strings.TrimSpace(packageResponse.PackageIntel.RecommendedActions.WhyThisMattersNow) == "" {
+		t.Fatalf("expected package recommended actions, got %#v", packageResponse.PackageIntel.RecommendedActions)
+	}
+	for _, finding := range packageResponse.PackageIntel.DefenseGapSummary.TopFindings {
+		if len(finding.EvidenceRefs) != 0 {
+			t.Fatalf("expected auditor-safe package intelligence to redact evidence refs, got %#v", packageResponse.PackageIntel.DefenseGapSummary.TopFindings)
+		}
+	}
 
 	queryReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/package?tenant_id=acme&audience=internal", nil)
 	queryRec := httptest.NewRecorder()
@@ -1044,6 +1064,27 @@ func TestIncidentPackageEndpointBuildsDerivedBundle(t *testing.T) {
 	}
 	if queryResponse.SelectionMode != "query_derived" || queryResponse.IncidentCount != 2 {
 		t.Fatalf("unexpected query-derived package %#v", queryResponse)
+	}
+	if queryResponse.PackageIntel.PolicyReplaySummary.BlastRadius.IncidentCount != 2 {
+		t.Fatalf("expected internal package intelligence replay blast radius, got %#v", queryResponse.PackageIntel.PolicyReplaySummary)
+	}
+
+	emptyReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/package?tenant_id=acme&audience=internal&environment=does-not-exist", nil)
+	emptyRec := httptest.NewRecorder()
+	handler.ServeHTTP(emptyRec, emptyReq)
+	if emptyRec.Code != http.StatusOK {
+		t.Fatalf("expected empty package 200, got %d: %s", emptyRec.Code, emptyRec.Body.String())
+	}
+
+	var emptyResponse incidentPackageResponse
+	if err := json.NewDecoder(emptyRec.Body).Decode(&emptyResponse); err != nil {
+		t.Fatalf("decode empty package response: %v", err)
+	}
+	if emptyResponse.IncidentCount != 0 || len(emptyResponse.PackageIntel.DefenseGapSummary.TopGapTypes) != 0 || emptyResponse.PackageIntel.PolicyReplaySummary.Delta.ImpactedCases != 0 {
+		t.Fatalf("expected empty package intelligence payload, got %#v", emptyResponse)
+	}
+	if len(emptyResponse.PackageIntel.DefenseGapSummary.Limitations) == 0 || len(emptyResponse.PackageIntel.SystemicWeakness.Limitations) == 0 {
+		t.Fatalf("expected empty package intelligence limitations, got %#v", emptyResponse.PackageIntel)
 	}
 }
 

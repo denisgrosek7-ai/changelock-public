@@ -93,6 +93,10 @@ function shieldBandClass(value: "strong" | "watch" | "at_risk") {
   return value === "strong" ? "allow" : value === "watch" ? "warning" : "deny";
 }
 
+function humanizeKey(value: string) {
+  return value.replace(/_/g, " ");
+}
+
 function describeScope(incident: InvestigationIncident) {
   const repos = incident.affectedRepos.length;
   const environments = incident.affectedEnvironments.length;
@@ -885,6 +889,140 @@ export function IncidentWorkbench({
 
                 <section className="incident-report-section">
                   <div className="incident-report-section__header">
+                    <span className="summary-label">Package intelligence</span>
+                    <strong>Aggregated advisory package layer</strong>
+                  </div>
+                  <div className="chip-row">
+                    <span className="chip chip--muted">advisory only</span>
+                    <span className="chip chip--muted">generated {formatTimestamp(packagePayload.packageIntelligence.generatedAt)}</span>
+                  </div>
+                  <div className="incident-impact-list">
+                    <article className="incident-impact-card incident-defense-gap">
+                      <div className="incident-impact-card__header">
+                        <strong>Top defense gaps</strong>
+                      </div>
+                      <p>{packagePayload.packageIntelligence.defenseGapSummary.rationale}</p>
+                      {renderChipList(
+                        packagePayload.packageIntelligence.defenseGapSummary.topGapTypes.map(humanizeKey),
+                        "No dominant defense-gap types recorded for this package.",
+                        "package-defense-gap-types",
+                        4,
+                      )}
+                      <div className="chip-row">
+                        {Object.entries(packagePayload.packageIntelligence.defenseGapSummary.confidenceMix).map(([key, value]) => (
+                          <span className={`chip chip--${confidenceClass(key as "high" | "medium" | "limited")}`} key={`package-gap-confidence-${key}`}>
+                            {key} {value}
+                          </span>
+                        ))}
+                      </div>
+                      {packagePayload.packageIntelligence.defenseGapSummary.topFindings.length > 0 ? (
+                        <div className="summary-grid">
+                          {packagePayload.packageIntelligence.defenseGapSummary.topFindings.slice(0, 2).map((gap) => (
+                            <article className="summary-card summary-card--compact" key={`package-gap-${gap.gapType}`}>
+                              <div className="overview-list-item__title">
+                                <strong>{gap.title}</strong>
+                                <span className={`chip chip--${confidenceClass(gap.confidence)}`}>{gap.confidence}</span>
+                              </div>
+                              <p>{gap.whyItMatters}</p>
+                              {renderChipList(gap.relatedIncidentRefs, "No related incident refs attached.", `package-gap-related-${gap.gapType}`, 4)}
+                            </article>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+
+                    <article className="incident-impact-card incident-defense-gap">
+                      <div className="incident-impact-card__header">
+                        <strong>Replay summary</strong>
+                      </div>
+                      <p>{packagePayload.packageIntelligence.policyReplaySummary.shadowModeImpact}</p>
+                      <div className="summary-grid">
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Current outcome</span>
+                          <strong className="summary-value">{packagePayload.packageIntelligence.policyReplaySummary.currentOutcome.blockingOrSurfacing}</strong>
+                          <p>
+                            blocking {packagePayload.packageIntelligence.policyReplaySummary.currentOutcome.blockingOrSurfacing} · monitoring {packagePayload.packageIntelligence.policyReplaySummary.currentOutcome.monitoringOnly} · resolved/reviewed {packagePayload.packageIntelligence.policyReplaySummary.currentOutcome.resolvedOrReviewed}
+                          </p>
+                        </article>
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Proposed outcome</span>
+                          <strong className="summary-value">{packagePayload.packageIntelligence.policyReplaySummary.delta.additionalRejections}</strong>
+                          <p>
+                            earlier denials {packagePayload.packageIntelligence.policyReplaySummary.proposedOutcome.earlierDenials} · evidence holds {packagePayload.packageIntelligence.policyReplaySummary.proposedOutcome.evidenceHolds} · narrower exceptions {packagePayload.packageIntelligence.policyReplaySummary.proposedOutcome.narrowerExceptions}
+                          </p>
+                        </article>
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Blast radius</span>
+                          <strong className="summary-value">{packagePayload.packageIntelligence.policyReplaySummary.blastRadius.incidentCount}</strong>
+                          <p>
+                            {packagePayload.packageIntelligence.policyReplaySummary.blastRadius.repoCount} repos · {packagePayload.packageIntelligence.policyReplaySummary.blastRadius.environmentCount} environments · {packagePayload.packageIntelligence.policyReplaySummary.blastRadius.workloadCount} workloads
+                          </p>
+                        </article>
+                      </div>
+                      {renderChipList(
+                        packagePayload.packageIntelligence.policyReplaySummary.topCoverageGaps.map((gap) => humanizeKey(gap.gapType)),
+                        "No dominant replay coverage gaps recorded for this package.",
+                        "package-replay-gaps",
+                        4,
+                      )}
+                    </article>
+
+                    <article className="incident-impact-card incident-defense-gap">
+                      <div className="incident-impact-card__header">
+                        <strong>Systemic weakness</strong>
+                      </div>
+                      <p>{packagePayload.packageIntelligence.systemicWeaknessSummary.rootCauseHypothesis}</p>
+                      <div className="chip-row">
+                        <span className={`chip chip--${packagePayload.packageIntelligence.systemicWeaknessSummary.processFragility ? "warning" : "muted"}`}>
+                          process fragility {packagePayload.packageIntelligence.systemicWeaknessSummary.processFragility ? "present" : "clear"}
+                        </span>
+                        <span className={`chip chip--${packagePayload.packageIntelligence.systemicWeaknessSummary.supplyChainBlindSpots ? "warning" : "muted"}`}>
+                          supply-chain blind spots {packagePayload.packageIntelligence.systemicWeaknessSummary.supplyChainBlindSpots ? "present" : "clear"}
+                        </span>
+                      </div>
+                      {packagePayload.packageIntelligence.systemicWeaknessSummary.topPatterns.length > 0 ? (
+                        <div className="summary-grid">
+                          {packagePayload.packageIntelligence.systemicWeaknessSummary.topPatterns.slice(0, 2).map((pattern) => (
+                            <article className="summary-card summary-card--compact" key={`package-pattern-${pattern.patternKey}`}>
+                              <div className="overview-list-item__title">
+                                <strong>{pattern.title}</strong>
+                                <span className={`chip chip--${priorityClass(pattern.priority)}`}>{pattern.priority}</span>
+                              </div>
+                              <small>{humanizeKey(pattern.patternKey)}</small>
+                              {renderChipList(pattern.relatedIncidentRefs, "No related incidents attached.", `package-pattern-related-${pattern.patternKey}`, 4)}
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="summary-list-empty">No dominant systemic weakness pattern is currently attached to this package.</div>
+                      )}
+                    </article>
+
+                    <article className="incident-impact-card incident-defense-gap">
+                      <div className="incident-impact-card__header">
+                        <strong>Suggested package control move</strong>
+                      </div>
+                      <p>{packagePayload.packageIntelligence.recommendedActions.whyThisMattersNow}</p>
+                      <div className="summary-grid">
+                        <div>
+                          <span className="summary-label">Immediate containment</span>
+                          {renderValueList(packagePayload.packageIntelligence.recommendedActions.immediateContainment, "No immediate containment move recorded.", 3)}
+                        </div>
+                        <div>
+                          <span className="summary-label">Near-term hardening</span>
+                          {renderValueList(packagePayload.packageIntelligence.recommendedActions.nearTermHardening, "No near-term hardening move recorded.", 3)}
+                        </div>
+                        <div>
+                          <span className="summary-label">Governance fix</span>
+                          {renderValueList(packagePayload.packageIntelligence.recommendedActions.governanceFix, "No governance fix recorded.", 3)}
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+
+                <section className="incident-report-section">
+                  <div className="incident-report-section__header">
                     <span className="summary-label">Included cases</span>
                     <strong>{packagePayload.incidentRefs.length} linked incident reports</strong>
                   </div>
@@ -921,7 +1059,13 @@ export function IncidentWorkbench({
                     <span className="summary-label">Limitations</span>
                   </div>
                   {renderValueList(
-                    [...packagePayload.redactionSummary, ...packagePayload.limitations],
+                    [
+                      ...packagePayload.redactionSummary,
+                      ...packagePayload.limitations,
+                      ...packagePayload.packageIntelligence.defenseGapSummary.limitations,
+                      ...packagePayload.packageIntelligence.policyReplaySummary.limitations,
+                      ...packagePayload.packageIntelligence.systemicWeaknessSummary.limitations,
+                    ],
                     "No explicit package limitations recorded.",
                     12,
                   )}

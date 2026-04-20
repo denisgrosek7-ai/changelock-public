@@ -65,6 +65,7 @@ type incidentPackageResponse struct {
 	IncidentRefs     []string                 `json:"incident_refs"`
 	Aggregate        incidentPackageAggregate `json:"aggregate"`
 	Incidents        []incidentPackageItem    `json:"incidents"`
+	PackageIntel     packageIntelligence      `json:"package_intelligence"`
 	Limitations      []string                 `json:"limitations"`
 }
 
@@ -86,6 +87,76 @@ type incidentPackageItem struct {
 	OpenedAt   *time.Time `json:"opened_at,omitempty"`
 	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+}
+
+type packageIntelligence struct {
+	AdvisoryOnly        bool                           `json:"advisory_only"`
+	GeneratedAt         time.Time                      `json:"generated_at"`
+	DefenseGapSummary   packageDefenseGapSummary       `json:"defense_gap_summary"`
+	PolicyReplaySummary packagePolicyReplaySummary     `json:"policy_replay_summary"`
+	SystemicWeakness    packageSystemicWeaknessSummary `json:"systemic_weakness_summary"`
+	RecommendedActions  packageRecommendedActions      `json:"recommended_actions"`
+}
+
+type packageDefenseGapSummary struct {
+	TopGapTypes   []string            `json:"top_gap_types"`
+	ConfidenceMix map[string]int      `json:"confidence_mix"`
+	TopFindings   []defenseGapFinding `json:"top_findings"`
+	Rationale     string              `json:"rationale"`
+	Limitations   []string            `json:"limitations"`
+}
+
+type packagePolicyReplaySummary struct {
+	CurrentOutcome   packageReplayOutcomeCurrent  `json:"current_outcome"`
+	ProposedOutcome  packageReplayOutcomeProposed `json:"proposed_outcome"`
+	Delta            packageReplayDelta           `json:"delta"`
+	BlastRadius      replayBlastRadius            `json:"blast_radius"`
+	TopCoverageGaps  []coverageGapFinding         `json:"top_coverage_gaps"`
+	ShadowModeImpact string                       `json:"shadow_mode_impact"`
+	Limitations      []string                     `json:"limitations"`
+}
+
+type packageReplayOutcomeCurrent struct {
+	BlockingOrSurfacing int `json:"blocking_or_surfacing"`
+	MonitoringOnly      int `json:"monitoring_only"`
+	ResolvedOrReviewed  int `json:"resolved_or_reviewed"`
+}
+
+type packageReplayOutcomeProposed struct {
+	EarlierDenials     int `json:"earlier_denials"`
+	EvidenceHolds      int `json:"evidence_holds"`
+	EarlierContainment int `json:"earlier_containment"`
+	NarrowerExceptions int `json:"narrower_exceptions"`
+}
+
+type packageReplayDelta struct {
+	AdditionalRejections int `json:"additional_rejections"`
+	EarlierContainment   int `json:"earlier_containment_paths"`
+	ImpactedCases        int `json:"impacted_cases"`
+}
+
+type packageSystemicWeaknessSummary struct {
+	TopPatterns             []packageSystemicPattern `json:"top_patterns"`
+	RootCauseHypothesis     string                   `json:"root_cause_hypothesis"`
+	ProcessFragility        bool                     `json:"process_fragility"`
+	SupplyChainBlindSpots   bool                     `json:"supply_chain_blind_spots"`
+	ExecutiveRecommendation string                   `json:"executive_recommendation"`
+	Limitations             []string                 `json:"limitations"`
+}
+
+type packageSystemicPattern struct {
+	PatternKey          string   `json:"pattern_key"`
+	Title               string   `json:"title"`
+	Priority            string   `json:"priority"`
+	RelatedIncidentRefs []string `json:"related_incident_refs"`
+	EvidenceRefs        []string `json:"evidence_refs"`
+}
+
+type packageRecommendedActions struct {
+	WhyThisMattersNow    string   `json:"why_this_matters_now"`
+	ImmediateContainment []string `json:"immediate_containment"`
+	NearTermHardening    []string `json:"near_term_hardening"`
+	GovernanceFix        []string `json:"governance_fix"`
 }
 
 type metricIncidentsResponse struct {
@@ -2742,6 +2813,7 @@ func selectIncidentScope(incidents []investigationIncident, selectedIDs []string
 
 func buildIncidentPackage(incidents []investigationIncident, selectedIDs []string, filter incidentFilter, audience string) incidentPackageResponse {
 	filtered, selectionMode := selectIncidentScope(incidents, selectedIDs)
+	selectionSummary := incidentPackageSelectionSummary(selectionMode, filter, selectedIDs)
 	limitations := []string{
 		"Package index is derived from canonical incident cases and existing case export lineage.",
 		"No persisted package object is created; this bundle is query-derived at render time.",
@@ -2794,12 +2866,13 @@ func buildIncidentPackage(incidents []investigationIncident, selectedIDs []strin
 		Redacted:         audience != incidentAudienceInternal,
 		RedactionSummary: incidentExportRedactionSummary(audience),
 		SelectionMode:    selectionMode,
-		SelectionSummary: incidentPackageSelectionSummary(selectionMode, filter, selectedIDs),
+		SelectionSummary: selectionSummary,
 		PackageSummary:   summary,
 		IncidentCount:    len(filtered),
 		IncidentRefs:     refs,
 		Aggregate:        aggregate,
 		Incidents:        items,
+		PackageIntel:     buildPackageIntelligence(filtered, selectionSummary, audience),
 		Limitations:      append(limitations, incidentPackageLimitations(audience)...),
 	}
 	return response
@@ -2855,6 +2928,312 @@ func incidentPackageLimitations(audience string) []string {
 		limitations = append(limitations, "All included case summaries inherit the same audience redaction rules as the underlying case exports.")
 	}
 	return limitations
+}
+
+func buildPackageIntelligence(incidents []investigationIncident, scopeSummary string, audience string) packageIntelligence {
+	defenseSummary := buildPackageDefenseGapSummary(incidents, audience)
+	replaySummary := buildPackagePolicyReplaySummary(incidents, audience)
+	systemicSummary := buildPackageSystemicWeaknessSummary(incidents, scopeSummary, audience)
+
+	return packageIntelligence{
+		AdvisoryOnly:        true,
+		GeneratedAt:         time.Now().UTC(),
+		DefenseGapSummary:   defenseSummary,
+		PolicyReplaySummary: replaySummary,
+		SystemicWeakness:    systemicSummary,
+		RecommendedActions:  buildPackageRecommendedActions(defenseSummary, replaySummary, systemicSummary),
+	}
+}
+
+func buildPackageDefenseGapSummary(incidents []investigationIncident, audience string) packageDefenseGapSummary {
+	summary := packageDefenseGapSummary{
+		TopGapTypes:   []string{},
+		ConfidenceMix: map[string]int{"high": 0, "medium": 0, "limited": 0},
+		TopFindings:   []defenseGapFinding{},
+		Rationale:     "No package-level defense-gap pressure is currently visible in the selected package scope.",
+		Limitations: []string{
+			"Package defense-gap summary is advisory only and aggregates package incidents without creating a new package truth model.",
+			"Package-level grouping is derived from canonical incident fields, scorecard refs, and evidence-linked patterns already present in the selected package scope.",
+		},
+	}
+	if len(incidents) == 0 {
+		summary.Limitations = append(summary.Limitations, "No in-scope incidents were present, so package defense-gap aggregation stayed empty.")
+		return summary
+	}
+
+	type gapAccumulator struct {
+		count        int
+		highSeverity bool
+		incidentRefs []string
+		evidenceRefs []string
+	}
+	accumulators := map[string]*gapAccumulator{}
+	for _, incident := range incidents {
+		for _, gapType := range incidentDefenseGapTypes(incident) {
+			accumulator := accumulators[gapType]
+			if accumulator == nil {
+				accumulator = &gapAccumulator{}
+				accumulators[gapType] = accumulator
+			}
+			accumulator.count++
+			accumulator.incidentRefs = append(accumulator.incidentRefs, incident.ID)
+			accumulator.evidenceRefs = append(accumulator.evidenceRefs, defenseGapEvidenceRefs([]investigationIncident{incident})...)
+			if incident.Severity == "critical" || incident.Severity == "high" {
+				accumulator.highSeverity = true
+			}
+		}
+	}
+
+	type rankedGap struct {
+		gapType string
+		count   int
+	}
+	ranked := make([]rankedGap, 0, len(accumulators))
+	for gapType, accumulator := range accumulators {
+		ranked = append(ranked, rankedGap{gapType: gapType, count: accumulator.count})
+		confidence := packageGapConfidence(accumulator.count, accumulator.highSeverity)
+		summary.ConfidenceMix[confidence]++
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].count == ranked[j].count {
+			return ranked[i].gapType < ranked[j].gapType
+		}
+		return ranked[i].count > ranked[j].count
+	})
+
+	topGapTypes := make([]string, 0, minInt(len(ranked), 3))
+	findings := make([]defenseGapFinding, 0, minInt(len(ranked), 3))
+	for _, item := range ranked[:minInt(len(ranked), 3)] {
+		topGapTypes = append(topGapTypes, item.gapType)
+		accumulator := accumulators[item.gapType]
+		findings = append(findings, buildDefenseGapFinding(
+			item.gapType,
+			packageGapConfidence(item.count, accumulator.highSeverity),
+			limitStrings(uniqueStrings(accumulator.evidenceRefs), 8),
+			limitStrings(uniqueStrings(accumulator.incidentRefs), 8),
+			fmt.Sprintf("Package scope across %d incident(s)", item.count),
+		))
+	}
+
+	summary.TopGapTypes = topGapTypes
+	summary.TopFindings = redactPackageDefenseGapFindings(findings, audience)
+	if len(ranked) > 0 {
+		summary.Rationale = fmt.Sprintf(
+			"Package intelligence shows the highest pressure in %s across %d of %d in-scope incidents.",
+			strings.ReplaceAll(ranked[0].gapType, "_", " "),
+			accumulators[ranked[0].gapType].count,
+			len(incidents),
+		)
+	}
+	return summary
+}
+
+func buildPackagePolicyReplaySummary(incidents []investigationIncident, audience string) packagePolicyReplaySummary {
+	replay := buildScopePolicyReplayAssessment(incidents)
+	summary := packagePolicyReplaySummary{
+		CurrentOutcome:  packageReplayOutcomeCurrent{},
+		ProposedOutcome: packageReplayOutcomeProposed{},
+		Delta: packageReplayDelta{
+			ImpactedCases: len(replay.ReplayResults),
+		},
+		BlastRadius:      replay.BlastRadius,
+		TopCoverageGaps:  []coverageGapFinding{},
+		ShadowModeImpact: "No replay-driven package delta is currently visible.",
+		Limitations: append([]string{
+			"Package replay summary is advisory only and stays in shadow mode; it does not mutate incident, lifecycle, or report truth.",
+		}, replay.Limitations...),
+	}
+	if len(incidents) == 0 {
+		summary.Limitations = append(summary.Limitations, "No in-scope incidents were present, so replay aggregation stayed empty.")
+		return summary
+	}
+
+	for _, incident := range incidents {
+		switch incident.Status {
+		case "active":
+			summary.CurrentOutcome.BlockingOrSurfacing++
+		case "watch":
+			summary.CurrentOutcome.MonitoringOnly++
+		default:
+			summary.CurrentOutcome.ResolvedOrReviewed++
+		}
+	}
+
+	for _, result := range replay.ReplayResults {
+		lower := strings.ToLower(result.ProposedOutcome)
+		switch {
+		case strings.Contains(lower, "deny earlier"):
+			summary.ProposedOutcome.EarlierDenials++
+		case strings.Contains(lower, "hold the change"):
+			summary.ProposedOutcome.EvidenceHolds++
+		case strings.Contains(lower, "containment") || strings.Contains(lower, "reconciliation"):
+			summary.ProposedOutcome.EarlierContainment++
+		case strings.Contains(lower, "exception"):
+			summary.ProposedOutcome.NarrowerExceptions++
+		default:
+			summary.ProposedOutcome.EvidenceHolds++
+		}
+	}
+	summary.Delta.AdditionalRejections = summary.ProposedOutcome.EarlierDenials + summary.ProposedOutcome.EvidenceHolds + summary.ProposedOutcome.NarrowerExceptions
+	summary.Delta.EarlierContainment = summary.ProposedOutcome.EarlierContainment
+	if summary.Delta.AdditionalRejections > 0 || summary.Delta.EarlierContainment > 0 {
+		summary.ShadowModeImpact = fmt.Sprintf(
+			"Shadow-mode replay suggests %d tighter package-level rejection or evidence-hold path(s) and %d earlier containment path(s) across the current scope.",
+			summary.Delta.AdditionalRejections,
+			summary.Delta.EarlierContainment,
+		)
+	} else {
+		summary.ShadowModeImpact = "Shadow-mode replay does not currently show a stronger earlier control boundary for this package."
+	}
+
+	topCoverage := append([]coverageGapFinding{}, replay.CoverageGaps...)
+	sort.Slice(topCoverage, func(i, j int) bool {
+		if len(topCoverage[i].RelatedIncidentRefs) == len(topCoverage[j].RelatedIncidentRefs) {
+			return topCoverage[i].GapType < topCoverage[j].GapType
+		}
+		return len(topCoverage[i].RelatedIncidentRefs) > len(topCoverage[j].RelatedIncidentRefs)
+	})
+	summary.TopCoverageGaps = redactPackageCoverageGaps(topCoverage[:minInt(len(topCoverage), 3)], audience)
+	if audience == incidentAudienceCustomerSafe {
+		summary.BlastRadius.TopScopes = nil
+	}
+	return summary
+}
+
+func buildPackageSystemicWeaknessSummary(incidents []investigationIncident, scopeSummary string, audience string) packageSystemicWeaknessSummary {
+	systemic := buildSystemicWeaknessResponse(incidents, scopeSummary)
+	summary := packageSystemicWeaknessSummary{
+		TopPatterns:             []packageSystemicPattern{},
+		RootCauseHypothesis:     "No repeated systemic weakness cluster is currently visible in the selected package scope.",
+		ProcessFragility:        false,
+		SupplyChainBlindSpots:   false,
+		ExecutiveRecommendation: "Keep package review focused on the currently linked incidents and their existing evidence lineage until a stronger shared pattern appears.",
+		Limitations:             append([]string{}, systemic.Limitations...),
+	}
+	if len(incidents) == 0 {
+		summary.Limitations = append(summary.Limitations, "No in-scope incidents were present, so systemic weakness aggregation stayed empty.")
+		return summary
+	}
+
+	topPatterns := make([]packageSystemicPattern, 0, minInt(len(systemic.Weaknesses), 3))
+	for _, weakness := range systemic.Weaknesses[:minInt(len(systemic.Weaknesses), 3)] {
+		topPatterns = append(topPatterns, packageSystemicPattern{
+			PatternKey:          weakness.PatternKey,
+			Title:               weakness.Title,
+			Priority:            weakness.Priority,
+			RelatedIncidentRefs: limitStrings(uniqueStrings(append([]string{}, weakness.RelatedIncidentRefs...)), 8),
+			EvidenceRefs:        limitStrings(uniqueStrings(append([]string{}, weakness.EvidenceRefs...)), 8),
+		})
+		if len(weakness.ProcessFragility) > 0 {
+			summary.ProcessFragility = true
+		}
+		if len(weakness.SupplyChainBlindSpots) > 0 {
+			summary.SupplyChainBlindSpots = true
+		}
+	}
+	summary.TopPatterns = redactPackageSystemicPatterns(topPatterns, audience)
+	if len(systemic.Weaknesses) > 0 {
+		summary.RootCauseHypothesis = systemic.Weaknesses[0].RootCauseHypothesis
+		summary.ExecutiveRecommendation = systemic.Weaknesses[0].ExecutiveRecommendation
+	}
+	return summary
+}
+
+func buildPackageRecommendedActions(
+	defenseSummary packageDefenseGapSummary,
+	replaySummary packagePolicyReplaySummary,
+	systemicSummary packageSystemicWeaknessSummary,
+) packageRecommendedActions {
+	actions := packageRecommendedActions{
+		WhyThisMattersNow: "Package intelligence is currently quiet; keep the current package under observation and continue narrowing evidence-backed fixes at the incident level.",
+	}
+	if len(defenseSummary.TopFindings) > 0 {
+		actions.ImmediateContainment = append(actions.ImmediateContainment, defenseSummary.TopFindings[0].RecommendedActions.Containment...)
+		actions.NearTermHardening = append(actions.NearTermHardening, defenseSummary.TopFindings[0].RecommendedActions.Hardening...)
+		actions.GovernanceFix = append(actions.GovernanceFix, defenseSummary.TopFindings[0].RecommendedActions.GovernanceFix...)
+	}
+	if len(replaySummary.TopCoverageGaps) > 0 {
+		actions.NearTermHardening = append(actions.NearTermHardening, replaySummary.TopCoverageGaps[0].RecommendedAction)
+	}
+	if systemicSummary.ExecutiveRecommendation != "" {
+		actions.GovernanceFix = append(actions.GovernanceFix, systemicSummary.ExecutiveRecommendation)
+	}
+
+	actions.ImmediateContainment = limitStrings(uniqueStrings(actions.ImmediateContainment), 3)
+	actions.NearTermHardening = limitStrings(uniqueStrings(actions.NearTermHardening), 3)
+	actions.GovernanceFix = limitStrings(uniqueStrings(actions.GovernanceFix), 3)
+	if len(defenseSummary.TopGapTypes) > 0 || len(systemicSummary.TopPatterns) > 0 || replaySummary.Delta.AdditionalRejections > 0 {
+		topGap := "package control pressure"
+		if len(defenseSummary.TopGapTypes) > 0 {
+			topGap = strings.ReplaceAll(defenseSummary.TopGapTypes[0], "_", " ")
+		}
+		topPattern := "no dominant systemic weakness"
+		if len(systemicSummary.TopPatterns) > 0 {
+			topPattern = strings.ReplaceAll(systemicSummary.TopPatterns[0].PatternKey, "_", " ")
+		}
+		actions.WhyThisMattersNow = fmt.Sprintf(
+			"The current package is concentrating %s and %s, while replay still shows %d tighter control path(s) worth reviewing now.",
+			topGap,
+			topPattern,
+			replaySummary.Delta.AdditionalRejections,
+		)
+	}
+	return actions
+}
+
+func packageGapConfidence(incidentCount int, highSeverity bool) string {
+	if highSeverity || incidentCount >= 3 {
+		return "high"
+	}
+	if incidentCount >= 1 {
+		return "medium"
+	}
+	return "limited"
+}
+
+func redactPackageDefenseGapFindings(findings []defenseGapFinding, audience string) []defenseGapFinding {
+	if audience == incidentAudienceInternal {
+		return findings
+	}
+	redacted := make([]defenseGapFinding, 0, len(findings))
+	for _, finding := range findings {
+		finding.EvidenceRefs = nil
+		if audience == incidentAudienceCustomerSafe {
+			finding.RelatedIncidentRefs = nil
+		}
+		redacted = append(redacted, finding)
+	}
+	return redacted
+}
+
+func redactPackageCoverageGaps(gaps []coverageGapFinding, audience string) []coverageGapFinding {
+	if audience == incidentAudienceInternal {
+		return gaps
+	}
+	redacted := make([]coverageGapFinding, 0, len(gaps))
+	for _, gap := range gaps {
+		gap.EvidenceRefs = nil
+		if audience == incidentAudienceCustomerSafe {
+			gap.RelatedIncidentRefs = nil
+		}
+		redacted = append(redacted, gap)
+	}
+	return redacted
+}
+
+func redactPackageSystemicPatterns(patterns []packageSystemicPattern, audience string) []packageSystemicPattern {
+	if audience == incidentAudienceInternal {
+		return patterns
+	}
+	redacted := make([]packageSystemicPattern, 0, len(patterns))
+	for _, pattern := range patterns {
+		pattern.EvidenceRefs = nil
+		if audience == incidentAudienceCustomerSafe {
+			pattern.RelatedIncidentRefs = nil
+		}
+		redacted = append(redacted, pattern)
+	}
+	return redacted
 }
 
 func buildExecutiveDefenseReport(incidents []investigationIncident, selectedIDs []string, filter incidentFilter, audience string) executiveDefenseReportResponse {

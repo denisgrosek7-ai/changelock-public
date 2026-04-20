@@ -140,7 +140,78 @@ export type IncidentPackage = {
   incidentRefs: string[];
   aggregate: IncidentPackageAggregate;
   incidents: IncidentPackageItem[];
+  packageIntelligence: PackageIntelligence;
   limitations: string[];
+};
+
+export type PackageDefenseGapSummary = {
+  topGapTypes: string[];
+  confidenceMix: Record<string, number>;
+  topFindings: DefenseGapFinding[];
+  rationale: string;
+  limitations: string[];
+};
+
+export type PackageReplayOutcomeCurrent = {
+  blockingOrSurfacing: number;
+  monitoringOnly: number;
+  resolvedOrReviewed: number;
+};
+
+export type PackageReplayOutcomeProposed = {
+  earlierDenials: number;
+  evidenceHolds: number;
+  earlierContainment: number;
+  narrowerExceptions: number;
+};
+
+export type PackageReplayDelta = {
+  additionalRejections: number;
+  earlierContainmentPaths: number;
+  impactedCases: number;
+};
+
+export type PackagePolicyReplaySummary = {
+  currentOutcome: PackageReplayOutcomeCurrent;
+  proposedOutcome: PackageReplayOutcomeProposed;
+  delta: PackageReplayDelta;
+  blastRadius: ReplayBlastRadius;
+  topCoverageGaps: CoverageGapFinding[];
+  shadowModeImpact: string;
+  limitations: string[];
+};
+
+export type PackageSystemicPattern = {
+  patternKey: string;
+  title: string;
+  priority: "critical" | "high" | "medium" | "low";
+  relatedIncidentRefs: string[];
+  evidenceRefs: string[];
+};
+
+export type PackageSystemicWeaknessSummary = {
+  topPatterns: PackageSystemicPattern[];
+  rootCauseHypothesis: string;
+  processFragility: boolean;
+  supplyChainBlindSpots: boolean;
+  executiveRecommendation: string;
+  limitations: string[];
+};
+
+export type PackageRecommendedActions = {
+  whyThisMattersNow: string;
+  immediateContainment: string[];
+  nearTermHardening: string[];
+  governanceFix: string[];
+};
+
+export type PackageIntelligence = {
+  advisoryOnly: boolean;
+  generatedAt: string;
+  defenseGapSummary: PackageDefenseGapSummary;
+  policyReplaySummary: PackagePolicyReplaySummary;
+  systemicWeaknessSummary: PackageSystemicWeaknessSummary;
+  recommendedActions: PackageRecommendedActions;
 };
 
 export type DefenseGapRecommendations = {

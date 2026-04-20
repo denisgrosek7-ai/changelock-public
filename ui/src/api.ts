@@ -209,6 +209,16 @@ function readOptionalStringArray(value: unknown, field: string): string[] | unde
   return value;
 }
 
+function readOptionalArray(value: unknown, field: string): unknown[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`Audit API returned invalid ${field}.`);
+  }
+  return value;
+}
+
 function readOptionalRecord(value: unknown, field: string): Record<string, unknown> | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -1575,7 +1585,7 @@ function parseIncidentPackageItem(value: unknown): IncidentPackage["incidents"][
 }
 
 function parseIncidentPackage(value: unknown): IncidentPackage {
-  if (!isRecord(value) || !Array.isArray(value.incidents) || !isRecord(value.aggregate)) {
+  if (!isRecord(value) || !Array.isArray(value.incidents) || !isRecord(value.aggregate) || !isRecord(value.package_intelligence)) {
     throw new Error("Audit API returned invalid incident package.");
   }
   return {
@@ -1594,7 +1604,94 @@ function parseIncidentPackage(value: unknown): IncidentPackage {
       byCategory: parseCountRecord((value.aggregate as Record<string, unknown>).by_category, "aggregate.by_category"),
     },
     incidents: value.incidents.map(parseIncidentPackageItem),
+    packageIntelligence: parsePackageIntelligence(value.package_intelligence),
     limitations: readOptionalStringArray(value.limitations, "limitations") || [],
+  };
+}
+
+function parsePackageIntelligence(value: unknown): IncidentPackage["packageIntelligence"] {
+  if (!isRecord(value) || !isRecord(value.defense_gap_summary) || !isRecord(value.policy_replay_summary) || !isRecord(value.systemic_weakness_summary) || !isRecord(value.recommended_actions)) {
+    throw new Error("Audit API returned invalid package intelligence.");
+  }
+  const defenseGapSummary = value.defense_gap_summary as Record<string, unknown>;
+  const policyReplaySummary = value.policy_replay_summary as Record<string, unknown>;
+  const replayCurrentOutcome = readOptionalRecord(policyReplaySummary.current_outcome, "package_intelligence.policy_replay_summary.current_outcome") || {};
+  const replayProposedOutcome = readOptionalRecord(policyReplaySummary.proposed_outcome, "package_intelligence.policy_replay_summary.proposed_outcome") || {};
+  const replayDelta = readOptionalRecord(policyReplaySummary.delta, "package_intelligence.policy_replay_summary.delta") || {};
+  const systemicWeaknessSummary = value.systemic_weakness_summary as Record<string, unknown>;
+  const recommendedActions = value.recommended_actions as Record<string, unknown>;
+  return {
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "package_intelligence.advisory_only"),
+    generatedAt: readString(value.generated_at, "package_intelligence.generated_at"),
+    defenseGapSummary: {
+      topGapTypes: readOptionalStringArray(defenseGapSummary.top_gap_types, "package_intelligence.defense_gap_summary.top_gap_types") || [],
+      confidenceMix: parseCountRecord(defenseGapSummary.confidence_mix, "package_intelligence.defense_gap_summary.confidence_mix"),
+      topFindings: readOptionalArray(defenseGapSummary.top_findings, "package_intelligence.defense_gap_summary.top_findings").map(parseDefenseGapFinding),
+      rationale: readString(defenseGapSummary.rationale, "package_intelligence.defense_gap_summary.rationale"),
+      limitations: readOptionalStringArray(defenseGapSummary.limitations, "package_intelligence.defense_gap_summary.limitations") || [],
+    },
+    policyReplaySummary: {
+      currentOutcome: {
+        blockingOrSurfacing: readNumber(replayCurrentOutcome.blocking_or_surfacing, "package_intelligence.policy_replay_summary.current_outcome.blocking_or_surfacing"),
+        monitoringOnly: readNumber(replayCurrentOutcome.monitoring_only, "package_intelligence.policy_replay_summary.current_outcome.monitoring_only"),
+        resolvedOrReviewed: readNumber(replayCurrentOutcome.resolved_or_reviewed, "package_intelligence.policy_replay_summary.current_outcome.resolved_or_reviewed"),
+      },
+      proposedOutcome: {
+        earlierDenials: readNumber(replayProposedOutcome.earlier_denials, "package_intelligence.policy_replay_summary.proposed_outcome.earlier_denials"),
+        evidenceHolds: readNumber(replayProposedOutcome.evidence_holds, "package_intelligence.policy_replay_summary.proposed_outcome.evidence_holds"),
+        earlierContainment: readNumber(replayProposedOutcome.earlier_containment, "package_intelligence.policy_replay_summary.proposed_outcome.earlier_containment"),
+        narrowerExceptions: readNumber(replayProposedOutcome.narrower_exceptions, "package_intelligence.policy_replay_summary.proposed_outcome.narrower_exceptions"),
+      },
+      delta: {
+        additionalRejections: readNumber(replayDelta.additional_rejections, "package_intelligence.policy_replay_summary.delta.additional_rejections"),
+        earlierContainmentPaths: readNumber(replayDelta.earlier_containment_paths, "package_intelligence.policy_replay_summary.delta.earlier_containment_paths"),
+        impactedCases: readNumber(replayDelta.impacted_cases, "package_intelligence.policy_replay_summary.delta.impacted_cases"),
+      },
+      blastRadius: parseReplayBlastRadius(policyReplaySummary.blast_radius),
+      topCoverageGaps: readOptionalArray(policyReplaySummary.top_coverage_gaps, "package_intelligence.policy_replay_summary.top_coverage_gaps").map(parseCoverageGapFinding),
+      shadowModeImpact: readString(policyReplaySummary.shadow_mode_impact, "package_intelligence.policy_replay_summary.shadow_mode_impact"),
+      limitations: readOptionalStringArray(policyReplaySummary.limitations, "package_intelligence.policy_replay_summary.limitations") || [],
+    },
+    systemicWeaknessSummary: {
+      topPatterns: readOptionalArray(systemicWeaknessSummary.top_patterns, "package_intelligence.systemic_weakness_summary.top_patterns").map(parsePackageSystemicPattern),
+      rootCauseHypothesis: readString(systemicWeaknessSummary.root_cause_hypothesis, "package_intelligence.systemic_weakness_summary.root_cause_hypothesis"),
+      processFragility: readBoolean(systemicWeaknessSummary.process_fragility, "package_intelligence.systemic_weakness_summary.process_fragility"),
+      supplyChainBlindSpots: readBoolean(systemicWeaknessSummary.supply_chain_blind_spots, "package_intelligence.systemic_weakness_summary.supply_chain_blind_spots"),
+      executiveRecommendation: readString(systemicWeaknessSummary.executive_recommendation, "package_intelligence.systemic_weakness_summary.executive_recommendation"),
+      limitations: readOptionalStringArray(systemicWeaknessSummary.limitations, "package_intelligence.systemic_weakness_summary.limitations") || [],
+    },
+    recommendedActions: {
+      whyThisMattersNow: readString(recommendedActions.why_this_matters_now, "package_intelligence.recommended_actions.why_this_matters_now"),
+      immediateContainment: readOptionalStringArray(recommendedActions.immediate_containment, "package_intelligence.recommended_actions.immediate_containment") || [],
+      nearTermHardening: readOptionalStringArray(recommendedActions.near_term_hardening, "package_intelligence.recommended_actions.near_term_hardening") || [],
+      governanceFix: readOptionalStringArray(recommendedActions.governance_fix, "package_intelligence.recommended_actions.governance_fix") || [],
+    },
+  };
+}
+
+function parsePackageSystemicPattern(value: unknown): IncidentPackage["packageIntelligence"]["systemicWeaknessSummary"]["topPatterns"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid package systemic pattern.");
+  }
+  return {
+    patternKey: readString(value.pattern_key, "package_intelligence.systemic_weakness_summary.top_patterns[].pattern_key"),
+    title: readString(value.title, "package_intelligence.systemic_weakness_summary.top_patterns[].title"),
+    priority: readString(value.priority, "package_intelligence.systemic_weakness_summary.top_patterns[].priority") as IncidentPackage["packageIntelligence"]["systemicWeaknessSummary"]["topPatterns"][number]["priority"],
+    relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "package_intelligence.systemic_weakness_summary.top_patterns[].related_incident_refs") || [],
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "package_intelligence.systemic_weakness_summary.top_patterns[].evidence_refs") || [],
+  };
+}
+
+function parseReplayBlastRadius(value: unknown): PolicyReplayAssessment["blastRadius"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid replay blast radius.");
+  }
+  return {
+    incidentCount: readNumber(value.incident_count, "blast_radius.incident_count"),
+    repoCount: readNumber(value.repo_count, "blast_radius.repo_count"),
+    environmentCount: readNumber(value.environment_count, "blast_radius.environment_count"),
+    workloadCount: readNumber(value.workload_count, "blast_radius.workload_count"),
+    topScopes: readOptionalStringArray(value.top_scopes, "blast_radius.top_scopes") || [],
   };
 }
 
