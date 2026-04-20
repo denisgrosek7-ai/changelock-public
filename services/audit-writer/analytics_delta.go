@@ -26,6 +26,7 @@ const (
 	analyticsMetricArtifactSecurityDelta      = "artifact_security_delta"
 	analyticsMetricEnvironmentPolicyDrift     = "environment_policy_drift_delta"
 	analyticsMetricSignerIdentityShift        = "signer_identity_shift"
+	analyticsMetricBlastRadiusTrend           = "blast_radius_trend"
 )
 
 type analyticsFact struct {
@@ -168,6 +169,19 @@ func analyticsMetricDefinitions() []audit.AnalyticsMetricDefinition {
 			Exclusions:     []string{"subjects without signer evidence"},
 			Owner:          "signing-governance",
 			Interpretation: "Higher values mean signer governance is unstable or drifting across the same change path.",
+		},
+		{
+			Key:            analyticsMetricBlastRadiusTrend,
+			Label:          "Blast radius trend",
+			MetricClass:    "state_metric",
+			Description:    "Average effective blast-radius score across topology-mapped nodes in the selected comparison window.",
+			Formula:        "avg(effective_node_blast_radius_score)",
+			Grain:          "topology_snapshot",
+			DefaultWindow:  "28d",
+			Segments:       []string{"team", "service", "environment"},
+			Exclusions:     []string{"subjects with no topology-mapped node in the selected window"},
+			Owner:          "service-topology-security",
+			Interpretation: "Higher values mean the scoped service graph can spread pressure further into critical or trust-boundary crossing paths.",
 		},
 	}
 }
@@ -407,7 +421,10 @@ func (s server) buildAnalyticsTrendsResponse(ctx context.Context, filter audit.A
 	}
 	metricTrends := make([]audit.AnalyticsMetricTrend, 0, len(analyticsMetricDefinitions()))
 	for _, definition := range analyticsMetricDefinitions() {
-		result := computeAnalyticsMetric(definition.Key, facts, comparison)
+		result, segments, metricLimitations, err := s.computeAnalyticsMetricResult(ctx, filter, facts, comparison, definition.Key)
+		if err != nil {
+			return audit.TrendsResponse{}, err
+		}
 		metricTrends = append(metricTrends, audit.AnalyticsMetricTrend{
 			Definition:        definition,
 			CurrentValue:      result.CurrentValue,
@@ -417,8 +434,8 @@ func (s server) buildAnalyticsTrendsResponse(ctx context.Context, filter audit.A
 			Direction:         result.Direction,
 			Velocity:          result.Velocity,
 			Summary:           result.Summary,
-			SegmentHighlights: buildAnalyticsSegmentDeltas(definition.Key, facts, comparison, filter.GroupBy, 3),
-			Limitations:       result.Limitations,
+			SegmentHighlights: segments[:minInt(len(segments), 3)],
+			Limitations:       uniqueStrings(append(result.Limitations, metricLimitations...)),
 		})
 	}
 	base.MetricTrends = metricTrends
@@ -437,15 +454,17 @@ func (s server) buildAnalyticsDeltaResponse(ctx context.Context, filter audit.An
 		return audit.AnalyticsDeltaResponse{}, err
 	}
 	definition := analyticsMetricDefinition(filter.Metric)
-	result := computeAnalyticsMetric(definition.Key, facts, comparison)
-	segments := buildAnalyticsSegmentDeltas(definition.Key, facts, comparison, filter.GroupBy, 8)
+	result, segments, metricLimitations, err := s.computeAnalyticsMetricResult(ctx, filter, facts, comparison, definition.Key)
+	if err != nil {
+		return audit.AnalyticsDeltaResponse{}, err
+	}
 
 	return audit.AnalyticsDeltaResponse{
 		Definition: definition,
 		Comparison: comparison,
 		Segments:   segments,
 		Summary:    result.Summary,
-		Limitations: append(limitations,
+		Limitations: append(append(append(limitations, result.Limitations...), metricLimitations...),
 			"Delta comparisons always declare the comparison window, grouping dimension, and canonical filter scope used for the metric.",
 		),
 	}, nil
@@ -475,7 +494,10 @@ func (s server) buildAnalyticsScorecardsResponse(ctx context.Context, filter aud
 
 	cards := make([]audit.AnalyticsScorecardCard, 0, len(analyticsMetricDefinitions()))
 	for _, definition := range analyticsMetricDefinitions() {
-		result := computeAnalyticsMetric(definition.Key, facts, comparison)
+		result, _, metricLimitations, err := s.computeAnalyticsMetricResult(ctx, filter, facts, comparison, definition.Key)
+		if err != nil {
+			return audit.AnalyticsScorecardsResponse{}, err
+		}
 		cards = append(cards, audit.AnalyticsScorecardCard{
 			Definition:    definition,
 			Status:        analyticsDecisionSeverity(result, definition.Key),
@@ -484,7 +506,7 @@ func (s server) buildAnalyticsScorecardsResponse(ctx context.Context, filter aud
 			DeltaValue:    result.DeltaValue,
 			DeltaPercent:  result.DeltaPercent,
 			Direction:     result.Direction,
-			Summary:       result.Summary,
+			Summary:       strings.TrimSpace(fmt.Sprintf("%s %s", result.Summary, firstString(metricLimitations))),
 		})
 	}
 
@@ -495,6 +517,174 @@ func (s server) buildAnalyticsScorecardsResponse(ctx context.Context, filter aud
 			"Scorecards remain decomposable and evidence-backed; they are not a new executive truth source.",
 		),
 	}, nil
+}
+
+func isTopologyAnalyticsMetric(metricKey string) bool {
+	switch metricKey {
+	case analyticsMetricBlastRadiusTrend:
+		return true
+	default:
+		return false
+	}
+}
+
+func topologyFilterFromAnalyticsFilter(filter audit.AnalyticsFilter) topologyFilter {
+	return topologyFilter{
+		analytics: filter,
+		event: audit.EventFilter{
+			ClusterID:   filter.ClusterID,
+			TenantID:    filter.TenantID,
+			Environment: filter.Environment,
+			Repo:        filter.Repo,
+			Limit:       topologyHistoryLimit,
+		},
+		Service: filter.Service,
+		Limit:   25,
+	}
+}
+
+func (s server) computeAnalyticsMetricResult(ctx context.Context, filter audit.AnalyticsFilter, facts []analyticsFact, comparison audit.AnalyticsComparisonContext, metricKey string) (analyticsMetricResult, []audit.AnalyticsSegmentDelta, []string, error) {
+	if !isTopologyAnalyticsMetric(metricKey) {
+		return computeAnalyticsMetric(metricKey, facts, comparison), buildAnalyticsSegmentDeltas(metricKey, facts, comparison, filter.GroupBy, 8), nil, nil
+	}
+
+	topologyFilter := topologyFilterFromAnalyticsFilter(filter)
+	currentSnapshot, _, err := s.buildTopologySnapshotForWindow(ctx, topologyFilter, comparison.CurrentStart, comparison.CurrentEnd)
+	if err != nil {
+		return analyticsMetricResult{}, nil, nil, err
+	}
+	baselineSnapshot, _, err := s.buildTopologySnapshotForWindow(ctx, topologyFilter, comparison.BaselineStart, comparison.BaselineEnd)
+	if err != nil {
+		return analyticsMetricResult{}, nil, nil, err
+	}
+
+	currentValue := topologySnapshotMetricValue(metricKey, currentSnapshot)
+	baselineValue := topologySnapshotMetricValue(metricKey, baselineSnapshot)
+	deltaValue := currentValue - baselineValue
+	deltaPercent := percentageDelta(currentValue, baselineValue)
+	direction := analyticsDirection(metricKey, currentValue, baselineValue)
+	limitations := uniqueStrings(append(append([]string{}, currentSnapshot.limitations...), baselineSnapshot.limitations...))
+	limitations = append(limitations, "Topology metric is derived from the effective 9e service graph over the same canonical window and remains advisory-only.")
+
+	return analyticsMetricResult{
+			CurrentValue:  currentValue,
+			BaselineValue: baselineValue,
+			DeltaValue:    deltaValue,
+			DeltaPercent:  deltaPercent,
+			Direction:     direction,
+			Velocity:      analyticsVelocity(deltaPercent),
+			Summary:       analyticsMetricSummary(metricKey, currentValue, baselineValue, deltaValue, direction),
+			Limitations:   uniqueStrings(append(analyticsMetricLimitations(metricKey, len(currentSnapshot.nodes), len(baselineSnapshot.nodes)), limitations...)),
+		},
+		buildTopologySegmentDeltas(metricKey, currentSnapshot, baselineSnapshot, filter.GroupBy, 8),
+		limitations,
+		nil
+}
+
+func topologySnapshotMetricValue(metricKey string, snapshot topologySnapshot) float64 {
+	if len(snapshot.scores) == 0 {
+		return 0
+	}
+	switch metricKey {
+	case analyticsMetricBlastRadiusTrend:
+		total := 0.0
+		count := 0.0
+		for nodeID := range snapshot.nodes {
+			total += float64(snapshot.scores[nodeID].BlastRadiusScore)
+			count++
+		}
+		if count == 0 {
+			return 0
+		}
+		return roundFloat(total / count)
+	default:
+		return 0
+	}
+}
+
+func buildTopologySegmentDeltas(metricKey string, currentSnapshot topologySnapshot, baselineSnapshot topologySnapshot, groupBy string, limit int) []audit.AnalyticsSegmentDelta {
+	currentValues := topologySegmentMetricValues(metricKey, currentSnapshot, groupBy)
+	baselineValues := topologySegmentMetricValues(metricKey, baselineSnapshot, groupBy)
+	keys := make([]string, 0, len(currentValues)+len(baselineValues))
+	for key := range currentValues {
+		keys = append(keys, key)
+	}
+	for key := range baselineValues {
+		keys = append(keys, key)
+	}
+	keys = uniqueStrings(keys)
+
+	segments := make([]audit.AnalyticsSegmentDelta, 0, len(keys))
+	for _, key := range keys {
+		currentValue := currentValues[key]
+		baselineValue := baselineValues[key]
+		segments = append(segments, audit.AnalyticsSegmentDelta{
+			SegmentKey:    key,
+			SegmentLabel:  key,
+			CurrentValue:  currentValue,
+			BaselineValue: baselineValue,
+			DeltaValue:    currentValue - baselineValue,
+			DeltaPercent:  percentageDelta(currentValue, baselineValue),
+			Direction:     analyticsDirection(metricKey, currentValue, baselineValue),
+		})
+	}
+	sort.Slice(segments, func(i, j int) bool {
+		left := math.Abs(segments[i].DeltaValue)
+		right := math.Abs(segments[j].DeltaValue)
+		if left == right {
+			return segments[i].SegmentKey < segments[j].SegmentKey
+		}
+		return left > right
+	})
+	if limit > 0 && len(segments) > limit {
+		segments = segments[:limit]
+	}
+	return segments
+}
+
+func topologySegmentMetricValues(metricKey string, snapshot topologySnapshot, groupBy string) map[string]float64 {
+	totals := map[string]float64{}
+	counts := map[string]float64{}
+	for nodeID, node := range snapshot.nodes {
+		key := topologySegmentKey(node, groupBy)
+		if key == "" {
+			key = "unknown"
+		}
+		totals[key] += topologyNodeMetricValue(metricKey, snapshot.scores[nodeID])
+		counts[key]++
+	}
+	values := map[string]float64{}
+	for key, total := range totals {
+		if counts[key] == 0 {
+			values[key] = 0
+			continue
+		}
+		values[key] = roundFloat(total / counts[key])
+	}
+	return values
+}
+
+func topologyNodeMetricValue(metricKey string, score topologyNodeScores) float64 {
+	switch metricKey {
+	case analyticsMetricBlastRadiusTrend:
+		return float64(score.BlastRadiusScore)
+	default:
+		return 0
+	}
+}
+
+func topologySegmentKey(node *topologyNodeRecord, groupBy string) string {
+	if node == nil {
+		return "unknown"
+	}
+	switch groupBy {
+	case "team":
+		return firstNonEmpty(node.Team, "unknown")
+	case "environment":
+		return firstNonEmpty(node.Environment, "unknown")
+	default:
+		return firstNonEmpty(node.Service, "unknown")
+	}
 }
 
 func (s server) buildAnalyticsSegmentsResponse(ctx context.Context, filter audit.AnalyticsFilter) (audit.AnalyticsSegmentsResponse, error) {
@@ -1017,6 +1207,8 @@ func analyticsMetricSummary(metricKey string, currentValue float64, baselineValu
 		return fmt.Sprintf("Environment verdict divergence moved from %.0f to %.0f base subjects and is %s.", baselineValue, currentValue, direction)
 	case analyticsMetricSignerIdentityShift:
 		return fmt.Sprintf("Signer identity shifts moved from %.0f to %.0f in-window transitions and are %s.", baselineValue, currentValue, direction)
+	case analyticsMetricBlastRadiusTrend:
+		return fmt.Sprintf("Average blast radius moved from %.1f to %.1f across the scoped topology snapshot and is %s.", baselineValue, currentValue, direction)
 	default:
 		return fmt.Sprintf("Metric moved from %.1f to %.1f and is %s.", baselineValue, currentValue, direction)
 	}
@@ -1034,6 +1226,8 @@ func analyticsMetricLimitations(metricKey string, currentSamples int, baselineSa
 		limitations = append(limitations, "Environment drift only appears where the same base subject has evidence across at least two environments.")
 	case analyticsMetricVulnerabilityRemediation, analyticsMetricVulnerabilityIntroduction, analyticsMetricArtifactSecurityDelta, analyticsMetricSignerIdentityShift:
 		limitations = append(limitations, "Transition metrics need repeated in-window evidence for the same subject; single observations do not contribute.")
+	case analyticsMetricBlastRadiusTrend:
+		limitations = append(limitations, "Blast-radius trend is derived from topology snapshots synthesized from canonical audit events; it remains an advisory topology view, not runtime network truth.")
 	}
 	return limitations
 }

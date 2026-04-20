@@ -17,18 +17,21 @@ type defenseGapReadbackPayload struct {
 	ProjectionAudience string                   `json:"projection_audience"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            defenseGapAssessment     `json:"payload"`
+	TopologyContext    *readbackTopologyContext `json:"topology_context"`
 }
 
 type policyReplayReadbackPayload struct {
 	ProjectionAudience string                   `json:"projection_audience"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            policyReplayAssessment   `json:"payload"`
+	TopologyContext    *readbackTopologyContext `json:"topology_context"`
 }
 
 type systemicWeaknessReadbackPayload struct {
 	ProjectionAudience string                   `json:"projection_audience"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            systemicWeakness         `json:"payload"`
+	TopologyContext    *readbackTopologyContext `json:"topology_context"`
 }
 
 func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
@@ -53,7 +56,9 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 		TenantID:       "acme",
 		Repo:           "repo-readback-a",
 		Environment:    "prod",
+		Namespace:      "acme-prod",
 		Workload:       "api",
+		ServiceAccount: "shared-sa",
 		Digest:         "sha256:readback-a",
 		Reasons:        []string{"workflow mismatch", "signature verification failed"},
 		PolicyBundleID: "bundle-readback-a",
@@ -72,6 +77,23 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 		DriftResult: "image_drift",
 		Reasons:     []string{"image drift"},
 	})
+	mustIngest(audit.Event{
+		RequestID:            "req-readback-auth",
+		Component:            "runtime-agent",
+		EventType:            audit.EventTypeRuntimeActiveStateObserved,
+		Decision:             audit.DecisionDeny,
+		TenantID:             "acme",
+		Repo:                 "repo-readback-auth",
+		Environment:          "prod",
+		Namespace:            "acme-prod",
+		Workload:             "auth-api",
+		ServiceAccount:       "shared-sa",
+		Digest:               "sha256:readback-auth",
+		DriftResult:          "service_account_drift",
+		DriftClasses:         []string{"service_account_drift"},
+		Reasons:              []string{"service account drift"},
+		ReconciliationStatus: "drift_detected",
+	})
 
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/incidents?tenant_id=acme", nil)
 	listRec := httptest.NewRecorder()
@@ -88,6 +110,12 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 		t.Fatal("expected at least one incident for readback tests")
 	}
 	incidentID := list.Incidents[0].ID
+	for _, incident := range list.Incidents {
+		if containsString(incident.AffectedWorkloads, "api") {
+			incidentID = incident.ID
+			break
+		}
+	}
 
 	defenseReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+url.PathEscape(incidentID)+"/defense-gaps?tenant_id=acme", nil)
 	defenseRec := httptest.NewRecorder()
@@ -118,6 +146,12 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 	}
 	if defenseReadback.EvidenceEnvelope.EvidenceHash != defense.Readback.EvidenceHash {
 		t.Fatalf("expected stable defense-gap evidence hash, got %q want %q", defenseReadback.EvidenceEnvelope.EvidenceHash, defense.Readback.EvidenceHash)
+	}
+	if defenseReadback.TopologyContext == nil || defenseReadback.TopologyContext.PrimaryAffectedNode == nil {
+		t.Fatalf("expected topology context on defense-gap readback, got %#v", defenseReadback.TopologyContext)
+	}
+	if defenseReadback.TopologyContext.BlastRadiusScore == 0 || len(defenseReadback.TopologyContext.TopRiskPathSummaries) == 0 {
+		t.Fatalf("expected explainable topology summary on defense-gap readback, got %#v", defenseReadback.TopologyContext)
 	}
 
 	readbackRecAgain := httptest.NewRecorder()

@@ -506,6 +506,14 @@ func (s server) buildIncidentBlastRadiusResponse(ctx context.Context, filter top
 }
 
 func (s server) buildMetricBlastRadiusResponse(ctx context.Context, filter topologyFilter, metricKey string, incidents []investigationIncident) (topologyBlastRadiusResponse, error) {
+	response, err := s.buildScopedBlastRadiusResponse(ctx, filter, "metric", metricKey, incidents)
+	if err != nil {
+		return topologyBlastRadiusResponse{}, err
+	}
+	return response, nil
+}
+
+func (s server) buildScopedBlastRadiusResponse(ctx context.Context, filter topologyFilter, subjectType string, subjectRef string, incidents []investigationIncident) (topologyBlastRadiusResponse, error) {
 	start, end := topologyCurrentWindow(filter.analytics, time.Now().UTC())
 	snapshot, _, err := s.buildTopologySnapshotForWindow(ctx, filter, start, end)
 	if err != nil {
@@ -517,7 +525,7 @@ func (s server) buildMetricBlastRadiusResponse(ctx context.Context, filter topol
 			nodeSet[nodeID] = struct{}{}
 		}
 	}
-	return snapshot.buildBlastRadiusResponse("metric", metricKey, uniqueStrings(mapKeys(nodeSet))), nil
+	return snapshot.buildBlastRadiusResponse(subjectType, subjectRef, uniqueStrings(mapKeys(nodeSet))), nil
 }
 
 func (s server) buildTopologyDeltaResponse(ctx context.Context, filter topologyFilter) (topologyDeltaResponse, error) {

@@ -769,6 +769,9 @@ func (s server) buildRecommendationCandidates(ctx context.Context, incidents []i
 	topIncidents := incidents[:minInt(len(incidents), 5)]
 	candidates = append(candidates, buildIncidentRecommendations(topIncidents, incidents, filter)...)
 	candidates = append(candidates, buildSystemicRecommendations(incidents, filter)...)
+	if topologyRecommendations, err := s.buildTopologyRecommendations(ctx, incidents, filter); err == nil {
+		candidates = append(candidates, topologyRecommendations...)
+	}
 
 	anomalyContext, err := s.buildRecommendationAnomalyContext(ctx, filter)
 	if err == nil {
@@ -1006,6 +1009,230 @@ func buildAnomalyRecommendations(response audit.AnalyticsAnomaliesResponse, inci
 		})
 	}
 	return recommendations
+}
+
+func (s server) buildTopologyRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
+	topologyFilter, err := recommendationTopologyFilter(filter)
+	if err != nil {
+		return nil, err
+	}
+	delta, err := s.buildTopologyDeltaResponse(ctx, topologyFilter)
+	if err != nil {
+		return nil, err
+	}
+	recommendations := make([]recommendation, 0, minInt(len(delta.Items), 2))
+	for _, item := range delta.Items {
+		if item.Delta <= 0 && len(item.DriftSignals) == 0 {
+			continue
+		}
+		serviceFilter := topologyFilter
+		serviceFilter.Service = item.Service
+		blast, err := s.buildTopologyBlastRadiusForService(ctx, serviceFilter)
+		if err != nil {
+			continue
+		}
+		related := incidentsForTopologyService(incidents, item.Service)
+		template := topologyRecommendationTemplate(item, blast)
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:    recommendationID("topology", item.Service, template.TemplateID),
+			SourceType:          "topology_signal",
+			SourceRef:           item.Service,
+			SubjectType:         "service",
+			SubjectRef:          item.Service,
+			Team:                firstIncidentTenant(related),
+			Service:             item.Service,
+			Repo:                firstIncidentRepo(related),
+			Environment:         firstIncidentEnvironment(related),
+			RecommendationType:  template.RecommendationType,
+			Title:               fmt.Sprintf("Reduce expanding blast radius for %s", item.Service),
+			Description:         firstNonEmpty(firstString(item.DriftSignals), fmt.Sprintf("Blast radius expanded for %s in the current topology window.", item.Service)),
+			RecommendedAction:   topologyRecommendationAction(blast, item),
+			Rationale:           topologyRecommendationRationale(item, blast),
+			EvidenceRefs:        topologyRecommendationEvidenceRefs(blast, related),
+			ReadbackRefs:        topologyRecommendationReadbackRefs(related, incidents, filter),
+			RelatedIncidentRefs: incidentIDs(related),
+			PriorityBand:        topologyRecommendationPriority(item, blast),
+			ImpactScore:         minInt(100, maxInt(48+blast.BlastRadiusScore/2+item.CriticalReachDelta*8, 40)),
+			EffortScore:         recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:     topologyRecommendationConfidence(blast, item),
+			ApprovalMode:        template.ApprovalMode,
+			Status:              recommendationStatusShown,
+			CreatedAt:           recommendationCreatedAt(timePointer(delta.Comparison.CurrentEnd), nil, nil),
+			ExpiresAt:           recommendationExpiry(timePointer(delta.Comparison.CurrentEnd)),
+			VerificationPlan: []string{
+				"Re-run service-graph blast radius for the same service and confirm the effective blast-radius score drops.",
+				"Confirm topology delta no longer shows blast-radius expansion, public exposure widening, or new critical downstream reach for this service.",
+			},
+			ActionTemplate: template,
+			Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+			AdvisoryOnly:   true,
+			Limitations: uniqueStrings(append([]string{
+				"Topology recommendation remains a workflow overlay derived from the advisory 9e service graph and does not mutate canonical incident or runtime truth.",
+			}, append(delta.Limitations, blast.Limitations...)...)),
+		})
+		if len(recommendations) == 2 {
+			break
+		}
+	}
+	return recommendations, nil
+}
+
+func recommendationTopologyFilter(filter recommendationFilter) (topologyFilter, error) {
+	analyticsFilter, err := audit.NormalizeAnalyticsFilter(audit.AnalyticsFilter{
+		Window:      "28d",
+		CompareTo:   "previous_window",
+		GroupBy:     "service",
+		ClusterID:   filter.event.ClusterID,
+		TenantID:    filter.event.TenantID,
+		Environment: filter.event.Environment,
+		Repo:        filter.event.Repo,
+		Service:     filter.Service,
+		Team:        filter.Team,
+	})
+	if err != nil {
+		return topologyFilter{}, err
+	}
+	return topologyFilterFromAnalyticsFilter(analyticsFilter), nil
+}
+
+func incidentsForTopologyService(incidents []investigationIncident, service string) []investigationIncident {
+	if strings.TrimSpace(service) == "" {
+		return nil
+	}
+	matches := make([]investigationIncident, 0, len(incidents))
+	for _, incident := range incidents {
+		if incidentMatchesTopologyService(incident, service) {
+			matches = append(matches, incident)
+		}
+	}
+	return matches
+}
+
+func incidentMatchesTopologyService(incident investigationIncident, service string) bool {
+	service = strings.ToLower(strings.TrimSpace(service))
+	if service == "" {
+		return false
+	}
+	if strings.ToLower(strings.TrimSpace(incident.ScopeRef)) == service {
+		return true
+	}
+	for _, workload := range incident.AffectedWorkloads {
+		if strings.ToLower(strings.TrimSpace(workload)) == service {
+			return true
+		}
+	}
+	repository := strings.ToLower(strings.TrimSpace(incident.Repository))
+	if repository != "" && (repository == service || strings.Contains(repository, service)) {
+		return true
+	}
+	return false
+}
+
+func topologyRecommendationTemplate(item topologyDeltaItem, blast topologyBlastRadiusResponse) recommendationActionTemplate {
+	if containsString(item.DriftSignals, "public exposure widened") || item.CriticalReachDelta > 0 || blast.BlastRadiusScore >= 85 {
+		return recommendationTemplateCatalog[6]
+	}
+	if containsString(item.DriftSignals, "new connectivity path detected") || blast.BlastRadiusScore >= 60 {
+		return recommendationTemplateCatalog[1]
+	}
+	return recommendationTemplateCatalog[0]
+}
+
+func topologyRecommendationPriority(item topologyDeltaItem, blast topologyBlastRadiusResponse) string {
+	switch {
+	case containsString(item.DriftSignals, "public exposure widened") || item.CriticalReachDelta > 0 || blast.BlastRadiusScore >= 85:
+		return "NOW"
+	case item.Delta > 0 || blast.BlastRadiusScore >= 60:
+		return "TODAY"
+	default:
+		return "THIS_WEEK"
+	}
+}
+
+func topologyRecommendationConfidence(blast topologyBlastRadiusResponse, item topologyDeltaItem) int {
+	confidence := 70
+	if blast.ObservedEdgeCount > 0 {
+		confidence += 8
+	}
+	if len(item.DriftSignals) > 0 {
+		confidence += 6
+	}
+	return minInt(90, confidence)
+}
+
+func topologyRecommendationAction(blast topologyBlastRadiusResponse, item topologyDeltaItem) string {
+	if len(blast.ContainmentOptions) > 0 {
+		return firstNonEmpty(blast.ContainmentOptions[0].Title, blast.ContainmentOptions[0].Summary)
+	}
+	if containsString(item.DriftSignals, "public exposure widened") {
+		return "Open a security review and simulate a minimal ingress restriction plan for this service."
+	}
+	return "Open a bounded topology investigation and route a remediation work item to the current owner."
+}
+
+func topologyRecommendationRationale(item topologyDeltaItem, blast topologyBlastRadiusResponse) string {
+	riskPath := firstString(topologyRiskPathSummaries(blast.TopRiskPaths, 1))
+	if riskPath == "" {
+		riskPath = "No single topological path summary was available beyond the effective graph score."
+	}
+	return strings.TrimSpace(fmt.Sprintf(
+		"Blast radius expanded from %d to %d for %s. Critical reach changed by %d. %s",
+		item.BaselineBlastRadiusScore,
+		item.CurrentBlastRadiusScore,
+		item.Service,
+		item.CriticalReachDelta,
+		riskPath,
+	))
+}
+
+func topologyRecommendationEvidenceRefs(blast topologyBlastRadiusResponse, related []investigationIncident) []string {
+	evidenceRefs := append([]string{}, blast.EvidenceRefs...)
+	for _, incident := range related {
+		evidenceRefs = append(evidenceRefs, incident.EvidenceRefs...)
+	}
+	return limitStrings(uniqueStrings(evidenceRefs), 12)
+}
+
+func topologyRecommendationReadbackRefs(related []investigationIncident, all []investigationIncident, filter recommendationFilter) []advisoryReadbackRef {
+	refs := []advisoryReadbackRef{}
+	for _, incident := range related[:minInt(len(related), 2)] {
+		defenseAssessment := attachDefenseGapReadback(buildIncidentDefenseGapAssessment(incident, all), filter.toIncidentFilter())
+		replayAssessment := attachPolicyReplayReadback(buildIncidentPolicyReplayAssessment(incident, all), filter.toIncidentFilter())
+		if defenseAssessment.Readback.ResourceID != "" {
+			refs = append(refs, defenseAssessment.Readback)
+		}
+		if replayAssessment.Readback.ResourceID != "" {
+			refs = append(refs, replayAssessment.Readback)
+		}
+	}
+	return uniqueAdvisoryReadbackRefs(refs)
+}
+
+func uniqueAdvisoryReadbackRefs(refs []advisoryReadbackRef) []advisoryReadbackRef {
+	seen := map[string]struct{}{}
+	unique := make([]advisoryReadbackRef, 0, len(refs))
+	for _, ref := range refs {
+		key := ref.ResourceType + ":" + ref.ResourceID
+		if ref.ResourceID == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, ref)
+	}
+	return unique
+}
+
+func topologyRiskPathSummaries(paths []topologyRiskPath, limit int) []string {
+	summaries := make([]string, 0, minInt(len(paths), limit))
+	for _, path := range paths[:minInt(len(paths), limit)] {
+		if summary := strings.TrimSpace(path.Summary); summary != "" {
+			summaries = append(summaries, summary)
+		}
+	}
+	return uniqueStrings(summaries)
 }
 
 func (s server) buildRecommendationAnomalyContext(ctx context.Context, filter recommendationFilter) (audit.AnalyticsAnomaliesResponse, error) {
@@ -1342,6 +1569,37 @@ func (s server) verifyRecommendation(ctx context.Context, item recommendation, f
 			}
 		}
 		return recommendationStatusVerifiedSuccessful, "The anomaly signal is no longer present in the current comparison window.", nil
+	case "topology_signal":
+		topologyFilter, err := recommendationTopologyFilter(filter)
+		if err != nil {
+			return "", "", err
+		}
+		topologyFilter.Service = firstNonEmpty(item.SubjectRef, item.Service)
+		blast, err := s.buildTopologyBlastRadiusForService(ctx, topologyFilter)
+		if err != nil {
+			return "", "", err
+		}
+		delta, err := s.buildTopologyDeltaResponse(ctx, topologyFilter)
+		if err != nil {
+			return "", "", err
+		}
+		for _, deltaItem := range delta.Items {
+			if deltaItem.Service != topologyFilter.Service {
+				continue
+			}
+			switch {
+			case containsString(deltaItem.DriftSignals, "public exposure widened") || deltaItem.CriticalReachDelta > 0:
+				return recommendationStatusRegressed, "The same service still shows widening public or critical downstream reach in topology delta.", nil
+			case deltaItem.Delta > 0 || blast.BlastRadiusScore >= 60:
+				return recommendationStatusExecutedNoEffect, "The same service still carries elevated blast-radius pressure in the current topology window.", nil
+			case blast.BlastRadiusScore > 0:
+				return recommendationStatusPartiallyEffective, "Blast-radius pressure narrowed, but the service still carries residual topological reach that should be tracked.", nil
+			}
+		}
+		if blast.BlastRadiusScore == 0 && len(blast.ReachableNodes) == 0 {
+			return recommendationStatusVerifiedSuccessful, "The topology signal no longer maps to an active blast-radius path in the current scope.", nil
+		}
+		return recommendationStatusPartiallyEffective, "The strongest drift signal cleared, but the service still retains some topology-mapped reach.", nil
 	default:
 		return recommendationStatusExecutedNoEffect, "The recommendation source does not yet expose a richer verification rule, so the workflow remains advisory-only.", nil
 	}

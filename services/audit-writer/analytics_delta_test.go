@@ -72,6 +72,15 @@ func TestAnalyticsDeltaAndAuxiliaryEndpoints(t *testing.T) {
 		t.Fatalf("expected segment deltas, got %#v", delta)
 	}
 
+	var topologyDelta audit.AnalyticsDeltaResponse
+	run("/v1/analytics/delta?window=28d&metric=blast_radius_trend&group_by=service&tenant_id=acme", &topologyDelta)
+	if topologyDelta.Definition.Key != analyticsMetricBlastRadiusTrend {
+		t.Fatalf("unexpected topology delta definition %#v", topologyDelta.Definition)
+	}
+	if len(topologyDelta.Segments) == 0 || !strings.Contains(strings.ToLower(topologyDelta.Summary), "blast radius") {
+		t.Fatalf("expected first-class topology metric output, got %#v", topologyDelta)
+	}
+
 	var anomalies audit.AnalyticsAnomaliesResponse
 	run("/v1/analytics/anomalies?window=28d&group_by=service&tenant_id=acme", &anomalies)
 	if len(anomalies.Items) == 0 {
