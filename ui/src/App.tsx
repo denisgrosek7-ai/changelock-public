@@ -9,6 +9,7 @@ import {
   apiTokenConfigured,
   assignRecommendation,
   commentRecommendation,
+  downloadHandoffBundle,
   getAnalyticsAnomalies,
   getAnalyticsDelta,
   getAnalyticsScorecards,
@@ -17,6 +18,7 @@ import {
   getForensicsState,
   getForensicsTimeline,
   getForensicsVEXFlashback,
+  getHandoffVerification,
   approveException,
   acceptRecommendation,
   assignIncident,
@@ -57,6 +59,7 @@ import {
   requestException,
   requestRecommendationApproval,
   revokeException,
+  sealHandoff,
   verifyRecommendation,
   watchIncident,
   executeRecommendation,
@@ -105,6 +108,7 @@ import type {
   EventFilters,
   ExceptionReport,
   ExceptionRequestInput,
+  HandoffSealResponse,
   PolicyException,
   RuntimeActiveState,
   RuntimeClosedLoopStatus,
@@ -910,6 +914,43 @@ export default function App() {
     }, incidentIDs, audience);
   }
 
+  async function handleSealHandoff(input: {
+    incidentIDs: string[];
+    audience: IncidentReportAudience;
+    includeForensics?: boolean;
+    includeRecommendations?: boolean;
+    coSignMode?: string;
+  }): Promise<HandoffSealResponse> {
+    return sealHandoff({
+      audience: input.audience,
+      incident_ids: input.incidentIDs,
+      include_forensics: input.includeForensics,
+      include_recommendations: input.includeRecommendations,
+      co_sign_mode: input.coSignMode,
+    }, {
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+      scorecard_ref: metricDrilldown?.metricKey,
+    });
+  }
+
+  async function handleGetHandoffVerification(packageID: string) {
+    return getHandoffVerification(packageID);
+  }
+
+  async function handleDownloadHandoff(packageID: string) {
+    const blob = await downloadHandoffBundle(packageID);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${packageID}.safepkg`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleLoadIncidentDefenseGaps(incidentID: string): Promise<DefenseGapAssessment> {
     return getIncidentDefenseGaps(incidentID, {
       environment: filters.environment,
@@ -1279,6 +1320,9 @@ export default function App() {
           onLoadExport={handleLoadIncidentExport}
           onLoadPackage={handleLoadIncidentPackage}
           onLoadExecutiveReport={handleLoadExecutiveReport}
+          onSealHandoff={handleSealHandoff}
+          onGetHandoffVerification={handleGetHandoffVerification}
+          onDownloadHandoff={handleDownloadHandoff}
           onLoadIncidentDefenseGaps={handleLoadIncidentDefenseGaps}
           onLoadMetricDefenseGaps={handleLoadMetricDefenseGaps}
           onLoadIncidentPolicyReplay={handleLoadIncidentPolicyReplay}

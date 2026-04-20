@@ -1467,6 +1467,7 @@ func mapKeys[T any](values map[string]T) []string {
 	for key := range values {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 	return keys
 }
 

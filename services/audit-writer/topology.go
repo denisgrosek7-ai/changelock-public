@@ -613,6 +613,30 @@ func (s server) buildTopologySnapshotForWindow(ctx context.Context, filter topol
 }
 
 func buildTopologySnapshot(records []audit.StoredEvent, filter topologyFilter) topologySnapshot {
+	records = append([]audit.StoredEvent(nil), records...)
+	sort.Slice(records, func(i, j int) bool {
+		leftTime := eventTimestamp(records[i])
+		rightTime := eventTimestamp(records[j])
+		if !leftTime.Equal(rightTime) {
+			return leftTime.Before(rightTime)
+		}
+		if records[i].ID != records[j].ID {
+			return records[i].ID < records[j].ID
+		}
+		if strings.TrimSpace(records[i].DecisionHash) != strings.TrimSpace(records[j].DecisionHash) {
+			return strings.TrimSpace(records[i].DecisionHash) < strings.TrimSpace(records[j].DecisionHash)
+		}
+		if strings.TrimSpace(records[i].RequestID) != strings.TrimSpace(records[j].RequestID) {
+			return strings.TrimSpace(records[i].RequestID) < strings.TrimSpace(records[j].RequestID)
+		}
+		if strings.TrimSpace(records[i].EventType) != strings.TrimSpace(records[j].EventType) {
+			return strings.TrimSpace(records[i].EventType) < strings.TrimSpace(records[j].EventType)
+		}
+		if strings.TrimSpace(records[i].Component) != strings.TrimSpace(records[j].Component) {
+			return strings.TrimSpace(records[i].Component) < strings.TrimSpace(records[j].Component)
+		}
+		return strings.TrimSpace(records[i].Digest) < strings.TrimSpace(records[j].Digest)
+	})
 	snapshot := topologySnapshot{
 		nodes:          map[string]*topologyNodeRecord{},
 		declaredEdges:  map[string]*topologyEdgeRecord{},
@@ -642,7 +666,11 @@ func buildTopologySnapshot(records []audit.StoredEvent, filter topologyFilter) t
 
 func topologyRecordRelevant(record audit.StoredEvent, filter topologyFilter) bool {
 	component := strings.TrimSpace(record.Component)
-	if component == incidentComponent || component == "recommendation-manager" {
+	if component == incidentComponent || component == "recommendation-manager" || component == handoffComponent {
+		return false
+	}
+	switch record.EventType {
+	case audit.EventTypeHandoffSealed, audit.EventTypeHandoffCosigned:
 		return false
 	}
 	if filter.Namespace != "" && strings.TrimSpace(record.Namespace) != filter.Namespace {
@@ -686,17 +714,17 @@ func (s topologySnapshot) ensureNode(record audit.StoredEvent) *topologyNodeReco
 		}
 		s.nodes[nodeID] = node
 	}
-	if node.Repo == "" {
-		node.Repo = strings.TrimSpace(record.Repo)
+	if repo := strings.TrimSpace(record.Repo); repo != "" {
+		node.Repo = repo
 	}
-	if node.ArtifactDigest == "" {
-		node.ArtifactDigest = strings.TrimSpace(record.Digest)
+	if digest := strings.TrimSpace(record.Digest); digest != "" {
+		node.ArtifactDigest = digest
 	}
-	if node.ServiceAccount == "" {
-		node.ServiceAccount = topologyServiceAccount(record)
+	if serviceAccount := topologyServiceAccount(record); serviceAccount != "" {
+		node.ServiceAccount = serviceAccount
 	}
-	if !record.Timestamp.IsZero() && record.Timestamp.After(node.LastSeen) {
-		node.LastSeen = record.Timestamp
+	if timestamp := eventTimestamp(record); !timestamp.IsZero() && timestamp.After(node.LastSeen) {
+		node.LastSeen = timestamp
 	}
 	for _, ref := range topologyEvidenceRefs(record) {
 		node.EvidenceRefs[ref] = struct{}{}
@@ -916,6 +944,9 @@ func (s topologySnapshot) adjacency() map[string][]string {
 		}
 		adjacency[edge.Source] = appendUnique(adjacency[edge.Source], edge.Target)
 		adjacency[edge.Target] = appendUnique(adjacency[edge.Target], edge.Source)
+	}
+	for nodeID := range adjacency {
+		sort.Strings(adjacency[nodeID])
 	}
 	return adjacency
 }
@@ -1548,17 +1579,26 @@ func topologyBoundaryCrossing(left *topologyNodeRecord, right *topologyNodeRecor
 func (s topologySnapshot) edgeTypesForPath(pathIDs []string) []string {
 	result := []string{}
 	for i := 0; i < len(pathIDs)-1; i++ {
-		left, right := canonicalEdgeEndpoints(pathIDs[i], pathIDs[i+1])
-		edgeType := "effective_path"
-		for _, edge := range s.effectiveEdges {
-			if edge.Source == left && edge.Target == right {
-				edgeType = edge.EdgeType
-				break
-			}
-		}
-		result = append(result, edgeType)
+		result = append(result, s.preferredEdgeTypeForEndpoints(pathIDs[i], pathIDs[i+1]))
 	}
 	return result
+}
+
+func (s topologySnapshot) preferredEdgeTypeForEndpoints(leftNodeID string, rightNodeID string) string {
+	left, right := canonicalEdgeEndpoints(leftNodeID, rightNodeID)
+	bestType := "effective_path"
+	bestRank := -1
+	for _, edge := range s.effectiveEdges {
+		if edge.Source != left || edge.Target != right {
+			continue
+		}
+		rank := topologyEdgeTypeRank(edge.EdgeType)
+		if rank > bestRank || (rank == bestRank && edge.EdgeType < bestType) {
+			bestType = edge.EdgeType
+			bestRank = rank
+		}
+	}
+	return bestType
 }
 
 func (s topologySnapshot) pathLabels(pathIDs []string) []string {
@@ -1598,6 +1638,25 @@ func estimateContainmentReduction(primary *topologyNode, baseline int, closedEdg
 		}
 	}
 	return minInt(baseline, reduction)
+}
+
+func topologyEdgeTypeRank(edgeType string) int {
+	switch edgeType {
+	case "shared_service_account":
+		return 6
+	case "shared_artifact":
+		return 5
+	case "incident_scope_overlap":
+		return 4
+	case "namespace_scope":
+		return 3
+	case "release_promotion":
+		return 2
+	case "public_ingress":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func dedupeRiskPaths(paths []topologyRiskPath, limit int) []topologyRiskPath {

@@ -694,6 +694,9 @@ func (s server) listForensicsEvents(ctx context.Context, filter forensicsFilter,
 func filterForensicsEvents(events []audit.StoredEvent, filter forensicsFilter) []audit.StoredEvent {
 	filtered := make([]audit.StoredEvent, 0, len(events))
 	for _, event := range events {
+		if forensicsEventExcluded(event) {
+			continue
+		}
 		if filter.IncidentID != "" && strings.TrimSpace(event.IncidentID) != filter.IncidentID {
 			continue
 		}
@@ -712,6 +715,18 @@ func filterForensicsEvents(events []audit.StoredEvent, filter forensicsFilter) [
 		filtered = append(filtered, event)
 	}
 	return filtered
+}
+
+func forensicsEventExcluded(event audit.StoredEvent) bool {
+	if strings.TrimSpace(event.Component) == handoffComponent {
+		return true
+	}
+	switch event.EventType {
+	case audit.EventTypeHandoffSealed, audit.EventTypeHandoffCosigned:
+		return true
+	default:
+		return false
+	}
 }
 
 func filterForensicsIncidents(incidents []investigationIncident, filter forensicsFilter) []investigationIncident {
@@ -1164,7 +1179,32 @@ func forensicSeverity(event audit.StoredEvent) string {
 
 func orderEventsAscending(events []audit.StoredEvent) []audit.StoredEvent {
 	sorted := append([]audit.StoredEvent(nil), events...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Timestamp.Before(sorted[j].Timestamp) })
+	sort.Slice(sorted, func(i, j int) bool {
+		leftTime := eventTimestamp(sorted[i])
+		rightTime := eventTimestamp(sorted[j])
+		if !leftTime.Equal(rightTime) {
+			return leftTime.Before(rightTime)
+		}
+		if sorted[i].ID != sorted[j].ID {
+			return sorted[i].ID < sorted[j].ID
+		}
+		if strings.TrimSpace(sorted[i].DecisionHash) != strings.TrimSpace(sorted[j].DecisionHash) {
+			return strings.TrimSpace(sorted[i].DecisionHash) < strings.TrimSpace(sorted[j].DecisionHash)
+		}
+		if strings.TrimSpace(sorted[i].RequestID) != strings.TrimSpace(sorted[j].RequestID) {
+			return strings.TrimSpace(sorted[i].RequestID) < strings.TrimSpace(sorted[j].RequestID)
+		}
+		if strings.TrimSpace(sorted[i].EventType) != strings.TrimSpace(sorted[j].EventType) {
+			return strings.TrimSpace(sorted[i].EventType) < strings.TrimSpace(sorted[j].EventType)
+		}
+		if strings.TrimSpace(sorted[i].Component) != strings.TrimSpace(sorted[j].Component) {
+			return strings.TrimSpace(sorted[i].Component) < strings.TrimSpace(sorted[j].Component)
+		}
+		if strings.TrimSpace(sorted[i].Digest) != strings.TrimSpace(sorted[j].Digest) {
+			return strings.TrimSpace(sorted[i].Digest) < strings.TrimSpace(sorted[j].Digest)
+		}
+		return strings.TrimSpace(sorted[i].IncidentID) < strings.TrimSpace(sorted[j].IncidentID)
+	})
 	return sorted
 }
 
