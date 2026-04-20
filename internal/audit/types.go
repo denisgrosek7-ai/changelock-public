@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -24,6 +25,8 @@ const (
 	EventTypeSigningIdentityPolicyRecorded   = "signing_identity_policy_recorded"
 	EventTypeSigningIdentityPolicyDistrusted = "signing_identity_policy_distrusted"
 	EventTypeSigningIdentityFinding          = "signing_identity_finding"
+	EventTypeHandoffSealed                   = "handoff_sealed"
+	EventTypeHandoffCosigned                 = "handoff_cosigned"
 
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
@@ -135,6 +138,7 @@ type Event struct {
 	RecommendationExpiresAt           *time.Time       `json:"recommendation_expires_at,omitempty"`
 	RecommendationVerificationResult  string           `json:"recommendation_verification_result,omitempty"`
 	Evidence                          *Evidence        `json:"evidence,omitempty"`
+	Handoff                           json.RawMessage  `json:"handoff,omitempty"`
 }
 
 type VerifierSummary struct {

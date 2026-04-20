@@ -39,6 +39,7 @@ import type {
   ExceptionActionResponse,
   ExceptionReport,
   ExceptionRequestInput,
+  HandoffSealResponse,
   ExceptionsResponse,
   GuidanceGrouping,
   GuidanceItem,
@@ -110,8 +111,10 @@ import type {
   VulnerabilityRescanResponse,
   VulnerabilityTimelineEntry,
   VulnerabilityTimelineResponse,
+  VerificationResult,
   VerifierSummary,
   StandardsMapping,
+  SealedManifest,
 } from "./types";
 
 type RuntimeConfig = {
@@ -191,6 +194,52 @@ async function fetchJSON<T>(
     }
 
     return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Audit API request timed out.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutID);
+  }
+}
+
+async function fetchBlob(
+  path: string,
+  options?: {
+    method?: string;
+    params?: Record<string, string | string[] | undefined>;
+    body?: unknown;
+  },
+): Promise<Blob> {
+  const controller = new AbortController();
+  const timeoutID = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(buildURL(path, options?.params), {
+      method: options?.method || "GET",
+      headers: {
+        Accept: "application/octet-stream",
+        ...(options?.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+      },
+      body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const payload = (await response.json()) as { error?: string };
+        throw new APIError(response.status, payload.error || `request failed with status ${response.status}`);
+      }
+
+      const payload = await response.text();
+      throw new APIError(response.status, payload || `request failed with status ${response.status}`);
+    }
+
+    return response.blob();
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("Audit API request timed out.");
@@ -884,6 +933,161 @@ function parseTopologyGraphResponse(value: unknown): TopologyGraphResponse {
     summary: parseTopologyGraphSummary(value.summary),
     applied_filters: (readOptionalRecord(value.applied_filters, "topology.applied_filters") as Record<string, string>) || {},
     limitations: readOptionalStringArray(value.limitations, "topology.limitations"),
+  };
+}
+
+function parseSealedManifestScope(value: unknown): SealedManifest["scope"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff manifest scope.");
+  }
+  return {
+    audience: readString(value.audience, "handoff.scope.audience"),
+    selection_mode: readString(value.selection_mode, "handoff.scope.selection_mode"),
+    selection_summary: readString(value.selection_summary, "handoff.scope.selection_summary"),
+    incident_count: readNumber(value.incident_count, "handoff.scope.incident_count"),
+    incident_refs: readOptionalStringArray(value.incident_refs, "handoff.scope.incident_refs") || [],
+    tenant_id: readOptionalString(value.tenant_id, "handoff.scope.tenant_id"),
+    environment: readOptionalString(value.environment, "handoff.scope.environment"),
+    repo: readOptionalString(value.repo, "handoff.scope.repo"),
+  };
+}
+
+function parseSealedManifestRedaction(value: unknown): SealedManifest["redaction_profile"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff redaction profile.");
+  }
+  return {
+    audience: readString(value.audience, "handoff.redaction_profile.audience"),
+    profile_version: readString(value.profile_version, "handoff.redaction_profile.profile_version"),
+    summary: readOptionalStringArray(value.summary, "handoff.redaction_profile.summary") || [],
+  };
+}
+
+function parseSealedManifestArtifact(value: unknown): SealedManifest["artifacts"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff artifact.");
+  }
+  return {
+    path: readString(value.path, "handoff.artifact.path"),
+    media_type: readString(value.media_type, "handoff.artifact.media_type"),
+    sha256: readString(value.sha256, "handoff.artifact.sha256"),
+    role: readString(value.role, "handoff.artifact.role"),
+    advisory_only: value.advisory_only === undefined ? undefined : readBoolean(value.advisory_only, "handoff.artifact.advisory_only"),
+  };
+}
+
+function parseSealedManifestReadbackRef(value: unknown): NonNullable<SealedManifest["readback_refs"]>[number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff readback ref.");
+  }
+  return {
+    resource_type: readString(value.resource_type, "handoff.readback_ref.resource_type"),
+    resource_id: readOptionalString(value.resource_id, "handoff.readback_ref.resource_id"),
+    evidence_hash: readString(value.evidence_hash, "handoff.readback_ref.evidence_hash"),
+    resource_uri: readOptionalString(value.resource_uri, "handoff.readback_ref.resource_uri"),
+  };
+}
+
+function parseSealedManifestForensicRef(value: unknown): NonNullable<SealedManifest["forensic_refs"]>[number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff forensic ref.");
+  }
+  return {
+    context_uri: readOptionalString(value.context_uri, "handoff.forensic_ref.context_uri"),
+    context_type: readString(value.context_type, "handoff.forensic_ref.context_type"),
+    timestamp: readString(value.timestamp, "handoff.forensic_ref.timestamp"),
+    advisory_only: readBoolean(value.advisory_only, "handoff.forensic_ref.advisory_only"),
+    counterfactual: value.counterfactual === undefined ? undefined : readBoolean(value.counterfactual, "handoff.forensic_ref.counterfactual"),
+  };
+}
+
+function parseSealedManifest(value: unknown): SealedManifest {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid sealed manifest.");
+  }
+  return {
+    package_id: readString(value.package_id, "handoff.manifest.package_id"),
+    package_type: readString(value.package_type, "handoff.manifest.package_type"),
+    schema_version: readString(value.schema_version, "handoff.manifest.schema_version"),
+    created_at: readString(value.created_at, "handoff.manifest.created_at"),
+    generator_identity: readString(value.generator_identity, "handoff.manifest.generator_identity"),
+    scope: parseSealedManifestScope(value.scope),
+    redaction_profile: parseSealedManifestRedaction(value.redaction_profile),
+    artifacts: readOptionalArray(value.artifacts, "handoff.manifest.artifacts").map(parseSealedManifestArtifact),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "handoff.manifest.evidence_refs") || [],
+    readback_refs: readOptionalArray(value.readback_refs, "handoff.manifest.readback_refs").map(parseSealedManifestReadbackRef),
+    forensic_refs: readOptionalArray(value.forensic_refs, "handoff.manifest.forensic_refs").map(parseSealedManifestForensicRef),
+    root_hash: readString(value.root_hash, "handoff.manifest.root_hash"),
+    limitations: readOptionalStringArray(value.limitations, "handoff.manifest.limitations"),
+  };
+}
+
+function parseHandoffSessionRecord(value: unknown): HandoffSealResponse["session"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff session.");
+  }
+  return {
+    session_id: readString(value.session_id, "handoff.session.session_id"),
+    package_id: readString(value.package_id, "handoff.session.package_id"),
+    package_type: readString(value.package_type, "handoff.session.package_type"),
+    scope_summary: readString(value.scope_summary, "handoff.session.scope_summary"),
+    initiated_by: readString(value.initiated_by, "handoff.session.initiated_by"),
+    initiated_at: readString(value.initiated_at, "handoff.session.initiated_at"),
+    sign_mode: readString(value.sign_mode, "handoff.session.sign_mode"),
+    co_sign_mode: readString(value.co_sign_mode, "handoff.session.co_sign_mode"),
+    status: readString(value.status, "handoff.session.status"),
+    final_bundle_ref: readString(value.final_bundle_ref, "handoff.session.final_bundle_ref"),
+    manifest_hash: readString(value.manifest_hash, "handoff.session.manifest_hash"),
+  };
+}
+
+function parseSealedBundleMetadata(value: unknown): HandoffSealResponse["bundle"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff bundle metadata.");
+  }
+  return {
+    package_id: readString(value.package_id, "handoff.bundle.package_id"),
+    bundle_path: readString(value.bundle_path, "handoff.bundle.bundle_path"),
+    manifest_hash: readString(value.manifest_hash, "handoff.bundle.manifest_hash"),
+    seal_status: readString(value.seal_status, "handoff.bundle.seal_status"),
+    signature_count: readNumber(value.signature_count, "handoff.bundle.signature_count"),
+    timestamp_status: readString(value.timestamp_status, "handoff.bundle.timestamp_status"),
+    transparency_status: readString(value.transparency_status, "handoff.bundle.transparency_status"),
+    verification_uri: readString(value.verification_uri, "handoff.bundle.verification_uri"),
+    offline_verifier_present: readBoolean(value.offline_verifier_present, "handoff.bundle.offline_verifier_present"),
+  };
+}
+
+function parseVerificationResult(value: unknown): VerificationResult {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff verification.");
+  }
+  return {
+    package_id: readString(value.package_id, "handoff.verification.package_id"),
+    manifest_valid: readBoolean(value.manifest_valid, "handoff.verification.manifest_valid"),
+    artifact_hashes_valid: readBoolean(value.artifact_hashes_valid, "handoff.verification.artifact_hashes_valid"),
+    signatures_valid: readBoolean(value.signatures_valid, "handoff.verification.signatures_valid"),
+    timestamp_valid: readBoolean(value.timestamp_valid, "handoff.verification.timestamp_valid"),
+    transparency_valid: readBoolean(value.transparency_valid, "handoff.verification.transparency_valid"),
+    signer_identities: readOptionalStringArray(value.signer_identities, "handoff.verification.signer_identities") || [],
+    redaction_profile: readString(value.redaction_profile, "handoff.verification.redaction_profile"),
+    overall_status: readString(value.overall_status, "handoff.verification.overall_status"),
+    limitations: readOptionalStringArray(value.limitations, "handoff.verification.limitations"),
+  };
+}
+
+function parseHandoffSealResponse(value: unknown): HandoffSealResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid handoff response.");
+  }
+  return {
+    package_id: readString(value.package_id, "handoff.package_id"),
+    manifest: parseSealedManifest(value.manifest),
+    session: parseHandoffSessionRecord(value.session),
+    bundle: parseSealedBundleMetadata(value.bundle),
+    verification: parseVerificationResult(value.verification),
+    download_uri: readString(value.download_uri, "handoff.download_uri"),
+    verification_uri: readString(value.verification_uri, "handoff.verification_uri"),
   };
 }
 
@@ -3482,6 +3686,50 @@ export async function rescanVulnerabilities(input?: { image_digest?: string; ima
       body: input || {},
     }),
   );
+}
+
+export async function sealHandoff(
+  input: {
+    audience: string;
+    incident_ids?: string[];
+    include_forensics?: boolean;
+    include_recommendations?: boolean;
+    co_sign_mode?: string;
+  },
+  filters?: Record<string, string | string[] | undefined>,
+) {
+  return parseHandoffSealResponse(
+    await fetchJSON<unknown>("/v1/handoff/seal", {
+      method: "POST",
+      params: filters,
+      body: input,
+    }),
+  );
+}
+
+export async function getHandoff(packageID: string) {
+  return parseHandoffSealResponse(await fetchJSON<unknown>(`/v1/handoff/${encodeURIComponent(packageID)}`));
+}
+
+export async function getHandoffManifest(packageID: string) {
+  return parseSealedManifest(await fetchJSON<unknown>(`/v1/handoff/${encodeURIComponent(packageID)}/manifest`));
+}
+
+export async function getHandoffVerification(packageID: string) {
+  return parseVerificationResult(await fetchJSON<unknown>(`/v1/handoff/${encodeURIComponent(packageID)}/verification`));
+}
+
+export async function cosignHandoff(packageID: string, signerRole: string) {
+  return parseHandoffSealResponse(
+    await fetchJSON<unknown>(`/v1/handoff/${encodeURIComponent(packageID)}/cosign`, {
+      method: "POST",
+      body: { signer_role: signerRole },
+    }),
+  );
+}
+
+export async function downloadHandoffBundle(packageID: string) {
+  return fetchBlob(`/v1/handoff/${encodeURIComponent(packageID)}/download`);
 }
 
 export async function getRuntimeDriftFindings(filters: {

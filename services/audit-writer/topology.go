@@ -642,7 +642,11 @@ func buildTopologySnapshot(records []audit.StoredEvent, filter topologyFilter) t
 
 func topologyRecordRelevant(record audit.StoredEvent, filter topologyFilter) bool {
 	component := strings.TrimSpace(record.Component)
-	if component == incidentComponent || component == "recommendation-manager" {
+	if component == incidentComponent || component == "recommendation-manager" || component == handoffComponent {
+		return false
+	}
+	switch record.EventType {
+	case audit.EventTypeHandoffSealed, audit.EventTypeHandoffCosigned:
 		return false
 	}
 	if filter.Namespace != "" && strings.TrimSpace(record.Namespace) != filter.Namespace {

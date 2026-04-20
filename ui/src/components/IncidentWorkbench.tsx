@@ -20,8 +20,7 @@ import {
   type MetricIncidentDrilldown,
   type Recommendation,
 } from "../incidents";
-import type { StoredEvent } from "../types";
-import type { TopologyBlastRadiusResponse } from "../types";
+import type { HandoffSealResponse, StoredEvent, TopologyBlastRadiusResponse, VerificationResult } from "../types";
 import { EventDetails } from "./EventDetails";
 import { EventsTable } from "./EventsTable";
 
@@ -37,6 +36,15 @@ type Props = {
   onLoadExport?: (incidentID: string, audience: IncidentReportAudience) => Promise<IncidentExport>;
   onLoadPackage?: (incidentIDs: string[], audience: IncidentReportAudience) => Promise<IncidentPackage>;
   onLoadExecutiveReport?: (incidentIDs: string[], audience: IncidentReportAudience) => Promise<ExecutiveDefenseReport>;
+  onSealHandoff?: (input: {
+    incidentIDs: string[];
+    audience: IncidentReportAudience;
+    includeForensics?: boolean;
+    includeRecommendations?: boolean;
+    coSignMode?: string;
+  }) => Promise<HandoffSealResponse>;
+  onGetHandoffVerification?: (packageID: string) => Promise<VerificationResult>;
+  onDownloadHandoff?: (packageID: string) => Promise<void>;
   onLoadIncidentDefenseGaps?: (incidentID: string) => Promise<DefenseGapAssessment>;
   onLoadMetricDefenseGaps?: (metricKey: string) => Promise<DefenseGapAssessment>;
   onLoadIncidentPolicyReplay?: (incidentID: string) => Promise<PolicyReplayAssessment>;
@@ -138,6 +146,10 @@ function recommendationStatusClass(value: Recommendation["status"]) {
 
 function recommendationApprovalClass(value: Recommendation["approvalMode"]) {
   return value === "approval_required" ? "warning" : "allow";
+}
+
+function handoffVerificationClass(value: string) {
+  return value === "valid" ? "allow" : value === "partial" ? "warning" : "deny";
 }
 
 function humanizeKey(value: string) {
@@ -303,6 +315,9 @@ export function IncidentWorkbench({
   onLoadExport,
   onLoadPackage,
   onLoadExecutiveReport,
+  onSealHandoff,
+  onGetHandoffVerification,
+  onDownloadHandoff,
   onLoadIncidentDefenseGaps,
   onLoadMetricDefenseGaps,
   onLoadIncidentPolicyReplay,
@@ -352,6 +367,10 @@ export function IncidentWorkbench({
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState<string | null>(null);
   const [packageHandoffMode, setPackageHandoffMode] = useState(false);
+  const [sealedHandoff, setSealedHandoff] = useState<HandoffSealResponse | null>(null);
+  const [handoffLoading, setHandoffLoading] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
   const [executivePayload, setExecutivePayload] = useState<ExecutiveDefenseReport | null>(null);
   const [executiveLoading, setExecutiveLoading] = useState(false);
   const [executiveError, setExecutiveError] = useState<string | null>(null);
@@ -751,6 +770,9 @@ export function IncidentWorkbench({
     }
     setPackageLoading(true);
     setPackageError(null);
+    setSealedHandoff(null);
+    setHandoffError(null);
+    setHandoffStatus(null);
     try {
       const payload = await onLoadPackage(incidentIDs, audience);
       setPackagePayload(payload);
@@ -774,6 +796,65 @@ export function IncidentWorkbench({
       setExecutiveError(loadError instanceof Error ? loadError.message : "Unable to load executive defense report.");
     } finally {
       setExecutiveLoading(false);
+    }
+  }
+
+  async function sealCurrentPackageHandoff() {
+    if (!packagePayload || !onSealHandoff) {
+      return;
+    }
+    setHandoffLoading(true);
+    setHandoffError(null);
+    setHandoffStatus(null);
+    try {
+      const payload = await onSealHandoff({
+        incidentIDs: packagePayload.selectionMode === "explicit" ? packagePayload.incidentRefs : [],
+        audience: packagePayload.audience,
+        includeForensics: true,
+        includeRecommendations: true,
+        coSignMode: "system_only",
+      });
+      setSealedHandoff(payload);
+      setHandoffStatus("Sealed bundle ready for offline verification.");
+    } catch (loadError) {
+      setHandoffError(loadError instanceof Error ? loadError.message : "Unable to seal handoff bundle.");
+    } finally {
+      setHandoffLoading(false);
+    }
+  }
+
+  async function refreshHandoffVerification() {
+    if (!sealedHandoff || !onGetHandoffVerification) {
+      return;
+    }
+    setHandoffLoading(true);
+    setHandoffError(null);
+    setHandoffStatus(null);
+    try {
+      const verification = await onGetHandoffVerification(sealedHandoff.package_id);
+      setSealedHandoff((current) => current ? { ...current, verification } : current);
+      setHandoffStatus("Seal verification refreshed.");
+    } catch (loadError) {
+      setHandoffError(loadError instanceof Error ? loadError.message : "Unable to refresh handoff verification.");
+    } finally {
+      setHandoffLoading(false);
+    }
+  }
+
+  async function downloadSealedHandoff() {
+    if (!sealedHandoff || !onDownloadHandoff) {
+      return;
+    }
+    setHandoffLoading(true);
+    setHandoffError(null);
+    setHandoffStatus(null);
+    try {
+      await onDownloadHandoff(sealedHandoff.package_id);
+      setHandoffStatus("Sealed bundle downloaded.");
+    } catch (loadError) {
+      setHandoffError(loadError instanceof Error ? loadError.message : "Unable to download sealed bundle.");
+    } finally {
+      setHandoffLoading(false);
     }
   }
 
@@ -1520,6 +1601,102 @@ export function IncidentWorkbench({
                       </div>
                     </article>
                   </div>
+                </section>
+
+                <section className="incident-report-section">
+                  <div className="incident-report-section__header">
+                    <span className="summary-label">Signed / sealed handoff</span>
+                    <strong>{sealedHandoff ? sealedHandoff.bundle.seal_status.replace(/_/g, " ") : "No sealed bundle generated yet"}</strong>
+                  </div>
+                  <div className="chip-row">
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={handoffLoading || !onSealHandoff}
+                      onClick={() => void sealCurrentPackageHandoff()}
+                    >
+                      {handoffLoading ? "Sealing bundle…" : "Seal current package"}
+                    </button>
+                    {sealedHandoff ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={handoffLoading || !onGetHandoffVerification}
+                          onClick={() => void refreshHandoffVerification()}
+                        >
+                          Refresh verification
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={handoffLoading || !onDownloadHandoff}
+                          onClick={() => void downloadSealedHandoff()}
+                        >
+                          Download .safepkg
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                  <p className="incident-inline-copy">
+                    Sealing is manifest-first and freezes the current package scope, redaction profile, readback lineage, and optional forensic context before signing.
+                  </p>
+                  {handoffError ? <p className="details-copy details-copy--error">{handoffError}</p> : null}
+                  {handoffStatus ? <p className="incident-inline-copy">{handoffStatus}</p> : null}
+                  {sealedHandoff ? (
+                    <>
+                      <div className="chip-row">
+                        <span className={`chip chip--${handoffVerificationClass(sealedHandoff.verification.overall_status)}`}>
+                          {sealedHandoff.verification.overall_status}
+                        </span>
+                        <span className="chip chip--muted">{sealedHandoff.manifest.redaction_profile.audience}</span>
+                        <span className="chip chip--muted">{sealedHandoff.bundle.signature_count} signatures</span>
+                        <span className="chip chip--muted">{sealedHandoff.bundle.timestamp_status}</span>
+                        <span className="chip chip--muted">{sealedHandoff.bundle.transparency_status}</span>
+                      </div>
+                      <div className="summary-grid">
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Package ID</span>
+                          <strong className="summary-value">{sealedHandoff.package_id}</strong>
+                          <p>{sealedHandoff.session.scope_summary}</p>
+                        </article>
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Manifest hash</span>
+                          <strong className="summary-value">{sealedHandoff.bundle.manifest_hash.slice(0, 16)}…</strong>
+                          <p>{sealedHandoff.manifest.artifacts.length} sealed artifacts · root {sealedHandoff.manifest.root_hash.slice(0, 16)}…</p>
+                        </article>
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Verifier status</span>
+                          <strong className="summary-value">{sealedHandoff.verification.signatures_valid && sealedHandoff.verification.timestamp_valid && sealedHandoff.verification.transparency_valid ? "ready" : "review"}</strong>
+                          <p>manifest {sealedHandoff.verification.manifest_valid ? "valid" : "invalid"} · hashes {sealedHandoff.verification.artifact_hashes_valid ? "valid" : "invalid"}</p>
+                        </article>
+                        <article className="summary-card summary-card--compact">
+                          <span className="summary-label">Offline verification</span>
+                          <strong className="summary-value">{sealedHandoff.bundle.offline_verifier_present ? "present" : "missing"}</strong>
+                          <p>{sealedHandoff.session.sign_mode} · generated {formatTimestamp(sealedHandoff.session.initiated_at)}</p>
+                        </article>
+                      </div>
+                      <div className="incident-evidence-grid">
+                        <div>
+                          <span className="summary-label">Signer identities</span>
+                          {renderValueList(sealedHandoff.verification.signer_identities, "No signer identities attached.", 4)}
+                        </div>
+                        <div>
+                          <span className="summary-label">Seal limitations</span>
+                          {renderValueList(
+                            [
+                              ...(sealedHandoff.manifest.limitations || []),
+                              ...(sealedHandoff.verification.limitations || []),
+                            ],
+                            "No explicit sealing limitations recorded.",
+                            8,
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="summary-list-empty">Seal the current package to produce a signed, timestamped, offline-verifiable handoff bundle.</div>
+                  )}
                 </section>
 
                 <section className="incident-report-section">

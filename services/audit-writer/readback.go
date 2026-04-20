@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -217,6 +218,7 @@ func buildAdvisoryReadbackRef(resourceType string, descriptor readbackDescriptor
 }
 
 func attachDefenseGapReadback(assessment defenseGapAssessment, filter incidentFilter) defenseGapAssessment {
+	assessment = normalizeDefenseGapAssessmentForReadback(assessment)
 	descriptor := readbackDescriptor{
 		ResourceType: readbackResourceDefenseGap,
 		SubjectType:  assessment.SubjectType,
@@ -229,6 +231,7 @@ func attachDefenseGapReadback(assessment defenseGapAssessment, filter incidentFi
 }
 
 func attachPolicyReplayReadback(assessment policyReplayAssessment, filter incidentFilter) policyReplayAssessment {
+	assessment = normalizePolicyReplayAssessmentForReadback(assessment)
 	descriptor := readbackDescriptor{
 		ResourceType: readbackResourcePolicyReplay,
 		SubjectType:  assessment.SubjectType,
@@ -241,6 +244,7 @@ func attachPolicyReplayReadback(assessment policyReplayAssessment, filter incide
 }
 
 func attachSystemicWeaknessReadback(response systemicWeaknessResponse, filter incidentFilter) systemicWeaknessResponse {
+	response = normalizeSystemicWeaknessResponseForReadback(response)
 	for index, weakness := range response.Weaknesses {
 		descriptor := readbackDescriptor{
 			ResourceType: readbackResourceSystemicWeak,
@@ -251,6 +255,50 @@ func attachSystemicWeaknessReadback(response systemicWeaknessResponse, filter in
 		envelope := buildSystemicWeaknessEnvelope(weakness, descriptor, response.GeneratedAt)
 		response.Weaknesses[index].Readback = buildAdvisoryReadbackRef(readbackResourceSystemicWeak, descriptor, envelope)
 	}
+	return response
+}
+
+func normalizeDefenseGapAssessmentForReadback(assessment defenseGapAssessment) defenseGapAssessment {
+	assessment.DefenseGaps = normalizeDefenseGapFindingsForHandoff(assessment.DefenseGaps)
+	assessment.SystemicPattern.RelatedIncidentRefs = sortedStrings(cloneStrings(assessment.SystemicPattern.RelatedIncidentRefs))
+	assessment.Limitations = sortedStrings(cloneStrings(assessment.Limitations))
+	return assessment
+}
+
+func normalizePolicyReplayAssessmentForReadback(assessment policyReplayAssessment) policyReplayAssessment {
+	assessment.ReplayResults = append([]policyReplayResult(nil), assessment.ReplayResults...)
+	for index := range assessment.ReplayResults {
+		assessment.ReplayResults[index].SupportingEvidenceRefs = sortedStrings(cloneStrings(assessment.ReplayResults[index].SupportingEvidenceRefs))
+		assessment.ReplayResults[index].Limitations = sortedStrings(cloneStrings(assessment.ReplayResults[index].Limitations))
+	}
+	sort.Slice(assessment.ReplayResults, func(i, j int) bool {
+		if assessment.ReplayResults[i].CaseRef == assessment.ReplayResults[j].CaseRef {
+			return assessment.ReplayResults[i].Title < assessment.ReplayResults[j].Title
+		}
+		return assessment.ReplayResults[i].CaseRef < assessment.ReplayResults[j].CaseRef
+	})
+	assessment.CoverageGaps = normalizeCoverageGapFindingsForHandoff(assessment.CoverageGaps)
+	assessment.BlastRadius.TopScopes = sortedStrings(cloneStrings(assessment.BlastRadius.TopScopes))
+	assessment.Limitations = sortedStrings(cloneStrings(assessment.Limitations))
+	return assessment
+}
+
+func normalizeSystemicWeaknessResponseForReadback(response systemicWeaknessResponse) systemicWeaknessResponse {
+	response.Weaknesses = append([]systemicWeakness(nil), response.Weaknesses...)
+	for index := range response.Weaknesses {
+		response.Weaknesses[index].ProcessFragility = sortedStrings(cloneStrings(response.Weaknesses[index].ProcessFragility))
+		response.Weaknesses[index].SupplyChainBlindSpots = sortedStrings(cloneStrings(response.Weaknesses[index].SupplyChainBlindSpots))
+		response.Weaknesses[index].RelatedIncidentRefs = sortedStrings(cloneStrings(response.Weaknesses[index].RelatedIncidentRefs))
+		response.Weaknesses[index].EvidenceRefs = sortedStrings(cloneStrings(response.Weaknesses[index].EvidenceRefs))
+		response.Weaknesses[index].Limitations = sortedStrings(cloneStrings(response.Weaknesses[index].Limitations))
+	}
+	sort.Slice(response.Weaknesses, func(i, j int) bool {
+		if response.Weaknesses[i].PatternKey == response.Weaknesses[j].PatternKey {
+			return response.Weaknesses[i].Title < response.Weaknesses[j].Title
+		}
+		return response.Weaknesses[i].PatternKey < response.Weaknesses[j].PatternKey
+	})
+	response.Limitations = sortedStrings(cloneStrings(response.Limitations))
 	return response
 }
 

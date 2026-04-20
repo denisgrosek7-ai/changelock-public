@@ -694,6 +694,9 @@ func (s server) listForensicsEvents(ctx context.Context, filter forensicsFilter,
 func filterForensicsEvents(events []audit.StoredEvent, filter forensicsFilter) []audit.StoredEvent {
 	filtered := make([]audit.StoredEvent, 0, len(events))
 	for _, event := range events {
+		if forensicsEventExcluded(event) {
+			continue
+		}
 		if filter.IncidentID != "" && strings.TrimSpace(event.IncidentID) != filter.IncidentID {
 			continue
 		}
@@ -712,6 +715,18 @@ func filterForensicsEvents(events []audit.StoredEvent, filter forensicsFilter) [
 		filtered = append(filtered, event)
 	}
 	return filtered
+}
+
+func forensicsEventExcluded(event audit.StoredEvent) bool {
+	if strings.TrimSpace(event.Component) == handoffComponent {
+		return true
+	}
+	switch event.EventType {
+	case audit.EventTypeHandoffSealed, audit.EventTypeHandoffCosigned:
+		return true
+	default:
+		return false
+	}
 }
 
 func filterForensicsIncidents(incidents []investigationIncident, filter forensicsFilter) []investigationIncident {

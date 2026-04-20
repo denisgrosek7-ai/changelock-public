@@ -1208,3 +1208,108 @@ export interface ForensicReplayResponse {
   evidence_refs?: string[];
   limitations?: string[];
 }
+
+export interface SealedManifestScope {
+  audience: string;
+  selection_mode: string;
+  selection_summary: string;
+  incident_count: number;
+  incident_refs: string[];
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+}
+
+export interface SealedManifestRedaction {
+  audience: string;
+  profile_version: string;
+  summary: string[];
+}
+
+export interface SealedManifestArtifact {
+  path: string;
+  media_type: string;
+  sha256: string;
+  role: string;
+  advisory_only?: boolean;
+}
+
+export interface SealedManifestReadbackRef {
+  resource_type: string;
+  resource_id?: string;
+  evidence_hash: string;
+  resource_uri?: string;
+}
+
+export interface SealedManifestForensicRef {
+  context_uri?: string;
+  context_type: string;
+  timestamp: string;
+  advisory_only: boolean;
+  counterfactual?: boolean;
+}
+
+export interface SealedManifest {
+  package_id: string;
+  package_type: string;
+  schema_version: string;
+  created_at: string;
+  generator_identity: string;
+  scope: SealedManifestScope;
+  redaction_profile: SealedManifestRedaction;
+  artifacts: SealedManifestArtifact[];
+  evidence_refs: string[];
+  readback_refs?: SealedManifestReadbackRef[];
+  forensic_refs?: SealedManifestForensicRef[];
+  root_hash: string;
+  limitations?: string[];
+}
+
+export interface HandoffSessionRecord {
+  session_id: string;
+  package_id: string;
+  package_type: string;
+  scope_summary: string;
+  initiated_by: string;
+  initiated_at: string;
+  sign_mode: string;
+  co_sign_mode: string;
+  status: string;
+  final_bundle_ref: string;
+  manifest_hash: string;
+}
+
+export interface SealedBundleMetadata {
+  package_id: string;
+  bundle_path: string;
+  manifest_hash: string;
+  seal_status: string;
+  signature_count: number;
+  timestamp_status: string;
+  transparency_status: string;
+  verification_uri: string;
+  offline_verifier_present: boolean;
+}
+
+export interface VerificationResult {
+  package_id: string;
+  manifest_valid: boolean;
+  artifact_hashes_valid: boolean;
+  signatures_valid: boolean;
+  timestamp_valid: boolean;
+  transparency_valid: boolean;
+  signer_identities: string[];
+  redaction_profile: string;
+  overall_status: string;
+  limitations?: string[];
+}
+
+export interface HandoffSealResponse {
+  package_id: string;
+  manifest: SealedManifest;
+  session: HandoffSessionRecord;
+  bundle: SealedBundleMetadata;
+  verification: VerificationResult;
+  download_uri: string;
+  verification_uri: string;
+}

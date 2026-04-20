@@ -1667,6 +1667,9 @@ func buildIncidentCases(events []audit.StoredEvent) []investigationIncident {
 			mutationEvents = append(mutationEvents, event)
 			continue
 		}
+		if !isIncidentDerivationEvent(event) {
+			continue
+		}
 		baseEvents = append(baseEvents, event)
 	}
 
@@ -1679,7 +1682,16 @@ func buildIncidentCases(events []audit.StoredEvent) []investigationIncident {
 			return priorityRank[incidents[i].Priority] > priorityRank[incidents[j].Priority]
 		}
 		if incidents[i].LastActivityAt == nil || incidents[j].LastActivityAt == nil {
-			return incidents[i].EventCount > incidents[j].EventCount
+			if incidents[i].EventCount != incidents[j].EventCount {
+				return incidents[i].EventCount > incidents[j].EventCount
+			}
+			return incidents[i].ID < incidents[j].ID
+		}
+		if incidents[i].LastActivityAt.Equal(*incidents[j].LastActivityAt) {
+			if incidents[i].EventCount != incidents[j].EventCount {
+				return incidents[i].EventCount > incidents[j].EventCount
+			}
+			return incidents[i].ID < incidents[j].ID
 		}
 		return incidents[i].LastActivityAt.After(*incidents[j].LastActivityAt)
 	})
@@ -1687,8 +1699,23 @@ func buildIncidentCases(events []audit.StoredEvent) []investigationIncident {
 }
 
 func buildDerivedIncidents(events []audit.StoredEvent) map[string]*investigationIncident {
+	ordered := append([]audit.StoredEvent(nil), events...)
+	sort.Slice(ordered, func(i, j int) bool {
+		left := eventTimestamp(ordered[i])
+		right := eventTimestamp(ordered[j])
+		if !left.Equal(right) {
+			return left.Before(right)
+		}
+		if ordered[i].ID != ordered[j].ID {
+			return ordered[i].ID < ordered[j].ID
+		}
+		if strings.TrimSpace(ordered[i].DecisionHash) != strings.TrimSpace(ordered[j].DecisionHash) {
+			return strings.TrimSpace(ordered[i].DecisionHash) < strings.TrimSpace(ordered[j].DecisionHash)
+		}
+		return ordered[i].EventType < ordered[j].EventType
+	})
 	grouped := map[string]*incidentAccumulator{}
-	for _, event := range events {
+	for _, event := range ordered {
 		classification := classifyIncident(event)
 		scopeType, scopeRef := incidentScope(event)
 		identityKey := incidentIdentityKey(classification, event, scopeType, scopeRef)
@@ -4232,6 +4259,9 @@ func buildSystemicWeaknessResponse(incidents []investigationIncident, scopeSumma
 		weaknesses = append(weaknesses, *cluster)
 	}
 	sort.Slice(weaknesses, func(i, j int) bool {
+		if systemicPriorityRank(weaknesses[i].Priority) == systemicPriorityRank(weaknesses[j].Priority) {
+			return weaknesses[i].PatternKey < weaknesses[j].PatternKey
+		}
 		return systemicPriorityRank(weaknesses[i].Priority) > systemicPriorityRank(weaknesses[j].Priority)
 	})
 
@@ -4606,6 +4636,18 @@ func isIncidentMutationEvent(event audit.StoredEvent) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func isIncidentDerivationEvent(event audit.StoredEvent) bool {
+	if strings.TrimSpace(event.Component) == handoffComponent {
+		return false
+	}
+	switch event.EventType {
+	case audit.EventTypeHandoffSealed, audit.EventTypeHandoffCosigned:
+		return false
+	default:
+		return true
 	}
 }
 
