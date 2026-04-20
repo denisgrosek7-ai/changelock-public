@@ -214,6 +214,93 @@ export type PackageIntelligence = {
   recommendedActions: PackageRecommendedActions;
 };
 
+export type RecommendationPriorityBand = "NOW" | "TODAY" | "THIS_WEEK" | "BACKLOG";
+export type RecommendationApprovalMode = "auto_safe" | "approval_required";
+export type RecommendationStatus =
+  | "shown"
+  | "acknowledged"
+  | "accepted"
+  | "rejected"
+  | "executed"
+  | "expired"
+  | "superseded"
+  | "verified_successful"
+  | "executed_no_effect"
+  | "partially_effective"
+  | "regressed";
+
+export type RecommendationActionTemplate = {
+  templateID: string;
+  title: string;
+  description: string;
+  recommendationType: string;
+  approvalMode: RecommendationApprovalMode;
+  requiredInputs: string[];
+  allowedAudiences: IncidentReportAudience[];
+  idempotent: boolean;
+  cancelSemantics: string;
+};
+
+export type RecommendationOutcome = {
+  status: RecommendationStatus;
+  summary?: string;
+  verifiedAt?: string;
+};
+
+export type RecommendationComment = {
+  id: string;
+  comment: string;
+  actor?: string;
+  timestamp?: string;
+};
+
+export type RecommendationHistoryEntry = {
+  id: string;
+  eventType: string;
+  title: string;
+  summary: string;
+  actor?: string;
+  timestamp?: string;
+};
+
+export type Recommendation = {
+  recommendationID: string;
+  sourceType: string;
+  sourceRef: string;
+  subjectType: string;
+  subjectRef: string;
+  team?: string;
+  service?: string;
+  repo?: string;
+  environment?: string;
+  recommendationType: string;
+  title: string;
+  description: string;
+  recommendedAction: string;
+  rationale: string;
+  evidenceRefs: string[];
+  readbackRefs: AdvisoryReadbackRef[];
+  relatedIncidentRefs: string[];
+  priorityBand: RecommendationPriorityBand;
+  impactScore: number;
+  effortScore: number;
+  confidenceScore: number;
+  approvalMode: RecommendationApprovalMode;
+  status: RecommendationStatus;
+  createdAt: string;
+  expiresAt?: string;
+  supersededBy?: string;
+  verificationPlan: string[];
+  feedbackSummary?: string;
+  actionTemplate: RecommendationActionTemplate;
+  owner?: string;
+  comments: RecommendationComment[];
+  history: RecommendationHistoryEntry[];
+  outcome: RecommendationOutcome;
+  advisoryOnly: boolean;
+  limitations: string[];
+};
+
 export type AdvisoryReadbackRef = {
   resourceType: "defense-gap" | "policy-replay" | "systemic-weakness";
   resourceID: string;

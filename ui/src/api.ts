@@ -10,6 +10,8 @@ import type {
   InvestigationIncident,
   MetricIncidentDrilldown,
   PolicyReplayAssessment,
+  Recommendation,
+  RecommendationActionTemplate,
   SystemicWeaknessResponse,
 } from "./incidents";
 import type {
@@ -1941,6 +1943,103 @@ function parseAdvisoryShareGrant(value: unknown): AdvisoryShareGrant {
   };
 }
 
+function parseRecommendationActionTemplate(value: unknown): RecommendationActionTemplate {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid recommendation action template.");
+  }
+  return {
+    templateID: readString(value.template_id, "recommendation_action.template_id"),
+    title: readString(value.title, "recommendation_action.title"),
+    description: readString(value.description, "recommendation_action.description"),
+    recommendationType: readString(value.recommendation_type, "recommendation_action.recommendation_type"),
+    approvalMode: (readString(value.approval_mode, "recommendation_action.approval_mode") as RecommendationActionTemplate["approvalMode"]),
+    requiredInputs: readOptionalStringArray(value.required_inputs, "recommendation_action.required_inputs") || [],
+    allowedAudiences: (readOptionalStringArray(value.allowed_audiences, "recommendation_action.allowed_audiences") || []) as RecommendationActionTemplate["allowedAudiences"],
+    idempotent: readBoolean(value.idempotent, "recommendation_action.idempotent"),
+    cancelSemantics: readString(value.cancel_semantics, "recommendation_action.cancel_semantics"),
+  };
+}
+
+function parseRecommendationOutcome(value: unknown): Recommendation["outcome"] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid recommendation outcome.");
+  }
+  return {
+    status: readString(value.status, "recommendation.outcome.status") as Recommendation["outcome"]["status"],
+    summary: readOptionalString(value.summary, "recommendation.outcome.summary"),
+    verifiedAt: readOptionalString(value.verified_at, "recommendation.outcome.verified_at"),
+  };
+}
+
+function parseRecommendationComment(value: unknown): Recommendation["comments"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid recommendation comment.");
+  }
+  return {
+    id: readString(value.id, "recommendation.comments[].id"),
+    comment: readString(value.comment, "recommendation.comments[].comment"),
+    actor: readOptionalString(value.actor, "recommendation.comments[].actor"),
+    timestamp: readOptionalString(value.timestamp, "recommendation.comments[].timestamp"),
+  };
+}
+
+function parseRecommendationHistoryEntry(value: unknown): Recommendation["history"][number] {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid recommendation history entry.");
+  }
+  return {
+    id: readString(value.id, "recommendation.history[].id"),
+    eventType: readString(value.event_type, "recommendation.history[].event_type"),
+    title: readString(value.title, "recommendation.history[].title"),
+    summary: readString(value.summary, "recommendation.history[].summary"),
+    actor: readOptionalString(value.actor, "recommendation.history[].actor"),
+    timestamp: readOptionalString(value.timestamp, "recommendation.history[].timestamp"),
+  };
+}
+
+function parseRecommendation(value: unknown): Recommendation {
+  if (!isRecord(value) || !isRecord(value.action_template) || !isRecord(value.outcome)) {
+    throw new Error("Audit API returned invalid recommendation.");
+  }
+  return {
+    recommendationID: readString(value.recommendation_id, "recommendation.recommendation_id"),
+    sourceType: readString(value.source_type, "recommendation.source_type"),
+    sourceRef: readString(value.source_ref, "recommendation.source_ref"),
+    subjectType: readString(value.subject_type, "recommendation.subject_type"),
+    subjectRef: readString(value.subject_ref, "recommendation.subject_ref"),
+    team: readOptionalString(value.team, "recommendation.team"),
+    service: readOptionalString(value.service, "recommendation.service"),
+    repo: readOptionalString(value.repo, "recommendation.repo"),
+    environment: readOptionalString(value.environment, "recommendation.environment"),
+    recommendationType: readString(value.recommendation_type, "recommendation.recommendation_type"),
+    title: readString(value.title, "recommendation.title"),
+    description: readString(value.description, "recommendation.description"),
+    recommendedAction: readString(value.recommended_action, "recommendation.recommended_action"),
+    rationale: readString(value.rationale, "recommendation.rationale"),
+    evidenceRefs: readOptionalStringArray(value.evidence_refs, "recommendation.evidence_refs") || [],
+    readbackRefs: readOptionalArray(value.readback_refs, "recommendation.readback_refs").map(parseAdvisoryReadbackRef),
+    relatedIncidentRefs: readOptionalStringArray(value.related_incident_refs, "recommendation.related_incident_refs") || [],
+    priorityBand: readString(value.priority_band, "recommendation.priority_band") as Recommendation["priorityBand"],
+    impactScore: readNumber(value.impact_score, "recommendation.impact_score"),
+    effortScore: readNumber(value.effort_score, "recommendation.effort_score"),
+    confidenceScore: readNumber(value.confidence_score, "recommendation.confidence_score"),
+    approvalMode: readString(value.approval_mode, "recommendation.approval_mode") as Recommendation["approvalMode"],
+    status: readString(value.status, "recommendation.status") as Recommendation["status"],
+    createdAt: readString(value.created_at, "recommendation.created_at"),
+    expiresAt: readOptionalString(value.expires_at, "recommendation.expires_at"),
+    supersededBy: readOptionalString(value.superseded_by, "recommendation.superseded_by"),
+    verificationPlan: readOptionalStringArray(value.verification_plan, "recommendation.verification_plan") || [],
+    feedbackSummary: readOptionalString(value.feedback_summary, "recommendation.feedback_summary"),
+    actionTemplate: parseRecommendationActionTemplate(value.action_template),
+    owner: readOptionalString(value.owner, "recommendation.owner"),
+    comments: readOptionalArray(value.comments, "recommendation.comments").map(parseRecommendationComment),
+    history: readOptionalArray(value.history, "recommendation.history").map(parseRecommendationHistoryEntry),
+    outcome: parseRecommendationOutcome(value.outcome),
+    advisoryOnly: value.advisory_only === undefined ? true : readBoolean(value.advisory_only, "recommendation.advisory_only"),
+    limitations: readOptionalStringArray(value.limitations, "recommendation.limitations") || [],
+  };
+}
+
 function parseReplayBlastRadius(value: unknown): PolicyReplayAssessment["blastRadius"] {
   if (!isRecord(value)) {
     throw new Error("Audit API returned invalid replay blast radius.");
@@ -2429,6 +2528,68 @@ export async function getIncidentPackage(
   }));
 }
 
+export async function getRecommendations(
+  filters: Pick<EventFilters, "environment" | "tenant_id" | "repo" | "limit"> & {
+    team?: string;
+    service?: string;
+    source_type?: string;
+    subject_type?: string;
+    recommendation_type?: string;
+    status?: string;
+  },
+  options?: {
+    incidentIDs?: string[];
+    packageIncidentIDs?: string[];
+  },
+) {
+  const payload = await fetchJSON<unknown>("/v1/recommendations", {
+    params: {
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      repo: filters.repo,
+      limit: filters.limit,
+      team: filters.team,
+      service: filters.service,
+      source_type: filters.source_type,
+      subject_type: filters.subject_type,
+      recommendation_type: filters.recommendation_type,
+      status: filters.status,
+      incident_id: options?.incidentIDs,
+      package_incident_id: options?.packageIncidentIDs,
+    },
+  });
+  if (!isRecord(payload) || !Array.isArray(payload.recommendations)) {
+    throw new Error("Audit API returned invalid recommendations response.");
+  }
+  return payload.recommendations.map(parseRecommendation);
+}
+
+export async function getRecommendation(
+  recommendationID: string,
+  filters?: Pick<EventFilters, "environment" | "tenant_id" | "repo"> & {
+    team?: string;
+    service?: string;
+  },
+) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}`, {
+    params: {
+      environment: filters?.environment,
+      tenant_id: filters?.tenant_id,
+      repo: filters?.repo,
+      team: filters?.team,
+      service: filters?.service,
+    },
+  }));
+}
+
+export async function getRecommendationActions() {
+  const payload = await fetchJSON<unknown>("/v1/recommendation-actions");
+  if (!isRecord(payload) || !Array.isArray(payload.templates)) {
+    throw new Error("Audit API returned invalid recommendation actions response.");
+  }
+  return payload.templates.map(parseRecommendationActionTemplate);
+}
+
 export async function getIncidentDefenseGaps(
   incidentID: string,
   filters?: Pick<EventFilters, "environment" | "tenant_id" | "repo">,
@@ -2557,6 +2718,68 @@ export async function getExecutiveDefenseReport(
       audience,
       incident_id: incidentIDs,
     },
+  }));
+}
+
+export async function acknowledgeRecommendation(recommendationID: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/acknowledge`, {
+    method: "POST",
+    body: {},
+  }));
+}
+
+export async function acceptRecommendation(recommendationID: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/accept`, {
+    method: "POST",
+    body: {},
+  }));
+}
+
+export async function rejectRecommendation(recommendationID: string, reason: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/reject`, {
+    method: "POST",
+    body: { reason },
+  }));
+}
+
+export async function executeRecommendation(
+  recommendationID: string,
+  input?: {
+    template_id?: string;
+    summary?: string;
+  },
+) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/execute`, {
+    method: "POST",
+    body: input || {},
+  }));
+}
+
+export async function verifyRecommendation(recommendationID: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/verify`, {
+    method: "POST",
+    body: {},
+  }));
+}
+
+export async function assignRecommendation(recommendationID: string, owner: string, reason?: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/assign`, {
+    method: "POST",
+    body: { owner, reason },
+  }));
+}
+
+export async function commentRecommendation(recommendationID: string, comment: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/comment`, {
+    method: "POST",
+    body: { comment },
+  }));
+}
+
+export async function requestRecommendationApproval(recommendationID: string, summary?: string) {
+  return parseRecommendation(await fetchJSON<unknown>(`/v1/recommendations/${encodeURIComponent(recommendationID)}/approval-request`, {
+    method: "POST",
+    body: summary ? { summary } : {},
   }));
 }
 

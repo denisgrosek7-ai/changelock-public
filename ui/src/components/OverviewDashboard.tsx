@@ -4,7 +4,7 @@ import {
   getSystemicWeaknessReadback,
 } from "../api";
 import { buildOverviewModel } from "../overview";
-import type { ExecutiveDefenseReport, SystemicWeaknessResponse } from "../incidents";
+import type { ExecutiveDefenseReport, Recommendation, SystemicWeaknessResponse } from "../incidents";
 import type {
   AuditHealth,
   DriftStatsResponse,
@@ -24,6 +24,7 @@ type Props = {
   exceptionReport: ExceptionReport | null;
   systemicWeaknesses: SystemicWeaknessResponse | null;
   executiveReport: ExecutiveDefenseReport | null;
+  recommendations: Recommendation[];
   syncStatus: SyncStatus | null;
   loading: boolean;
   onSelectTrustMetric?: (metricKey: string, label: string) => void;
@@ -75,6 +76,7 @@ export function OverviewDashboard({
   exceptionReport,
   systemicWeaknesses,
   executiveReport,
+  recommendations,
   syncStatus,
   loading,
   onSelectTrustMetric,
@@ -452,6 +454,35 @@ export function OverviewDashboard({
               )}
             </div>
           </div>
+        </article>
+
+        <article className="panel analytics-panel">
+          <div className="table-toolbar">
+            <span className="summary-label">Recommendation workflow</span>
+            <strong>{recommendations.length}</strong>
+          </div>
+          {recommendations.length > 0 ? (
+            <ul className="analytics-list">
+              {recommendations.slice(0, 4).map((item) => (
+                <li key={item.recommendationID} className="analytics-list__item overview-list-item">
+                  <div>
+                    <div className="overview-list-item__title">
+                      <strong>{item.title}</strong>
+                      <span className={`chip chip--${priorityClass(item.priorityBand.toLowerCase())}`}>{item.priorityBand.replace("_", " ")}</span>
+                    </div>
+                    <p>{item.recommendedAction}</p>
+                    <small>{item.rationale}</small>
+                  </div>
+                  <div className="overview-list-item__aside">
+                    <small>{item.actionTemplate.title}</small>
+                    <small>{item.status.replace(/_/g, " ")}</small>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="summary-list-empty">No recommendation overlay items are visible for the current posture scope.</div>
+          )}
         </article>
       </section>
 
