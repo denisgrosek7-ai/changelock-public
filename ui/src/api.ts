@@ -72,6 +72,18 @@ import type {
   TrustScorecard,
   TopViolator,
   TopViolatorsResponse,
+  TopologyBlastRadiusResponse,
+  TopologyContainmentOption,
+  TopologyDeltaItem,
+  TopologyDeltaResponse,
+  TopologyEdge,
+  TopologyGraphResponse,
+  TopologyGraphSummary,
+  TopologyGraphView,
+  TopologyHeatmapResponse,
+  TopologyNode,
+  TopologyRiskPath,
+  TopologyServicesResponse,
   TrendBucket,
   TrendsResponse,
   VEXCreateInput,
@@ -688,6 +700,183 @@ function parseAnalyticsSegmentsResponse(value: unknown): AnalyticsSegmentsRespon
     comparison: parseAnalyticsComparisonContext(value.comparison),
     items: value.items.map(parseAnalyticsSegmentCatalogItem),
     limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseTopologyNode(value: unknown): TopologyNode {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology node.");
+  }
+  return {
+    node_id: readString(value.node_id, "topology.node_id"),
+    service: readString(value.service, "topology.service"),
+    workload: readOptionalString(value.workload, "topology.workload"),
+    namespace: readOptionalString(value.namespace, "topology.namespace"),
+    cluster: readOptionalString(value.cluster, "topology.cluster"),
+    environment: readOptionalString(value.environment, "topology.environment"),
+    team: readOptionalString(value.team, "topology.team"),
+    repo: readOptionalString(value.repo, "topology.repo"),
+    artifact_digest: readOptionalString(value.artifact_digest, "topology.artifact_digest"),
+    public_exposure: readBoolean(value.public_exposure, "topology.public_exposure"),
+    sensitivity_class: readString(value.sensitivity_class, "topology.sensitivity_class"),
+    node_risk_score: readNumber(value.node_risk_score, "topology.node_risk_score"),
+    blast_radius_score: readNumber(value.blast_radius_score, "topology.blast_radius_score"),
+    critical_reach_count: readNumber(value.critical_reach_count, "topology.critical_reach_count"),
+    public_entry_flag: readBoolean(value.public_entry_flag, "topology.public_entry_flag"),
+    sensitive_asset_reach_flag: readBoolean(value.sensitive_asset_reach_flag, "topology.sensitive_asset_reach_flag"),
+    propagation_class: readString(value.propagation_class, "topology.propagation_class"),
+    trust_boundary_crossings: readNumber(value.trust_boundary_crossings, "topology.trust_boundary_crossings"),
+    last_seen: readString(value.last_seen, "topology.last_seen"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "topology.evidence_refs"),
+  };
+}
+
+function parseTopologyEdge(value: unknown): TopologyEdge {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology edge.");
+  }
+  return {
+    source: readString(value.source, "topology.edges[].source"),
+    target: readString(value.target, "topology.edges[].target"),
+    edge_type: readString(value.edge_type, "topology.edges[].edge_type"),
+    connectivity_class: readString(value.connectivity_class, "topology.edges[].connectivity_class"),
+    evidence_source: readString(value.evidence_source, "topology.edges[].evidence_source"),
+    confidence: readString(value.confidence, "topology.edges[].confidence"),
+    last_seen: readOptionalString(value.last_seen, "topology.edges[].last_seen"),
+    environment_scope: readOptionalString(value.environment_scope, "topology.edges[].environment_scope"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "topology.edges[].evidence_refs"),
+  };
+}
+
+function parseTopologyGraphView(value: unknown): TopologyGraphView {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology graph view.");
+  }
+  return {
+    nodes: readOptionalArray(value.nodes, "topology.graph.nodes").map(parseTopologyNode),
+    edges: readOptionalArray(value.edges, "topology.graph.edges").map(parseTopologyEdge),
+  };
+}
+
+function parseTopologyGraphSummary(value: unknown): TopologyGraphSummary {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology graph summary.");
+  }
+  return {
+    declared_nodes: readNumber(value.declared_nodes, "topology.summary.declared_nodes"),
+    declared_edges: readNumber(value.declared_edges, "topology.summary.declared_edges"),
+    observed_nodes: readNumber(value.observed_nodes, "topology.summary.observed_nodes"),
+    observed_edges: readNumber(value.observed_edges, "topology.summary.observed_edges"),
+    effective_nodes: readNumber(value.effective_nodes, "topology.summary.effective_nodes"),
+    effective_edges: readNumber(value.effective_edges, "topology.summary.effective_edges"),
+    public_entry_nodes: readNumber(value.public_entry_nodes, "topology.summary.public_entry_nodes"),
+    critical_nodes: readNumber(value.critical_nodes, "topology.summary.critical_nodes"),
+    high_blast_radius: readNumber(value.high_blast_radius, "topology.summary.high_blast_radius"),
+  };
+}
+
+function parseTopologyServicesResponse(value: unknown): TopologyServicesResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology services response.");
+  }
+  return {
+    items: readOptionalArray(value.items, "topology.items").map(parseTopologyNode),
+    applied_filters: (readOptionalRecord(value.applied_filters, "topology.applied_filters") as Record<string, string>) || {},
+    limitations: readOptionalStringArray(value.limitations, "topology.limitations"),
+  };
+}
+
+function parseTopologyHeatmapResponse(value: unknown): TopologyHeatmapResponse {
+  return parseTopologyServicesResponse(value);
+}
+
+function parseTopologyRiskPath(value: unknown): TopologyRiskPath {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology risk path.");
+  }
+  return {
+    nodes: readOptionalStringArray(value.nodes, "topology.top_risk_paths[].nodes") || [],
+    edge_types: readOptionalStringArray(value.edge_types, "topology.top_risk_paths[].edge_types") || [],
+    summary: readString(value.summary, "topology.top_risk_paths[].summary"),
+  };
+}
+
+function parseTopologyContainmentOption(value: unknown): TopologyContainmentOption {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology containment option.");
+  }
+  return {
+    option_id: readString(value.option_id, "topology.containment_options[].option_id"),
+    title: readString(value.title, "topology.containment_options[].title"),
+    summary: readString(value.summary, "topology.containment_options[].summary"),
+    restriction_plan: readOptionalStringArray(value.restriction_plan, "topology.containment_options[].restriction_plan") || [],
+    closed_edge_types: readOptionalStringArray(value.closed_edge_types, "topology.containment_options[].closed_edge_types") || [],
+    estimated_score_reduction: readNumber(value.estimated_score_reduction, "topology.containment_options[].estimated_score_reduction"),
+    approval_mode: readString(value.approval_mode, "topology.containment_options[].approval_mode"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "topology.containment_options[].evidence_refs"),
+  };
+}
+
+function parseTopologyBlastRadiusResponse(value: unknown): TopologyBlastRadiusResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology blast radius response.");
+  }
+  return {
+    subject_ref: readString(value.subject_ref, "topology.subject_ref"),
+    subject_type: readString(value.subject_type, "topology.subject_type"),
+    affected_nodes: readOptionalArray(value.affected_nodes, "topology.affected_nodes").map(parseTopologyNode),
+    primary_affected_node: value.primary_affected_node ? parseTopologyNode(value.primary_affected_node) : undefined,
+    reachable_nodes: readOptionalArray(value.reachable_nodes, "topology.reachable_nodes").map(parseTopologyNode),
+    critical_reach_count: readNumber(value.critical_reach_count, "topology.critical_reach_count"),
+    blast_radius_score: readNumber(value.blast_radius_score, "topology.blast_radius_score"),
+    trust_boundary_crossings: readNumber(value.trust_boundary_crossings, "topology.trust_boundary_crossings"),
+    declared_edge_count: readNumber(value.declared_edge_count, "topology.declared_edge_count"),
+    observed_edge_count: readNumber(value.observed_edge_count, "topology.observed_edge_count"),
+    top_risk_paths: readOptionalArray(value.top_risk_paths, "topology.top_risk_paths").map(parseTopologyRiskPath),
+    containment_options: readOptionalArray(value.containment_options, "topology.containment_options").map(parseTopologyContainmentOption),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "topology.evidence_refs"),
+    limitations: readOptionalStringArray(value.limitations, "topology.limitations"),
+  };
+}
+
+function parseTopologyDeltaItem(value: unknown): TopologyDeltaItem {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology delta item.");
+  }
+  return {
+    node_id: readString(value.node_id, "topology.delta.items[].node_id"),
+    service: readString(value.service, "topology.delta.items[].service"),
+    current_blast_radius_score: readNumber(value.current_blast_radius_score, "topology.delta.items[].current_blast_radius_score"),
+    baseline_blast_radius_score: readNumber(value.baseline_blast_radius_score, "topology.delta.items[].baseline_blast_radius_score"),
+    delta: readNumber(value.delta, "topology.delta.items[].delta"),
+    edge_additions: readNumber(value.edge_additions, "topology.delta.items[].edge_additions"),
+    critical_reach_delta: readNumber(value.critical_reach_delta, "topology.delta.items[].critical_reach_delta"),
+    drift_signals: readOptionalStringArray(value.drift_signals, "topology.delta.items[].drift_signals"),
+  };
+}
+
+function parseTopologyDeltaResponse(value: unknown): TopologyDeltaResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology delta response.");
+  }
+  return {
+    comparison: parseAnalyticsComparisonContext(value.comparison),
+    items: readOptionalArray(value.items, "topology.delta.items").map(parseTopologyDeltaItem),
+    limitations: readOptionalStringArray(value.limitations, "topology.delta.limitations"),
+  };
+}
+
+function parseTopologyGraphResponse(value: unknown): TopologyGraphResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid topology graph response.");
+  }
+  return {
+    declared_graph: parseTopologyGraphView(value.declared_graph),
+    observed_graph: parseTopologyGraphView(value.observed_graph),
+    effective_graph: parseTopologyGraphView(value.effective_graph),
+    summary: parseTopologyGraphSummary(value.summary),
+    applied_filters: (readOptionalRecord(value.applied_filters, "topology.applied_filters") as Record<string, string>) || {},
+    limitations: readOptionalStringArray(value.limitations, "topology.limitations"),
   };
 }
 
@@ -2737,6 +2926,92 @@ export async function getAnalyticsSegments(filters: {
   subject?: string;
 }) {
   return parseAnalyticsSegmentsResponse(await fetchJSON<unknown>("/v1/analytics/segments", { params: filters }));
+}
+
+export async function getTopologyServices(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  service?: string;
+  workload?: string;
+  limit?: string;
+}) {
+  return parseTopologyServicesResponse(await fetchJSON<unknown>("/v1/topology/services", { params: filters }));
+}
+
+export async function getTopologyGraph(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  service?: string;
+  workload?: string;
+  limit?: string;
+}) {
+  return parseTopologyGraphResponse(await fetchJSON<unknown>("/v1/topology/graph", { params: filters }));
+}
+
+export async function getTopologyHeatmap(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  service?: string;
+  workload?: string;
+  limit?: string;
+}) {
+  return parseTopologyHeatmapResponse(await fetchJSON<unknown>("/v1/topology/heatmap", { params: filters }));
+}
+
+export async function getTopologyDelta(filters: {
+  window?: string;
+  window_days?: string;
+  compare_to?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  service?: string;
+  workload?: string;
+  limit?: string;
+}) {
+  return parseTopologyDeltaResponse(await fetchJSON<unknown>("/v1/topology/delta", { params: filters }));
+}
+
+export async function getIncidentBlastRadius(
+  incidentID: string,
+  filters?: Pick<EventFilters, "environment" | "tenant_id" | "repo">,
+) {
+  return parseTopologyBlastRadiusResponse(await fetchJSON<unknown>(`/v1/incidents/${encodeURIComponent(incidentID)}/blast-radius`, {
+    params: {
+      environment: filters?.environment,
+      tenant_id: filters?.tenant_id,
+      repo: filters?.repo,
+    },
+  }));
+}
+
+export async function getMetricBlastRadius(metricKey: string, filters: EventFilters) {
+  return parseTopologyBlastRadiusResponse(await fetchJSON<unknown>(`/v1/scorecard/metrics/${encodeURIComponent(metricKey)}/blast-radius`, {
+    params: {
+      decision: filters.decision,
+      component: filters.component,
+      repo: filters.repo,
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      limit: filters.limit,
+    },
+  }));
 }
 
 export async function getTopViolators(filters: {

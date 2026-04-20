@@ -20,11 +20,13 @@ import {
   getExceptions,
   getHealth,
   getIncidentDefenseGaps,
+  getIncidentBlastRadius,
   getIncidentExport,
   getIncidentPolicyReplay,
   getIncidentPackage,
   getIncidents,
   getMetricDefenseGaps,
+  getMetricBlastRadius,
   getMetricIncidents,
   getMetricPolicyReplay,
   getRuntimeActiveStates,
@@ -34,6 +36,9 @@ import {
   getSummary,
   getSystemicWeaknesses,
   getSyncStatus,
+  getTopologyDelta,
+  getTopologyGraph,
+  getTopologyHeatmap,
   getTopViolators,
   getTrends,
   rejectException,
@@ -58,7 +63,7 @@ import { PendingExceptionsPanel } from "./components/PendingExceptionsPanel";
 import { RuntimeDriftPanel } from "./components/RuntimeDriftPanel";
 import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
 import { SigningIdentityPanel } from "./components/SigningIdentityPanel";
-import { SummaryCards } from "./components/SummaryCards";
+import { TopologyInsightsPanel } from "./components/TopologyInsightsPanel";
 import { TopViolatorsPanel } from "./components/TopViolatorsPanel";
 import { TrustScorecardPanel } from "./components/TrustScorecardPanel";
 import { VulnerabilityOpsPanel } from "./components/VulnerabilityOpsPanel";
@@ -94,6 +99,10 @@ import type {
   SyncStatus,
   TabKey,
   TopViolatorsResponse,
+  TopologyBlastRadiusResponse,
+  TopologyDeltaResponse,
+  TopologyGraphResponse,
+  TopologyHeatmapResponse,
   TrendsResponse,
 } from "./types";
 
@@ -112,6 +121,7 @@ const tabs: Array<{ key: TabKey; label: string; description: string }> = [
   { key: "denies", label: "Denials", description: "Rejected operations and the trust reasons that blocked them." },
   { key: "runtime", label: "Runtime", description: "Drift findings and the workloads that need reconciliation." },
   { key: "analytics", label: "Governance", description: "Trends, violators, and control-plane operating pressure." },
+  { key: "topology", label: "Topology", description: "Service-graph blast radius, drift, and containment guidance." },
   { key: "exceptions", label: "Exceptions", description: "Approval queue, status counts, and recent exception use." },
   { key: "inventory", label: "Components", description: "Investigate stored SBOM components by digest, package, or PURL." },
   { key: "vulnerabilities", label: "Vulnerabilities", description: "Active findings, blast radius, timelines, and VEX-lite decisions." },
@@ -144,6 +154,9 @@ export default function App() {
   const [analyticsAnomalies, setAnalyticsAnomalies] = useState<AnalyticsAnomaliesResponse | null>(null);
   const [analyticsScorecards, setAnalyticsScorecards] = useState<AnalyticsScorecardsResponse | null>(null);
   const [analyticsSegments, setAnalyticsSegments] = useState<AnalyticsSegmentsResponse | null>(null);
+  const [topologyGraph, setTopologyGraph] = useState<TopologyGraphResponse | null>(null);
+  const [topologyHeatmap, setTopologyHeatmap] = useState<TopologyHeatmapResponse | null>(null);
+  const [topologyDelta, setTopologyDelta] = useState<TopologyDeltaResponse | null>(null);
   const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
   const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
   const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
@@ -200,6 +213,9 @@ export default function App() {
           setAnalyticsAnomalies(null);
           setAnalyticsScorecards(null);
           setAnalyticsSegments(null);
+          setTopologyGraph(null);
+          setTopologyHeatmap(null);
+          setTopologyDelta(null);
           setRuntimeActiveStates([]);
           setRuntimeClosedLoopStatus(null);
           setRuntimeDriftFindings([]);
@@ -371,6 +387,61 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
+            setPendingExceptions([]);
+          } else if (activeTab === "topology") {
+            promises.push(
+              getTopologyGraph({
+                window: "28d",
+                compare_to: "previous_window",
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setTopologyGraph),
+            );
+            promises.push(
+              getTopologyHeatmap({
+                window: "28d",
+                compare_to: "previous_window",
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setTopologyHeatmap),
+            );
+            promises.push(
+              getTopologyDelta({
+                window: "28d",
+                compare_to: "previous_window",
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then(setTopologyDelta),
+            );
+            setEvents([]);
+            setSelectedEvent(null);
+            setTrends(null);
+            setTopViolators(null);
+            setDriftStats(null);
+            setExceptionReport(null);
+            setSystemicWeaknesses(null);
+            setExecutiveReport(null);
+            setAnalyticsDelta(null);
+            setAnalyticsAnomalies(null);
+            setAnalyticsScorecards(null);
+            setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
+            setRuntimeActiveStates([]);
+            setRuntimeClosedLoopStatus(null);
+            setRuntimeDriftFindings([]);
+            setRuntimeDriftStatus(null);
+            setIncidents([]);
             setPendingExceptions([]);
           } else if (activeTab === "analytics") {
             promises.push(
@@ -502,6 +573,9 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
           } else if (activeTab === "inventory" || activeTab === "vulnerabilities" || activeTab === "signing" || activeTab === "scorecard" || activeTab === "guidance") {
             setEvents([]);
             setSelectedEvent(null);
@@ -512,6 +586,9 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -535,6 +612,9 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -706,6 +786,21 @@ export default function App() {
     });
   }
 
+  async function handleLoadIncidentBlastRadius(incidentID: string): Promise<TopologyBlastRadiusResponse> {
+    return getIncidentBlastRadius(incidentID, {
+      environment: filters.environment,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+      repo: filters.repo,
+    });
+  }
+
+  async function handleLoadMetricBlastRadius(metricKey: string): Promise<TopologyBlastRadiusResponse> {
+    return getMetricBlastRadius(metricKey, {
+      ...filters,
+      tenant_id: enforcedTenantID || filters.tenant_id,
+    });
+  }
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -867,6 +962,17 @@ export default function App() {
         </section>
       ) : null}
 
+      {activeTab === "topology" ? (
+        <section className="analytics-grid">
+          <TopologyInsightsPanel
+            graph={topologyGraph}
+            heatmap={topologyHeatmap}
+            delta={topologyDelta}
+            loading={loading}
+          />
+        </section>
+      ) : null}
+
       {activeTab === "exceptions" ? (
         <>
           <section className="summary-grid">
@@ -949,6 +1055,8 @@ export default function App() {
           onLoadMetricDefenseGaps={handleLoadMetricDefenseGaps}
           onLoadIncidentPolicyReplay={handleLoadIncidentPolicyReplay}
           onLoadMetricPolicyReplay={handleLoadMetricPolicyReplay}
+          onLoadIncidentBlastRadius={handleLoadIncidentBlastRadius}
+          onLoadMetricBlastRadius={handleLoadMetricBlastRadius}
           onAcknowledge={handleAcknowledgeIncident}
           onWatch={handleWatchIncident}
           onAssign={handleAssignIncident}
@@ -958,7 +1066,7 @@ export default function App() {
         />
       ) : null}
 
-      {activeTab !== "analytics" && activeTab !== "runtime" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
+      {activeTab !== "analytics" && activeTab !== "topology" && activeTab !== "runtime" && activeTab !== "exceptions" && activeTab !== "inventory" && activeTab !== "vulnerabilities" && activeTab !== "signing" && activeTab !== "scorecard" && activeTab !== "guidance" ? (
         <section className="content-grid">
           <EventsTable
             events={events}

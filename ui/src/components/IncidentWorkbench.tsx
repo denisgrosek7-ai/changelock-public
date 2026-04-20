@@ -20,6 +20,7 @@ import {
   type MetricIncidentDrilldown,
 } from "../incidents";
 import type { StoredEvent } from "../types";
+import type { TopologyBlastRadiusResponse } from "../types";
 import { EventDetails } from "./EventDetails";
 import { EventsTable } from "./EventsTable";
 
@@ -38,6 +39,8 @@ type Props = {
   onLoadMetricDefenseGaps?: (metricKey: string) => Promise<DefenseGapAssessment>;
   onLoadIncidentPolicyReplay?: (incidentID: string) => Promise<PolicyReplayAssessment>;
   onLoadMetricPolicyReplay?: (metricKey: string) => Promise<PolicyReplayAssessment>;
+  onLoadIncidentBlastRadius?: (incidentID: string) => Promise<TopologyBlastRadiusResponse>;
+  onLoadMetricBlastRadius?: (metricKey: string) => Promise<TopologyBlastRadiusResponse>;
   onAcknowledge?: (incidentID: string, summary?: string) => Promise<void>;
   onWatch?: (incidentID: string, summary?: string) => Promise<void>;
   onAssign?: (incidentID: string, owner: string, reason: string) => Promise<void>;
@@ -155,6 +158,81 @@ function renderDefenseGapActions(title: string, values: string[]) {
   );
 }
 
+function renderTopologyBlastRadiusSummary(payload: TopologyBlastRadiusResponse) {
+  return (
+    <div className="incident-impact-list">
+      <article className="incident-impact-card incident-defense-gap">
+        <div className="incident-impact-card__header">
+          <strong>Contextual impact</strong>
+          <span className={`chip chip--${payload.blast_radius_score >= 70 ? "deny" : payload.blast_radius_score >= 40 ? "warning" : "allow"}`}>
+            score {payload.blast_radius_score}
+          </span>
+        </div>
+        <p>
+          critical reach {payload.critical_reach_count} · trust boundary crossings {payload.trust_boundary_crossings} · declared edges {payload.declared_edge_count} · observed edges {payload.observed_edge_count}
+        </p>
+        {payload.primary_affected_node ? (
+          <small>
+            affected service {payload.primary_affected_node.service} · propagation {payload.primary_affected_node.propagation_class} · node risk {payload.primary_affected_node.node_risk_score}
+          </small>
+        ) : null}
+      </article>
+
+      <article className="incident-impact-card incident-defense-gap">
+        <div className="incident-impact-card__header">
+          <strong>Reachable services</strong>
+          <span className="chip chip--muted">{payload.reachable_nodes.length} nodes</span>
+        </div>
+        {renderChipList(
+          payload.reachable_nodes.slice(0, 8).map((node) => node.service),
+          "No downstream services were reachable in the current topology scope.",
+          `${payload.subject_ref}-reachable`,
+          8,
+        )}
+      </article>
+
+      <article className="incident-impact-card incident-defense-gap">
+        <div className="incident-impact-card__header">
+          <strong>Top risk paths</strong>
+        </div>
+        {payload.top_risk_paths.length > 0 ? (
+          <ul className="summary-list summary-list--compact">
+            {payload.top_risk_paths.slice(0, 3).map((path) => (
+              <li key={`${payload.subject_ref}-${path.nodes.join("->")}`}>
+                <span>{path.summary}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="summary-list-empty">No dominant downstream path is recorded for this topology scope.</div>
+        )}
+      </article>
+
+      <article className="incident-impact-card incident-defense-gap">
+        <div className="incident-impact-card__header">
+          <strong>Containment options</strong>
+        </div>
+        {payload.containment_options.length > 0 ? (
+          <div className="summary-grid">
+            {payload.containment_options.slice(0, 2).map((option) => (
+              <article className="summary-card summary-card--compact" key={`${payload.subject_ref}-${option.option_id}`}>
+                <div className="overview-list-item__title">
+                  <strong>{option.title}</strong>
+                  <span className="chip chip--warning">{option.approval_mode}</span>
+                </div>
+                <p>{option.summary}</p>
+                {renderValueList(option.restriction_plan, "No restriction plan attached.", 3)}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="summary-list-empty">No containment simulation options were derived for this scope.</div>
+        )}
+      </article>
+    </div>
+  );
+}
+
 function absoluteReadbackURL(path: string) {
   if (/^https?:\/\//i.test(path)) {
     return path;
@@ -191,6 +269,8 @@ export function IncidentWorkbench({
   onLoadMetricDefenseGaps,
   onLoadIncidentPolicyReplay,
   onLoadMetricPolicyReplay,
+  onLoadIncidentBlastRadius,
+  onLoadMetricBlastRadius,
   onAcknowledge,
   onWatch,
   onAssign,
@@ -232,14 +312,20 @@ export function IncidentWorkbench({
   const [metricDefenseAssessments, setMetricDefenseAssessments] = useState<Record<string, DefenseGapAssessment>>({});
   const [incidentReplayAssessments, setIncidentReplayAssessments] = useState<Record<string, PolicyReplayAssessment>>({});
   const [metricReplayAssessments, setMetricReplayAssessments] = useState<Record<string, PolicyReplayAssessment>>({});
+  const [incidentBlastRadiusAssessments, setIncidentBlastRadiusAssessments] = useState<Record<string, TopologyBlastRadiusResponse>>({});
+  const [metricBlastRadiusAssessments, setMetricBlastRadiusAssessments] = useState<Record<string, TopologyBlastRadiusResponse>>({});
   const [defenseGapLoading, setDefenseGapLoading] = useState(false);
   const [metricDefenseGapLoading, setMetricDefenseGapLoading] = useState(false);
   const [incidentReplayLoading, setIncidentReplayLoading] = useState(false);
   const [metricReplayLoading, setMetricReplayLoading] = useState(false);
+  const [incidentBlastRadiusLoading, setIncidentBlastRadiusLoading] = useState(false);
+  const [metricBlastRadiusLoading, setMetricBlastRadiusLoading] = useState(false);
   const [defenseGapError, setDefenseGapError] = useState<string | null>(null);
   const [metricDefenseGapError, setMetricDefenseGapError] = useState<string | null>(null);
   const [incidentReplayError, setIncidentReplayError] = useState<string | null>(null);
   const [metricReplayError, setMetricReplayError] = useState<string | null>(null);
+  const [incidentBlastRadiusError, setIncidentBlastRadiusError] = useState<string | null>(null);
+  const [metricBlastRadiusError, setMetricBlastRadiusError] = useState<string | null>(null);
   const [readbackActionLoading, setReadbackActionLoading] = useState(false);
   const [readbackActionError, setReadbackActionError] = useState<string | null>(null);
   const [readbackActionStatus, setReadbackActionStatus] = useState<string | null>(null);
@@ -248,6 +334,8 @@ export function IncidentWorkbench({
   const metricDefenseGaps = metricDrilldown ? metricDefenseAssessments[metricDrilldown.metricKey] : undefined;
   const incidentReplay = selectedIncident ? incidentReplayAssessments[selectedIncident.id] : undefined;
   const metricReplay = metricDrilldown ? metricReplayAssessments[metricDrilldown.metricKey] : undefined;
+  const incidentBlastRadius = selectedIncident ? incidentBlastRadiusAssessments[selectedIncident.id] : undefined;
+  const metricBlastRadius = metricDrilldown ? metricBlastRadiusAssessments[metricDrilldown.metricKey] : undefined;
   const canManage = role === "operator" || role === "security_admin";
   const canResolve = role === "security_admin";
 
@@ -434,6 +522,66 @@ export function IncidentWorkbench({
       ignore = true;
     };
   }, [metricDrilldown, metricReplayAssessments, onLoadMetricPolicyReplay]);
+
+  useEffect(() => {
+    if (!selectedIncident || !onLoadIncidentBlastRadius || incidentBlastRadiusAssessments[selectedIncident.id]) {
+      return;
+    }
+    let ignore = false;
+    setIncidentBlastRadiusLoading(true);
+    setIncidentBlastRadiusError(null);
+    void onLoadIncidentBlastRadius(selectedIncident.id)
+      .then((payload) => {
+        if (ignore) {
+          return;
+        }
+        setIncidentBlastRadiusAssessments((current) => ({ ...current, [selectedIncident.id]: payload }));
+      })
+      .catch((loadError) => {
+        if (ignore) {
+          return;
+        }
+        setIncidentBlastRadiusError(loadError instanceof Error ? loadError.message : "Unable to load service-graph blast radius.");
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIncidentBlastRadiusLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [incidentBlastRadiusAssessments, onLoadIncidentBlastRadius, selectedIncident]);
+
+  useEffect(() => {
+    if (!metricDrilldown?.metricKey || !onLoadMetricBlastRadius || metricBlastRadiusAssessments[metricDrilldown.metricKey]) {
+      return;
+    }
+    let ignore = false;
+    setMetricBlastRadiusLoading(true);
+    setMetricBlastRadiusError(null);
+    void onLoadMetricBlastRadius(metricDrilldown.metricKey)
+      .then((payload) => {
+        if (ignore) {
+          return;
+        }
+        setMetricBlastRadiusAssessments((current) => ({ ...current, [metricDrilldown.metricKey]: payload }));
+      })
+      .catch((loadError) => {
+        if (ignore) {
+          return;
+        }
+        setMetricBlastRadiusError(loadError instanceof Error ? loadError.message : "Unable to load metric blast-radius analysis.");
+      })
+      .finally(() => {
+        if (!ignore) {
+          setMetricBlastRadiusLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [metricBlastRadiusAssessments, metricDrilldown, onLoadMetricBlastRadius]);
 
   async function runAction(action: () => Promise<void>) {
     setActionSubmitting(true);
@@ -1290,6 +1438,23 @@ export function IncidentWorkbench({
               </section>
             ) : null}
 
+            {metricDrilldown ? (
+              <section className="incident-case-section incident-case-section--wide">
+                <div className="incident-report-section__header">
+                  <h3>Service-graph blast radius</h3>
+                </div>
+                {metricBlastRadiusLoading ? (
+                  <div className="summary-list-empty">Loading topology context for the selected metric…</div>
+                ) : metricBlastRadiusError ? (
+                  <p className="details-copy details-copy--error">{metricBlastRadiusError}</p>
+                ) : metricBlastRadius ? (
+                  renderTopologyBlastRadiusSummary(metricBlastRadius)
+                ) : (
+                  <div className="summary-list-empty">No topology context has been loaded for this metric yet.</div>
+                )}
+              </section>
+            ) : null}
+
             <div className="details-header">
               <div>
                 <span className="summary-label">{selectedIncident.category}</span>
@@ -1492,6 +1657,20 @@ export function IncidentWorkbench({
                   </div>
                 ) : (
                   <div className="summary-list-empty">No replay assessment has been loaded for this case yet.</div>
+                )}
+              </section>
+              <section className="incident-case-section incident-case-section--wide">
+                <div className="incident-report-section__header">
+                  <h3>Service-graph blast radius</h3>
+                </div>
+                {incidentBlastRadiusLoading ? (
+                  <div className="summary-list-empty">Loading topology context for this case…</div>
+                ) : incidentBlastRadiusError ? (
+                  <p className="details-copy details-copy--error">{incidentBlastRadiusError}</p>
+                ) : incidentBlastRadius ? (
+                  renderTopologyBlastRadiusSummary(incidentBlastRadius)
+                ) : (
+                  <div className="summary-list-empty">No topology context has been loaded for this case yet.</div>
                 )}
               </section>
               <section className="incident-case-section">
