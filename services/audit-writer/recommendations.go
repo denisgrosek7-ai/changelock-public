@@ -775,6 +775,9 @@ func (s server) buildRecommendationCandidates(ctx context.Context, incidents []i
 	if forensicRecommendations, err := s.buildForensicsRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, forensicRecommendations...)
 	}
+	if runtimeRecommendations, err := s.buildRuntimeRecommendations(ctx, incidents, filter); err == nil {
+		candidates = append(candidates, runtimeRecommendations...)
+	}
 	if federationRecommendations, err := s.buildFederationRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, federationRecommendations...)
 	}
@@ -1184,6 +1187,190 @@ func (s server) buildForensicsRecommendations(ctx context.Context, incidents []i
 			"Forensic recommendation remains an overlay derived from reconstructed historical state and counterfactual replay; it does not mutate canonical incident or evidence truth.",
 		}, replay.Limitations...), delta.Limitations...)),
 	}}, nil
+}
+
+func (s server) buildRuntimeRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
+	runtimeFilter := recommendationRuntimeFilter(filter)
+	findings, _, err := s.buildRuntimeFindings(ctx, runtimeFilter)
+	if err != nil {
+		return nil, err
+	}
+	if len(findings) == 0 {
+		return nil, nil
+	}
+	workloads, _, err := s.buildRuntimeWorkloads(ctx, runtimeFilter)
+	if err != nil {
+		return nil, err
+	}
+	workloadBySubject := map[string]runtimeWorkloadView{}
+	for _, item := range workloads {
+		workloadBySubject[item.SubjectRef] = item
+	}
+	recommendations := make([]recommendation, 0, minInt(len(findings), 3))
+	for _, finding := range findings {
+		if finding.Status == runtimeFindingStatusRemediated {
+			continue
+		}
+		workload := workloadBySubject[finding.SubjectRef]
+		decision, err := s.evaluateRuntimeEnforcement(ctx, runtimeFilter, runtimeActionRequest{
+			FindingID:  finding.FindingID,
+			SubjectRef: finding.SubjectRef,
+		}, "")
+		if err != nil {
+			continue
+		}
+		related := incidentsForRuntimeSubject(incidents, finding.SubjectRef)
+		template := runtimeRecommendationTemplate(finding, decision)
+		workloadName := runtimeRecommendationSubjectName(finding.SubjectRef)
+		title := fmt.Sprintf("Contain %s on %s", strings.ReplaceAll(finding.FindingType, "_", " "), workloadName)
+		if finding.Severity == "critical" {
+			title = fmt.Sprintf("Review critical runtime drift on %s", workloadName)
+		}
+		description := finding.Summary
+		if workload.State.CurrentSandboxClass != "" {
+			description = fmt.Sprintf("%s Current sandbox class is %s.", finding.Summary, workload.State.CurrentSandboxClass)
+		}
+		rationale := finding.Summary
+		if decision.TopologyContext != nil && decision.TopologyContext.BlastRadiusScore > 0 {
+			rationale = fmt.Sprintf(
+				"%s Containment affects service %s with blast radius %d and %d critical downstream reach.",
+				finding.Summary,
+				firstNonEmpty(decision.TopologyContext.PrimaryService, workloadName),
+				decision.TopologyContext.BlastRadiusScore,
+				decision.TopologyContext.CriticalReachCount,
+			)
+		}
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:    recommendationID("runtime", finding.SubjectRef, finding.FindingType),
+			SourceType:          "runtime_signal",
+			SourceRef:           finding.FindingID,
+			SubjectType:         "workload",
+			SubjectRef:          finding.SubjectRef,
+			Team:                firstNonEmpty(firstIncidentTenant(related), filter.event.TenantID),
+			Service:             workloadName,
+			Repo:                firstNonEmpty(firstString(workload.Profile.ProfileSource), firstIncidentRepo(related), filter.event.Repo),
+			Environment:         firstNonEmpty(workload.Environment, firstIncidentEnvironment(related), filter.event.Environment),
+			RecommendationType:  template.RecommendationType,
+			Title:               title,
+			Description:         description,
+			RecommendedAction:   decision.Action,
+			Rationale:           rationale,
+			EvidenceRefs:        uniqueStrings(append(append([]string{}, finding.EvidenceRefs...), workload.State.EvidenceRefs...)),
+			ReadbackRefs:        finding.ReadbackRefs,
+			RelatedIncidentRefs: incidentIDs(related),
+			PriorityBand:        runtimeRecommendationPriority(finding),
+			ImpactScore:         runtimeRecommendationImpact(finding, decision),
+			EffortScore:         recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:     runtimeRecommendationConfidence(finding),
+			ApprovalMode:        decision.ApprovalMode,
+			Status:              recommendationStatusShown,
+			CreatedAt:           recommendationCreatedAt(timePointer(workload.State.LastVerifiedAt), nil, nil),
+			ExpiresAt:           recommendationExpiry(timePointer(workload.State.LastVerifiedAt)),
+			VerificationPlan: []string{
+				fmt.Sprintf("Re-run runtime integrity for %s and confirm %s is no longer active for the same subject.", workloadName, finding.FindingType),
+				"Confirm the workload sandbox class, SBOM verification, and topology-aware containment posture all move back toward the expected state without reopening drift.",
+			},
+			ActionTemplate: template,
+			Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+			AdvisoryOnly:   true,
+			Limitations: uniqueStrings(append([]string{
+				"Runtime recommendation remains an overlay derived from canonical runtime observations, profile evaluation, and policy-gated containment logic; it does not itself execute containment.",
+			}, append(finding.Limitations, decision.Limitations...)...)),
+		})
+		if len(recommendations) == 3 {
+			break
+		}
+	}
+	return recommendations, nil
+}
+
+func recommendationRuntimeFilter(filter recommendationFilter) runtimeIntegrityFilter {
+	limit := maxInt(filter.Limit, 25)
+	workload := strings.TrimSpace(filter.Service)
+	return runtimeIntegrityFilter{
+		ClusterID:   filter.event.ClusterID,
+		TenantID:    filter.event.TenantID,
+		Environment: filter.event.Environment,
+		Repo:        filter.event.Repo,
+		Workload:    workload,
+		Limit:       limit,
+		event: audit.EventFilter{
+			ClusterID:   filter.event.ClusterID,
+			TenantID:    filter.event.TenantID,
+			Environment: filter.event.Environment,
+			Repo:        filter.event.Repo,
+			Limit:       maxInt(limit*8, 500),
+		},
+	}
+}
+
+func incidentsForRuntimeSubject(incidents []investigationIncident, subjectRef string) []investigationIncident {
+	_, namespace, _, workload, err := parseRuntimeSubjectRef(subjectRef)
+	if err != nil {
+		return nil
+	}
+	matches := make([]investigationIncident, 0, len(incidents))
+	for _, incident := range incidents {
+		if strings.EqualFold(strings.TrimSpace(incident.ScopeRef), workload) ||
+			containsString(incident.AffectedWorkloads, workload) ||
+			containsString(incident.AffectedNamespaces, namespace) {
+			matches = append(matches, incident)
+		}
+	}
+	return matches
+}
+
+func runtimeRecommendationTemplate(finding runtimeIntegrityFinding, decision runtimeEnforcementDecision) recommendationActionTemplate {
+	switch {
+	case decision.ApprovalMode == recommendationApprovalHumanReview:
+		return recommendationTemplateCatalog[6]
+	case decision.Action == runtimeActionCaptureForensics:
+		return recommendationTemplateCatalog[1]
+	case decision.Action == runtimeActionAlert:
+		return recommendationTemplateCatalog[5]
+	default:
+		return recommendationTemplateCatalog[2]
+	}
+}
+
+func runtimeRecommendationPriority(finding runtimeIntegrityFinding) string {
+	switch finding.Severity {
+	case "critical":
+		return "NOW"
+	case "high":
+		return "TODAY"
+	case "medium":
+		return "THIS_WEEK"
+	default:
+		return "BACKLOG"
+	}
+}
+
+func runtimeRecommendationImpact(finding runtimeIntegrityFinding, decision runtimeEnforcementDecision) int {
+	score := 40 + runtimeSeverityRank(finding.Severity)*12
+	if decision.TopologyContext != nil {
+		score += minInt(24, decision.TopologyContext.BlastRadiusScore/4+decision.TopologyContext.CriticalReachCount*6)
+	}
+	return minInt(100, score)
+}
+
+func runtimeRecommendationConfidence(finding runtimeIntegrityFinding) int {
+	switch strings.TrimSpace(finding.Confidence) {
+	case runtimeConfidenceHigh:
+		return 84
+	case runtimeConfidenceLow:
+		return 58
+	default:
+		return 72
+	}
+}
+
+func runtimeRecommendationSubjectName(subjectRef string) string {
+	_, _, _, workload, err := parseRuntimeSubjectRef(subjectRef)
+	if err != nil {
+		return subjectRef
+	}
+	return workload
 }
 
 func recommendationForensicsFilter(filter recommendationFilter, incidents []investigationIncident) (forensicsFilter, error) {
@@ -1815,6 +2002,36 @@ func (s server) verifyRecommendation(ctx context.Context, item recommendation, f
 		default:
 			return recommendationStatusExecutedNoEffect, "Historical replay still diverges under the current control stack, so the forensic review remains active.", nil
 		}
+	case "runtime_signal":
+		runtimeFilter := recommendationRuntimeFilter(filter)
+		runtimeFilter.SubjectRef = item.SubjectRef
+		findings, _, err := s.buildRuntimeFindings(ctx, runtimeFilter)
+		if err != nil {
+			return "", "", err
+		}
+		states, _, err := s.buildRuntimeIntegrityStates(ctx, runtimeFilter)
+		if err != nil {
+			return "", "", err
+		}
+		for _, finding := range findings {
+			if finding.FindingID != item.SourceRef {
+				continue
+			}
+			switch finding.Severity {
+			case "critical":
+				return recommendationStatusRegressed, "The same critical runtime finding is still active for the workload, so the executed workflow did not hold containment.", nil
+			case "high":
+				return recommendationStatusExecutedNoEffect, "The same high-severity runtime finding is still active for the workload.", nil
+			default:
+				return recommendationStatusPartiallyEffective, "The same runtime finding is still present, but it has narrowed below the highest severity band.", nil
+			}
+		}
+		for _, state := range states {
+			if state.SubjectRef == item.SubjectRef && len(state.ActiveFindings) > 0 {
+				return recommendationStatusPartiallyEffective, "The original runtime signal cleared, but the workload still carries residual runtime findings in the current integrity state.", nil
+			}
+		}
+		return recommendationStatusVerifiedSuccessful, "The runtime drift signal is no longer active for the workload and the current integrity state no longer carries the same finding.", nil
 	case "federation_signal":
 		view, err := s.buildFederationGlobalView(ctx)
 		if err != nil {

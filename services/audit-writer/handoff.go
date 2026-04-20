@@ -69,6 +69,7 @@ type handoffSealRequest struct {
 	Audience               string   `json:"audience,omitempty"`
 	IncidentIDs            []string `json:"incident_ids,omitempty"`
 	IncludeForensics       bool     `json:"include_forensics,omitempty"`
+	IncludeRuntime         bool     `json:"include_runtime,omitempty"`
 	IncludeRecommendations bool     `json:"include_recommendations,omitempty"`
 	CoSignMode             string   `json:"co_sign_mode,omitempty"`
 }
@@ -80,6 +81,13 @@ type handoffCosignRequest struct {
 type handoffVerifyRequest struct {
 	BundleBase64 string `json:"bundle_base64,omitempty"`
 	PackageID    string `json:"package_id,omitempty"`
+}
+
+type handoffRuntimeContext struct {
+	AdvisoryOnly bool                      `json:"advisory_only"`
+	Workloads    []runtimeWorkloadView     `json:"workloads"`
+	Findings     []runtimeIntegrityFinding `json:"findings"`
+	Limitations  []string                  `json:"limitations,omitempty"`
 }
 
 type sealedManifest struct {
@@ -565,6 +573,42 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 			AdvisoryOnly: true,
 		}}
 	}
+	var runtimeContext *handoffRuntimeContext
+	if request.IncludeRuntime {
+		runtimeFilter := runtimeIntegrityFilter{
+			ClusterID:   filter.event.ClusterID,
+			TenantID:    filter.event.TenantID,
+			Environment: filter.event.Environment,
+			Repo:        filter.event.Repo,
+			Limit:       6,
+			event: audit.EventFilter{
+				ClusterID:   filter.event.ClusterID,
+				TenantID:    filter.event.TenantID,
+				Environment: filter.event.Environment,
+				Repo:        filter.event.Repo,
+				Limit:       600,
+			},
+		}
+		if len(filtered) == 1 {
+			runtimeFilter.Workload = firstNonEmpty(filtered[0].ScopeRef, firstString(filtered[0].AffectedWorkloads))
+		}
+		workloads, workloadLimitations, err := s.buildRuntimeWorkloads(ctx, runtimeFilter)
+		if err != nil {
+			return handoffStoredRecord{}, err
+		}
+		findings, findingLimitations, err := s.buildRuntimeFindings(ctx, runtimeFilter)
+		if err != nil {
+			return handoffStoredRecord{}, err
+		}
+		runtimeContext = &handoffRuntimeContext{
+			AdvisoryOnly: true,
+			Workloads:    workloads,
+			Findings:     findings,
+			Limitations: uniqueStrings(append([]string{
+				"Runtime context is exported as evidence-backed runtime state and advisory findings; it does not become canonical incident or report truth inside the sealed bundle.",
+			}, append(workloadLimitations, findingLimitations...)...)),
+		}
+	}
 
 	var recommendations []recommendation
 	if request.IncludeRecommendations {
@@ -584,7 +628,7 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 		})
 	}
 
-	artifactFiles, err := buildHandoffContentFiles(packagePayload, readbackRefs, forensicState, recommendations)
+	artifactFiles, err := buildHandoffContentFiles(packagePayload, readbackRefs, forensicState, runtimeContext, recommendations)
 	if err != nil {
 		return handoffStoredRecord{}, err
 	}
@@ -753,12 +797,19 @@ func ensurePrincipalHandoffScope(principal auth.Principal, record handoffStoredR
 	return nil
 }
 
-func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRefs []sealedManifestReadbackRef, forensicState *pointInTimeState, recommendations []recommendation) ([]handoffBundleFile, error) {
+func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRefs []sealedManifestReadbackRef, forensicState *pointInTimeState, runtimeContext *handoffRuntimeContext, recommendations []recommendation) ([]handoffBundleFile, error) {
 	packagePayload = normalizeIncidentPackageForHandoff(packagePayload)
 	readbackRefs = normalizeSealedManifestReadbackRefs(readbackRefs)
 	if forensicState != nil {
 		normalized := normalizePointInTimeStateForHandoff(*forensicState)
 		forensicState = &normalized
+	}
+	if runtimeContext != nil {
+		normalized := *runtimeContext
+		normalized.Workloads = append([]runtimeWorkloadView(nil), runtimeContext.Workloads...)
+		normalized.Findings = append([]runtimeIntegrityFinding(nil), runtimeContext.Findings...)
+		normalized.Limitations = append([]string(nil), runtimeContext.Limitations...)
+		runtimeContext = &normalized
 	}
 	recommendations = normalizeRecommendationsForHandoff(recommendations)
 	files := []handoffBundleFile{}
@@ -802,6 +853,19 @@ func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRe
 			MediaType:    "application/json",
 			Role:         "forensic_context",
 			Content:      string(forensicsBytes),
+			AdvisoryOnly: true,
+		})
+	}
+	if runtimeContext != nil {
+		runtimeBytes, err := canonicalJSON(runtimeContext)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, handoffBundleFile{
+			Path:         "evidence/runtime_context.json",
+			MediaType:    "application/json",
+			Role:         "runtime_context",
+			Content:      string(runtimeBytes),
 			AdvisoryOnly: true,
 		})
 	}

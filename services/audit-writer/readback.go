@@ -645,6 +645,10 @@ func (s server) readbackHandler(w http.ResponseWriter, r *http.Request, resource
 		s.readbackForensicContextHandler(w, r, resourceType)
 		return
 	}
+	if strings.HasSuffix(strings.TrimSpace(r.URL.Path), "/runtime-context") {
+		s.readbackRuntimeContextHandler(w, r, resourceType)
+		return
+	}
 	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin)
 	if !ok {
 		return

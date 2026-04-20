@@ -11,27 +11,33 @@ import (
 )
 
 const (
-	EventTypeArtifactVerificationResult      = "artifact_verification_result"
-	EventTypeDeployGateDecision              = "deploy_gate_decision"
-	EventTypePolicyDecision                  = "policy_decision"
-	EventTypeRuntimeDriftResult              = "runtime_drift_result"
-	EventTypeRuntimeDesiredStateRecorded     = "runtime_desired_state_recorded"
-	EventTypeRuntimeActiveStateObserved      = "runtime_active_state_observed"
-	EventTypeDriftDetected                   = "drift_detected"
-	EventTypeDriftRemediationStarted         = "drift_remediation_started"
-	EventTypeDriftRemediationSucceeded       = "drift_remediation_succeeded"
-	EventTypeDriftRemediationFailed          = "drift_remediation_failed"
-	EventTypeDriftQuarantined                = "drift_quarantined"
-	EventTypeSigningIdentityPolicyRecorded   = "signing_identity_policy_recorded"
-	EventTypeSigningIdentityPolicyDistrusted = "signing_identity_policy_distrusted"
-	EventTypeSigningIdentityFinding          = "signing_identity_finding"
-	EventTypeHandoffSealed                   = "handoff_sealed"
-	EventTypeHandoffCosigned                 = "handoff_cosigned"
-	EventTypeFederationPeerRegistered        = "federation_peer_registered"
-	EventTypeFederationProofRequested        = "federation_proof_requested"
-	EventTypeFederationProofVerified         = "federation_proof_verified"
-	EventTypeFederationPolicySynced          = "federation_policy_synced"
-	EventTypeFederationAnchorPublished       = "federation_anchor_published"
+	EventTypeArtifactVerificationResult       = "artifact_verification_result"
+	EventTypeDeployGateDecision               = "deploy_gate_decision"
+	EventTypePolicyDecision                   = "policy_decision"
+	EventTypeRuntimeDriftResult               = "runtime_drift_result"
+	EventTypeRuntimeDesiredStateRecorded      = "runtime_desired_state_recorded"
+	EventTypeRuntimeActiveStateObserved       = "runtime_active_state_observed"
+	EventTypeRuntimeObservationRecorded       = "runtime_observation_recorded"
+	EventTypeRuntimeSBOMVerificationRecorded  = "runtime_sbom_verification_recorded"
+	EventTypeDriftDetected                    = "drift_detected"
+	EventTypeDriftRemediationStarted          = "drift_remediation_started"
+	EventTypeDriftRemediationSucceeded        = "drift_remediation_succeeded"
+	EventTypeDriftRemediationFailed           = "drift_remediation_failed"
+	EventTypeDriftQuarantined                 = "drift_quarantined"
+	EventTypeRuntimeEnforcementEvaluated      = "runtime_enforcement_evaluated"
+	EventTypeRuntimeForensicSnapshotRequested = "runtime_forensic_snapshot_requested"
+	EventTypeRuntimeTrustedRestartRequested   = "runtime_trusted_restart_requested"
+	EventTypeRuntimeNetworkIsolationApplied   = "runtime_network_isolation_applied"
+	EventTypeSigningIdentityPolicyRecorded    = "signing_identity_policy_recorded"
+	EventTypeSigningIdentityPolicyDistrusted  = "signing_identity_policy_distrusted"
+	EventTypeSigningIdentityFinding           = "signing_identity_finding"
+	EventTypeHandoffSealed                    = "handoff_sealed"
+	EventTypeHandoffCosigned                  = "handoff_cosigned"
+	EventTypeFederationPeerRegistered         = "federation_peer_registered"
+	EventTypeFederationProofRequested         = "federation_proof_requested"
+	EventTypeFederationProofVerified          = "federation_proof_verified"
+	EventTypeFederationPolicySynced           = "federation_policy_synced"
+	EventTypeFederationAnchorPublished        = "federation_anchor_published"
 
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
@@ -145,6 +151,7 @@ type Event struct {
 	Evidence                          *Evidence        `json:"evidence,omitempty"`
 	Handoff                           json.RawMessage  `json:"handoff,omitempty"`
 	Federation                        json.RawMessage  `json:"federation,omitempty"`
+	RuntimeIntegrity                  json.RawMessage  `json:"runtime_integrity,omitempty"`
 }
 
 type VerifierSummary struct {
