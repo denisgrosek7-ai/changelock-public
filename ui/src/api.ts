@@ -72,6 +72,14 @@ import type {
   RuntimeClosedLoopStatus,
   RuntimeDriftFindingsResponse,
   RuntimeDriftStatus,
+  HardeningAction,
+  HardeningAssessment,
+  HardeningExecutionRecord,
+  HardeningExecutionResponse,
+  HardeningEvaluationResponse,
+  HardeningPolicyDecision,
+  HardeningTrigger,
+  DefensePostureState,
   RuntimeEnforcementDecision,
   RuntimeEnforcementListResponse,
   RuntimeFindingsResponse,
@@ -3214,6 +3222,140 @@ function parseRuntimeEnforcementListResponse(value: unknown): RuntimeEnforcement
   };
 }
 
+function parseHardeningTrigger(value: unknown): HardeningTrigger {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening trigger.");
+  }
+  return {
+    trigger_id: readString(value.trigger_id, "hardening_trigger.trigger_id"),
+    source_finding: readString(value.source_finding, "hardening_trigger.source_finding"),
+    trigger_type: readString(value.trigger_type, "hardening_trigger.trigger_type"),
+    timestamp: readString(value.timestamp, "hardening_trigger.timestamp"),
+    subject_ref: readString(value.subject_ref, "hardening_trigger.subject_ref"),
+    severity: readString(value.severity, "hardening_trigger.severity"),
+    confidence: readString(value.confidence, "hardening_trigger.confidence"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "hardening_trigger.evidence_refs"),
+  };
+}
+
+function parseHardeningAssessment(value: unknown): HardeningAssessment {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening assessment.");
+  }
+  return {
+    assessment_id: readString(value.assessment_id, "hardening_assessment.assessment_id"),
+    trigger_ref: readString(value.trigger_ref, "hardening_assessment.trigger_ref"),
+    subject_ref: readString(value.subject_ref, "hardening_assessment.subject_ref"),
+    blast_radius_score: readNumber(value.blast_radius_score, "hardening_assessment.blast_radius_score"),
+    criticality: readString(value.criticality, "hardening_assessment.criticality"),
+    current_sandbox_class: readString(value.current_sandbox_class, "hardening_assessment.current_sandbox_class"),
+    forensic_first: readBoolean(value.forensic_first, "hardening_assessment.forensic_first"),
+    recommended_hardening_class: readString(
+      value.recommended_hardening_class,
+      "hardening_assessment.recommended_hardening_class",
+    ),
+    reason_codes: readOptionalStringArray(value.reason_codes, "hardening_assessment.reason_codes"),
+    limitations: readOptionalStringArray(value.limitations, "hardening_assessment.limitations"),
+  };
+}
+
+function parseHardeningPolicyDecision(value: unknown): HardeningPolicyDecision {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening policy decision.");
+  }
+  return {
+    decision_id: readString(value.decision_id, "hardening_policy.decision_id"),
+    assessment_ref: readString(value.assessment_ref, "hardening_policy.assessment_ref"),
+    policy_ref: readString(value.policy_ref, "hardening_policy.policy_ref"),
+    allowed_actions: readOptionalStringArray(value.allowed_actions, "hardening_policy.allowed_actions") || [],
+    approval_mode: readString(value.approval_mode, "hardening_policy.approval_mode"),
+    ttl: readString(value.ttl, "hardening_policy.ttl"),
+    rollback_required: readBoolean(value.rollback_required, "hardening_policy.rollback_required"),
+    forensic_requirement: readString(value.forensic_requirement, "hardening_policy.forensic_requirement"),
+    decision_summary: readString(value.decision_summary, "hardening_policy.decision_summary"),
+  };
+}
+
+function parseHardeningAction(value: unknown): HardeningAction {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening action.");
+  }
+  return {
+    action_id: readString(value.action_id, "hardening_action.action_id"),
+    action_type: readString(value.action_type, "hardening_action.action_type"),
+    subject_ref: readString(value.subject_ref, "hardening_action.subject_ref"),
+    scope: readString(value.scope, "hardening_action.scope"),
+    parameters: isRecord(value.parameters) ? value.parameters : undefined,
+    is_immediate: readBoolean(value.is_immediate, "hardening_action.is_immediate"),
+    is_reversible: readBoolean(value.is_reversible, "hardening_action.is_reversible"),
+  };
+}
+
+function parseHardeningExecutionRecord(value: unknown): HardeningExecutionRecord {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening execution record.");
+  }
+  return {
+    execution_id: readString(value.execution_id, "hardening_execution.execution_id"),
+    subject_ref: readString(value.subject_ref, "hardening_execution.subject_ref"),
+    trigger_ref: readString(value.trigger_ref, "hardening_execution.trigger_ref"),
+    decision_ref: readString(value.decision_ref, "hardening_execution.decision_ref"),
+    actions_applied: readOptionalArray(value.actions_applied, "hardening_execution.actions_applied").map(parseHardeningAction),
+    executed_at: readString(value.executed_at, "hardening_execution.executed_at"),
+    execution_result: readString(value.execution_result, "hardening_execution.execution_result"),
+    rollback_plan: readOptionalStringArray(value.rollback_plan, "hardening_execution.rollback_plan"),
+    forensic_refs: readOptionalStringArray(value.forensic_refs, "hardening_execution.forensic_refs"),
+    incident_refs: readOptionalStringArray(value.incident_refs, "hardening_execution.incident_refs"),
+    recommendation_refs: readOptionalStringArray(value.recommendation_refs, "hardening_execution.recommendation_refs"),
+    expires_at: readOptionalString(value.expires_at, "hardening_execution.expires_at"),
+    limitations: readOptionalStringArray(value.limitations, "hardening_execution.limitations"),
+  };
+}
+
+function parseDefensePostureState(value: unknown): DefensePostureState {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid defense posture state.");
+  }
+  return {
+    subject_ref: readString(value.subject_ref, "defense_posture.subject_ref"),
+    current_mode: readString(value.current_mode, "defense_posture.current_mode"),
+    active_restrictions: readOptionalStringArray(value.active_restrictions, "defense_posture.active_restrictions"),
+    trigger_summary: readOptionalString(value.trigger_summary, "defense_posture.trigger_summary"),
+    forensic_status: readOptionalString(value.forensic_status, "defense_posture.forensic_status"),
+    rollback_ready: readBoolean(value.rollback_ready, "defense_posture.rollback_ready"),
+    expires_at: readOptionalString(value.expires_at, "defense_posture.expires_at"),
+    linked_findings: readOptionalStringArray(value.linked_findings, "defense_posture.linked_findings"),
+    linked_topology_refs: readOptionalStringArray(value.linked_topology_refs, "defense_posture.linked_topology_refs"),
+    limitations: readOptionalStringArray(value.limitations, "defense_posture.limitations"),
+  };
+}
+
+function parseHardeningEvaluationResponse(value: unknown): HardeningEvaluationResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening evaluation response.");
+  }
+  return {
+    trigger: parseHardeningTrigger(value.trigger),
+    assessment: parseHardeningAssessment(value.assessment),
+    policy_decision: parseHardeningPolicyDecision(value.policy_decision),
+    actions: readOptionalArray(value.actions, "hardening_evaluation.actions").map(parseHardeningAction),
+    posture: parseDefensePostureState(value.posture),
+  };
+}
+
+function parseHardeningExecutionResponse(value: unknown): HardeningExecutionResponse {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid hardening execution response.");
+  }
+  return {
+    trigger: parseHardeningTrigger(value.trigger),
+    assessment: parseHardeningAssessment(value.assessment),
+    policy_decision: parseHardeningPolicyDecision(value.policy_decision),
+    execution: parseHardeningExecutionRecord(value.execution),
+    posture: parseDefensePostureState(value.posture),
+  };
+}
+
 function parseValidationHarnessScenario(value: unknown): ValidationHarnessScenario {
   if (!isRecord(value)) {
     throw new Error("Audit API returned invalid validation harness scenario.");
@@ -4421,6 +4563,89 @@ export async function getRuntimeEnforcement(filters: {
   limit?: string;
 }) {
   return parseRuntimeEnforcementListResponse(await fetchJSON<unknown>("/v1/runtime/enforcement", { params: filters }));
+}
+
+export async function getHardeningPosture(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  subject_ref?: string;
+  limit?: string;
+}) {
+  const payload = await fetchJSON<unknown>("/v1/hardening/posture", { params: filters });
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new Error("Audit API returned invalid hardening posture response.");
+  }
+  return payload.items.map(parseDefensePostureState);
+}
+
+export async function getHardeningActions(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  subject_ref?: string;
+  limit?: string;
+}) {
+  const payload = await fetchJSON<unknown>("/v1/hardening/actions", { params: filters });
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new Error("Audit API returned invalid hardening actions response.");
+  }
+  return payload.items.map(parseHardeningExecutionRecord);
+}
+
+export async function evaluateHardening(
+  filters: {
+    cluster_id?: string;
+    tenant_id?: string;
+    environment?: string;
+    repo?: string;
+    namespace?: string;
+    workload_kind?: string;
+    workload?: string;
+    subject_ref?: string;
+    limit?: string;
+  },
+  input?: Record<string, unknown>,
+) {
+  return parseHardeningEvaluationResponse(
+    await fetchJSON<unknown>("/v1/hardening/evaluate", {
+      method: "POST",
+      params: filters,
+      body: input || {},
+    }),
+  );
+}
+
+export async function applyHardening(
+  path: "/v1/hardening/apply" | "/v1/hardening/quarantine" | "/v1/hardening/divert-traffic" | "/v1/hardening/forensic-first" | "/v1/hardening/rollback" | "/v1/hardening/recover",
+  filters: {
+    cluster_id?: string;
+    tenant_id?: string;
+    environment?: string;
+    repo?: string;
+    namespace?: string;
+    workload_kind?: string;
+    workload?: string;
+    subject_ref?: string;
+    limit?: string;
+  },
+  input?: Record<string, unknown>,
+) {
+  return parseHardeningExecutionResponse(
+    await fetchJSON<unknown>(path, {
+      method: "POST",
+      params: filters,
+      body: input || {},
+    }),
+  );
 }
 
 export async function getSigningIdentityObservations(filters?: Record<string, string | undefined>) {

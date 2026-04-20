@@ -184,6 +184,7 @@ func TestReadbackForensicContextAndForensicRecommendations(t *testing.T) {
 
 type forensicsFixtureData struct {
 	handler             http.Handler
+	store               audit.Store
 	historicalTimestamp time.Time
 	currentTimestamp    time.Time
 	flashbackTimestamp  time.Time
@@ -563,6 +564,7 @@ func forensicsTestFixture(t *testing.T) forensicsFixtureData {
 
 	return forensicsFixtureData{
 		handler:             newHandlerWithAuth(store, "memory", authConfig),
+		store:               store,
 		historicalTimestamp: historicalTimestamp,
 		currentTimestamp:    currentTimestamp,
 		flashbackTimestamp:  flashbackTimestamp,

@@ -778,6 +778,9 @@ func (s server) buildRecommendationCandidates(ctx context.Context, incidents []i
 	if runtimeRecommendations, err := s.buildRuntimeRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, runtimeRecommendations...)
 	}
+	if hardeningRecommendations, err := s.buildHardeningRecommendations(ctx, incidents, filter); err == nil {
+		candidates = append(candidates, hardeningRecommendations...)
+	}
 	if federationRecommendations, err := s.buildFederationRecommendations(ctx, incidents, filter); err == nil {
 		candidates = append(candidates, federationRecommendations...)
 	}
@@ -1287,6 +1290,101 @@ func (s server) buildRuntimeRecommendations(ctx context.Context, incidents []inv
 	return recommendations, nil
 }
 
+func (s server) buildHardeningRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
+	runtimeFilter := recommendationRuntimeFilter(filter)
+	executions, _, err := s.listHardeningExecutions(ctx, runtimeFilter)
+	if err != nil {
+		return nil, err
+	}
+	if len(executions) == 0 {
+		return nil, nil
+	}
+	posture, _, err := s.buildDefensePostureStates(ctx, runtimeFilter)
+	if err != nil {
+		return nil, err
+	}
+	postureBySubject := map[string]defensePostureState{}
+	for _, item := range posture {
+		postureBySubject[item.SubjectRef] = item
+	}
+	findings, _, err := s.buildRuntimeFindings(ctx, runtimeFilter)
+	if err != nil {
+		return nil, err
+	}
+	findingByID := map[string]runtimeIntegrityFinding{}
+	for _, item := range findings {
+		findingByID[item.FindingID] = item
+	}
+	recommendations := make([]recommendation, 0, minInt(len(executions), 3))
+	for _, execution := range executions {
+		if execution.ExecutionResult == "rollback_applied" || execution.ExecutionResult == "trusted_recovery_completed" {
+			continue
+		}
+		postureState := postureBySubject[execution.SubjectRef]
+		finding, hasFinding := findingByID[execution.TriggerRef]
+		template := recommendationTemplateCatalog[2]
+		if strings.Contains(execution.ExecutionResult, "pending") {
+			template = recommendationTemplateCatalog[6]
+		} else if containsHardeningActionType(execution.ActionsApplied, hardeningActionRequestForensics) {
+			template = recommendationTemplateCatalog[1]
+		}
+		workloadName := runtimeRecommendationSubjectName(execution.SubjectRef)
+		title := fmt.Sprintf("Convert temporary hardening on %s into a durable remediation plan", workloadName)
+		if strings.Contains(execution.ExecutionResult, "pending") {
+			title = fmt.Sprintf("Review pending runtime hardening approval for %s", workloadName)
+		}
+		rationale := "Temporary autonomous hardening reduced immediate runtime pressure, but permanent remediation still belongs in a bounded workflow."
+		if hasFinding {
+			rationale = fmt.Sprintf("%s Temporary hardening left %s in %s mode, which now needs a durable follow-up in workflow rather than indefinite autonomous posture.", finding.Summary, workloadName, postureState.CurrentMode)
+		}
+		priority := "TODAY"
+		if hasFinding && finding.Severity == "critical" {
+			priority = "NOW"
+		}
+		recommendations = append(recommendations, recommendation{
+			RecommendationID:    hardeningRecommendationID(execution.SubjectRef, execution.ExecutionID),
+			SourceType:          "hardening_signal",
+			SourceRef:           execution.ExecutionID,
+			SubjectType:         "workload",
+			SubjectRef:          execution.SubjectRef,
+			Team:                firstIncidentTenant(incidentsForRuntimeSubject(incidents, execution.SubjectRef)),
+			Service:             workloadName,
+			Repo:                firstIncidentRepo(incidentsForRuntimeSubject(incidents, execution.SubjectRef)),
+			Environment:         firstIncidentEnvironment(incidentsForRuntimeSubject(incidents, execution.SubjectRef)),
+			RecommendationType:  template.RecommendationType,
+			Title:               title,
+			Description:         firstNonEmpty(postureState.TriggerSummary, execution.ExecutionResult),
+			RecommendedAction:   firstNonEmpty(firstHardeningActionType(execution.ActionsApplied), "generate_remediation_draft"),
+			Rationale:           rationale,
+			EvidenceRefs:        uniqueStrings(append(append([]string{}, execution.ForensicRefs...), execution.IncidentRefs...)),
+			ReadbackRefs:        nil,
+			RelatedIncidentRefs: uniqueStrings(append([]string{}, execution.IncidentRefs...)),
+			PriorityBand:        priority,
+			ImpactScore:         minInt(100, 58+len(execution.ActionsApplied)*8+len(execution.IncidentRefs)*5),
+			EffortScore:         recommendationEffortScore(template.TemplateID),
+			ConfidenceScore:     74,
+			ApprovalMode:        template.ApprovalMode,
+			Status:              recommendationStatusShown,
+			CreatedAt:           execution.ExecutedAt,
+			ExpiresAt:           execution.ExpiresAt,
+			VerificationPlan: []string{
+				fmt.Sprintf("Confirm %s no longer re-triggers the same runtime hardening path for %s in the current scope.", firstNonEmpty(execution.TriggerRef, "the linked finding"), workloadName),
+				"Verify temporary restrictions can be removed without reopening runtime drift, then close the hardening follow-up as permanent remediation.",
+			},
+			ActionTemplate: template,
+			Outcome:        recommendationOutcome{Status: recommendationStatusShown},
+			AdvisoryOnly:   true,
+			Limitations: []string{
+				"Hardening recommendation is an overlay derived from bounded 9k temporary response records; it does not treat temporary autonomous containment as permanent remediation truth.",
+			},
+		})
+		if len(recommendations) == 3 {
+			break
+		}
+	}
+	return recommendations, nil
+}
+
 func (s server) buildValidationRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
 	validationFilter := validationHarnessFilter{
 		ClusterID:   filter.event.ClusterID,
@@ -1453,6 +1551,24 @@ func runtimeRecommendationConfidence(finding runtimeIntegrityFinding) int {
 	default:
 		return 72
 	}
+}
+
+func containsHardeningActionType(actions []hardeningAction, actionType string) bool {
+	for _, action := range actions {
+		if action.ActionType == actionType {
+			return true
+		}
+	}
+	return false
+}
+
+func firstHardeningActionType(actions []hardeningAction) string {
+	for _, action := range actions {
+		if strings.TrimSpace(action.ActionType) != "" {
+			return action.ActionType
+		}
+	}
+	return ""
 }
 
 func mapValidationRecommendationPriority(status string) string {
@@ -2150,6 +2266,44 @@ func (s server) verifyRecommendation(ctx context.Context, item recommendation, f
 			}
 		}
 		return recommendationStatusVerifiedSuccessful, "The runtime drift signal is no longer active for the workload and the current integrity state no longer carries the same finding.", nil
+	case "hardening_signal":
+		runtimeFilter := recommendationRuntimeFilter(filter)
+		runtimeFilter.SubjectRef = item.SubjectRef
+		executions, _, err := s.listHardeningExecutions(ctx, runtimeFilter)
+		if err != nil {
+			return "", "", err
+		}
+		posture, _, err := s.buildDefensePostureStates(ctx, runtimeFilter)
+		if err != nil {
+			return "", "", err
+		}
+		findings, _, err := s.buildRuntimeFindings(ctx, runtimeFilter)
+		if err != nil {
+			return "", "", err
+		}
+		for _, finding := range findings {
+			if finding.SubjectRef == item.SubjectRef && runtimeSeverityRank(finding.Severity) >= runtimeSeverityRank("high") {
+				return recommendationStatusRegressed, "The workload still carries a high-severity runtime signal, so temporary hardening has not stabilized the subject yet.", nil
+			}
+		}
+		for _, execution := range executions {
+			if execution.ExecutionID != item.SourceRef {
+				continue
+			}
+			if execution.ExecutionResult == "rollback_applied" || execution.ExecutionResult == "trusted_recovery_completed" {
+				return recommendationStatusVerifiedSuccessful, "Temporary hardening has already been cleared through rollback or trusted recovery in the current scope.", nil
+			}
+			for _, state := range posture {
+				if state.SubjectRef != item.SubjectRef {
+					continue
+				}
+				if len(state.ActiveRestrictions) > 0 || state.CurrentMode == hardeningModePendingApproval {
+					return recommendationStatusPartiallyEffective, "Temporary hardening still remains active or pending approval, so the workflow should stay open until the durable remediation closes the loop.", nil
+				}
+			}
+			return recommendationStatusPartiallyEffective, "The original hardening record remains visible, but active restrictions are no longer the dominant posture in the current scope.", nil
+		}
+		return recommendationStatusVerifiedSuccessful, "The referenced hardening action is no longer active in the current scope.", nil
 	case "federation_signal":
 		view, err := s.buildFederationGlobalView(ctx)
 		if err != nil {

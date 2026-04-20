@@ -70,6 +70,7 @@ type handoffSealRequest struct {
 	IncidentIDs            []string `json:"incident_ids,omitempty"`
 	IncludeForensics       bool     `json:"include_forensics,omitempty"`
 	IncludeRuntime         bool     `json:"include_runtime,omitempty"`
+	IncludeHardening       bool     `json:"include_hardening,omitempty"`
 	IncludeValidation      bool     `json:"include_validation,omitempty"`
 	IncludeRecommendations bool     `json:"include_recommendations,omitempty"`
 	CoSignMode             string   `json:"co_sign_mode,omitempty"`
@@ -98,6 +99,13 @@ type handoffValidationContext struct {
 	Scenarios    []validationHarnessScenario    `json:"scenarios"`
 	Certificate  *validationCertificate         `json:"certificate,omitempty"`
 	Limitations  []string                       `json:"limitations,omitempty"`
+}
+
+type handoffHardeningContext struct {
+	AdvisoryOnly bool                       `json:"advisory_only"`
+	Posture      []defensePostureState      `json:"posture"`
+	Actions      []hardeningExecutionRecord `json:"actions"`
+	Limitations  []string                   `json:"limitations,omitempty"`
 }
 
 type sealedManifest struct {
@@ -619,6 +627,42 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 			}, append(workloadLimitations, findingLimitations...)...)),
 		}
 	}
+	var hardeningContext *handoffHardeningContext
+	if request.IncludeHardening {
+		runtimeFilter := runtimeIntegrityFilter{
+			ClusterID:   filter.event.ClusterID,
+			TenantID:    filter.event.TenantID,
+			Environment: filter.event.Environment,
+			Repo:        filter.event.Repo,
+			Limit:       6,
+			event: audit.EventFilter{
+				ClusterID:   filter.event.ClusterID,
+				TenantID:    filter.event.TenantID,
+				Environment: filter.event.Environment,
+				Repo:        filter.event.Repo,
+				Limit:       600,
+			},
+		}
+		if len(filtered) == 1 {
+			runtimeFilter.Workload = firstNonEmpty(filtered[0].ScopeRef, firstString(filtered[0].AffectedWorkloads))
+		}
+		posture, postureLimitations, err := s.buildDefensePostureStates(ctx, runtimeFilter)
+		if err != nil {
+			return handoffStoredRecord{}, err
+		}
+		actions, actionLimitations, err := s.listHardeningExecutions(ctx, runtimeFilter)
+		if err != nil {
+			return handoffStoredRecord{}, err
+		}
+		hardeningContext = &handoffHardeningContext{
+			AdvisoryOnly: true,
+			Posture:      posture,
+			Actions:      actions,
+			Limitations: uniqueStrings(append([]string{
+				"Runtime hardening context is exported as bounded autonomous-response evidence plus advisory posture; it does not become canonical incident or runtime truth inside the sealed bundle.",
+			}, append(postureLimitations, actionLimitations...)...)),
+		}
+	}
 	var validationContext *handoffValidationContext
 	if request.IncludeValidation {
 		validationFilter := validationHarnessFilter{
@@ -678,7 +722,7 @@ func (s server) createSealedHandoff(ctx context.Context, principal auth.Principa
 		})
 	}
 
-	artifactFiles, err := buildHandoffContentFiles(packagePayload, readbackRefs, forensicState, runtimeContext, validationContext, recommendations)
+	artifactFiles, err := buildHandoffContentFiles(packagePayload, readbackRefs, forensicState, runtimeContext, hardeningContext, validationContext, recommendations)
 	if err != nil {
 		return handoffStoredRecord{}, err
 	}
@@ -847,7 +891,7 @@ func ensurePrincipalHandoffScope(principal auth.Principal, record handoffStoredR
 	return nil
 }
 
-func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRefs []sealedManifestReadbackRef, forensicState *pointInTimeState, runtimeContext *handoffRuntimeContext, validationContext *handoffValidationContext, recommendations []recommendation) ([]handoffBundleFile, error) {
+func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRefs []sealedManifestReadbackRef, forensicState *pointInTimeState, runtimeContext *handoffRuntimeContext, hardeningContext *handoffHardeningContext, validationContext *handoffValidationContext, recommendations []recommendation) ([]handoffBundleFile, error) {
 	packagePayload = normalizeIncidentPackageForHandoff(packagePayload)
 	readbackRefs = normalizeSealedManifestReadbackRefs(readbackRefs)
 	if forensicState != nil {
@@ -877,6 +921,13 @@ func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRe
 		}
 		normalized.Limitations = append([]string(nil), validationContext.Limitations...)
 		validationContext = &normalized
+	}
+	if hardeningContext != nil {
+		normalized := *hardeningContext
+		normalized.Posture = append([]defensePostureState(nil), hardeningContext.Posture...)
+		normalized.Actions = append([]hardeningExecutionRecord(nil), hardeningContext.Actions...)
+		normalized.Limitations = append([]string(nil), hardeningContext.Limitations...)
+		hardeningContext = &normalized
 	}
 	recommendations = normalizeRecommendationsForHandoff(recommendations)
 	files := []handoffBundleFile{}
@@ -947,6 +998,19 @@ func buildHandoffContentFiles(packagePayload incidentPackageResponse, readbackRe
 			Role:         "validation_harness",
 			AdvisoryOnly: true,
 			Content:      string(validationBytes),
+		})
+	}
+	if hardeningContext != nil {
+		hardeningBytes, err := canonicalJSON(hardeningContext)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, handoffBundleFile{
+			Path:         "evidence/hardening_context.json",
+			MediaType:    "application/json",
+			Role:         "runtime_hardening",
+			AdvisoryOnly: true,
+			Content:      string(hardeningBytes),
 		})
 	}
 	if len(recommendations) > 0 {
