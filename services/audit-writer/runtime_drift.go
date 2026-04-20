@@ -123,6 +123,10 @@ func (s server) runtimeClosedLoopStatusHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (s server) runtimeQuarantineHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		s.runtimeExecuteActionHandler(w, r, runtimeActionApplyNetworkIsolation)
+		return
+	}
 	principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleViewer, auth.RoleOperator, auth.RoleSecurityAdmin, auth.RoleService)
 	if !ok {
 		return

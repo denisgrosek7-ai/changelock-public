@@ -130,6 +130,167 @@ export interface RuntimeClosedLoopStatus {
   last_reconciled_at?: string;
 }
 
+export interface RuntimeObservation {
+  observation_id: string;
+  timestamp: string;
+  cluster?: string;
+  environment?: string;
+  node?: string;
+  namespace?: string;
+  workload?: string;
+  pod?: string;
+  container_id?: string;
+  image_digest?: string;
+  event_type: string;
+  event_payload?: Record<string, unknown>;
+  evidence_refs?: string[];
+  confidence: string;
+  limitations?: string[];
+}
+
+export interface RuntimePrivilegeProfile {
+  run_as_non_root: boolean;
+  read_only_root_filesystem: boolean;
+  allow_privilege_escalation: boolean;
+  drop_all_capabilities: boolean;
+  seccomp_runtime_default: boolean;
+  deny_privileged: boolean;
+}
+
+export interface RuntimeIntegrityProfile {
+  profile_id: string;
+  subject_ref: string;
+  allowed_binaries: string[];
+  allowed_exec_paths: string[];
+  allowed_library_patterns: string[];
+  allowed_network_patterns: string[];
+  expected_signers: string[];
+  privilege_profile: RuntimePrivilegeProfile;
+  sandbox_class: string;
+  profile_source: string[];
+  limitations?: string[];
+}
+
+export interface RuntimeSBOMVerificationResult {
+  subject_ref: string;
+  status: string;
+  matched_artifacts?: string[];
+  observed_library_refs?: string[];
+  unexpected_artifact_refs?: string[];
+  unexpected_executable_mappings?: string[];
+  evidence_refs?: string[];
+  limitations?: string[];
+}
+
+export interface RuntimeFindingReadbackRef {
+  resource_type: string;
+  resource_id: string;
+  resource_uri: string;
+  evidence_hash: string;
+}
+
+export interface RuntimeIntegrityFinding {
+  finding_id: string;
+  finding_type: string;
+  severity: string;
+  subject_ref: string;
+  observation_refs?: string[];
+  profile_ref?: string;
+  status: string;
+  summary: string;
+  matched_policy_rule?: string;
+  evidence_refs?: string[];
+  readback_refs?: RuntimeFindingReadbackRef[];
+  forensic_context_uri?: string;
+  confidence: string;
+  recommended_action: string;
+  limitations?: string[];
+}
+
+export interface RuntimeSandboxDecision {
+  subject_ref: string;
+  attestation_inputs: string[];
+  assigned_sandbox_class: string;
+  reason_codes: string[];
+  policy_ref: string;
+  evaluated_at: string;
+}
+
+export interface RuntimeEnforcementTopologyContext {
+  primary_service?: string;
+  blast_radius_score: number;
+  critical_reach_count: number;
+  top_risk_path_summaries?: string[];
+  limitations?: string[];
+}
+
+export interface RuntimeEnforcementDecision {
+  decision_id: string;
+  subject_ref: string;
+  trigger_finding?: string;
+  action: string;
+  approval_mode: string;
+  executed: boolean;
+  execution_result: string;
+  policy_ref: string;
+  evidence_refs?: string[];
+  forensic_context_uri?: string;
+  topology_context?: RuntimeEnforcementTopologyContext;
+  evaluated_at: string;
+  limitations?: string[];
+}
+
+export interface RuntimeIntegrityState {
+  subject_ref: string;
+  identity_status: string;
+  runtime_integrity_score: number;
+  score_reasons?: string[];
+  drift_level: string;
+  active_findings?: string[];
+  current_sandbox_class: string;
+  current_enforcement_posture: string;
+  last_verified_at: string;
+  evidence_refs?: string[];
+  sbom_verification: RuntimeSBOMVerificationResult;
+  limitations?: string[];
+}
+
+export interface RuntimeWorkloadView {
+  subject_ref: string;
+  cluster?: string;
+  environment?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  service_account?: string;
+  image_digest?: string;
+  state: RuntimeIntegrityState;
+  profile: RuntimeIntegrityProfile;
+  sandbox_decision: RuntimeSandboxDecision;
+  last_observation?: RuntimeObservation;
+  last_enforcement?: RuntimeEnforcementDecision;
+}
+
+export interface RuntimeIntegrityListResponse {
+  items: RuntimeIntegrityState[];
+  limitations?: string[];
+}
+
+export interface RuntimeWorkloadListResponse {
+  items: RuntimeWorkloadView[];
+  limitations?: string[];
+}
+
+export interface RuntimeFindingsResponse {
+  items: RuntimeIntegrityFinding[];
+  limitations?: string[];
+}
+
+export interface RuntimeEnforcementListResponse {
+  items: RuntimeEnforcementDecision[];
+  limitations?: string[];
+}
+
 export interface SigningIdentityPolicy {
   id: string;
   name?: string;

@@ -72,6 +72,18 @@ import type {
   RuntimeClosedLoopStatus,
   RuntimeDriftFindingsResponse,
   RuntimeDriftStatus,
+  RuntimeEnforcementDecision,
+  RuntimeEnforcementListResponse,
+  RuntimeFindingsResponse,
+  RuntimeIntegrityFinding,
+  RuntimeIntegrityListResponse,
+  RuntimeIntegrityProfile,
+  RuntimeIntegrityState,
+  RuntimeObservation,
+  RuntimeSBOMVerificationResult,
+  RuntimeSandboxDecision,
+  RuntimeWorkloadListResponse,
+  RuntimeWorkloadView,
   SigningIdentityFinding,
   SigningIdentityFindingsResponse,
   SigningIdentityObservation,
@@ -2962,6 +2974,241 @@ function parseRuntimeClosedLoopStatus(value: unknown): RuntimeClosedLoopStatus {
   };
 }
 
+function parseRuntimeObservation(value: unknown): RuntimeObservation {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime observation.");
+  }
+  return {
+    observation_id: readString(value.observation_id, "runtime_observation.observation_id"),
+    timestamp: readString(value.timestamp, "runtime_observation.timestamp"),
+    cluster: readOptionalString(value.cluster, "runtime_observation.cluster"),
+    environment: readOptionalString(value.environment, "runtime_observation.environment"),
+    node: readOptionalString(value.node, "runtime_observation.node"),
+    namespace: readOptionalString(value.namespace, "runtime_observation.namespace"),
+    workload: readOptionalString(value.workload, "runtime_observation.workload"),
+    pod: readOptionalString(value.pod, "runtime_observation.pod"),
+    container_id: readOptionalString(value.container_id, "runtime_observation.container_id"),
+    image_digest: readOptionalString(value.image_digest, "runtime_observation.image_digest"),
+    event_type: readString(value.event_type, "runtime_observation.event_type"),
+    event_payload: readOptionalRecord(value.event_payload, "runtime_observation.event_payload"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "runtime_observation.evidence_refs"),
+    confidence: readString(value.confidence, "runtime_observation.confidence"),
+    limitations: readOptionalStringArray(value.limitations, "runtime_observation.limitations"),
+  };
+}
+
+function parseRuntimePrivilegeProfile(value: unknown) {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime privilege profile.");
+  }
+  return {
+    run_as_non_root: readBoolean(value.run_as_non_root, "runtime_privilege_profile.run_as_non_root"),
+    read_only_root_filesystem: readBoolean(value.read_only_root_filesystem, "runtime_privilege_profile.read_only_root_filesystem"),
+    allow_privilege_escalation: readBoolean(value.allow_privilege_escalation, "runtime_privilege_profile.allow_privilege_escalation"),
+    drop_all_capabilities: readBoolean(value.drop_all_capabilities, "runtime_privilege_profile.drop_all_capabilities"),
+    seccomp_runtime_default: readBoolean(value.seccomp_runtime_default, "runtime_privilege_profile.seccomp_runtime_default"),
+    deny_privileged: readBoolean(value.deny_privileged, "runtime_privilege_profile.deny_privileged"),
+  };
+}
+
+function parseRuntimeIntegrityProfile(value: unknown): RuntimeIntegrityProfile {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime integrity profile.");
+  }
+  return {
+    profile_id: readString(value.profile_id, "runtime_profile.profile_id"),
+    subject_ref: readString(value.subject_ref, "runtime_profile.subject_ref"),
+    allowed_binaries: readOptionalStringArray(value.allowed_binaries, "runtime_profile.allowed_binaries") || [],
+    allowed_exec_paths: readOptionalStringArray(value.allowed_exec_paths, "runtime_profile.allowed_exec_paths") || [],
+    allowed_library_patterns: readOptionalStringArray(value.allowed_library_patterns, "runtime_profile.allowed_library_patterns") || [],
+    allowed_network_patterns: readOptionalStringArray(value.allowed_network_patterns, "runtime_profile.allowed_network_patterns") || [],
+    expected_signers: readOptionalStringArray(value.expected_signers, "runtime_profile.expected_signers") || [],
+    privilege_profile: parseRuntimePrivilegeProfile(value.privilege_profile),
+    sandbox_class: readString(value.sandbox_class, "runtime_profile.sandbox_class"),
+    profile_source: readOptionalStringArray(value.profile_source, "runtime_profile.profile_source") || [],
+    limitations: readOptionalStringArray(value.limitations, "runtime_profile.limitations"),
+  };
+}
+
+function parseRuntimeSBOMVerificationResult(value: unknown): RuntimeSBOMVerificationResult {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime SBOM verification result.");
+  }
+  return {
+    subject_ref: readString(value.subject_ref, "runtime_sbom.subject_ref"),
+    status: readString(value.status, "runtime_sbom.status"),
+    matched_artifacts: readOptionalStringArray(value.matched_artifacts, "runtime_sbom.matched_artifacts"),
+    observed_library_refs: readOptionalStringArray(value.observed_library_refs, "runtime_sbom.observed_library_refs"),
+    unexpected_artifact_refs: readOptionalStringArray(value.unexpected_artifact_refs, "runtime_sbom.unexpected_artifact_refs"),
+    unexpected_executable_mappings: readOptionalStringArray(
+      value.unexpected_executable_mappings,
+      "runtime_sbom.unexpected_executable_mappings",
+    ),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "runtime_sbom.evidence_refs"),
+    limitations: readOptionalStringArray(value.limitations, "runtime_sbom.limitations"),
+  };
+}
+
+function parseRuntimeIntegrityFinding(value: unknown): RuntimeIntegrityFinding {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime integrity finding.");
+  }
+  return {
+    finding_id: readString(value.finding_id, "runtime_finding.finding_id"),
+    finding_type: readString(value.finding_type, "runtime_finding.finding_type"),
+    severity: readString(value.severity, "runtime_finding.severity"),
+    subject_ref: readString(value.subject_ref, "runtime_finding.subject_ref"),
+    observation_refs: readOptionalStringArray(value.observation_refs, "runtime_finding.observation_refs"),
+    profile_ref: readOptionalString(value.profile_ref, "runtime_finding.profile_ref"),
+    status: readString(value.status, "runtime_finding.status"),
+    summary: readString(value.summary, "runtime_finding.summary"),
+    matched_policy_rule: readOptionalString(value.matched_policy_rule, "runtime_finding.matched_policy_rule"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "runtime_finding.evidence_refs"),
+    readback_refs: Array.isArray(value.readback_refs)
+      ? value.readback_refs.map((item) => ({
+          resource_type: readString((item as Record<string, unknown>).resource_type, "runtime_finding.readback_refs.resource_type"),
+          resource_id: readString((item as Record<string, unknown>).resource_id, "runtime_finding.readback_refs.resource_id"),
+          resource_uri: readString((item as Record<string, unknown>).resource_uri, "runtime_finding.readback_refs.resource_uri"),
+          evidence_hash: readString((item as Record<string, unknown>).evidence_hash, "runtime_finding.readback_refs.evidence_hash"),
+        }))
+      : undefined,
+    forensic_context_uri: readOptionalString(value.forensic_context_uri, "runtime_finding.forensic_context_uri"),
+    confidence: readString(value.confidence, "runtime_finding.confidence"),
+    recommended_action: readString(value.recommended_action, "runtime_finding.recommended_action"),
+    limitations: readOptionalStringArray(value.limitations, "runtime_finding.limitations"),
+  };
+}
+
+function parseRuntimeSandboxDecision(value: unknown): RuntimeSandboxDecision {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime sandbox decision.");
+  }
+  return {
+    subject_ref: readString(value.subject_ref, "runtime_sandbox.subject_ref"),
+    attestation_inputs: readOptionalStringArray(value.attestation_inputs, "runtime_sandbox.attestation_inputs") || [],
+    assigned_sandbox_class: readString(value.assigned_sandbox_class, "runtime_sandbox.assigned_sandbox_class"),
+    reason_codes: readOptionalStringArray(value.reason_codes, "runtime_sandbox.reason_codes") || [],
+    policy_ref: readString(value.policy_ref, "runtime_sandbox.policy_ref"),
+    evaluated_at: readString(value.evaluated_at, "runtime_sandbox.evaluated_at"),
+  };
+}
+
+function parseRuntimeEnforcementTopologyContext(value: unknown) {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime topology context.");
+  }
+  return {
+    primary_service: readOptionalString(value.primary_service, "runtime_topology.primary_service"),
+    blast_radius_score: readNumber(value.blast_radius_score, "runtime_topology.blast_radius_score"),
+    critical_reach_count: readNumber(value.critical_reach_count, "runtime_topology.critical_reach_count"),
+    top_risk_path_summaries: readOptionalStringArray(value.top_risk_path_summaries, "runtime_topology.top_risk_path_summaries"),
+    limitations: readOptionalStringArray(value.limitations, "runtime_topology.limitations"),
+  };
+}
+
+function parseRuntimeEnforcementDecision(value: unknown): RuntimeEnforcementDecision {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime enforcement decision.");
+  }
+  return {
+    decision_id: readString(value.decision_id, "runtime_enforcement.decision_id"),
+    subject_ref: readString(value.subject_ref, "runtime_enforcement.subject_ref"),
+    trigger_finding: readOptionalString(value.trigger_finding, "runtime_enforcement.trigger_finding"),
+    action: readString(value.action, "runtime_enforcement.action"),
+    approval_mode: readString(value.approval_mode, "runtime_enforcement.approval_mode"),
+    executed: readBoolean(value.executed, "runtime_enforcement.executed"),
+    execution_result: readString(value.execution_result, "runtime_enforcement.execution_result"),
+    policy_ref: readString(value.policy_ref, "runtime_enforcement.policy_ref"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "runtime_enforcement.evidence_refs"),
+    forensic_context_uri: readOptionalString(value.forensic_context_uri, "runtime_enforcement.forensic_context_uri"),
+    topology_context:
+      value.topology_context === undefined ? undefined : parseRuntimeEnforcementTopologyContext(value.topology_context),
+    evaluated_at: readString(value.evaluated_at, "runtime_enforcement.evaluated_at"),
+    limitations: readOptionalStringArray(value.limitations, "runtime_enforcement.limitations"),
+  };
+}
+
+function parseRuntimeIntegrityState(value: unknown): RuntimeIntegrityState {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime integrity state.");
+  }
+  return {
+    subject_ref: readString(value.subject_ref, "runtime_integrity.subject_ref"),
+    identity_status: readString(value.identity_status, "runtime_integrity.identity_status"),
+    runtime_integrity_score: readNumber(value.runtime_integrity_score, "runtime_integrity.runtime_integrity_score"),
+    score_reasons: readOptionalStringArray(value.score_reasons, "runtime_integrity.score_reasons"),
+    drift_level: readString(value.drift_level, "runtime_integrity.drift_level"),
+    active_findings: readOptionalStringArray(value.active_findings, "runtime_integrity.active_findings"),
+    current_sandbox_class: readString(value.current_sandbox_class, "runtime_integrity.current_sandbox_class"),
+    current_enforcement_posture: readString(value.current_enforcement_posture, "runtime_integrity.current_enforcement_posture"),
+    last_verified_at: readString(value.last_verified_at, "runtime_integrity.last_verified_at"),
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "runtime_integrity.evidence_refs"),
+    sbom_verification: parseRuntimeSBOMVerificationResult(value.sbom_verification),
+    limitations: readOptionalStringArray(value.limitations, "runtime_integrity.limitations"),
+  };
+}
+
+function parseRuntimeWorkloadView(value: unknown): RuntimeWorkloadView {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid runtime workload view.");
+  }
+  return {
+    subject_ref: readString(value.subject_ref, "runtime_workload.subject_ref"),
+    cluster: readOptionalString(value.cluster, "runtime_workload.cluster"),
+    environment: readOptionalString(value.environment, "runtime_workload.environment"),
+    namespace: readOptionalString(value.namespace, "runtime_workload.namespace"),
+    workload_kind: readOptionalString(value.workload_kind, "runtime_workload.workload_kind"),
+    workload: readOptionalString(value.workload, "runtime_workload.workload"),
+    service_account: readOptionalString(value.service_account, "runtime_workload.service_account"),
+    image_digest: readOptionalString(value.image_digest, "runtime_workload.image_digest"),
+    state: parseRuntimeIntegrityState(value.state),
+    profile: parseRuntimeIntegrityProfile(value.profile),
+    sandbox_decision: parseRuntimeSandboxDecision(value.sandbox_decision),
+    last_observation: value.last_observation === undefined ? undefined : parseRuntimeObservation(value.last_observation),
+    last_enforcement: value.last_enforcement === undefined ? undefined : parseRuntimeEnforcementDecision(value.last_enforcement),
+  };
+}
+
+function parseRuntimeIntegrityListResponse(value: unknown): RuntimeIntegrityListResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid runtime integrity response.");
+  }
+  return {
+    items: value.items.map(parseRuntimeIntegrityState),
+    limitations: readOptionalStringArray(value.limitations, "runtime_integrity.limitations"),
+  };
+}
+
+function parseRuntimeWorkloadListResponse(value: unknown): RuntimeWorkloadListResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid runtime workload response.");
+  }
+  return {
+    items: value.items.map(parseRuntimeWorkloadView),
+    limitations: readOptionalStringArray(value.limitations, "runtime_workloads.limitations"),
+  };
+}
+
+function parseRuntimeIntegrityFindingsResponse(value: unknown): RuntimeFindingsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid runtime integrity findings response.");
+  }
+  return {
+    items: value.items.map(parseRuntimeIntegrityFinding),
+    limitations: readOptionalStringArray(value.limitations, "runtime_findings.limitations"),
+  };
+}
+
+function parseRuntimeEnforcementListResponse(value: unknown): RuntimeEnforcementListResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid runtime enforcement list response.");
+  }
+  return {
+    items: value.items.map(parseRuntimeEnforcementDecision),
+    limitations: readOptionalStringArray(value.limitations, "runtime_enforcement.limitations"),
+  };
+}
+
 export async function getHealth() {
   return fetchJSON<AuditHealth>("/health");
 }
@@ -3927,6 +4174,66 @@ export async function getRuntimeClosedLoopStatus(filters: {
   limit?: string;
 }) {
   return parseRuntimeClosedLoopStatus(await fetchJSON<unknown>("/v1/runtime/closed-loop/status", { params: filters }));
+}
+
+export async function getRuntimeIntegrity(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  severity?: string;
+  status?: string;
+  limit?: string;
+}) {
+  return parseRuntimeIntegrityListResponse(await fetchJSON<unknown>("/v1/runtime/integrity", { params: filters }));
+}
+
+export async function getRuntimeWorkloads(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  severity?: string;
+  status?: string;
+  limit?: string;
+}) {
+  return parseRuntimeWorkloadListResponse(await fetchJSON<unknown>("/v1/runtime/workloads", { params: filters }));
+}
+
+export async function getRuntimeFindings(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  severity?: string;
+  status?: string;
+  limit?: string;
+}) {
+  return parseRuntimeIntegrityFindingsResponse(await fetchJSON<unknown>("/v1/runtime/findings", { params: filters }));
+}
+
+export async function getRuntimeEnforcement(filters: {
+  cluster_id?: string;
+  tenant_id?: string;
+  environment?: string;
+  repo?: string;
+  namespace?: string;
+  workload_kind?: string;
+  workload?: string;
+  severity?: string;
+  status?: string;
+  limit?: string;
+}) {
+  return parseRuntimeEnforcementListResponse(await fetchJSON<unknown>("/v1/runtime/enforcement", { params: filters }));
 }
 
 export async function getSigningIdentityObservations(filters?: Record<string, string | undefined>) {

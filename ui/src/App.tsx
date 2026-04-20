@@ -45,6 +45,10 @@ import {
   getRuntimeClosedLoopStatus,
   getRuntimeDriftFindings,
   getRuntimeDriftStatus,
+  getRuntimeEnforcement,
+  getRuntimeFindings,
+  getRuntimeIntegrity,
+  getRuntimeWorkloads,
   getSummary,
   getSystemicWeaknesses,
   getSyncStatus,
@@ -81,6 +85,7 @@ import { IncidentWorkbench } from "./components/IncidentWorkbench";
 import { OverviewDashboard } from "./components/OverviewDashboard";
 import { PendingExceptionsPanel } from "./components/PendingExceptionsPanel";
 import { RuntimeDriftPanel } from "./components/RuntimeDriftPanel";
+import { RuntimeIntegrityPanel } from "./components/RuntimeIntegrityPanel";
 import { SBOMInventoryPanel } from "./components/SBOMInventoryPanel";
 import { SigningIdentityPanel } from "./components/SigningIdentityPanel";
 import { TopologyInsightsPanel } from "./components/TopologyInsightsPanel";
@@ -117,6 +122,10 @@ import type {
   RuntimeClosedLoopStatus,
   RuntimeDriftFinding,
   RuntimeDriftStatus,
+  RuntimeEnforcementDecision,
+  RuntimeIntegrityFinding,
+  RuntimeIntegrityState,
+  RuntimeWorkloadView,
   StoredEvent,
   Summary,
   SyncStatus,
@@ -211,6 +220,10 @@ export default function App() {
   const [forensicsReplay, setForensicsReplay] = useState<ForensicReplayResponse | null>(null);
   const [federationView, setFederationView] = useState<FederationGlobalView | null>(null);
   const [forensicsTimestamp, setForensicsTimestamp] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
+  const [runtimeIntegrityStates, setRuntimeIntegrityStates] = useState<RuntimeIntegrityState[]>([]);
+  const [runtimeWorkloads, setRuntimeWorkloads] = useState<RuntimeWorkloadView[]>([]);
+  const [runtimeIntegrityFindings, setRuntimeIntegrityFindings] = useState<RuntimeIntegrityFinding[]>([]);
+  const [runtimeEnforcement, setRuntimeEnforcement] = useState<RuntimeEnforcementDecision[]>([]);
   const [runtimeActiveStates, setRuntimeActiveStates] = useState<RuntimeActiveState[]>([]);
   const [runtimeClosedLoopStatus, setRuntimeClosedLoopStatus] = useState<RuntimeClosedLoopStatus | null>(null);
   const [runtimeDriftFindings, setRuntimeDriftFindings] = useState<RuntimeDriftFinding[]>([]);
@@ -277,6 +290,10 @@ export default function App() {
           setForensicsVEXFlashback(null);
           setForensicsReplay(null);
           setFederationView(null);
+          setRuntimeIntegrityStates([]);
+          setRuntimeWorkloads([]);
+          setRuntimeIntegrityFindings([]);
+          setRuntimeEnforcement([]);
           setRuntimeActiveStates([]);
           setRuntimeClosedLoopStatus(null);
           setRuntimeDriftFindings([]);
@@ -523,6 +540,10 @@ export default function App() {
             setTopologyHeatmap(null);
             setTopologyDelta(null);
             setRecommendations([]);
+            setRuntimeIntegrityStates([]);
+            setRuntimeWorkloads([]);
+            setRuntimeIntegrityFindings([]);
+            setRuntimeEnforcement([]);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -597,6 +618,10 @@ export default function App() {
             setTopologyHeatmap(null);
             setTopologyDelta(null);
             setRecommendations([]);
+            setRuntimeIntegrityStates([]);
+            setRuntimeWorkloads([]);
+            setRuntimeIntegrityFindings([]);
+            setRuntimeEnforcement([]);
             setRuntimeActiveStates([]);
             setRuntimeClosedLoopStatus(null);
             setRuntimeDriftFindings([]);
@@ -707,6 +732,38 @@ export default function App() {
             setPendingExceptions([]);
           } else if (activeTab === "runtime") {
             promises.push(
+              getRuntimeIntegrity({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then((response) => setRuntimeIntegrityStates(response.items)),
+            );
+            promises.push(
+              getRuntimeWorkloads({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then((response) => setRuntimeWorkloads(response.items)),
+            );
+            promises.push(
+              getRuntimeFindings({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then((response) => setRuntimeIntegrityFindings(response.items)),
+            );
+            promises.push(
+              getRuntimeEnforcement({
+                tenant_id: scopedTenantID,
+                environment: filters.environment,
+                repo: filters.repo,
+                limit: filters.limit,
+              }).then((response) => setRuntimeEnforcement(response.items)),
+            );
+            promises.push(
               getRuntimeDriftFindings({
                 tenant_id: scopedTenantID,
                 limit: filters.limit,
@@ -743,6 +800,15 @@ export default function App() {
             setAnalyticsAnomalies(null);
             setAnalyticsScorecards(null);
             setAnalyticsSegments(null);
+            setTopologyGraph(null);
+            setTopologyHeatmap(null);
+            setTopologyDelta(null);
+            setForensicsState(null);
+            setForensicsDelta(null);
+            setForensicsTimeline(null);
+            setForensicsVEXFlashback(null);
+            setForensicsReplay(null);
+            setFederationView(null);
             setRecommendations([]);
             setExceptionReport(null);
             setSystemicWeaknesses(null);
@@ -1325,6 +1391,13 @@ export default function App() {
 
       {activeTab === "runtime" ? (
         <>
+          <RuntimeIntegrityPanel
+            integrity={runtimeIntegrityStates}
+            workloads={runtimeWorkloads}
+            findings={runtimeIntegrityFindings}
+            enforcement={runtimeEnforcement}
+            loading={loading}
+          />
           <RuntimeDriftPanel
             findings={runtimeDriftFindings}
             status={runtimeDriftStatus}
