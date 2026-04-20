@@ -122,6 +122,7 @@ type forensicsTopologyContext struct {
 }
 
 type pointInTimeState struct {
+	SchemaVersion        string                        `json:"schema_version"`
 	Mode                 string                        `json:"mode"`
 	Timestamp            time.Time                     `json:"timestamp"`
 	TenantID             string                        `json:"tenant_id,omitempty"`
@@ -146,6 +147,7 @@ type timeDeltaSet struct {
 }
 
 type timeDeltaResult struct {
+	SchemaVersion      string              `json:"schema_version"`
 	Mode               string              `json:"mode"`
 	Comparison         forensicsComparison `json:"comparison"`
 	PolicyDelta        timeDeltaSet        `json:"policy_delta"`
@@ -160,6 +162,7 @@ type timeDeltaResult struct {
 }
 
 type vexFlashbackResponse struct {
+	SchemaVersion                string                           `json:"schema_version"`
 	Mode                         string                           `json:"mode"`
 	Timestamp                    time.Time                        `json:"timestamp"`
 	ImageDigest                  string                           `json:"image_digest,omitempty"`
@@ -184,10 +187,11 @@ type forensicTimelineMarker struct {
 }
 
 type forensicTimelineResponse struct {
-	Mode        string                   `json:"mode"`
-	Comparison  forensicsComparison      `json:"comparison"`
-	Markers     []forensicTimelineMarker `json:"markers"`
-	Limitations []string                 `json:"limitations,omitempty"`
+	SchemaVersion string                   `json:"schema_version"`
+	Mode          string                   `json:"mode"`
+	Comparison    forensicsComparison      `json:"comparison"`
+	Markers       []forensicTimelineMarker `json:"markers"`
+	Limitations   []string                 `json:"limitations,omitempty"`
 }
 
 type forensicReplayRequest struct {
@@ -201,6 +205,7 @@ type forensicReplayRequest struct {
 }
 
 type forensicReplayResponse struct {
+	SchemaVersion             string                `json:"schema_version"`
 	Mode                      string                `json:"mode"`
 	Counterfactual            bool                  `json:"counterfactual"`
 	ReplayMode                string                `json:"replay_mode"`
@@ -218,6 +223,7 @@ type forensicReplayResponse struct {
 }
 
 type readbackForensicResponse struct {
+	SchemaVersion      string           `json:"schema_version"`
 	ResourceType       string           `json:"resource_type"`
 	ResourceID         string           `json:"resource_id"`
 	ForensicContextURI string           `json:"forensic_context_uri"`
@@ -472,6 +478,7 @@ func (s server) buildPointInTimeState(ctx context.Context, filter forensicsFilte
 	}
 	incidents := filterForensicsIncidents(buildIncidentCases(events), filter)
 	state := pointInTimeState{
+		SchemaVersion:        forensicsStateSchemaVersion,
 		Mode:                 forensicsModeHistoricalReconstruction,
 		Timestamp:            filter.Timestamp,
 		TenantID:             filter.event.TenantID,
@@ -518,6 +525,7 @@ func (s server) buildForensicsDeltaResponse(ctx context.Context, filter forensic
 		return timeDeltaResult{}, err
 	}
 	return timeDeltaResult{
+		SchemaVersion:      forensicsDeltaSchemaVersion,
 		Mode:               forensicsModeTimeDelta,
 		Comparison:         comparison,
 		PolicyDelta:        forensicsDeltaSet(state1.PolicyContext.ActiveRules, state2.PolicyContext.ActiveRules, state1.PolicyContext.RuleVersions, state2.PolicyContext.RuleVersions),
@@ -574,9 +582,10 @@ func (s server) buildForensicsTimeline(ctx context.Context, filter forensicsFilt
 		markers = markers[:filter.Limit]
 	}
 	return forensicTimelineResponse{
-		Mode:       forensicsModeHistoricalReconstruction,
-		Comparison: comparison,
-		Markers:    markers,
+		SchemaVersion: forensicsTimelineSchemaVersion,
+		Mode:          forensicsModeHistoricalReconstruction,
+		Comparison:    comparison,
+		Markers:       markers,
 		Limitations: []string{
 			"Timeline markers are evidence-backed events over the selected historical window; they do not invent missing state transitions in the UI.",
 		},
@@ -609,6 +618,7 @@ func (s server) buildVEXFlashback(ctx context.Context, filter forensicsFilter) (
 	flashback := activeVEXAtTimestamp(statements, filter.Timestamp)
 	readbackRefs := s.forensicsReadbackRefs(ctx, filter)
 	return vexFlashbackResponse{
+		SchemaVersion:                forensicsVEXFlashbackSchemaVersion,
 		Mode:                         forensicsModeHistoricalReconstruction,
 		Timestamp:                    filter.Timestamp,
 		ImageDigest:                  filter.ImageDigest,
@@ -638,6 +648,7 @@ func (s server) buildForensicsReplay(ctx context.Context, filter forensicsFilter
 	historicalVerdict := determineHistoricalVerdict(historicalState)
 	replayVerdict, policyDelta, vulnDelta, identityDelta, explanations := determineReplayVerdict(historicalState, currentState, replayMode)
 	return forensicReplayResponse{
+		SchemaVersion:             forensicsReplaySchemaVersion,
 		Mode:                      forensicsModeCounterfactualReplay,
 		Counterfactual:            replayMode != forensicsReplayHistorical,
 		ReplayMode:                replayMode,
@@ -1380,6 +1391,7 @@ func (s server) readbackForensicContextHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	httpjson.Write(w, http.StatusOK, readbackForensicResponse{
+		SchemaVersion:      forensicsReadbackSchemaVersion,
 		ResourceType:       resourceType,
 		ResourceID:         resourceID,
 		ForensicContextURI: buildForensicsStateURI(resourceType, resourceID),

@@ -33,6 +33,9 @@ func TestForensicsStateDeltaTimelineReplayAndFlashback(t *testing.T) {
 	if state.Mode != forensicsModeHistoricalReconstruction || state.PolicyContext.PolicyBundleHash == "" {
 		t.Fatalf("expected historical reconstruction with policy context, got %#v", state)
 	}
+	if state.SchemaVersion != forensicsStateSchemaVersion {
+		t.Fatalf("expected schema-versioned forensic state, got %#v", state)
+	}
 	if len(state.VulnerabilityContext.UnknownLaterDisclosedRefs) == 0 {
 		t.Fatalf("expected later disclosures to stay separate from historical known-state, got %#v", state.VulnerabilityContext)
 	}
@@ -55,6 +58,9 @@ func TestForensicsStateDeltaTimelineReplayAndFlashback(t *testing.T) {
 	if delta.Mode != forensicsModeTimeDelta || len(delta.TopologyDelta) == 0 {
 		t.Fatalf("expected time delta with topology drift, got %#v", delta)
 	}
+	if delta.SchemaVersion != forensicsDeltaSchemaVersion {
+		t.Fatalf("expected schema-versioned forensic delta, got %#v", delta)
+	}
 	if len(delta.PolicyDelta.Modified) == 0 && len(delta.PolicyDelta.Added) == 0 {
 		t.Fatalf("expected policy delta in forensic compare, got %#v", delta.PolicyDelta)
 	}
@@ -73,6 +79,9 @@ func TestForensicsStateDeltaTimelineReplayAndFlashback(t *testing.T) {
 	}
 	if len(timeline.Markers) == 0 {
 		t.Fatalf("expected evidence-backed timeline markers, got %#v", timeline)
+	}
+	if timeline.SchemaVersion != forensicsTimelineSchemaVersion {
+		t.Fatalf("expected schema-versioned forensic timeline, got %#v", timeline)
 	}
 
 	replayReq := httptest.NewRequest(
@@ -94,6 +103,9 @@ func TestForensicsStateDeltaTimelineReplayAndFlashback(t *testing.T) {
 	}
 	if replay.Mode != forensicsModeCounterfactualReplay || !replay.Counterfactual {
 		t.Fatalf("expected counterfactual replay response, got %#v", replay)
+	}
+	if replay.SchemaVersion != forensicsReplaySchemaVersion {
+		t.Fatalf("expected schema-versioned forensic replay, got %#v", replay)
 	}
 	if replay.VerdictDelta == "no_change" {
 		t.Fatalf("expected replay verdict delta from historical state, got %#v", replay)
@@ -117,8 +129,55 @@ func TestForensicsStateDeltaTimelineReplayAndFlashback(t *testing.T) {
 	if len(flashback.HistoricalVulnerabilityState) == 0 || len(flashback.VEXFlashback) == 0 {
 		t.Fatalf("expected historical vuln state and active vex flashback, got %#v", flashback)
 	}
+	if flashback.SchemaVersion != forensicsVEXFlashbackSchemaVersion {
+		t.Fatalf("expected schema-versioned vex flashback, got %#v", flashback)
+	}
 	if len(flashback.DisclosedAfterTRefs) == 0 {
 		t.Fatalf("expected disclosed-after-T refs in vex flashback, got %#v", flashback)
+	}
+}
+
+func TestForensicsStateAndDeltaAreDeterministicForSameInput(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	buildState := func() pointInTimeState {
+		req := httptest.NewRequest(http.MethodGet, "/v1/forensics/state?tenant_id=acme&environment=prod&service=edge-gateway&timestamp="+fixture.historicalTimestamp.Format(time.RFC3339), nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		fixture.handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected forensic state 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var state pointInTimeState
+		if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
+			t.Fatalf("decode forensic state: %v", err)
+		}
+		return state
+	}
+	firstState := buildState()
+	secondState := buildState()
+	if string(canonicalJSONMust(firstState)) != string(canonicalJSONMust(secondState)) {
+		t.Fatalf("expected point-in-time forensic state to stay deterministic for the same input")
+	}
+
+	buildDelta := func() timeDeltaResult {
+		req := httptest.NewRequest(http.MethodGet, "/v1/forensics/delta?tenant_id=acme&environment=prod&service=edge-gateway&t1="+fixture.historicalTimestamp.Format(time.RFC3339)+"&t2="+fixture.currentTimestamp.Format(time.RFC3339), nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		fixture.handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected forensic delta 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var delta timeDeltaResult
+		if err := json.NewDecoder(rec.Body).Decode(&delta); err != nil {
+			t.Fatalf("decode forensic delta: %v", err)
+		}
+		return delta
+	}
+	firstDelta := buildDelta()
+	secondDelta := buildDelta()
+	if string(canonicalJSONMust(firstDelta)) != string(canonicalJSONMust(secondDelta)) {
+		t.Fatalf("expected forensic delta to stay deterministic for the same input")
 	}
 }
 
@@ -182,6 +241,32 @@ func TestReadbackForensicContextAndForensicRecommendations(t *testing.T) {
 	}
 }
 
+func TestForensicsStateReturnsLimitationsForEmptyScope(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/forensics/state?tenant_id=acme&environment=prod&service=missing-service&timestamp="+fixture.historicalTimestamp.Format(time.RFC3339), nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected forensic state 200 for empty scope, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var state pointInTimeState
+	if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
+		t.Fatalf("decode empty-scope forensic state: %v", err)
+	}
+	if state.SchemaVersion != forensicsStateSchemaVersion {
+		t.Fatalf("expected schema-versioned empty forensic state, got %#v", state)
+	}
+	if len(state.EvidenceRefs) != 0 {
+		t.Fatalf("expected no evidence refs for empty scope, got %#v", state.EvidenceRefs)
+	}
+	if len(state.Limitations) == 0 {
+		t.Fatalf("expected bounded reconstruction limitations for empty scope, got %#v", state)
+	}
+}
+
 type forensicsFixtureData struct {
 	handler             http.Handler
 	store               audit.Store
@@ -190,7 +275,7 @@ type forensicsFixtureData struct {
 	flashbackTimestamp  time.Time
 }
 
-func forensicsTestFixture(t *testing.T) forensicsFixtureData {
+func forensicsTestFixture(t testing.TB) forensicsFixtureData {
 	t.Helper()
 	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
 	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())

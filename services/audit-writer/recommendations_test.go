@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
@@ -33,6 +34,9 @@ func TestRecommendationsListSupportsIncidentAndPackageScopes(t *testing.T) {
 	}
 	if len(incidentResponse.Recommendations) == 0 {
 		t.Fatal("expected at least one incident recommendation")
+	}
+	if incidentResponse.SchemaVersion != recommendationListSchemaVersion || incidentResponse.Recommendations[0].SchemaVersion != recommendationSchemaVersion {
+		t.Fatalf("expected schema-versioned incident recommendations, got %#v", incidentResponse)
 	}
 	if len(incidentResponse.Recommendations) > 3 {
 		t.Fatalf("expected limit=3 to be respected, got %d items", len(incidentResponse.Recommendations))
@@ -69,6 +73,19 @@ func TestRecommendationsListSupportsIncidentAndPackageScopes(t *testing.T) {
 	}
 	if pkg.ActionTemplate.TemplateID != "create_ticket" {
 		t.Fatalf("expected package workflow template, got %#v", pkg.ActionTemplate)
+	}
+
+	repeatRec := httptest.NewRecorder()
+	handler.ServeHTTP(repeatRec, incidentReq)
+	if repeatRec.Code != http.StatusOK {
+		t.Fatalf("expected repeated incident recommendations 200, got %d: %s", repeatRec.Code, repeatRec.Body.String())
+	}
+	var repeat recommendationListResponse
+	if err := json.NewDecoder(repeatRec.Body).Decode(&repeat); err != nil {
+		t.Fatalf("decode repeated incident recommendations: %v", err)
+	}
+	if string(canonicalJSONMust(incidentResponse)) != string(canonicalJSONMust(repeat)) {
+		t.Fatalf("expected incident recommendation list to stay deterministic for the same input")
 	}
 }
 
@@ -207,11 +224,72 @@ func TestTopologySignalRecommendationsAreGeneratedFromBackendTopologySignals(t *
 	if item.SourceType != "topology_signal" || item.SubjectType != "service" {
 		t.Fatalf("expected topology-backed recommendation object, got %#v", item)
 	}
+	if response.SchemaVersion != recommendationListSchemaVersion || item.SchemaVersion != recommendationSchemaVersion {
+		t.Fatalf("expected schema-versioned topology recommendations, got %#v", response)
+	}
 	if item.ApprovalMode == "" || len(item.VerificationPlan) == 0 || len(item.EvidenceRefs) == 0 {
 		t.Fatalf("expected topology recommendation with approval, evidence, and verification, got %#v", item)
 	}
 	if !strings.Contains(strings.ToLower(item.Rationale), "blast radius") {
 		t.Fatalf("expected topology rationale to mention blast radius, got %#v", item)
+	}
+}
+
+func TestFederationAndValidationRecommendationsStayDeterministic(t *testing.T) {
+	t.Setenv("CHANGELOCK_HANDOFF_SIGNING_SEED", "handoff-seed")
+	t.Setenv("CHANGELOCK_FEDERATION_SIGNING_SEED", "federation-seed")
+	t.Setenv("CHANGELOCK_AUTH_MODE", auth.ModeStaticToken)
+	t.Setenv("CHANGELOCK_AUTH_TOKENS_JSON", testAuthTokensJSON())
+
+	fixture := forensicsTestFixture(t)
+	registerFederationPeerForTest(t, fixture.handler, federationPeerRequest{
+		PeerID:            "peer-stale",
+		Organization:      "Supplier",
+		Region:            "us-east",
+		Cluster:           "cluster-stale",
+		TrustDomain:       "supplier.example",
+		Endpoint:          "https://supplier.example.invalid",
+		PublicKeys:        []string{"pub-stale-1"},
+		Capabilities:      []string{"sealed_handoff"},
+		PolicyRole:        federationPolicyRoleSupplier,
+		AcceptedAudiences: []string{incidentAudienceAuditorSafe},
+		LastSeen:          timePointer(time.Date(2026, time.April, 20, 9, 0, 0, 0, time.UTC)),
+	})
+
+	runReq := httptest.NewRequest(http.MethodPost, "/v1/validation/harness/runs?tenant_id=acme&environment=prod", bytes.NewBufferString(`{"mode":"policy_dry_run"}`))
+	runReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	runReq.Header.Set("Content-Type", "application/json")
+	runRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(runRec, runReq)
+	if runRec.Code != http.StatusOK {
+		t.Fatalf("expected validation run 200, got %d: %s", runRec.Code, runRec.Body.String())
+	}
+
+	checkDeterministicList := func(path string) recommendationListResponse {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		fixture.handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for %s, got %d: %s", path, rec.Code, rec.Body.String())
+		}
+		var response recommendationListResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return response
+	}
+
+	federationFirst := checkDeterministicList("/v1/recommendations?tenant_id=acme&environment=prod&source_type=federation_signal")
+	federationSecond := checkDeterministicList("/v1/recommendations?tenant_id=acme&environment=prod&source_type=federation_signal")
+	if string(canonicalJSONMust(federationFirst)) != string(canonicalJSONMust(federationSecond)) {
+		t.Fatalf("expected federation recommendations to stay deterministic for the same input")
+	}
+
+	validationFirst := checkDeterministicList("/v1/recommendations?tenant_id=acme&environment=prod&source_type=validation_signal")
+	validationSecond := checkDeterministicList("/v1/recommendations?tenant_id=acme&environment=prod&source_type=validation_signal")
+	if string(canonicalJSONMust(validationFirst)) != string(canonicalJSONMust(validationSecond)) {
+		t.Fatalf("expected validation recommendations to stay deterministic for the same input")
 	}
 }
 

@@ -111,6 +111,7 @@ type runtimePrivilegeProfile struct {
 }
 
 type runtimeIntegrityProfile struct {
+	SchemaVersion          string                  `json:"schema_version"`
 	ProfileID              string                  `json:"profile_id"`
 	SubjectRef             string                  `json:"subject_ref"`
 	AllowedBinaries        []string                `json:"allowed_binaries"`
@@ -136,6 +137,7 @@ type runtimeSBOMVerificationResult struct {
 }
 
 type runtimeIntegrityFinding struct {
+	SchemaVersion      string                `json:"schema_version"`
 	FindingID          string                `json:"finding_id"`
 	FindingType        string                `json:"finding_type"`
 	Severity           string                `json:"severity"`
@@ -171,6 +173,7 @@ type runtimeEnforcementTopologyContext struct {
 }
 
 type runtimeEnforcementDecision struct {
+	SchemaVersion      string                             `json:"schema_version"`
 	DecisionID         string                             `json:"decision_id"`
 	SubjectRef         string                             `json:"subject_ref"`
 	TriggerFinding     string                             `json:"trigger_finding,omitempty"`
@@ -187,6 +190,7 @@ type runtimeEnforcementDecision struct {
 }
 
 type runtimeIntegrityState struct {
+	SchemaVersion             string                        `json:"schema_version"`
 	SubjectRef                string                        `json:"subject_ref"`
 	IdentityStatus            string                        `json:"identity_status"`
 	RuntimeIntegrityScore     int                           `json:"runtime_integrity_score"`
@@ -202,6 +206,7 @@ type runtimeIntegrityState struct {
 }
 
 type runtimeWorkloadView struct {
+	SchemaVersion   string                      `json:"schema_version"`
 	SubjectRef      string                      `json:"subject_ref"`
 	Cluster         string                      `json:"cluster,omitempty"`
 	Environment     string                      `json:"environment,omitempty"`
@@ -218,26 +223,31 @@ type runtimeWorkloadView struct {
 }
 
 type runtimeIntegrityListResponse struct {
-	Items       []runtimeIntegrityState `json:"items"`
-	Limitations []string                `json:"limitations,omitempty"`
+	SchemaVersion string                  `json:"schema_version"`
+	Items         []runtimeIntegrityState `json:"items"`
+	Limitations   []string                `json:"limitations,omitempty"`
 }
 
 type runtimeWorkloadListResponse struct {
-	Items       []runtimeWorkloadView `json:"items"`
-	Limitations []string              `json:"limitations,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Items         []runtimeWorkloadView `json:"items"`
+	Limitations   []string              `json:"limitations,omitempty"`
 }
 
 type runtimeFindingsResponse struct {
-	Items       []runtimeIntegrityFinding `json:"items"`
-	Limitations []string                  `json:"limitations,omitempty"`
+	SchemaVersion string                    `json:"schema_version"`
+	Items         []runtimeIntegrityFinding `json:"items"`
+	Limitations   []string                  `json:"limitations,omitempty"`
 }
 
 type runtimeEnforcementListResponse struct {
-	Items       []runtimeEnforcementDecision `json:"items"`
-	Limitations []string                     `json:"limitations,omitempty"`
+	SchemaVersion string                       `json:"schema_version"`
+	Items         []runtimeEnforcementDecision `json:"items"`
+	Limitations   []string                     `json:"limitations,omitempty"`
 }
 
 type readbackRuntimeResponse struct {
+	SchemaVersion     string                    `json:"schema_version"`
 	ResourceType      string                    `json:"resource_type"`
 	ResourceID        string                    `json:"resource_id"`
 	RuntimeContextURI string                    `json:"runtime_context_uri"`
@@ -342,7 +352,11 @@ func (s server) runtimeIntegrityHandler(w http.ResponseWriter, r *http.Request) 
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, runtimeIntegrityListResponse{Items: items, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, runtimeIntegrityListResponse{
+		SchemaVersion: runtimeIntegrityListSchemaVersion,
+		Items:         items,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) runtimeWorkloadsHandler(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +387,11 @@ func (s server) runtimeWorkloadsHandler(w http.ResponseWriter, r *http.Request) 
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, runtimeWorkloadListResponse{Items: items, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, runtimeWorkloadListResponse{
+		SchemaVersion: runtimeWorkloadListSchemaVersion,
+		Items:         items,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) runtimeFindingsHandler(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +422,11 @@ func (s server) runtimeFindingsHandler(w http.ResponseWriter, r *http.Request) {
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, runtimeFindingsResponse{Items: items, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, runtimeFindingsResponse{
+		SchemaVersion: runtimeFindingsSchemaVersion,
+		Items:         items,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) runtimeFindingByIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -514,7 +536,11 @@ func (s server) runtimeEnforcementHandler(w http.ResponseWriter, r *http.Request
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, runtimeEnforcementListResponse{Items: items, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, runtimeEnforcementListResponse{
+		SchemaVersion: runtimeEnforcementListSchemaVersion,
+		Items:         items,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) runtimeEnforcementEvaluateHandler(w http.ResponseWriter, r *http.Request) {
@@ -649,7 +675,9 @@ func (s server) buildRuntimeIntegrityStates(ctx context.Context, filter runtimeI
 	}
 	items := make([]runtimeIntegrityState, 0, len(workloads))
 	for _, item := range workloads {
-		items = append(items, item.State)
+		state := item.State
+		state.SchemaVersion = runtimeStateSchemaVersion
+		items = append(items, state)
 	}
 	return items, limitations, nil
 }
@@ -705,6 +733,9 @@ func (s server) buildRuntimeFindings(ctx context.Context, filter runtimeIntegrit
 	if len(findings) > filter.Limit {
 		findings = findings[:filter.Limit]
 	}
+	for i := range findings {
+		findings[i].SchemaVersion = runtimeFindingSchemaVersion
+	}
 	limitations := []string{
 		"Runtime findings are backend-derived from canonical runtime-agent events, artifact trust state, SBOM references, topology context, and explicit runtime observations; they do not create a separate runtime truth layer.",
 		"Memory-related findings reflect unexpected executable mappings or loaded-state anomalies that are evidenced in runtime signals; they are not presented as absolute full-RAM malware detection.",
@@ -721,7 +752,12 @@ func (s server) buildRuntimeProfile(ctx context.Context, filter runtimeIntegrity
 	if subject == nil {
 		return runtimeIntegrityProfile{}, errIncidentNotFound
 	}
-	return s.profileFromSubject(ctx, filter, subject)
+	profile, err := s.profileFromSubject(ctx, filter, subject)
+	if err != nil {
+		return runtimeIntegrityProfile{}, err
+	}
+	profile.SchemaVersion = runtimeProfileSchemaVersion
+	return profile, nil
 }
 
 func (s server) buildRuntimeEnforcementHistory(ctx context.Context, filter runtimeIntegrityFilter) ([]runtimeEnforcementDecision, []string, error) {
@@ -736,6 +772,9 @@ func (s server) buildRuntimeEnforcementHistory(ctx context.Context, filter runti
 	sort.Slice(items, func(i, j int) bool { return items[i].EvaluatedAt.After(items[j].EvaluatedAt) })
 	if len(items) > filter.Limit {
 		items = items[:filter.Limit]
+	}
+	for i := range items {
+		items[i].SchemaVersion = runtimeEnforcementSchemaVersion
 	}
 	return items, []string{
 		"Runtime enforcement history records policy-driven evaluation and action results over canonical runtime signals; it does not imply that every suggested action executed automatically.",
@@ -797,6 +836,7 @@ func (s server) evaluateRuntimeEnforcement(ctx context.Context, filter runtimeIn
 		}
 	}
 	return runtimeEnforcementDecision{
+		SchemaVersion:      runtimeEnforcementSchemaVersion,
 		DecisionID:         recommendationID("runtime-enforcement", finding.SubjectRef, action),
 		SubjectRef:         finding.SubjectRef,
 		TriggerFinding:     finding.FindingID,
@@ -1115,6 +1155,8 @@ func (s server) snapshotToRuntimeWorkloads(ctx context.Context, snapshot runtime
 		sbom := s.subjectSBOMVerification(subject)
 		sandbox := s.buildRuntimeSandboxDecision(subject, findings, sbom)
 		state := s.buildRuntimeIntegrityState(subject, findings, sandbox, sbom)
+		state.SchemaVersion = runtimeStateSchemaVersion
+		profile.SchemaVersion = runtimeProfileSchemaVersion
 		var lastObservation *runtimeObservation
 		if len(subject.Observations) > 0 {
 			copyObservation := subject.Observations[0]
@@ -1123,9 +1165,11 @@ func (s server) snapshotToRuntimeWorkloads(ctx context.Context, snapshot runtime
 		var lastEnforcement *runtimeEnforcementDecision
 		if len(subject.Enforcements) > 0 {
 			copyDecision := subject.Enforcements[0]
+			copyDecision.SchemaVersion = runtimeEnforcementSchemaVersion
 			lastEnforcement = &copyDecision
 		}
 		items = append(items, runtimeWorkloadView{
+			SchemaVersion:   runtimeWorkloadSchemaVersion,
 			SubjectRef:      subject.SubjectRef,
 			Cluster:         subject.Cluster,
 			Environment:     subject.Environment,
@@ -2087,6 +2131,7 @@ func (s server) readbackRuntimeContextHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httpjson.Write(w, http.StatusOK, readbackRuntimeResponse{
+		SchemaVersion:     runtimeReadbackSchemaVersion,
 		ResourceType:      resourceType,
 		ResourceID:        resourceID,
 		RuntimeContextURI: buildReadbackRuntimeURI(resourceType, resourceID),

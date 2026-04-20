@@ -56,6 +56,9 @@ func TestFederationProofExchangeDecisionAndPolicyState(t *testing.T) {
 	if exchange.Response.ManifestHash != sealed.Bundle.ManifestHash || len(exchange.Response.ReadbackRefs) == 0 {
 		t.Fatalf("expected readback lineage and manifest hash in proof response, got %#v", exchange)
 	}
+	if exchange.SchemaVersion != federationProofExchangeSchemaVersion || exchange.Response.SchemaVersion != federationProofResponseSchemaVersion {
+		t.Fatalf("expected schema-versioned federation proof exchange, got %#v", exchange)
+	}
 
 	verifyReq := httptest.NewRequest(http.MethodPost, "/v1/federation/proof-verify", bytes.NewBufferString(`{"peer_id":"`+peer.PeerID+`","bundle_base64":"`+bundleBase64+`","requested_scope":{"tenant_id":"acme","environment":"prod","audience":"auditor_safe"}}`))
 	verifyReq.Header.Set("Authorization", "Bearer operator-demo-token")
@@ -72,6 +75,9 @@ func TestFederationProofExchangeDecisionAndPolicyState(t *testing.T) {
 	}
 	if accepted.Decision.Decision != federationDecisionAccepted {
 		t.Fatalf("expected accepted federated trust decision, got %#v", accepted.Decision)
+	}
+	if accepted.SchemaVersion != federationProofVerifySchemaVersion || accepted.Decision.SchemaVersion != federationTrustDecisionSchemaVersion {
+		t.Fatalf("expected schema-versioned federation verify response, got %#v", accepted)
 	}
 
 	syncReq := httptest.NewRequest(http.MethodPost, "/v1/federation/policy-sync", bytes.NewBufferString(`{"leader_peer":"`+peer.PeerID+`","global_policy_root":"sha256:global-root","local_policy_root":"sha256:regional-root","local_overrides":["regional_compliance_hold"],"inherited_rules":["base:trusted-remote-proof"],"remote_policy_version":"2026.04"}`))
@@ -180,6 +186,22 @@ func TestFederationProofExchangeDecisionAndPolicyState(t *testing.T) {
 	if len(history.Items) < 3 {
 		t.Fatalf("expected recorded federation history items, got %#v", history)
 	}
+	if history.SchemaVersion != federationProofHistorySchemaVersion {
+		t.Fatalf("expected schema-versioned federation history, got %#v", history)
+	}
+
+	historyRecRepeat := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(historyRecRepeat, historyReq)
+	if historyRecRepeat.Code != http.StatusOK {
+		t.Fatalf("expected repeated federation proof history 200, got %d: %s", historyRecRepeat.Code, historyRecRepeat.Body.String())
+	}
+	var historyRepeat federationProofHistoryResponse
+	if err := json.NewDecoder(historyRecRepeat.Body).Decode(&historyRepeat); err != nil {
+		t.Fatalf("decode repeated federation history: %v", err)
+	}
+	if string(canonicalJSONMust(history)) != string(canonicalJSONMust(historyRepeat)) {
+		t.Fatalf("expected federation proof history to stay deterministic for the same input")
+	}
 
 	anchorsReq := httptest.NewRequest(http.MethodGet, "/v1/federation/anchors", nil)
 	anchorsReq.Header.Set("Authorization", "Bearer viewer-demo-token")
@@ -195,6 +217,22 @@ func TestFederationProofExchangeDecisionAndPolicyState(t *testing.T) {
 	if len(anchors.Items) == 0 || anchors.Items[0].AuditRootHash == "" {
 		t.Fatalf("expected local federation anchors, got %#v", anchors)
 	}
+	if anchors.SchemaVersion != federationAnchorsSchemaVersion {
+		t.Fatalf("expected schema-versioned federation anchors, got %#v", anchors)
+	}
+
+	anchorsRecRepeat := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(anchorsRecRepeat, anchorsReq)
+	if anchorsRecRepeat.Code != http.StatusOK {
+		t.Fatalf("expected repeated federation anchors 200, got %d: %s", anchorsRecRepeat.Code, anchorsRecRepeat.Body.String())
+	}
+	var anchorsRepeat federationAnchorsResponse
+	if err := json.NewDecoder(anchorsRecRepeat.Body).Decode(&anchorsRepeat); err != nil {
+		t.Fatalf("decode repeated federation anchors: %v", err)
+	}
+	if string(canonicalJSONMust(anchors)) != string(canonicalJSONMust(anchorsRepeat)) {
+		t.Fatalf("expected federation anchors to stay deterministic for the same input")
+	}
 
 	globalReq := httptest.NewRequest(http.MethodGet, "/v1/federation/global-view", nil)
 	globalReq.Header.Set("Authorization", "Bearer viewer-demo-token")
@@ -209,6 +247,9 @@ func TestFederationProofExchangeDecisionAndPolicyState(t *testing.T) {
 	}
 	if global.VerifiedArtifactsReused == 0 || len(global.StalePeers) == 0 {
 		t.Fatalf("expected reused artifacts and stale peer signal in global view, got %#v", global)
+	}
+	if global.SchemaVersion != federationGlobalViewSchemaVersion {
+		t.Fatalf("expected schema-versioned federation global view, got %#v", global)
 	}
 }
 
@@ -250,7 +291,7 @@ func TestFederationRecommendations(t *testing.T) {
 	}
 }
 
-func registerFederationPeerForTest(t *testing.T, handler http.Handler, request federationPeerRequest) federationPeer {
+func registerFederationPeerForTest(t testing.TB, handler http.Handler, request federationPeerRequest) federationPeer {
 	t.Helper()
 	body, err := json.Marshal(request)
 	if err != nil {
@@ -271,7 +312,7 @@ func registerFederationPeerForTest(t *testing.T, handler http.Handler, request f
 	return peer
 }
 
-func sealFederationHandoffForTest(t *testing.T, handler http.Handler, audience string) handoffSealResponse {
+func sealFederationHandoffForTest(t testing.TB, handler http.Handler, audience string) handoffSealResponse {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/v1/handoff/seal?tenant_id=acme&environment=prod", bytes.NewBufferString(`{"audience":"`+audience+`","include_forensics":true,"co_sign_mode":"system_only"}`))
 	req.Header.Set("Authorization", "Bearer operator-demo-token")
@@ -288,7 +329,7 @@ func sealFederationHandoffForTest(t *testing.T, handler http.Handler, audience s
 	return response
 }
 
-func downloadHandoffBundleForTest(t *testing.T, handler http.Handler, packageID string) []byte {
+func downloadHandoffBundleForTest(t testing.TB, handler http.Handler, packageID string) []byte {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/v1/handoff/"+packageID+"/download", nil)
 	req.Header.Set("Authorization", "Bearer viewer-demo-token")

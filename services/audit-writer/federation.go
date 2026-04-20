@@ -86,6 +86,7 @@ type federationPeerTrustState struct {
 }
 
 type federationPeer struct {
+	SchemaVersion     string                     `json:"schema_version"`
 	PeerID            string                     `json:"peer_id"`
 	Organization      string                     `json:"organization"`
 	Region            string                     `json:"region,omitempty"`
@@ -123,7 +124,8 @@ type federationPeerRequest struct {
 }
 
 type federationPeersResponse struct {
-	Peers []federationPeer `json:"peers"`
+	SchemaVersion string           `json:"schema_version"`
+	Peers         []federationPeer `json:"peers"`
 }
 
 type federatedProofRequest struct {
@@ -152,6 +154,7 @@ type federationProofFreshness struct {
 }
 
 type federatedProofResponse struct {
+	SchemaVersion     string                      `json:"schema_version"`
 	RequestID         string                      `json:"request_id"`
 	RespondingPeer    string                      `json:"responding_peer"`
 	ProofType         string                      `json:"proof_type"`
@@ -170,6 +173,7 @@ type federatedProofResponse struct {
 }
 
 type federatedTrustDecision struct {
+	SchemaVersion       string    `json:"schema_version"`
 	Decision            string    `json:"decision"`
 	DecisionID          string    `json:"decision_id"`
 	SubjectRef          string    `json:"subject_ref"`
@@ -191,14 +195,16 @@ type federationProofVerifyRequest struct {
 }
 
 type federationProofExchangeResult struct {
-	Request  federatedProofRequest  `json:"request"`
-	Response federatedProofResponse `json:"response"`
+	SchemaVersion string                 `json:"schema_version"`
+	Request       federatedProofRequest  `json:"request"`
+	Response      federatedProofResponse `json:"response"`
 }
 
 type federationProofVerifyResult struct {
-	Response     federatedProofResponse `json:"response"`
-	Verification verificationResult     `json:"verification"`
-	Decision     federatedTrustDecision `json:"decision"`
+	SchemaVersion string                 `json:"schema_version"`
+	Response      federatedProofResponse `json:"response"`
+	Verification  verificationResult     `json:"verification"`
+	Decision      federatedTrustDecision `json:"decision"`
 }
 
 type federationProofHistoryItem struct {
@@ -215,10 +221,12 @@ type federationProofHistoryItem struct {
 }
 
 type federationProofHistoryResponse struct {
-	Items []federationProofHistoryItem `json:"items"`
+	SchemaVersion string                       `json:"schema_version"`
+	Items         []federationProofHistoryItem `json:"items"`
 }
 
 type policyFederationState struct {
+	SchemaVersion       string     `json:"schema_version"`
 	LeaderPeer          string     `json:"leader_peer,omitempty"`
 	GlobalPolicyRoot    string     `json:"global_policy_root,omitempty"`
 	LocalPolicyRoot     string     `json:"local_policy_root,omitempty"`
@@ -250,10 +258,12 @@ type federationAnchorRecord struct {
 }
 
 type federationAnchorsResponse struct {
-	Items []federationAnchorRecord `json:"items"`
+	SchemaVersion string                   `json:"schema_version"`
+	Items         []federationAnchorRecord `json:"items"`
 }
 
 type federationGlobalView struct {
+	SchemaVersion           string                       `json:"schema_version"`
 	Peers                   []federationPeer             `json:"peers"`
 	ProofHistory            []federationProofHistoryItem `json:"proof_history"`
 	PolicyState             policyFederationState        `json:"policy_state"`
@@ -292,7 +302,10 @@ func (s server) federationPeersHandler(w http.ResponseWriter, r *http.Request) {
 			httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		httpjson.Write(w, http.StatusOK, federationPeersResponse{Peers: peers})
+		httpjson.Write(w, http.StatusOK, federationPeersResponse{
+			SchemaVersion: federationPeersSchemaVersion,
+			Peers:         peers,
+		})
 	case http.MethodPost:
 		principal, authorizedRequest, ok := s.authorize(w, r, auth.RoleOperator, auth.RoleSecurityAdmin)
 		if !ok {
@@ -401,7 +414,10 @@ func (s server) federationProofHistoryHandler(w http.ResponseWriter, r *http.Req
 		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	httpjson.Write(w, http.StatusOK, federationProofHistoryResponse{Items: items})
+	httpjson.Write(w, http.StatusOK, federationProofHistoryResponse{
+		SchemaVersion: federationProofHistorySchemaVersion,
+		Items:         items,
+	})
 }
 
 func (s server) federationPolicyStateHandler(w http.ResponseWriter, r *http.Request) {
@@ -453,7 +469,10 @@ func (s server) federationAnchorsHandler(w http.ResponseWriter, r *http.Request)
 		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	httpjson.Write(w, http.StatusOK, federationAnchorsResponse{Items: items})
+	httpjson.Write(w, http.StatusOK, federationAnchorsResponse{
+		SchemaVersion: federationAnchorsSchemaVersion,
+		Items:         items,
+	})
 }
 
 func (s server) federationGlobalViewHandler(w http.ResponseWriter, r *http.Request) {
@@ -486,6 +505,7 @@ func (s server) registerFederationPeer(ctx context.Context, principal auth.Princ
 		lastSeen = request.LastSeen.UTC()
 	}
 	peer := federationPeer{
+		SchemaVersion:     federationPeerSchemaVersion,
 		PeerID:            strings.TrimSpace(request.PeerID),
 		Organization:      strings.TrimSpace(request.Organization),
 		Region:            strings.TrimSpace(request.Region),
@@ -564,6 +584,7 @@ func (s server) listFederationPeers(ctx context.Context) ([]federationPeer, erro
 			continue
 		}
 		peer := payload.Peer
+		peer.SchemaVersion = federationPeerSchemaVersion
 		peer.Status = federationPeerDerivedStatus(peer)
 		latest[peer.PeerID] = peer
 	}
@@ -612,7 +633,11 @@ func (s server) createFederatedProofExchange(ctx context.Context, principal auth
 	if err != nil {
 		return federationProofExchangeResult{}, err
 	}
-	return federationProofExchangeResult{Request: req, Response: response}, nil
+	return federationProofExchangeResult{
+		SchemaVersion: federationProofExchangeSchemaVersion,
+		Request:       req,
+		Response:      response,
+	}, nil
 }
 
 func (s server) verifyFederatedProof(ctx context.Context, principal auth.Principal, request federationProofVerifyRequest) (federationProofVerifyResult, error) {
@@ -657,9 +682,10 @@ func (s server) verifyFederatedProof(ctx context.Context, principal auth.Princip
 		return federationProofVerifyResult{}, err
 	}
 	return federationProofVerifyResult{
-		Response:     response,
-		Verification: verification,
-		Decision:     decision,
+		SchemaVersion: federationProofVerifySchemaVersion,
+		Response:      response,
+		Verification:  verification,
+		Decision:      decision,
 	}, nil
 }
 
@@ -705,19 +731,12 @@ func (s server) listFederationProofHistory(ctx context.Context) ([]federationPro
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
-		left := time.Time{}
-		right := time.Time{}
-		if items[i].VerifiedAt != nil {
-			left = items[i].VerifiedAt.UTC()
-		} else {
-			left = time.Now().UTC()
-		}
-		if items[j].VerifiedAt != nil {
-			right = items[j].VerifiedAt.UTC()
-		} else {
-			right = time.Now().UTC()
-		}
+		left := federationHistorySortTime(items[i])
+		right := federationHistorySortTime(items[j])
 		if left.Equal(right) {
+			if items[i].PeerID == items[j].PeerID {
+				return items[i].RequestID < items[j].RequestID
+			}
 			return items[i].PeerID < items[j].PeerID
 		}
 		return left.After(right)
@@ -730,7 +749,9 @@ func (s server) currentFederationPolicyState(ctx context.Context) (policyFederat
 	if err != nil {
 		return policyFederationState{}, err
 	}
-	for _, event := range events {
+	var latest policyFederationState
+	found := false
+	for _, event := range orderEventsAscending(events) {
 		if len(event.Federation) == 0 {
 			continue
 		}
@@ -739,10 +760,15 @@ func (s server) currentFederationPolicyState(ctx context.Context) (policyFederat
 			continue
 		}
 		payload.State.SyncStatus = deriveFederationSyncStatus(payload.State)
-		return payload.State, nil
+		latest = payload.State
+		found = true
+	}
+	if found {
+		return latest, nil
 	}
 	return policyFederationState{
-		SyncStatus: federationSyncStatusLocalOnly,
+		SchemaVersion: federationPolicyStateSchemaVersion,
+		SyncStatus:    federationSyncStatusLocalOnly,
 		DivergenceReasons: []string{
 			"No federation leader is configured yet; local policy remains authoritative in the current scope.",
 		},
@@ -754,6 +780,7 @@ func (s server) syncFederationPolicy(ctx context.Context, principal auth.Princip
 		return policyFederationState{}, audit.ErrInvalidEvent
 	}
 	state := policyFederationState{
+		SchemaVersion:       federationPolicyStateSchemaVersion,
 		LeaderPeer:          strings.TrimSpace(request.LeaderPeer),
 		GlobalPolicyRoot:    strings.TrimSpace(request.GlobalPolicyRoot),
 		LocalPolicyRoot:     firstNonEmpty(strings.TrimSpace(request.LocalPolicyRoot), strings.TrimSpace(request.GlobalPolicyRoot)),
@@ -859,6 +886,7 @@ func (s server) buildFederationGlobalView(ctx context.Context) (federationGlobal
 		trustHealth = "degraded"
 	}
 	return federationGlobalView{
+		SchemaVersion:           federationGlobalViewSchemaVersion,
 		Peers:                   peers,
 		ProofHistory:            history,
 		PolicyState:             state,
@@ -893,6 +921,7 @@ func buildFederatedProofResponse(peer federationPeer, record handoffStoredRecord
 	}
 	validUntil := issuedAt.Add(time.Duration(freshnessMinutes) * time.Minute)
 	return federatedProofResponse{
+		SchemaVersion:     federationProofResponseSchemaVersion,
 		RequestID:         requestID,
 		RespondingPeer:    federationLocalPeerID,
 		ProofType:         federationProofTypeHandoff,
@@ -961,6 +990,7 @@ func (s server) makeFederatedTrustDecision(peer federationPeer, record handoffSt
 		reasons = append(reasons, "remote proof validated against local trust anchors, scope, freshness, and disclosure policy")
 	}
 	return federatedTrustDecision{
+		SchemaVersion:       federationTrustDecisionSchemaVersion,
 		DecisionID:          recommendationID("federation-decision", peer.PeerID, record.ManifestHash),
 		SubjectRef:          firstNonEmpty(requestedScope.Repo, record.PackageID),
 		PeerID:              peer.PeerID,
@@ -987,7 +1017,14 @@ func buildLocalFederationAnchor(events []audit.StoredEvent) federationAnchorReco
 		RequestID    string    `json:"request_id"`
 	}
 	items := make([]canonicalAnchorItem, 0, len(events))
+	publishedAt := time.Time{}
 	for _, event := range orderEventsAscending(events) {
+		if ts := eventTimestamp(event).UTC(); ts.After(publishedAt) {
+			publishedAt = ts
+		}
+		if received := event.ReceivedAt.UTC(); received.After(publishedAt) {
+			publishedAt = received
+		}
 		items = append(items, canonicalAnchorItem{
 			Timestamp:    eventTimestamp(event).UTC(),
 			ReceivedAt:   event.ReceivedAt.UTC(),
@@ -999,10 +1036,13 @@ func buildLocalFederationAnchor(events []audit.StoredEvent) federationAnchorReco
 	}
 	payload, _ := canonicalJSON(items)
 	sum := sha256.Sum256(payload)
+	if publishedAt.IsZero() {
+		publishedAt = time.Unix(0, 0).UTC()
+	}
 	return federationAnchorRecord{
 		PeerID:             federationLocalPeerID,
 		AuditRootHash:      "sha256:" + hex.EncodeToString(sum[:]),
-		PublishedAt:        time.Now().UTC(),
+		PublishedAt:        publishedAt,
 		VerificationStatus: "valid",
 		ProofRef:           "/v1/federation/anchors",
 		Limitations: []string{
@@ -1206,6 +1246,21 @@ func timePointerFreshness(value federationProofFreshness) *federationProofFreshn
 	return &copy
 }
 
+func federationHistorySortTime(item federationProofHistoryItem) time.Time {
+	if item.VerifiedAt != nil && !item.VerifiedAt.IsZero() {
+		return item.VerifiedAt.UTC()
+	}
+	if item.Freshness != nil {
+		if !item.Freshness.IssuedAt.IsZero() {
+			return item.Freshness.IssuedAt.UTC()
+		}
+		if !item.Freshness.ValidUntil.IsZero() {
+			return item.Freshness.ValidUntil.UTC()
+		}
+	}
+	return time.Unix(0, 0).UTC()
+}
+
 func (s server) buildFederationRecommendations(ctx context.Context, incidents []investigationIncident, filter recommendationFilter) ([]recommendation, error) {
 	view, err := s.buildFederationGlobalView(ctx)
 	if err != nil {
@@ -1214,6 +1269,7 @@ func (s server) buildFederationRecommendations(ctx context.Context, incidents []
 	recommendations := []recommendation{}
 	if len(view.StalePeers) > 0 {
 		peerID := view.StalePeers[0]
+		stalePeerSeenAt := federationPeerLastSeen(view.Peers, peerID)
 		template := recommendationTemplateCatalog[6]
 		recommendations = append(recommendations, recommendation{
 			RecommendationID:   recommendationID("federation", peerID, template.TemplateID),
@@ -1236,8 +1292,8 @@ func (s server) buildFederationRecommendations(ctx context.Context, incidents []
 			ConfidenceScore:    82,
 			ApprovalMode:       template.ApprovalMode,
 			Status:             recommendationStatusShown,
-			CreatedAt:          time.Now().UTC(),
-			ExpiresAt:          recommendationExpiry(timePointer(time.Now().UTC())),
+			CreatedAt:          recommendationCreatedAt(stalePeerSeenAt),
+			ExpiresAt:          recommendationExpiry(stalePeerSeenAt),
 			VerificationPlan: []string{
 				"Confirm the peer moves back to active status and no longer appears in the stale federation peer list.",
 				"Re-run a bounded proof verification and confirm local trust decision returns accepted or accepted_with_local_overrides.",
@@ -1252,6 +1308,7 @@ func (s server) buildFederationRecommendations(ctx context.Context, incidents []
 	}
 	if len(view.PolicyDivergence) > 0 {
 		template := recommendationTemplateCatalog[0]
+		policyTimestamp := view.PolicyState.LastSyncAt
 		recommendations = append(recommendations, recommendation{
 			RecommendationID:   recommendationID("federation-policy", view.PolicyState.LeaderPeer, template.TemplateID),
 			SourceType:         "federation_signal",
@@ -1273,8 +1330,8 @@ func (s server) buildFederationRecommendations(ctx context.Context, incidents []
 			ConfidenceScore:    84,
 			ApprovalMode:       template.ApprovalMode,
 			Status:             recommendationStatusShown,
-			CreatedAt:          time.Now().UTC(),
-			ExpiresAt:          recommendationExpiry(timePointer(time.Now().UTC())),
+			CreatedAt:          recommendationCreatedAt(policyTimestamp),
+			ExpiresAt:          recommendationExpiry(policyTimestamp),
 			VerificationPlan: []string{
 				"Confirm the federation policy state returns to synced or synced_with_local_overrides without unresolved divergence reasons.",
 				"Verify that remote proof acceptance decisions no longer fail because of policy conflict in the same scope.",
@@ -1329,6 +1386,17 @@ func (s server) buildFederationRecommendations(ctx context.Context, incidents []
 		break
 	}
 	return recommendations, nil
+}
+
+func federationPeerLastSeen(peers []federationPeer, peerID string) *time.Time {
+	for _, peer := range peers {
+		if peer.PeerID != peerID || peer.LastSeen.IsZero() {
+			continue
+		}
+		timestamp := peer.LastSeen.UTC()
+		return &timestamp
+	}
+	return nil
 }
 
 func federationRecommendationSourceRef(kind, value string) string {

@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/denisgrosek/changelock/internal/audit"
 )
 
 func TestRuntimeIntegrityStateFindingsAndEnforcement(t *testing.T) {
@@ -260,6 +264,62 @@ func TestRuntimeReadbackRecommendationsAndHandoffRuntimeContext(t *testing.T) {
 	}
 	if !handoffManifestHasArtifact(sealed.Manifest, "evidence/runtime_context.json") {
 		t.Fatalf("expected runtime context artifact in sealed handoff, got %#v", sealed.Manifest.Artifacts)
+	}
+}
+
+func TestRuntimeIntegrityMarksTelemetryGapAsUnverifiable(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	if _, err := fixture.store.Ingest(context.Background(), audit.Event{
+		RequestID:      "runtime-gap-observation",
+		Timestamp:      fixture.currentTimestamp.Add(-15 * time.Minute),
+		Component:      "runtime-agent",
+		EventType:      audit.EventTypeRuntimeObservationRecorded,
+		Decision:       audit.DecisionAllow,
+		TenantID:       "acme",
+		ClusterID:      "local",
+		Repo:           "acme/platform-gap",
+		Environment:    "prod",
+		Namespace:      "acme-prod",
+		WorkloadKind:   "Deployment",
+		Workload:       "telemetry-gap",
+		ServiceAccount: "gap-sa",
+		Digest:         "sha256:gap-v1",
+		Reasons:        []string{"runtime observation without corresponding desired or active digest pair"},
+		RuntimeIntegrity: canonicalJSONMust(runtimeIntegrityEventPayload{
+			Observation: &runtimeObservationPayload{
+				Node:        "node-gap",
+				Pod:         "telemetry-gap-v1-0",
+				ContainerID: "ctr-gap",
+				EventType:   "binary_exec",
+				Confidence:  runtimeConfidenceMedium,
+				EventPayload: map[string]any{
+					"binary_path": "/tmp/tool",
+				},
+			},
+		}),
+	}); err != nil {
+		t.Fatalf("ingest telemetry-gap observation: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/runtime/integrity?tenant_id=acme&environment=prod&workload=telemetry-gap", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected runtime integrity 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var integrity runtimeIntegrityListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&integrity); err != nil {
+		t.Fatalf("decode runtime integrity gap response: %v", err)
+	}
+	state := findRuntimeIntegrityState(t, integrity.Items, "telemetry-gap")
+	if state.SBOMVerification.Status != runtimeSBOMStatusUnverifiable {
+		t.Fatalf("expected unverifiable SBOM status for telemetry gap, got %#v", state.SBOMVerification)
+	}
+	if !strings.Contains(strings.ToLower(strings.Join(state.SBOMVerification.Limitations, " ")), "unverifiable") {
+		t.Fatalf("expected explicit telemetry gap limitation, got %#v", state.SBOMVerification.Limitations)
 	}
 }
 

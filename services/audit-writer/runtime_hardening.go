@@ -50,6 +50,7 @@ var (
 )
 
 type hardeningTrigger struct {
+	SchemaVersion string    `json:"schema_version"`
 	TriggerID     string    `json:"trigger_id"`
 	SourceFinding string    `json:"source_finding"`
 	TriggerType   string    `json:"trigger_type"`
@@ -61,6 +62,7 @@ type hardeningTrigger struct {
 }
 
 type hardeningAssessment struct {
+	SchemaVersion             string   `json:"schema_version"`
 	AssessmentID              string   `json:"assessment_id"`
 	TriggerRef                string   `json:"trigger_ref"`
 	SubjectRef                string   `json:"subject_ref"`
@@ -74,6 +76,7 @@ type hardeningAssessment struct {
 }
 
 type hardeningPolicyDecision struct {
+	SchemaVersion       string   `json:"schema_version"`
 	DecisionID          string   `json:"decision_id"`
 	AssessmentRef       string   `json:"assessment_ref"`
 	PolicyRef           string   `json:"policy_ref"`
@@ -86,16 +89,18 @@ type hardeningPolicyDecision struct {
 }
 
 type hardeningAction struct {
-	ActionID     string         `json:"action_id"`
-	ActionType   string         `json:"action_type"`
-	SubjectRef   string         `json:"subject_ref"`
-	Scope        string         `json:"scope"`
-	Parameters   map[string]any `json:"parameters,omitempty"`
-	IsImmediate  bool           `json:"is_immediate"`
-	IsReversible bool           `json:"is_reversible"`
+	SchemaVersion string         `json:"schema_version"`
+	ActionID      string         `json:"action_id"`
+	ActionType    string         `json:"action_type"`
+	SubjectRef    string         `json:"subject_ref"`
+	Scope         string         `json:"scope"`
+	Parameters    map[string]any `json:"parameters,omitempty"`
+	IsImmediate   bool           `json:"is_immediate"`
+	IsReversible  bool           `json:"is_reversible"`
 }
 
 type hardeningExecutionRecord struct {
+	SchemaVersion      string            `json:"schema_version"`
 	ExecutionID        string            `json:"execution_id"`
 	SubjectRef         string            `json:"subject_ref"`
 	TriggerRef         string            `json:"trigger_ref"`
@@ -112,6 +117,7 @@ type hardeningExecutionRecord struct {
 }
 
 type defensePostureState struct {
+	SchemaVersion      string     `json:"schema_version"`
 	SubjectRef         string     `json:"subject_ref"`
 	CurrentMode        string     `json:"current_mode"`
 	ActiveRestrictions []string   `json:"active_restrictions,omitempty"`
@@ -133,6 +139,7 @@ type hardeningRequest struct {
 }
 
 type hardeningEvaluationResponse struct {
+	SchemaVersion  string                  `json:"schema_version"`
 	Trigger        hardeningTrigger        `json:"trigger"`
 	Assessment     hardeningAssessment     `json:"assessment"`
 	PolicyDecision hardeningPolicyDecision `json:"policy_decision"`
@@ -141,6 +148,7 @@ type hardeningEvaluationResponse struct {
 }
 
 type hardeningExecutionResponse struct {
+	SchemaVersion  string                   `json:"schema_version"`
 	Trigger        hardeningTrigger         `json:"trigger"`
 	Assessment     hardeningAssessment      `json:"assessment"`
 	PolicyDecision hardeningPolicyDecision  `json:"policy_decision"`
@@ -149,13 +157,15 @@ type hardeningExecutionResponse struct {
 }
 
 type hardeningActionsResponse struct {
-	Items       []hardeningExecutionRecord `json:"items"`
-	Limitations []string                   `json:"limitations,omitempty"`
+	SchemaVersion string                     `json:"schema_version"`
+	Items         []hardeningExecutionRecord `json:"items"`
+	Limitations   []string                   `json:"limitations,omitempty"`
 }
 
 type hardeningPostureResponse struct {
-	Items       []defensePostureState `json:"items"`
-	Limitations []string              `json:"limitations,omitempty"`
+	SchemaVersion string                `json:"schema_version"`
+	Items         []defensePostureState `json:"items"`
+	Limitations   []string              `json:"limitations,omitempty"`
 }
 
 type hardeningEventPayload struct {
@@ -195,7 +205,11 @@ func (s server) hardeningPostureHandler(w http.ResponseWriter, r *http.Request) 
 		writeHardeningError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, hardeningPostureResponse{Items: items, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, hardeningPostureResponse{
+		SchemaVersion: hardeningPostureListSchemaVersion,
+		Items:         items,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) hardeningActionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +240,11 @@ func (s server) hardeningActionsHandler(w http.ResponseWriter, r *http.Request) 
 		writeHardeningError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, hardeningActionsResponse{Items: items, Limitations: limitations})
+	httpjson.Write(w, http.StatusOK, hardeningActionsResponse{
+		SchemaVersion: hardeningActionsSchemaVersion,
+		Items:         items,
+		Limitations:   limitations,
+	})
 }
 
 func (s server) hardeningActionByIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +461,7 @@ func (s server) buildHardeningEvaluation(ctx context.Context, filter runtimeInte
 	}
 	posture := previewDefensePosture(trigger, assessment, decision, actions, topology)
 	return hardeningEvaluationResponse{
+		SchemaVersion:  hardeningEvaluationSchemaVersion,
 		Trigger:        trigger,
 		Assessment:     assessment,
 		PolicyDecision: decision,
@@ -509,6 +528,7 @@ func (s server) resolveHardeningContext(ctx context.Context, filter runtimeInteg
 
 func buildHardeningTrigger(finding runtimeIntegrityFinding) hardeningTrigger {
 	return hardeningTrigger{
+		SchemaVersion: hardeningTriggerSchemaVersion,
 		TriggerID:     recommendationID("hardening-trigger", finding.SubjectRef, finding.FindingType),
 		SourceFinding: finding.FindingID,
 		TriggerType:   finding.FindingType,
@@ -571,9 +591,10 @@ func buildHardeningAssessment(finding runtimeIntegrityFinding, workload runtimeW
 		limitations = append(limitations, "Process-profile tightening distinguishes immediate containment from next-restart enforcement where the runtime platform cannot hot-reload syscall or exec restrictions.")
 	}
 	return hardeningAssessment{
-		AssessmentID: recommendationID("hardening-assessment", finding.SubjectRef, finding.FindingType),
-		TriggerRef:   recommendationID("hardening-trigger", finding.SubjectRef, finding.FindingType),
-		SubjectRef:   finding.SubjectRef,
+		SchemaVersion: hardeningAssessmentSchemaVersion,
+		AssessmentID:  recommendationID("hardening-assessment", finding.SubjectRef, finding.FindingType),
+		TriggerRef:    recommendationID("hardening-trigger", finding.SubjectRef, finding.FindingType),
+		SubjectRef:    finding.SubjectRef,
 		BlastRadiusScore: func() int {
 			if topology != nil {
 				return topology.BlastRadiusScore
@@ -633,6 +654,7 @@ func buildHardeningPolicyDecision(trigger hardeningTrigger, assessment hardening
 		approvalMode,
 	)
 	return hardeningPolicyDecision{
+		SchemaVersion:       hardeningPolicyDecisionSchemaVersion,
 		DecisionID:          recommendationID("hardening-policy", trigger.SubjectRef, trigger.TriggerType),
 		AssessmentRef:       assessment.AssessmentID,
 		PolicyRef:           fmt.Sprintf("runtime_closed_loop_hardening.v1:%s:%s", trigger.TriggerType, assessment.RecommendedHardeningClass),
@@ -666,13 +688,14 @@ func planHardeningActions(trigger hardeningTrigger, assessment hardeningAssessme
 			parameters[key] = value
 		}
 		return hardeningAction{
-			ActionID:     recommendationID("hardening-action", trigger.SubjectRef, actionType),
-			ActionType:   actionType,
-			SubjectRef:   trigger.SubjectRef,
-			Scope:        scope,
-			Parameters:   parameters,
-			IsImmediate:  immediate,
-			IsReversible: reversible,
+			SchemaVersion: hardeningActionSchemaVersion,
+			ActionID:      recommendationID("hardening-action", trigger.SubjectRef, actionType),
+			ActionType:    actionType,
+			SubjectRef:    trigger.SubjectRef,
+			Scope:         scope,
+			Parameters:    parameters,
+			IsImmediate:   immediate,
+			IsReversible:  reversible,
 		}
 	}
 	if action == hardeningActionRequestForensics {
@@ -790,6 +813,7 @@ func previewDefensePosture(trigger hardeningTrigger, assessment hardeningAssessm
 		limitations = append(limitations, "Next-restart restrictions are staged for a later trusted restart or reschedule; they are not represented as immediate enforcement.")
 	}
 	return defensePostureState{
+		SchemaVersion:      hardeningPostureSchemaVersion,
 		SubjectRef:         trigger.SubjectRef,
 		CurrentMode:        assessment.RecommendedHardeningClass,
 		ActiveRestrictions: uniqueStrings(activeRestrictions),
@@ -809,6 +833,7 @@ func (s server) executeHardeningPlan(ctx context.Context, principal auth.Princip
 		return hardeningExecutionResponse{}, err
 	}
 	execution := hardeningExecutionRecord{
+		SchemaVersion:      hardeningExecutionSchemaVersion,
 		ExecutionID:        recommendationID("hardening-execution", evaluation.Trigger.SubjectRef, firstNonEmpty(forcedAction, evaluation.Assessment.RecommendedHardeningClass)),
 		SubjectRef:         evaluation.Trigger.SubjectRef,
 		TriggerRef:         evaluation.Trigger.TriggerID,
@@ -847,6 +872,7 @@ func (s server) executeHardeningPlan(ctx context.Context, principal auth.Princip
 	}
 	posture := buildExecutedDefensePosture(evaluation, execution)
 	response := hardeningExecutionResponse{
+		SchemaVersion:  hardeningExecutionResponseSchemaValue,
 		Trigger:        evaluation.Trigger,
 		Assessment:     evaluation.Assessment,
 		PolicyDecision: evaluation.PolicyDecision,
@@ -868,7 +894,9 @@ func (s server) rollbackHardeningExecution(ctx context.Context, principal auth.P
 		return hardeningExecutionResponse{}, errHardeningRollbackNotAvailable
 	}
 	response := hardeningExecutionResponse{
+		SchemaVersion: hardeningExecutionResponseSchemaValue,
 		Trigger: hardeningTrigger{
+			SchemaVersion: hardeningTriggerSchemaVersion,
 			TriggerID:     recommendationID("hardening-rollback", record.SubjectRef, record.TriggerRef),
 			SourceFinding: record.TriggerRef,
 			TriggerType:   "rollback",
@@ -879,6 +907,7 @@ func (s server) rollbackHardeningExecution(ctx context.Context, principal auth.P
 			EvidenceRefs:  uniqueStrings(append([]string{}, record.ForensicRefs...)),
 		},
 		Assessment: hardeningAssessment{
+			SchemaVersion:             hardeningAssessmentSchemaVersion,
 			AssessmentID:              recommendationID("hardening-rollback", record.SubjectRef, "assessment"),
 			TriggerRef:                record.TriggerRef,
 			SubjectRef:                record.SubjectRef,
@@ -891,6 +920,7 @@ func (s server) rollbackHardeningExecution(ctx context.Context, principal auth.P
 			},
 		},
 		PolicyDecision: hardeningPolicyDecision{
+			SchemaVersion:       hardeningPolicyDecisionSchemaVersion,
 			DecisionID:          recommendationID("hardening-rollback", record.SubjectRef, "decision"),
 			AssessmentRef:       recommendationID("hardening-rollback", record.SubjectRef, "assessment"),
 			PolicyRef:           "runtime_closed_loop_hardening.v1:rollback",
@@ -902,11 +932,12 @@ func (s server) rollbackHardeningExecution(ctx context.Context, principal auth.P
 			DecisionSummary:     "Rollback is allowed because the active hardening record is reversible and bounded by TTL.",
 		},
 		Execution: hardeningExecutionRecord{
+			SchemaVersion:      hardeningExecutionSchemaVersion,
 			ExecutionID:        recommendationID("hardening-rollback", record.SubjectRef, record.ExecutionID),
 			SubjectRef:         record.SubjectRef,
 			TriggerRef:         record.TriggerRef,
 			DecisionRef:        recommendationID("hardening-rollback", record.SubjectRef, "decision"),
-			ActionsApplied:     []hardeningAction{{ActionID: recommendationID("hardening-action", record.SubjectRef, hardeningActionRollbackRestrictions), ActionType: hardeningActionRollbackRestrictions, SubjectRef: record.SubjectRef, Scope: "workload_only", Parameters: map[string]any{"rollback_of": record.ExecutionID}, IsImmediate: true, IsReversible: false}},
+			ActionsApplied:     []hardeningAction{{SchemaVersion: hardeningActionSchemaVersion, ActionID: recommendationID("hardening-action", record.SubjectRef, hardeningActionRollbackRestrictions), ActionType: hardeningActionRollbackRestrictions, SubjectRef: record.SubjectRef, Scope: "workload_only", Parameters: map[string]any{"rollback_of": record.ExecutionID}, IsImmediate: true, IsReversible: false}},
 			ExecutedAt:         time.Now().UTC(),
 			ExecutionResult:    "rollback_applied",
 			ForensicRefs:       uniqueStrings(append([]string{}, record.ForensicRefs...)),
@@ -917,6 +948,7 @@ func (s server) rollbackHardeningExecution(ctx context.Context, principal auth.P
 			},
 		},
 		Posture: defensePostureState{
+			SchemaVersion:      hardeningPostureSchemaVersion,
 			SubjectRef:         record.SubjectRef,
 			CurrentMode:        hardeningModeObserveOnly,
 			ActiveRestrictions: nil,
@@ -969,7 +1001,9 @@ func (s server) recoverHardenedSubject(ctx context.Context, principal auth.Princ
 	}
 	executedAt := time.Now().UTC()
 	response := hardeningExecutionResponse{
+		SchemaVersion: hardeningExecutionResponseSchemaValue,
 		Trigger: hardeningTrigger{
+			SchemaVersion: hardeningTriggerSchemaVersion,
 			TriggerID:     recommendationID("hardening-recovery", record.SubjectRef, "trusted"),
 			SourceFinding: record.TriggerRef,
 			TriggerType:   "trusted_recovery",
@@ -980,6 +1014,7 @@ func (s server) recoverHardenedSubject(ctx context.Context, principal auth.Princ
 			EvidenceRefs:  uniqueStrings(append([]string{}, state.EvidenceRefs...)),
 		},
 		Assessment: hardeningAssessment{
+			SchemaVersion:             hardeningAssessmentSchemaVersion,
 			AssessmentID:              recommendationID("hardening-recovery", record.SubjectRef, "assessment"),
 			TriggerRef:                record.TriggerRef,
 			SubjectRef:                record.SubjectRef,
@@ -998,6 +1033,7 @@ func (s server) recoverHardenedSubject(ctx context.Context, principal auth.Princ
 			},
 		},
 		PolicyDecision: hardeningPolicyDecision{
+			SchemaVersion:       hardeningPolicyDecisionSchemaVersion,
 			DecisionID:          recommendationID("hardening-recovery", record.SubjectRef, "decision"),
 			AssessmentRef:       recommendationID("hardening-recovery", record.SubjectRef, "assessment"),
 			PolicyRef:           "runtime_closed_loop_hardening.v1:trusted_recovery",
@@ -1009,11 +1045,12 @@ func (s server) recoverHardenedSubject(ctx context.Context, principal auth.Princ
 			DecisionSummary:     "Trusted recovery is allowed because the workload re-verified cleanly before temporary restrictions were removed.",
 		},
 		Execution: hardeningExecutionRecord{
+			SchemaVersion:      hardeningExecutionSchemaVersion,
 			ExecutionID:        recommendationID("hardening-recovery", record.SubjectRef, record.ExecutionID),
 			SubjectRef:         record.SubjectRef,
 			TriggerRef:         record.TriggerRef,
 			DecisionRef:        recommendationID("hardening-recovery", record.SubjectRef, "decision"),
-			ActionsApplied:     []hardeningAction{{ActionID: recommendationID("hardening-action", record.SubjectRef, hardeningActionRestartTrusted), ActionType: hardeningActionRestartTrusted, SubjectRef: record.SubjectRef, Scope: "workload_only", Parameters: map[string]any{"reverify_required": true, "verified_image_only": true}, IsImmediate: false, IsReversible: true}},
+			ActionsApplied:     []hardeningAction{{SchemaVersion: hardeningActionSchemaVersion, ActionID: recommendationID("hardening-action", record.SubjectRef, hardeningActionRestartTrusted), ActionType: hardeningActionRestartTrusted, SubjectRef: record.SubjectRef, Scope: "workload_only", Parameters: map[string]any{"reverify_required": true, "verified_image_only": true}, IsImmediate: false, IsReversible: true}},
 			ExecutedAt:         executedAt,
 			ExecutionResult:    "trusted_recovery_completed",
 			ForensicRefs:       uniqueStrings(append([]string{}, record.ForensicRefs...)),
@@ -1024,6 +1061,7 @@ func (s server) recoverHardenedSubject(ctx context.Context, principal auth.Princ
 			},
 		},
 		Posture: defensePostureState{
+			SchemaVersion:      hardeningPostureSchemaVersion,
 			SubjectRef:         record.SubjectRef,
 			CurrentMode:        hardeningModeObserveOnly,
 			ActiveRestrictions: nil,
@@ -1135,6 +1173,7 @@ func (s server) listHardeningExecutions(ctx context.Context, filter runtimeInteg
 			continue
 		}
 		record := *payload.Execution
+		record.SchemaVersion = hardeningExecutionSchemaVersion
 		if filter.SubjectRef != "" && record.SubjectRef != filter.SubjectRef {
 			continue
 		}
@@ -1276,6 +1315,7 @@ func (s server) buildDefensePostureStates(ctx context.Context, filter runtimeInt
 			continue
 		}
 		items = append(items, defensePostureState{
+			SchemaVersion:      hardeningPostureSchemaVersion,
 			SubjectRef:         subjectRef,
 			CurrentMode:        mode,
 			ActiveRestrictions: uniqueStrings(activeRestrictions),
@@ -1404,6 +1444,7 @@ func buildExecutedDefensePosture(evaluation hardeningEvaluationResponse, executi
 		"Defense posture reflects executed hardening state only for bounded immediate restrictions; next-restart hardening remains explicitly staged until a later trusted restart occurs.",
 	}
 	return defensePostureState{
+		SchemaVersion:      hardeningPostureSchemaVersion,
 		SubjectRef:         execution.SubjectRef,
 		CurrentMode:        mode,
 		ActiveRestrictions: uniqueStrings(activeRestrictions),

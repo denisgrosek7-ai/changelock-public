@@ -88,6 +88,7 @@ type decisionEvidenceEnvelope struct {
 }
 
 type readbackResponse struct {
+	SchemaVersion      string                   `json:"schema_version"`
 	ResourceType       string                   `json:"resource_type"`
 	ResourceID         string                   `json:"resource_id"`
 	PermanentURI       string                   `json:"permanent_uri"`
@@ -130,13 +131,14 @@ type readbackGrantRequest struct {
 }
 
 type readbackGrantResponse struct {
-	GrantID      string    `json:"grant_id"`
-	ShareURL     string    `json:"share_url"`
-	ResourceType string    `json:"resource_type"`
-	ResourceID   string    `json:"resource_id"`
-	Audience     string    `json:"audience"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	Purpose      string    `json:"purpose,omitempty"`
+	SchemaVersion string    `json:"schema_version"`
+	GrantID       string    `json:"grant_id"`
+	ShareURL      string    `json:"share_url"`
+	ResourceType  string    `json:"resource_type"`
+	ResourceID    string    `json:"resource_id"`
+	Audience      string    `json:"audience"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Purpose       string    `json:"purpose,omitempty"`
 }
 
 type signedReadbackGrant struct {
@@ -580,13 +582,14 @@ func (s server) readbackGrantHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpjson.Write(w, http.StatusCreated, readbackGrantResponse{
-		GrantID:      grantID(token),
-		ShareURL:     "/s/" + token,
-		ResourceType: req.ResourceType,
-		ResourceID:   req.ResourceID,
-		Audience:     audience,
-		ExpiresAt:    grant.ExpiresAt,
-		Purpose:      grant.Purpose,
+		SchemaVersion: readbackGrantSchemaVersion,
+		GrantID:       grantID(token),
+		ShareURL:      "/s/" + token,
+		ResourceType:  req.ResourceType,
+		ResourceID:    req.ResourceID,
+		Audience:      audience,
+		ExpiresAt:     grant.ExpiresAt,
+		Purpose:       grant.Purpose,
 	})
 }
 
@@ -761,6 +764,7 @@ func (s server) materializeReadback(ctx context.Context, resourceType string, re
 
 func buildReadbackResponse(resourceType string, resourceID string, audience string, payload any, envelope decisionEvidenceEnvelope, payloadSummary string, topologyContext *readbackTopologyContext) readbackResponse {
 	return readbackResponse{
+		SchemaVersion:      readbackResponseSchemaVersion,
 		ResourceType:       resourceType,
 		ResourceID:         resourceID,
 		PermanentURI:       fmt.Sprintf("/r/%s/%s", resourceType, resourceID),

@@ -2,6 +2,13 @@
 
 ChangeLock upgrades should preserve the shared PostgreSQL state and roll the stateless control-plane components safely.
 
+Related docs:
+
+- [Release Channels](release-channels.md)
+- [Rollback Guide](rollback.md)
+- [Compatibility Matrix](compatibility-matrix.md)
+- [Support Boundaries](support.md)
+
 ## Recommended flow
 
 1. Take a PostgreSQL backup before the upgrade.
@@ -35,3 +42,5 @@ If a bad deploy-gate rollout blocks pod changes in an enforced namespace:
 1. remove `changelock.io/enforce=enabled` from the affected namespace, or
 2. upgrade the release with `deployGate.webhook.enabled=false`, then
 3. restore the deploy-gate service and re-enable the label only after `/health` is green again
+
+If the upgrade must be reversed instead of only unblocked, continue with the formal [rollback guide](rollback.md).

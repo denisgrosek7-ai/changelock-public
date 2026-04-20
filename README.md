@@ -162,6 +162,14 @@ ChangeLock has grown in layers. The simplest way to read the program is phase-by
 
 ## Architecture
 
+Documentation entry points:
+
+- [`docs/documentation-truth-policy.md`](docs/documentation-truth-policy.md)
+- [`docs/architecture/phase-index.md`](docs/architecture/phase-index.md)
+- [`docs/architecture/canonical-architecture-spec.md`](docs/architecture/canonical-architecture-spec.md)
+- [`docs/api-versioning-policy.md`](docs/api-versioning-policy.md)
+- [`docs/policy-language-reference.md`](docs/policy-language-reference.md)
+
 Core services:
 
 - `services/policy-engine`
@@ -204,6 +212,25 @@ Operator surface:
   - raw Kubernetes references
 - `deploy/kyverno/`
   - cluster-side policy examples
+
+## Integration Guides
+
+- [`docs/integrations/github-actions.md`](docs/integrations/github-actions.md)
+- [`docs/integrations/gitlab-ci.md`](docs/integrations/gitlab-ci.md)
+- [`docs/integrations/jenkins.md`](docs/integrations/jenkins.md)
+
+## Operations Guides
+
+- [`docs/operations/benchmark-baseline.md`](docs/operations/benchmark-baseline.md)
+- [`docs/operations/sla-slo.md`](docs/operations/sla-slo.md)
+- [`docs/operations/failure-mode-suite.md`](docs/operations/failure-mode-suite.md)
+- [`docs/operations/cost-performance-budget.md`](docs/operations/cost-performance-budget.md)
+- [`docs/operations/reliability-gates.md`](docs/operations/reliability-gates.md)
+- [`docs/operations/upgrade.md`](docs/operations/upgrade.md)
+- [`docs/operations/rollback.md`](docs/operations/rollback.md)
+- [`docs/operations/backup-restore.md`](docs/operations/backup-restore.md)
+- [`docs/operations/break-glass.md`](docs/operations/break-glass.md)
+- [`docs/operations/support-debug-bundle.md`](docs/operations/support-debug-bundle.md)
 
 ## Capability Map
 
@@ -482,6 +509,12 @@ Included sample scenarios:
 
 ## Documentation Map
 
+Documentation governance:
+
+- [docs/documentation-truth-policy.md](docs/documentation-truth-policy.md)
+- [docs/architecture/phase-index.md](docs/architecture/phase-index.md)
+- [docs/api-versioning-policy.md](docs/api-versioning-policy.md)
+
 Core docs:
 
 - [docs/architecture.md](docs/architecture.md)
@@ -489,6 +522,15 @@ Core docs:
 - [docs/threat-model.md](docs/threat-model.md)
 - [docs/trust-boundaries.md](docs/trust-boundaries.md)
 - [docs/audit-evidence.md](docs/audit-evidence.md)
+
+Phase references:
+
+- [docs/phases/phase-1-core-policy-evaluation.md](docs/phases/phase-1-core-policy-evaluation.md)
+- [docs/phases/phase-2-artifact-trust-verification.md](docs/phases/phase-2-artifact-trust-verification.md)
+- [docs/phases/phase-3-kubernetes-admission-enforcement.md](docs/phases/phase-3-kubernetes-admission-enforcement.md)
+- [docs/phases/phase-4-runtime-drift-detection.md](docs/phases/phase-4-runtime-drift-detection.md)
+- [docs/phases/phase-8-advanced-trust-platform.md](docs/phases/phase-8-advanced-trust-platform.md)
+- [docs/phases/phase-8-extended-surface-8m-8w.md](docs/phases/phase-8-extended-surface-8m-8w.md)
 
 Operations and enterprise:
 

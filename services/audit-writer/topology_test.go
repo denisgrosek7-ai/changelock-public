@@ -32,6 +32,9 @@ func TestTopologyGraphBuildsDeclaredObservedAndEffectiveViews(t *testing.T) {
 	if response.Summary.PublicEntryNodes == 0 || response.Summary.EffectiveEdges == 0 {
 		t.Fatalf("expected topology graph summary with public entry and effective edges, got %#v", response.Summary)
 	}
+	if response.SchemaVersion != topologyGraphSchemaVersion {
+		t.Fatalf("expected schema-versioned topology graph, got %#v", response)
+	}
 	if len(response.DeclaredGraph.Edges) == 0 || len(response.ObservedGraph.Edges) == 0 || len(response.EffectiveGraph.Nodes) == 0 {
 		t.Fatalf("expected declared, observed, and effective graph data, got %#v", response)
 	}
@@ -55,6 +58,9 @@ func TestIncidentBlastRadiusShowsCriticalReachAndContainmentOptions(t *testing.T
 	}
 	if response.SubjectType != "incident" || response.BlastRadiusScore == 0 {
 		t.Fatalf("expected incident blast radius payload, got %#v", response)
+	}
+	if response.SchemaVersion != topologyBlastRadiusSchemaVersion {
+		t.Fatalf("expected schema-versioned topology blast radius response, got %#v", response)
 	}
 	if response.CriticalReachCount == 0 {
 		t.Fatalf("expected critical downstream reach from topology graph, got %#v", response)
@@ -82,6 +88,9 @@ func TestTopologyDeltaAndQuarantineSimulationAreExplainable(t *testing.T) {
 	if len(delta.Items) == 0 {
 		t.Fatalf("expected topology delta items, got %#v", delta)
 	}
+	if delta.SchemaVersion != topologyDeltaSchemaVersion {
+		t.Fatalf("expected schema-versioned topology delta response, got %#v", delta)
+	}
 	if len(delta.Items[0].DriftSignals) == 0 {
 		t.Fatalf("expected explainable drift signals, got %#v", delta.Items[0])
 	}
@@ -102,6 +111,53 @@ func TestTopologyDeltaAndQuarantineSimulationAreExplainable(t *testing.T) {
 	}
 	if !simulation.ApprovalRequired || simulation.Reduction == 0 || len(simulation.Options) == 0 {
 		t.Fatalf("expected approval-based topology simulation with reduction, got %#v", simulation)
+	}
+	if simulation.SchemaVersion != topologyQuarantineSchemaVersion {
+		t.Fatalf("expected schema-versioned topology quarantine simulation, got %#v", simulation)
+	}
+}
+
+func TestTopologyGraphAndDeltaAreDeterministicForSameInput(t *testing.T) {
+	handler := topologyTestHandler(t)
+
+	buildGraph := func() topologyGraphResponse {
+		req := httptest.NewRequest(http.MethodGet, "/v1/topology/graph?tenant_id=acme&environment=prod&limit=10", nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected topology graph 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var response topologyGraphResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode topology graph: %v", err)
+		}
+		return response
+	}
+	firstGraph := buildGraph()
+	secondGraph := buildGraph()
+	if string(canonicalJSONMust(firstGraph)) != string(canonicalJSONMust(secondGraph)) {
+		t.Fatalf("expected topology graph to stay deterministic for the same input")
+	}
+
+	buildDelta := func() topologyDeltaResponse {
+		req := httptest.NewRequest(http.MethodGet, "/v1/topology/delta?tenant_id=acme&environment=prod&window=7d&limit=5", nil)
+		req.Header.Set("Authorization", "Bearer viewer-demo-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected topology delta 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var response topologyDeltaResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode topology delta: %v", err)
+		}
+		return response
+	}
+	firstDelta := buildDelta()
+	secondDelta := buildDelta()
+	if string(canonicalJSONMust(firstDelta)) != string(canonicalJSONMust(secondDelta)) {
+		t.Fatalf("expected topology delta to stay deterministic for the same input")
 	}
 }
 

@@ -2,6 +2,22 @@
 
 Use this as operator guidance, not a contractual support promise.
 
+Related docs:
+
+- [Documentation Truth Policy](../documentation-truth-policy.md)
+- [Phase Index](../architecture/phase-index.md)
+- [Release Channels](release-channels.md)
+- [Upgrade Guide](upgrade.md)
+- [Rollback Guide](rollback.md)
+- [Backup And Restore](backup-restore.md)
+- [Break-Glass](break-glass.md)
+- [Compatibility Matrix](compatibility-matrix.md)
+- [Support Bundle Schema](support-bundle-schema.md)
+- [Support And Debug Bundle](support-debug-bundle.md)
+- [Failure-Mode Suite](failure-mode-suite.md)
+- [Reliability Gates](reliability-gates.md)
+- [Troubleshooting](troubleshooting.md)
+
 ## Supported operating modes
 
 - local demo/dev:

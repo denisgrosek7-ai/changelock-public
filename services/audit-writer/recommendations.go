@@ -45,14 +45,17 @@ const (
 )
 
 type recommendationListResponse struct {
+	SchemaVersion   string           `json:"schema_version"`
 	Recommendations []recommendation `json:"recommendations"`
 }
 
 type recommendationActionsResponse struct {
-	Templates []recommendationActionTemplate `json:"templates"`
+	SchemaVersion string                         `json:"schema_version"`
+	Templates     []recommendationActionTemplate `json:"templates"`
 }
 
 type recommendation struct {
+	SchemaVersion       string                       `json:"schema_version"`
 	RecommendationID    string                       `json:"recommendation_id"`
 	SourceType          string                       `json:"source_type"`
 	SourceRef           string                       `json:"source_ref"`
@@ -296,7 +299,10 @@ func (s server) recommendationsHandler(w http.ResponseWriter, r *http.Request) {
 		writeRecommendationError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, recommendationListResponse{Recommendations: recommendations})
+	httpjson.Write(w, http.StatusOK, recommendationListResponse{
+		SchemaVersion:   recommendationListSchemaVersion,
+		Recommendations: recommendations,
+	})
 }
 
 func (s server) recommendationActionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +323,10 @@ func (s server) recommendationActionsHandler(w http.ResponseWriter, r *http.Requ
 			httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 			return
 		}
-		httpjson.Write(w, http.StatusOK, recommendationActionsResponse{Templates: recommendationTemplateCatalog})
+		httpjson.Write(w, http.StatusOK, recommendationActionsResponse{
+			SchemaVersion: recommendationTemplatesSchemaVersion,
+			Templates:     recommendationTemplateCatalog,
+		})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -722,6 +731,9 @@ func (s server) listRecommendations(ctx context.Context, filter recommendationFi
 	sortRecommendations(recommendations)
 	if len(recommendations) > filter.Limit {
 		recommendations = recommendations[:filter.Limit]
+	}
+	for i := range recommendations {
+		recommendations[i].SchemaVersion = recommendationSchemaVersion
 	}
 	return recommendations, nil
 }
@@ -1405,6 +1417,19 @@ func (s server) buildValidationRecommendations(ctx context.Context, incidents []
 	if err != nil {
 		return nil, err
 	}
+	scenarioTimes := map[string]*time.Time{}
+	if runs, _, err := s.listStrictValidationRuns(ctx, validationFilter); err == nil {
+		for _, run := range runs {
+			issuedAt := run.Certificate.IssuedAt.UTC()
+			for _, verdict := range run.Verdicts {
+				if _, exists := scenarioTimes[verdict.ScenarioID]; exists {
+					continue
+				}
+				timestamp := issuedAt
+				scenarioTimes[verdict.ScenarioID] = &timestamp
+			}
+		}
+	}
 	if score.FailedScenarios == 0 && score.PartialScenarios == 0 {
 		return nil, nil
 	}
@@ -1452,8 +1477,8 @@ func (s server) buildValidationRecommendations(ctx context.Context, incidents []
 			ConfidenceScore:     mapValidationRecommendationConfidence(result.Status, score.ConfidenceLevel),
 			ApprovalMode:        template.ApprovalMode,
 			Status:              recommendationStatusShown,
-			CreatedAt:           recommendationCreatedAt(nil, nil, nil),
-			ExpiresAt:           recommendationExpiry(nil),
+			CreatedAt:           recommendationCreatedAt(scenarioTimes[result.ScenarioID]),
+			ExpiresAt:           recommendationExpiry(scenarioTimes[result.ScenarioID]),
 			VerificationPlan: []string{
 				fmt.Sprintf("Re-run validation harness scenario %s and confirm it moves out of %s into pass.", result.ScenarioID, result.Status),
 				"Confirm the corresponding runtime, topology, forensics, or policy evidence path no longer appears as a validation gap in the current scope.",
@@ -2634,7 +2659,7 @@ func recommendationCreatedAt(candidates ...*time.Time) time.Time {
 			return candidate.UTC()
 		}
 	}
-	return time.Now().UTC()
+	return time.Unix(0, 0).UTC()
 }
 
 func recommendationExpiry(candidate *time.Time) *time.Time {

@@ -14,6 +14,7 @@ import (
 )
 
 type defenseGapReadbackPayload struct {
+	SchemaVersion      string                   `json:"schema_version"`
 	ProjectionAudience string                   `json:"projection_audience"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            defenseGapAssessment     `json:"payload"`
@@ -21,6 +22,7 @@ type defenseGapReadbackPayload struct {
 }
 
 type policyReplayReadbackPayload struct {
+	SchemaVersion      string                   `json:"schema_version"`
 	ProjectionAudience string                   `json:"projection_audience"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            policyReplayAssessment   `json:"payload"`
@@ -28,6 +30,7 @@ type policyReplayReadbackPayload struct {
 }
 
 type systemicWeaknessReadbackPayload struct {
+	SchemaVersion      string                   `json:"schema_version"`
 	ProjectionAudience string                   `json:"projection_audience"`
 	EvidenceEnvelope   decisionEvidenceEnvelope `json:"evidence_envelope"`
 	Payload            systemicWeakness         `json:"payload"`
@@ -147,6 +150,9 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 	if defenseReadback.EvidenceEnvelope.EvidenceHash != defense.Readback.EvidenceHash {
 		t.Fatalf("expected stable defense-gap evidence hash, got %q want %q", defenseReadback.EvidenceEnvelope.EvidenceHash, defense.Readback.EvidenceHash)
 	}
+	if defenseReadback.SchemaVersion != readbackResponseSchemaVersion || defenseReadback.EvidenceEnvelope.SchemaVersion != readbackEnvelopeSchemaVersion {
+		t.Fatalf("expected schema-versioned defense-gap readback, got %#v", defenseReadback)
+	}
 	if defenseReadback.TopologyContext == nil || defenseReadback.TopologyContext.PrimaryAffectedNode == nil {
 		t.Fatalf("expected topology context on defense-gap readback, got %#v", defenseReadback.TopologyContext)
 	}
@@ -165,6 +171,9 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 	}
 	if defenseReadbackAgain.EvidenceEnvelope.EvidenceHash != defenseReadback.EvidenceEnvelope.EvidenceHash {
 		t.Fatalf("expected repeated defense-gap readback hash to stay stable, got %q then %q", defenseReadback.EvidenceEnvelope.EvidenceHash, defenseReadbackAgain.EvidenceEnvelope.EvidenceHash)
+	}
+	if string(canonicalBytes(defenseReadback)) != string(canonicalBytes(defenseReadbackAgain)) {
+		t.Fatalf("expected repeated defense-gap readback payload to stay deterministic")
 	}
 
 	replayReq := httptest.NewRequest(http.MethodGet, "/v1/incidents/"+url.PathEscape(incidentID)+"/policy-replay?tenant_id=acme", nil)
@@ -196,6 +205,9 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 	if replayReadback.EvidenceEnvelope.EvidenceHash != replay.Readback.EvidenceHash {
 		t.Fatalf("expected stable policy replay evidence hash, got %q want %q", replayReadback.EvidenceEnvelope.EvidenceHash, replay.Readback.EvidenceHash)
 	}
+	if replayReadback.SchemaVersion != readbackResponseSchemaVersion {
+		t.Fatalf("expected schema-versioned policy replay readback, got %#v", replayReadback)
+	}
 
 	weaknessReq := httptest.NewRequest(http.MethodGet, "/v1/ai/systemic-weaknesses?tenant_id=acme", nil)
 	weaknessRec := httptest.NewRecorder()
@@ -225,6 +237,9 @@ func TestReadbackEndpointsExposeStableEvidenceEnvelope(t *testing.T) {
 	}
 	if weaknessReadback.EvidenceEnvelope.EvidenceHash != weaknesses.Weaknesses[0].Readback.EvidenceHash {
 		t.Fatalf("expected stable systemic weakness evidence hash, got %q want %q", weaknessReadback.EvidenceEnvelope.EvidenceHash, weaknesses.Weaknesses[0].Readback.EvidenceHash)
+	}
+	if weaknessReadback.SchemaVersion != readbackResponseSchemaVersion {
+		t.Fatalf("expected schema-versioned systemic weakness readback, got %#v", weaknessReadback)
 	}
 }
 

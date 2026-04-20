@@ -94,6 +94,7 @@ type topologyGraphSummary struct {
 }
 
 type topologyGraphResponse struct {
+	SchemaVersion  string               `json:"schema_version"`
 	DeclaredGraph  topologyGraphView    `json:"declared_graph"`
 	ObservedGraph  topologyGraphView    `json:"observed_graph"`
 	EffectiveGraph topologyGraphView    `json:"effective_graph"`
@@ -103,12 +104,14 @@ type topologyGraphResponse struct {
 }
 
 type topologyServicesResponse struct {
+	SchemaVersion  string            `json:"schema_version"`
 	Items          []topologyNode    `json:"items"`
 	AppliedFilters map[string]string `json:"applied_filters"`
 	Limitations    []string          `json:"limitations,omitempty"`
 }
 
 type topologyHeatmapResponse struct {
+	SchemaVersion  string            `json:"schema_version"`
 	Items          []topologyNode    `json:"items"`
 	AppliedFilters map[string]string `json:"applied_filters"`
 	Limitations    []string          `json:"limitations,omitempty"`
@@ -132,6 +135,7 @@ type topologyContainmentOption struct {
 }
 
 type topologyBlastRadiusResponse struct {
+	SchemaVersion          string                      `json:"schema_version"`
 	SubjectRef             string                      `json:"subject_ref"`
 	SubjectType            string                      `json:"subject_type"`
 	AffectedNodes          []topologyNode              `json:"affected_nodes"`
@@ -160,9 +164,10 @@ type topologyDeltaItem struct {
 }
 
 type topologyDeltaResponse struct {
-	Comparison  audit.AnalyticsComparisonContext `json:"comparison"`
-	Items       []topologyDeltaItem              `json:"items"`
-	Limitations []string                         `json:"limitations,omitempty"`
+	SchemaVersion string                           `json:"schema_version"`
+	Comparison    audit.AnalyticsComparisonContext `json:"comparison"`
+	Items         []topologyDeltaItem              `json:"items"`
+	Limitations   []string                         `json:"limitations,omitempty"`
 }
 
 type topologyQuarantineSimulationRequest struct {
@@ -172,6 +177,7 @@ type topologyQuarantineSimulationRequest struct {
 }
 
 type topologyQuarantineSimulationResponse struct {
+	SchemaVersion             string                      `json:"schema_version"`
 	SubjectRef                string                      `json:"subject_ref"`
 	ApprovalRequired          bool                        `json:"approval_required"`
 	BaselineBlastRadiusScore  int                         `json:"baseline_blast_radius_score"`
@@ -273,10 +279,20 @@ func (s server) topologyListLikeHandler(w http.ResponseWriter, r *http.Request, 
 	}
 	items := snapshot.heatmapItems(filter.Limit)
 	if heatmap {
-		httpjson.Write(w, http.StatusOK, topologyHeatmapResponse{Items: items, AppliedFilters: applied, Limitations: snapshot.limitations})
+		httpjson.Write(w, http.StatusOK, topologyHeatmapResponse{
+			SchemaVersion:  topologyHeatmapSchemaVersion,
+			Items:          items,
+			AppliedFilters: applied,
+			Limitations:    snapshot.limitations,
+		})
 		return
 	}
-	httpjson.Write(w, http.StatusOK, topologyServicesResponse{Items: items, AppliedFilters: applied, Limitations: snapshot.limitations})
+	httpjson.Write(w, http.StatusOK, topologyServicesResponse{
+		SchemaVersion:  topologyServicesSchemaVersion,
+		Items:          items,
+		AppliedFilters: applied,
+		Limitations:    snapshot.limitations,
+	})
 }
 
 func (s server) topologyGraphHandler(w http.ResponseWriter, r *http.Request) {
@@ -308,6 +324,7 @@ func (s server) topologyGraphHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpjson.Write(w, http.StatusOK, topologyGraphResponse{
+		SchemaVersion: topologyGraphSchemaVersion,
 		DeclaredGraph: topologyGraphView{
 			Nodes: snapshot.nodeListForConnectivity(topologyConnectivityDeclared, filter.Limit),
 			Edges: snapshot.edgeList(snapshot.declaredEdges, filter.Limit*4),
@@ -543,9 +560,10 @@ func (s server) buildTopologyDeltaResponse(ctx context.Context, filter topologyF
 	limitations := uniqueStrings(append(append([]string{}, currentSnapshot.limitations...), baselineSnapshot.limitations...))
 	limitations = append(limitations, "Topology delta compares the current and baseline windows over the same canonical audit event scope; it does not rewrite historical runtime truth.")
 	return topologyDeltaResponse{
-		Comparison:  comparison,
-		Items:       items,
-		Limitations: uniqueStrings(limitations),
+		SchemaVersion: topologyDeltaSchemaVersion,
+		Comparison:    comparison,
+		Items:         items,
+		Limitations:   uniqueStrings(limitations),
 	}, nil
 }
 
@@ -576,6 +594,7 @@ func (s server) buildTopologyQuarantineSimulation(ctx context.Context, filter to
 		}
 	}
 	return topologyQuarantineSimulationResponse{
+		SchemaVersion:             topologyQuarantineSchemaVersion,
 		SubjectRef:                response.SubjectRef,
 		ApprovalRequired:          true,
 		BaselineBlastRadiusScore:  response.BlastRadiusScore,
@@ -955,6 +974,9 @@ func (s topologySnapshot) heatmapItems(limit int) []topologyNode {
 	items := s.nodeListForConnectivity(topologyConnectivityEffective, limit)
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].BlastRadiusScore == items[j].BlastRadiusScore {
+			if items[i].Service == items[j].Service {
+				return items[i].NodeID < items[j].NodeID
+			}
 			return items[i].Service < items[j].Service
 		}
 		return items[i].BlastRadiusScore > items[j].BlastRadiusScore
@@ -978,6 +1000,9 @@ func (s topologySnapshot) nodeListForConnectivity(connectivity string, limit int
 	}
 	sort.Slice(nodes, func(i, j int) bool {
 		if nodes[i].BlastRadiusScore == nodes[j].BlastRadiusScore {
+			if nodes[i].Service == nodes[j].Service {
+				return nodes[i].NodeID < nodes[j].NodeID
+			}
 			return nodes[i].Service < nodes[j].Service
 		}
 		return nodes[i].BlastRadiusScore > nodes[j].BlastRadiusScore
@@ -1005,6 +1030,15 @@ func (s topologySnapshot) edgeList(source map[string]*topologyEdgeRecord, limit 
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Source == items[j].Source {
+			if items[i].Target == items[j].Target {
+				if items[i].ConnectivityClass == items[j].ConnectivityClass {
+					if items[i].EdgeType == items[j].EdgeType {
+						return items[i].EvidenceSource < items[j].EvidenceSource
+					}
+					return items[i].EdgeType < items[j].EdgeType
+				}
+				return items[i].ConnectivityClass < items[j].ConnectivityClass
+			}
 			return items[i].Target < items[j].Target
 		}
 		return items[i].Source < items[j].Source
@@ -1177,11 +1211,19 @@ func (s topologySnapshot) buildBlastRadiusResponse(subjectType string, subjectRe
 	}
 	sort.Slice(reachableNodes, func(i, j int) bool {
 		if reachableNodes[i].BlastRadiusScore == reachableNodes[j].BlastRadiusScore {
+			if reachableNodes[i].Service == reachableNodes[j].Service {
+				return reachableNodes[i].NodeID < reachableNodes[j].NodeID
+			}
 			return reachableNodes[i].Service < reachableNodes[j].Service
 		}
 		return reachableNodes[i].BlastRadiusScore > reachableNodes[j].BlastRadiusScore
 	})
-	sort.Slice(affected, func(i, j int) bool { return affected[i].Service < affected[j].Service })
+	sort.Slice(affected, func(i, j int) bool {
+		if affected[i].Service == affected[j].Service {
+			return affected[i].NodeID < affected[j].NodeID
+		}
+		return affected[i].Service < affected[j].Service
+	})
 	options := s.containmentOptions(primary, maxScore)
 	limitations := append([]string{}, s.limitations...)
 	if len(affected) == 0 {
@@ -1191,6 +1233,7 @@ func (s topologySnapshot) buildBlastRadiusResponse(subjectType string, subjectRe
 		limitations = append(limitations, "No strong containment simulation path was available from the current topology evidence.")
 	}
 	return topologyBlastRadiusResponse{
+		SchemaVersion:          topologyBlastRadiusSchemaVersion,
 		SubjectRef:             subjectRef,
 		SubjectType:            subjectType,
 		AffectedNodes:          affected,
@@ -1240,6 +1283,9 @@ func (s topologySnapshot) topRiskPaths(nodeID string, limit int) []topologyRiskP
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].node.BlastRadiusScore == candidates[j].node.BlastRadiusScore {
+			if candidates[i].node.Service == candidates[j].node.Service {
+				return candidates[i].node.NodeID < candidates[j].node.NodeID
+			}
 			return candidates[i].node.Service < candidates[j].node.Service
 		}
 		return candidates[i].node.BlastRadiusScore > candidates[j].node.BlastRadiusScore
@@ -1370,6 +1416,9 @@ func buildTopologyDeltaItems(current topologySnapshot, baseline topologySnapshot
 		left := absInt(items[i].Delta) + items[i].EdgeAdditions*4 + absInt(items[i].CriticalReachDelta)*8
 		right := absInt(items[j].Delta) + items[j].EdgeAdditions*4 + absInt(items[j].CriticalReachDelta)*8
 		if left == right {
+			if items[i].Service == items[j].Service {
+				return items[i].NodeID < items[j].NodeID
+			}
 			return items[i].Service < items[j].Service
 		}
 		return left > right
@@ -1554,6 +1603,9 @@ func topologyOrderedReachable(reachable []string, parents map[string]string, nod
 			return reachable[i] < reachable[j]
 		}
 		if left.SensitivityClass == right.SensitivityClass {
+			if left.Service == right.Service {
+				return left.NodeID < right.NodeID
+			}
 			return left.Service < right.Service
 		}
 		return sensitivityRank(left.SensitivityClass) > sensitivityRank(right.SensitivityClass)

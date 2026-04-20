@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStrictValidationExecutionSurfaces(t *testing.T) {
@@ -27,6 +28,9 @@ func TestStrictValidationExecutionSurfaces(t *testing.T) {
 	if len(scenarioResponse.Scenarios) < 7 {
 		t.Fatalf("expected strict validation scenario registry, got %#v", scenarioResponse)
 	}
+	if scenarioResponse.SchemaVersion != validationScenarioListSchemaVersion || scenarioResponse.Scenarios[0].SchemaVersion != validationScenarioSchemaVersion {
+		t.Fatalf("expected schema-versioned strict validation scenarios, got %#v", scenarioResponse)
+	}
 	if scenarioResponse.Scenarios[0].Version == "" || len(scenarioResponse.Scenarios[0].CleanupPlan) == 0 {
 		t.Fatalf("expected versioned scenario metadata with cleanup, got %#v", scenarioResponse.Scenarios[0])
 	}
@@ -46,6 +50,9 @@ func TestStrictValidationExecutionSurfaces(t *testing.T) {
 	}
 	if run.RunID == "" || len(run.Executions) != 2 || len(run.Verdicts) != 2 {
 		t.Fatalf("expected strict validation run with executions and verdicts, got %#v", run)
+	}
+	if run.SchemaVersion != validationRunSchemaVersion || run.Executions[0].SchemaVersion != validationExecutionSchemaVersion || run.Verdicts[0].SchemaVersion != validationVerdictSchemaVersion {
+		t.Fatalf("expected schema-versioned strict validation run payload, got %#v", run)
 	}
 	if run.Certificate.CertificateID == "" || !run.Certificate.SealReady {
 		t.Fatalf("expected seal-ready validation certificate, got %#v", run.Certificate)
@@ -71,6 +78,9 @@ func TestStrictValidationExecutionSurfaces(t *testing.T) {
 	}
 	if len(executionList.Executions) == 0 {
 		t.Fatalf("expected strict validation execution list, got %#v", executionList)
+	}
+	if executionList.SchemaVersion != validationExecutionListSchemaVersion {
+		t.Fatalf("expected schema-versioned execution list, got %#v", executionList)
 	}
 
 	executionReq := httptest.NewRequest(http.MethodGet, "/v1/validation/executions/"+run.Executions[0].ExecutionID+"?tenant_id=acme&environment=prod", nil)
@@ -111,6 +121,65 @@ func TestStrictValidationExecutionSurfaces(t *testing.T) {
 	}
 	if certificate.Scope == "" || len(certificate.ScenarioResults) == 0 {
 		t.Fatalf("expected strict validation certificate payload, got %#v", certificate)
+	}
+	if certificate.SchemaVersion != validationCertificateSchemaVersion {
+		t.Fatalf("expected schema-versioned validation certificate, got %#v", certificate)
+	}
+}
+
+func TestValidationScenarioRegistryAndCertificateAreDeterministic(t *testing.T) {
+	scenariosFirst := validationScenarioRegistry()
+	scenariosSecond := validationScenarioRegistry()
+	if string(canonicalJSONMust(scenariosFirst)) != string(canonicalJSONMust(scenariosSecond)) {
+		t.Fatalf("expected validation scenario registry to stay deterministic for the same input")
+	}
+
+	completedAt := time.Date(2026, time.April, 20, 12, 0, 0, 0, time.UTC)
+	executions := []validationExecution{{
+		SchemaVersion:  validationExecutionSchemaVersion,
+		RunID:          "VALRUN-test",
+		ExecutionID:    "VALEXEC-test",
+		ScenarioID:     validationScenarioSafeRelease,
+		Namespace:      "validation-shadow-acme-prod",
+		Mode:           validationModeRegression,
+		EnvironmentTag: "shadow",
+		IsolationClass: "digital_twin",
+		StartedAt:      completedAt.Add(-250 * time.Millisecond),
+		CompletedAt:    completedAt,
+		Status:         validationStatusPass,
+	}}
+	verdicts := []validationVerdict{{
+		SchemaVersion: validationVerdictSchemaVersion,
+		RunID:         "VALRUN-test",
+		VerdictID:     "VALVERDICT-test",
+		ExecutionID:   "VALEXEC-test",
+		ScenarioID:    validationScenarioSafeRelease,
+		Status:        validationStatusPass,
+		ExpectedOutcome: validationExpectedOutcome{
+			Verdict:            "allow",
+			LatencyThresholdMS: 250,
+		},
+		ObservedOutcome: validationObservedOutcome{
+			Verdict:   "allow",
+			LatencyMS: 225,
+			Summary:   "Deterministic validation sample.",
+		},
+	}}
+	filter := validationHarnessFilter{
+		ClusterID:   "local",
+		TenantID:    "acme",
+		Environment: "prod",
+		Repo:        "acme/platform-edge",
+		Service:     "edge-gateway",
+	}
+
+	first := strictValidationCertificate("VALRUN-test", filter, executions, verdicts, validationModeRegression)
+	second := strictValidationCertificate("VALRUN-test", filter, executions, verdicts, validationModeRegression)
+	if string(canonicalJSONMust(first)) != string(canonicalJSONMust(second)) {
+		t.Fatalf("expected validation certificate to stay deterministic for the same execution input")
+	}
+	if !first.IssuedAt.Equal(completedAt) {
+		t.Fatalf("expected certificate issuance to derive from execution completion time, got %s want %s", first.IssuedAt, completedAt)
 	}
 }
 

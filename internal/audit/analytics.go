@@ -25,6 +25,7 @@ type TrendBucket struct {
 }
 
 type TrendsResponse struct {
+	SchemaVersion  string                      `json:"schema_version"`
 	Buckets        []TrendBucket               `json:"buckets"`
 	Totals         map[string]int64            `json:"totals"`
 	AppliedFilters map[string]string           `json:"applied_filters"`
@@ -50,6 +51,7 @@ type TopViolator struct {
 }
 
 type TopViolatorsResponse struct {
+	SchemaVersion  string            `json:"schema_version"`
 	Items          []TopViolator     `json:"items"`
 	AppliedFilters map[string]string `json:"applied_filters"`
 }
@@ -73,6 +75,7 @@ type DriftWorkloadCount struct {
 }
 
 type DriftStatsResponse struct {
+	SchemaVersion            string               `json:"schema_version"`
 	TotalRuntimeDriftDenies  int64                `json:"total_runtime_drift_denies"`
 	CountsByDriftClass       map[string]int64     `json:"counts_by_drift_class"`
 	TopDriftedWorkloads      []DriftWorkloadCount `json:"top_drifted_workloads"`
@@ -226,11 +229,12 @@ type AnalyticsMetricTrend struct {
 }
 
 type AnalyticsDeltaResponse struct {
-	Definition  AnalyticsMetricDefinition  `json:"definition"`
-	Comparison  AnalyticsComparisonContext `json:"comparison"`
-	Segments    []AnalyticsSegmentDelta    `json:"segments"`
-	Summary     string                     `json:"summary"`
-	Limitations []string                   `json:"limitations,omitempty"`
+	SchemaVersion string                     `json:"schema_version"`
+	Definition    AnalyticsMetricDefinition  `json:"definition"`
+	Comparison    AnalyticsComparisonContext `json:"comparison"`
+	Segments      []AnalyticsSegmentDelta    `json:"segments"`
+	Summary       string                     `json:"summary"`
+	Limitations   []string                   `json:"limitations,omitempty"`
 }
 
 type AnalyticsAnomaly struct {
@@ -248,9 +252,10 @@ type AnalyticsAnomaly struct {
 }
 
 type AnalyticsAnomaliesResponse struct {
-	Comparison  AnalyticsComparisonContext `json:"comparison"`
-	Items       []AnalyticsAnomaly         `json:"items"`
-	Limitations []string                   `json:"limitations,omitempty"`
+	SchemaVersion string                     `json:"schema_version"`
+	Comparison    AnalyticsComparisonContext `json:"comparison"`
+	Items         []AnalyticsAnomaly         `json:"items"`
+	Limitations   []string                   `json:"limitations,omitempty"`
 }
 
 type AnalyticsScorecardCard struct {
@@ -265,9 +270,10 @@ type AnalyticsScorecardCard struct {
 }
 
 type AnalyticsScorecardsResponse struct {
-	Comparison  AnalyticsComparisonContext `json:"comparison"`
-	Cards       []AnalyticsScorecardCard   `json:"cards"`
-	Limitations []string                   `json:"limitations,omitempty"`
+	SchemaVersion string                     `json:"schema_version"`
+	Comparison    AnalyticsComparisonContext `json:"comparison"`
+	Cards         []AnalyticsScorecardCard   `json:"cards"`
+	Limitations   []string                   `json:"limitations,omitempty"`
 }
 
 type AnalyticsSegmentCatalogItem struct {
@@ -276,9 +282,10 @@ type AnalyticsSegmentCatalogItem struct {
 }
 
 type AnalyticsSegmentsResponse struct {
-	Comparison  AnalyticsComparisonContext    `json:"comparison"`
-	Items       []AnalyticsSegmentCatalogItem `json:"items"`
-	Limitations []string                      `json:"limitations,omitempty"`
+	SchemaVersion string                        `json:"schema_version"`
+	Comparison    AnalyticsComparisonContext    `json:"comparison"`
+	Items         []AnalyticsSegmentCatalogItem `json:"items"`
+	Limitations   []string                      `json:"limitations,omitempty"`
 }
 
 func NormalizeAnalyticsFilter(filter AnalyticsFilter) (AnalyticsFilter, error) {

@@ -159,6 +159,74 @@ func TestAdmissionReviewAllowsTrustedWorkload(t *testing.T) {
 	}
 }
 
+func TestAdmissionReviewDecisionIsIdempotentForSameInput(t *testing.T) {
+	t.Setenv("CHANGELOCK_POLICIES_DIR", "../../policies")
+	previousVerifier := artifactVerifier
+	artifactVerifier = fakeArtifactVerifier{
+		result: verify.ArtifactVerification{
+			SignatureValid:   true,
+			AttestationValid: true,
+			VerifiedIdentity: "https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main",
+			VerifiedRepo:     "my-org/acme-app",
+			VerifiedWorkflow: ".github/workflows/build-sign-attest.yml",
+			VerifiedSubject:  "repo:my-org/acme-app",
+			VerifiedDigest:   "sha256:abc123",
+		},
+	}
+	defer func() {
+		artifactVerifier = previousVerifier
+	}()
+
+	readOnly := true
+	noPrivEsc := false
+	runAsNonRoot := true
+
+	review := admissionReview{
+		Request: &admissionRequest{
+			UID:       "allow-idempotent-1",
+			Namespace: "acme-prod",
+			Kind:      objectReference{Kind: "Pod"},
+			Object: pod{
+				Metadata: objectMeta{
+					Annotations: map[string]string{
+						"changelock.io/tenant":       "acme",
+						"changelock.io/repository":   "my-org/acme-app",
+						"changelock.io/subject":      "repo:my-org/acme-app",
+						"changelock.io/workflow-sha": "abc123",
+					},
+				},
+				Spec: podSpec{
+					SecurityContext: &podSecurityContext{RunAsNonRoot: &runAsNonRoot},
+					Containers: []container{{
+						Name:  "app",
+						Image: "ghcr.io/my-org/acme-app@sha256:abc123",
+						SecurityContext: &securityContext{
+							ReadOnlyRootFilesystem:   &readOnly,
+							AllowPrivilegeEscalation: &noPrivEsc,
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	first := executeAdmissionRequest(t, review)
+	second := executeAdmissionRequest(t, review)
+
+	firstJSON, err := json.Marshal(first)
+	if err != nil {
+		t.Fatalf("Marshal(first) error = %v", err)
+	}
+	secondJSON, err := json.Marshal(second)
+	if err != nil {
+		t.Fatalf("Marshal(second) error = %v", err)
+	}
+
+	if string(firstJSON) != string(secondJSON) {
+		t.Fatalf("expected idempotent admission decision for same input, got %s then %s", firstJSON, secondJSON)
+	}
+}
+
 func TestAdmissionReviewDeniesMutableAndPrivilegedWorkload(t *testing.T) {
 	t.Setenv("CHANGELOCK_POLICIES_DIR", "../../policies")
 	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
@@ -217,6 +285,23 @@ func TestAdmissionReviewDeniesMutableAndPrivilegedWorkload(t *testing.T) {
 	deployEvent := findDecisionEvent(events, audit.EventTypeDeployGateDecision, audit.DecisionDeny)
 	if deployEvent == nil || len(deployEvent.Reasons) == 0 {
 		t.Fatalf("expected explainable DENY deploy gate event, got %#v", events)
+	}
+}
+
+func TestAdmissionReviewDeniesWhenArtifactVerifierErrors(t *testing.T) {
+	t.Setenv("CHANGELOCK_POLICIES_DIR", "../../policies")
+	previousVerifier := artifactVerifier
+	artifactVerifier = fakeArtifactVerifier{err: context.DeadlineExceeded}
+	defer func() {
+		artifactVerifier = previousVerifier
+	}()
+
+	response := executeAdmissionRequest(t, trustedAdmissionReview())
+	if response.Response.Allowed {
+		t.Fatalf("expected admission to deny, got %#v", response.Response)
+	}
+	if response.Response.Status == nil || !strings.Contains(response.Response.Status.Message, "artifact verifier error") {
+		t.Fatalf("expected artifact verifier failure to be visible, got %#v", response.Response)
 	}
 }
 

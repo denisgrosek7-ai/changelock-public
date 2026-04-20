@@ -223,6 +223,7 @@ type sealedBundleMetadata struct {
 }
 
 type verificationResult struct {
+	SchemaVersion       string   `json:"schema_version"`
 	PackageID           string   `json:"package_id"`
 	ManifestValid       bool     `json:"manifest_valid"`
 	ArtifactHashesValid bool     `json:"artifact_hashes_valid"`
@@ -274,6 +275,7 @@ type handoffStoredRecord struct {
 }
 
 type handoffSealResponse struct {
+	SchemaVersion   string               `json:"schema_version"`
 	PackageID       string               `json:"package_id"`
 	Manifest        sealedManifest       `json:"manifest"`
 	Session         handoffSessionRecord `json:"session"`
@@ -318,6 +320,7 @@ func (s server) handoffSealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpjson.Write(w, http.StatusOK, handoffSealResponse{
+		SchemaVersion:   handoffSealResponseSchemaVersion,
 		PackageID:       record.PackageID,
 		Manifest:        record.Manifest,
 		Session:         record.Session,
@@ -423,6 +426,7 @@ func (s server) getHandoffHandler(w http.ResponseWriter, r *http.Request, packag
 		return
 	}
 	httpjson.Write(w, http.StatusOK, handoffSealResponse{
+		SchemaVersion:   handoffSealResponseSchemaVersion,
 		PackageID:       record.PackageID,
 		Manifest:        record.Manifest,
 		Session:         record.Session,
@@ -529,6 +533,7 @@ func (s server) cosignHandoffHandler(w http.ResponseWriter, r *http.Request, pac
 		return
 	}
 	httpjson.Write(w, http.StatusOK, handoffSealResponse{
+		SchemaVersion:   handoffSealResponseSchemaVersion,
 		PackageID:       updated.PackageID,
 		Manifest:        updated.Manifest,
 		Session:         updated.Session,
@@ -1433,6 +1438,7 @@ func parseHandoffBundle(bundle []byte) (handoffStoredRecord, error) {
 
 func (s server) verifyStoredHandoff(record handoffStoredRecord) verificationResult {
 	result := verificationResult{
+		SchemaVersion:    handoffVerificationSchemaVersion,
 		PackageID:        record.PackageID,
 		SignerIdentities: []string{},
 		RedactionProfile: record.Manifest.RedactionProfile.Audience,
