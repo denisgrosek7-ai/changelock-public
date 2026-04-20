@@ -1,3 +1,8 @@
+import {
+  apiBaseURL,
+  createAdvisoryReadbackGrant,
+  getSystemicWeaknessReadback,
+} from "../api";
 import { buildOverviewModel } from "../overview";
 import type { ExecutiveDefenseReport, SystemicWeaknessResponse } from "../incidents";
 import type {
@@ -48,6 +53,19 @@ function shieldBandClass(value: string) {
   return value === "strong" ? "allow" : value === "watch" ? "warning" : "deny";
 }
 
+function absoluteReadbackURL(path: string) {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  const base = apiBaseURL();
+  if (/^https?:\/\//i.test(base)) {
+    return new URL(path, base).toString();
+  }
+  const normalizedBase = `${window.location.origin}${base.startsWith("/") ? base : `/${base}`}`.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 export function OverviewDashboard({
   health,
   summary,
@@ -74,6 +92,26 @@ export function OverviewDashboard({
     exceptionReport,
     syncStatus,
   });
+
+  async function copyReadbackPermalink(path: string) {
+    if (!navigator?.clipboard?.writeText) {
+      return;
+    }
+    await navigator.clipboard.writeText(absoluteReadbackURL(path));
+  }
+
+  async function openSystemicReadback(resourceID: string) {
+    const payload = await getSystemicWeaknessReadback(resourceID);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  async function openAuditorShare(resourceType: "systemic-weakness", resourceID: string) {
+    const grant = await createAdvisoryReadbackGrant(resourceType, resourceID, "auditor_safe", "posture-overview");
+    window.open(absoluteReadbackURL(grant.shareURL), "_blank", "noopener,noreferrer");
+  }
 
   return (
     <>
@@ -303,7 +341,20 @@ export function OverviewDashboard({
                     <p>{weakness.summary}</p>
                     <small>{weakness.rootCauseHypothesis}</small>
                   </div>
-                  <div className="overview-list-item__aside">{weakness.executiveRecommendation}</div>
+                  <div className="overview-list-item__aside">
+                    <div>{weakness.executiveRecommendation}</div>
+                    <div className="chip-row">
+                      <button type="button" className="button button-secondary" onClick={() => void copyReadbackPermalink(weakness.readback.resourceURI)}>
+                        Copy link
+                      </button>
+                      <button type="button" className="button button-secondary" onClick={() => void openSystemicReadback(weakness.readback.resourceID)}>
+                        Open readback
+                      </button>
+                      <button type="button" className="button button-secondary" onClick={() => void openAuditorShare("systemic-weakness", weakness.readback.resourceID)}>
+                        Auditor-safe
+                      </button>
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>

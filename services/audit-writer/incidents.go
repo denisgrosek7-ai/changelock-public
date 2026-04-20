@@ -174,6 +174,7 @@ type defenseGapAssessment struct {
 	AdvisoryOnly    bool                `json:"advisory_only"`
 	DefenseGaps     []defenseGapFinding `json:"defense_gaps"`
 	SystemicPattern defenseGapPattern   `json:"systemic_pattern"`
+	Readback        advisoryReadbackRef `json:"readback"`
 	Limitations     []string            `json:"limitations"`
 }
 
@@ -210,6 +211,7 @@ type policyReplayAssessment struct {
 	ReplayResults []policyReplayResult `json:"replay_results"`
 	CoverageGaps  []coverageGapFinding `json:"coverage_gaps"`
 	BlastRadius   replayBlastRadius    `json:"blast_radius"`
+	Readback      advisoryReadbackRef  `json:"readback"`
 	Limitations   []string             `json:"limitations"`
 }
 
@@ -251,17 +253,18 @@ type systemicWeaknessResponse struct {
 }
 
 type systemicWeakness struct {
-	PatternKey              string   `json:"pattern_key"`
-	Title                   string   `json:"title"`
-	Priority                string   `json:"priority"`
-	Summary                 string   `json:"summary"`
-	ProcessFragility        []string `json:"process_fragility"`
-	SupplyChainBlindSpots   []string `json:"supply_chain_blind_spots"`
-	RootCauseHypothesis     string   `json:"root_cause_hypothesis"`
-	ExecutiveRecommendation string   `json:"executive_recommendation"`
-	RelatedIncidentRefs     []string `json:"related_incident_refs"`
-	EvidenceRefs            []string `json:"evidence_refs"`
-	Limitations             []string `json:"limitations"`
+	PatternKey              string              `json:"pattern_key"`
+	Title                   string              `json:"title"`
+	Priority                string              `json:"priority"`
+	Summary                 string              `json:"summary"`
+	ProcessFragility        []string            `json:"process_fragility"`
+	SupplyChainBlindSpots   []string            `json:"supply_chain_blind_spots"`
+	RootCauseHypothesis     string              `json:"root_cause_hypothesis"`
+	ExecutiveRecommendation string              `json:"executive_recommendation"`
+	RelatedIncidentRefs     []string            `json:"related_incident_refs"`
+	EvidenceRefs            []string            `json:"evidence_refs"`
+	Readback                advisoryReadbackRef `json:"readback"`
+	Limitations             []string            `json:"limitations"`
 }
 
 type executiveDefenseReportResponse struct {
@@ -807,11 +810,11 @@ func (s server) scorecardMetricIncidentsHandler(w http.ResponseWriter, r *http.R
 			Limitations: metricDrilldownLimitations(metricKey),
 		})
 	case "defense-gaps":
-		httpjson.Write(w, http.StatusOK, buildMetricDefenseGapAssessment(definition.Key, incidents))
+		httpjson.Write(w, http.StatusOK, attachDefenseGapReadback(buildMetricDefenseGapAssessment(definition.Key, incidents), filter))
 	case "policy-replay":
-		httpjson.Write(w, http.StatusOK, buildMetricPolicyReplayAssessment(definition.Key, incidents))
+		httpjson.Write(w, http.StatusOK, attachPolicyReplayReadback(buildMetricPolicyReplayAssessment(definition.Key, incidents), filter))
 	case "systemic-weaknesses":
-		httpjson.Write(w, http.StatusOK, buildSystemicWeaknessResponse(incidents, definition.Label))
+		httpjson.Write(w, http.StatusOK, attachSystemicWeaknessReadback(buildSystemicWeaknessResponse(incidents, definition.Label), filter))
 	default:
 		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "metric not found"})
 	}
@@ -905,7 +908,7 @@ func (s server) getIncidentDefenseGapsHandler(w http.ResponseWriter, r *http.Req
 		writeIncidentError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, buildIncidentDefenseGapAssessment(incident, incidents))
+	httpjson.Write(w, http.StatusOK, attachDefenseGapReadback(buildIncidentDefenseGapAssessment(incident, incidents), filter))
 }
 
 func (s server) getIncidentPolicyReplayHandler(w http.ResponseWriter, r *http.Request, incidentID string) {
@@ -937,7 +940,7 @@ func (s server) getIncidentPolicyReplayHandler(w http.ResponseWriter, r *http.Re
 		writeIncidentError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, buildIncidentPolicyReplayAssessment(incident, incidents))
+	httpjson.Write(w, http.StatusOK, attachPolicyReplayReadback(buildIncidentPolicyReplayAssessment(incident, incidents), filter))
 }
 
 func (s server) defenseGapAssessmentsHandler(w http.ResponseWriter, r *http.Request) {
@@ -978,7 +981,7 @@ func (s server) defenseGapAssessmentsHandler(w http.ResponseWriter, r *http.Requ
 			writeIncidentError(w, err)
 			return
 		}
-		httpjson.Write(w, http.StatusOK, buildIncidentDefenseGapAssessment(incident, incidents))
+		httpjson.Write(w, http.StatusOK, attachDefenseGapReadback(buildIncidentDefenseGapAssessment(incident, incidents), filter))
 	case metricKey != "":
 		filter.ScorecardRef = metricKey
 		incidents, err := s.listIncidents(ctx, filter)
@@ -986,7 +989,7 @@ func (s server) defenseGapAssessmentsHandler(w http.ResponseWriter, r *http.Requ
 			writeIncidentError(w, err)
 			return
 		}
-		httpjson.Write(w, http.StatusOK, buildMetricDefenseGapAssessment(metricKey, incidents))
+		httpjson.Write(w, http.StatusOK, attachDefenseGapReadback(buildMetricDefenseGapAssessment(metricKey, incidents), filter))
 	default:
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "incident_id or metric_key is required"})
 	}
@@ -1030,7 +1033,7 @@ func (s server) policyReplayAssessmentsHandler(w http.ResponseWriter, r *http.Re
 			writeIncidentError(w, err)
 			return
 		}
-		httpjson.Write(w, http.StatusOK, buildIncidentPolicyReplayAssessment(incident, incidents))
+		httpjson.Write(w, http.StatusOK, attachPolicyReplayReadback(buildIncidentPolicyReplayAssessment(incident, incidents), filter))
 	case metricKey != "":
 		filter.ScorecardRef = metricKey
 		incidents, err := s.listIncidents(ctx, filter)
@@ -1038,14 +1041,14 @@ func (s server) policyReplayAssessmentsHandler(w http.ResponseWriter, r *http.Re
 			writeIncidentError(w, err)
 			return
 		}
-		httpjson.Write(w, http.StatusOK, buildMetricPolicyReplayAssessment(metricKey, incidents))
+		httpjson.Write(w, http.StatusOK, attachPolicyReplayReadback(buildMetricPolicyReplayAssessment(metricKey, incidents), filter))
 	default:
 		incidents, err := s.listIncidents(ctx, filter)
 		if err != nil {
 			writeIncidentError(w, err)
 			return
 		}
-		httpjson.Write(w, http.StatusOK, buildScopePolicyReplayAssessment(incidents))
+		httpjson.Write(w, http.StatusOK, attachPolicyReplayReadback(buildScopePolicyReplayAssessment(incidents), filter))
 	}
 }
 
@@ -1077,7 +1080,7 @@ func (s server) systemicWeaknessesHandler(w http.ResponseWriter, r *http.Request
 		writeIncidentError(w, err)
 		return
 	}
-	httpjson.Write(w, http.StatusOK, buildSystemicWeaknessResponse(incidents, "current filtered scope"))
+	httpjson.Write(w, http.StatusOK, attachSystemicWeaknessReadback(buildSystemicWeaknessResponse(incidents, "current filtered scope"), filter))
 }
 
 func (s server) executiveDefenseReportHandler(w http.ResponseWriter, r *http.Request) {
@@ -3721,7 +3724,7 @@ func buildIncidentDefenseGapAssessment(incident investigationIncident, incidents
 		AssessmentID:    defenseGapAssessmentID("incident", incident.ID, gapTypes),
 		SubjectType:     "incident",
 		SubjectRef:      incident.ID,
-		GeneratedAt:     time.Now().UTC(),
+		GeneratedAt:     advisoryGeneratedAt([]investigationIncident{incident}),
 		AdvisoryOnly:    true,
 		DefenseGaps:     findings,
 		SystemicPattern: pattern,
@@ -3771,7 +3774,7 @@ func buildMetricDefenseGapAssessment(metricKey string, incidents []investigation
 		AssessmentID:    defenseGapAssessmentID("metric", metricKey, gapTypes),
 		SubjectType:     "metric",
 		SubjectRef:      metricKey,
-		GeneratedAt:     time.Now().UTC(),
+		GeneratedAt:     advisoryGeneratedAt(incidents),
 		AdvisoryOnly:    true,
 		DefenseGaps:     findings,
 		SystemicPattern: pattern,
@@ -3952,12 +3955,34 @@ func defenseGapAssessmentID(subjectType, subjectRef string, gapTypes []string) s
 	return "DGA-" + strings.ToUpper(fmt.Sprintf("%x", sum[:]))[:10]
 }
 
+func advisoryGeneratedAt(incidents []investigationIncident) time.Time {
+	var latest time.Time
+	for _, incident := range incidents {
+		for _, candidate := range []*time.Time{
+			incident.LastActivityAt,
+			incident.UpdatedAt,
+			incident.LastSeenAt,
+			incident.OpenedAt,
+			incident.ResolvedAt,
+			incident.FirstSeenAt,
+		} {
+			if candidate != nil && candidate.After(latest) {
+				latest = candidate.UTC()
+			}
+		}
+	}
+	if latest.IsZero() {
+		return time.Unix(0, 0).UTC()
+	}
+	return latest.UTC()
+}
+
 func buildIncidentPolicyReplayAssessment(incident investigationIncident, incidents []investigationIncident) policyReplayAssessment {
 	return policyReplayAssessment{
 		AssessmentID: defenseGapAssessmentID("replay-incident", incident.ID, incident.ScorecardRefs),
 		SubjectType:  "incident",
 		SubjectRef:   incident.ID,
-		GeneratedAt:  time.Now().UTC(),
+		GeneratedAt:  advisoryGeneratedAt([]investigationIncident{incident}),
 		AdvisoryOnly: true,
 		ShadowMode:   true,
 		ReplayResults: []policyReplayResult{
@@ -3981,7 +4006,7 @@ func buildMetricPolicyReplayAssessment(metricKey string, incidents []investigati
 		AssessmentID:  defenseGapAssessmentID("replay-metric", metricKey, []string{metricKey}),
 		SubjectType:   "metric",
 		SubjectRef:    metricKey,
-		GeneratedAt:   time.Now().UTC(),
+		GeneratedAt:   advisoryGeneratedAt(incidents),
 		AdvisoryOnly:  true,
 		ShadowMode:    true,
 		ReplayResults: results,
@@ -4003,7 +4028,7 @@ func buildScopePolicyReplayAssessment(incidents []investigationIncident) policyR
 		AssessmentID:  defenseGapAssessmentID("replay-scope", "current-scope", nil),
 		SubjectType:   "scope",
 		SubjectRef:    "current filtered scope",
-		GeneratedAt:   time.Now().UTC(),
+		GeneratedAt:   advisoryGeneratedAt(incidents),
 		AdvisoryOnly:  true,
 		ShadowMode:    true,
 		ReplayResults: results,
@@ -4193,7 +4218,7 @@ func buildSystemicWeaknessResponse(incidents []investigationIncident, scopeSumma
 	})
 
 	return systemicWeaknessResponse{
-		GeneratedAt:  time.Now().UTC(),
+		GeneratedAt:  advisoryGeneratedAt(incidents),
 		AdvisoryOnly: true,
 		ScopeSummary: scopeSummary,
 		Weaknesses:   weaknesses,
