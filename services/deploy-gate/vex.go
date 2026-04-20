@@ -27,10 +27,10 @@ type vulnerabilityNetEvaluator interface {
 }
 
 type httpVulnerabilityNetEvaluator struct {
-	mode      string
-	baseURL   string
-	token     string
-	client    *http.Client
+	mode    string
+	baseURL string
+	token   string
+	client  *http.Client
 }
 
 func newVulnerabilityNetEvaluator() vulnerabilityNetEvaluator {

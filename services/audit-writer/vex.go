@@ -27,7 +27,7 @@ type vexStatementResponse struct {
 }
 
 type vexImportResponse struct {
-	Status string                 `json:"status"`
+	Status string                   `json:"status"`
 	Result internalvex.ImportResult `json:"result"`
 }
 

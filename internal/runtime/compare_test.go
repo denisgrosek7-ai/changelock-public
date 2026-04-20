@@ -133,11 +133,11 @@ func sampleApprovedState() ApprovedWorkloadState {
 
 func sampleObservedState() ObservedWorkloadState {
 	return ObservedWorkloadState{
-		Namespace:        "acme-prod",
-		WorkloadKind:     "Deployment",
-		Workload:         "booking-api",
+		Namespace:          "acme-prod",
+		WorkloadKind:       "Deployment",
+		Workload:           "booking-api",
 		ServiceAccountName: "booking-api",
-		ActualConfigHash: "cfg-123",
+		ActualConfigHash:   "cfg-123",
 		Containers: []ObservedContainerState{
 			{
 				Name:          "app",
