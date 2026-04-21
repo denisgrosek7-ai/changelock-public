@@ -84,6 +84,41 @@ func TestAdmissionReviewDeniesTrustedExecutionProfileMismatch(t *testing.T) {
 	}
 }
 
+func TestAdmissionReviewDeniesUnknownTrustedExecutionProfile(t *testing.T) {
+	t.Setenv("CHANGELOCK_POLICIES_DIR", "../../policies")
+	previousVerifier := artifactVerifier
+	previousSigner := signerIdentityEnforcer
+	artifactVerifier = fakeArtifactVerifier{
+		result: verify.ArtifactVerification{
+			SignatureValid:   true,
+			AttestationValid: true,
+			VerifiedIdentity: "https://github.com/my-org/acme-app/.github/workflows/build-sign-attest.yml@refs/heads/main",
+			VerifiedRepo:     "my-org/acme-app",
+			VerifiedWorkflow: ".github/workflows/build-sign-attest.yml",
+			VerifiedSubject:  "repo:my-org/acme-app",
+			VerifiedDigest:   "sha256:abc123",
+		},
+	}
+	signerIdentityEnforcer = &fakeSignerIdentityEvaluator{enabled: false, mode: signingidentity.EnforcementDisabled}
+	defer func() {
+		artifactVerifier = previousVerifier
+		signerIdentityEnforcer = previousSigner
+	}()
+
+	review := trustedAdmissionReview()
+	review.Request.UID = "deny-profile-unknown"
+	review.Request.Object.Metadata.Name = "payments-api"
+	review.Request.Object.Metadata.Annotations["changelock.io/trusted-execution-profile"] = "does-not-exist"
+
+	response := executeAdmissionRequest(t, review)
+	if response.Response.Allowed {
+		t.Fatalf("expected denial for unknown trusted execution profile, got %#v", response.Response)
+	}
+	if response.Response.Status == nil || response.Response.Status.Message == "" || !containsReason(response.Response.Status.Message, "trusted execution profile is unknown") {
+		t.Fatalf("expected unknown trusted execution profile in denial message, got %#v", response.Response)
+	}
+}
+
 func containsReason(value, expected string) bool {
 	return value != "" && expected != "" && strings.Contains(value, expected)
 }
