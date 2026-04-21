@@ -92,6 +92,27 @@ func TestExecutionConfidentialReadiness(t *testing.T) {
 	}
 }
 
+func TestHasConfidentialEvidenceUsesStructuredTokens(t *testing.T) {
+	metadataOnly := runtimePostureState{
+		SubjectRef:       "edge-service",
+		ReadinessSignals: []string{"runtime_findings_present"},
+		EvidenceRefs:     []string{"sample://runtime/edge-service"},
+	}
+	if hasConfidentialEvidence(metadataOnly) {
+		t.Fatalf("expected free-form service names not to trigger confidential evidence, got %#v", metadataOnly)
+	}
+
+	evidenceBacked := runtimePostureState{
+		SubjectRef:       "edge-service",
+		ReadinessSignals: []string{"confidential_execution_requested"},
+		EvidenceRefs:     []string{"sample://attestation/sev"},
+		ActualTrustState: runtimePostureTrustState{AttestationInputs: []string{"sev_attestation"}},
+	}
+	if !hasConfidentialEvidence(evidenceBacked) {
+		t.Fatalf("expected structured confidential evidence markers to be detected, got %#v", evidenceBacked)
+	}
+}
+
 func TestExecutionComplianceReadiness(t *testing.T) {
 	t.Setenv("CHANGELOCK_SIGNER_MODE", signing.ModeVaultTransit)
 	t.Setenv("CHANGELOCK_SIGNER_KEY_ID", "changelock-control-plane")
