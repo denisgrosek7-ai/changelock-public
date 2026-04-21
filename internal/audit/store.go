@@ -110,7 +110,8 @@ func NormalizeEvent(event Event, now func() time.Time) Event {
 	if event.Digest == "" {
 		event.Digest = DigestFromImage(event.Image)
 	}
-	return EnsureDecisionHash(event)
+	event = EnsureDecisionHash(event)
+	return EnsureExecutionEnvelope(event)
 }
 
 func ValidateEvent(event Event) error {
@@ -124,6 +125,27 @@ func ValidateEvent(event Event) error {
 	case DecisionAllow, DecisionDeny, DecisionError:
 	default:
 		return fmt.Errorf("%w: decision must be one of %q, %q, %q", ErrInvalidEvent, DecisionAllow, DecisionDeny, DecisionError)
+	}
+	if strings.TrimSpace(event.SchemaVersion) == "" {
+		return fmt.Errorf("%w: schema_version is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(event.EventID) == "" {
+		return fmt.Errorf("%w: event_id is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(event.TraceID) == "" {
+		return fmt.Errorf("%w: trace_id is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(event.CorrelationID) == "" {
+		return fmt.Errorf("%w: correlation_id is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(event.DecisionID) == "" {
+		return fmt.Errorf("%w: decision_id is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(event.IdempotencyKey) == "" {
+		return fmt.Errorf("%w: idempotency_key is required", ErrInvalidEvent)
+	}
+	if strings.TrimSpace(event.PayloadHash) == "" {
+		return fmt.Errorf("%w: payload_hash is required", ErrInvalidEvent)
 	}
 	return nil
 }
