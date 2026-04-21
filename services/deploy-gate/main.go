@@ -203,6 +203,9 @@ func evaluateAdmission(request admissionRequest) admissionResponse {
 
 	reasons := []string{}
 	reasons = append(reasons, evaluateRuntimePolicy(bundle.Runtime.Spec, request.Object)...)
+	if trustedExecution, trustedReasons := evaluateTrustedExecutionProfile(request, selectPrimaryImage(containers, primaryImage)); trustedExecution != nil {
+		reasons = append(reasons, trustedReasons...)
+	}
 	var primaryVerification *verify.ArtifactVerification
 	for _, workloadContainer := range append([]container{}, append(request.Object.Spec.InitContainers, request.Object.Spec.Containers...)...) {
 		verificationRequest, requestErr := buildVerificationRequest(bundle, annotations, workloadContainer.Image)

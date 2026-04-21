@@ -179,3 +179,55 @@ func TestNoImplicitFallbackFromVaultToSoftware(t *testing.T) {
 		t.Fatalf("expected vault configuration error, got %v", err)
 	}
 }
+
+func TestRuntimeDescribeProvider(t *testing.T) {
+	t.Run("software", func(t *testing.T) {
+		runtime, err := NewRuntime(Config{
+			Mode:           ModeSoftware,
+			Purposes:       map[string]struct{}{PurposeExceptions: {}},
+			KeyID:          "software-key",
+			Algorithm:      AlgorithmHMACSHA256,
+			VerifyOnRead:   true,
+			SoftwareSecret: "super-secret",
+		}, ProviderOptions{})
+		if err != nil {
+			t.Fatalf("NewRuntime() error = %v", err)
+		}
+		descriptor := runtime.DescribeProvider()
+		if descriptor.ProviderMode != ModeSoftware || descriptor.TrustBoundary != TrustBoundaryApplicationLocal || !descriptor.SupportsRotation {
+			t.Fatalf("unexpected software provider descriptor %#v", descriptor)
+		}
+	})
+
+	t.Run("vault transit", func(t *testing.T) {
+		runtime, err := NewRuntime(Config{
+			Mode:             ModeVaultTransit,
+			Purposes:         map[string]struct{}{PurposeSyncSnapshots: {}},
+			KeyID:            "transit/changelock",
+			Algorithm:        AlgorithmSHA2256,
+			VerifyOnRead:     true,
+			VaultAddr:        "https://vault.example.com",
+			VaultToken:       "vault-token",
+			VaultTransitPath: "transit",
+			VaultTransitKey:  "changelock",
+		}, ProviderOptions{HTTPClient: http.DefaultClient})
+		if err != nil {
+			t.Fatalf("NewRuntime() error = %v", err)
+		}
+		descriptor := runtime.DescribeProvider()
+		if descriptor.ProviderMode != ModeVaultTransit || descriptor.TrustBoundary != TrustBoundaryExternalManaged || descriptor.KeyExportability != "non_exportable_remote_key_material" {
+			t.Fatalf("unexpected vault transit descriptor %#v", descriptor)
+		}
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		runtime, err := NewRuntime(Config{Mode: ModeDisabled}, ProviderOptions{})
+		if err != nil {
+			t.Fatalf("NewRuntime() error = %v", err)
+		}
+		descriptor := runtime.DescribeProvider()
+		if descriptor.ProviderMode != ModeDisabled || descriptor.TrustBoundary != TrustBoundaryDisabled {
+			t.Fatalf("unexpected disabled descriptor %#v", descriptor)
+		}
+	})
+}

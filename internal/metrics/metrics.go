@@ -98,6 +98,20 @@ var (
 		},
 		[]string{"component", "backend"},
 	)
+	executionAsyncTaskTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "changelock_execution_async_task_total",
+			Help: "Total Phase 1 async task transitions by task type and state.",
+		},
+		[]string{"component", "task_type", "state"},
+	)
+	executionAsyncReplayTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "changelock_execution_async_replay_total",
+			Help: "Total Phase 1 async task replay requests.",
+		},
+		[]string{"component", "task_type", "outcome"},
+	)
 )
 
 func Handler() http.Handler {
@@ -183,6 +197,24 @@ func IncAuditStoreWriteFailure(component, backend string) {
 	).Inc()
 }
 
+func IncExecutionAsyncTask(component, taskType, state string) {
+	ensureRegistered()
+	executionAsyncTaskTotal.WithLabelValues(
+		normalizeLabel(component, "unknown"),
+		normalizeLabel(taskType, "unknown"),
+		normalizeLabel(state, "unknown"),
+	).Inc()
+}
+
+func IncExecutionAsyncReplay(component, taskType, outcome string) {
+	ensureRegistered()
+	executionAsyncReplayTotal.WithLabelValues(
+		normalizeLabel(component, "unknown"),
+		normalizeLabel(taskType, "unknown"),
+		normalizeLabel(outcome, "unknown"),
+	).Inc()
+}
+
 func ensureRegistered() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(
@@ -198,6 +230,8 @@ func ensureRegistered() {
 			auditForwardingFailureTotal,
 			auditStoreWriteSuccessTotal,
 			auditStoreWriteFailureTotal,
+			executionAsyncTaskTotal,
+			executionAsyncReplayTotal,
 		)
 	})
 }

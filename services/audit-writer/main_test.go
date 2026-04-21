@@ -132,11 +132,18 @@ func TestIngestStoresEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListEvents() error = %v", err)
 	}
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
+	if len(events) < 1 {
+		t.Fatalf("expected at least 1 event, got %d", len(events))
 	}
-	if events[0].RequestID != "req-123" {
-		t.Fatalf("expected request id from header, got %#v", events[0])
+	foundDeploy := false
+	for _, item := range events {
+		if item.RequestID == "req-123" && item.EventType == audit.EventTypeDeployGateDecision {
+			foundDeploy = true
+			break
+		}
+	}
+	if !foundDeploy {
+		t.Fatalf("expected deploy-gate event with request id from header, got %#v", events)
 	}
 }
 
@@ -1169,13 +1176,13 @@ func TestPostgresReportsRoundTripPreservesRawEventAndSummary(t *testing.T) {
 	if err := json.NewDecoder(eventsRec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode events response: %v", err)
 	}
-	if len(response.Events) != 2 {
-		t.Fatalf("expected 2 events, got %#v", response)
+	if len(response.Events) < 2 {
+		t.Fatalf("expected at least 2 events, got %#v", response)
 	}
 
 	var deployRecord *audit.StoredEvent
 	for i := range response.Events {
-		if response.Events[i].RequestID == "req-postgres-deny" {
+		if response.Events[i].RequestID == "req-postgres-deny" && response.Events[i].EventType == audit.EventTypeDeployGateDecision {
 			deployRecord = &response.Events[i]
 			break
 		}
@@ -1201,11 +1208,14 @@ func TestPostgresReportsRoundTripPreservesRawEventAndSummary(t *testing.T) {
 	if err := json.NewDecoder(summaryRec.Body).Decode(&summary); err != nil {
 		t.Fatalf("decode summary response: %v", err)
 	}
-	if summary.TotalEvents != 2 || summary.TotalDeny != 2 {
+	if summary.TotalEvents < 2 || summary.TotalDeny != 2 {
 		t.Fatalf("unexpected summary %#v", summary)
 	}
 	if summary.CountsByEventType[audit.EventTypeDeployGateDecision] != 1 || summary.CountsByEventType[audit.EventTypeRuntimeDriftResult] != 1 {
 		t.Fatalf("unexpected event-type counts %#v", summary.CountsByEventType)
+	}
+	if summary.CountsByEventType[audit.EventTypeExecutionTraceRecorded] < 2 {
+		t.Fatalf("expected trace evidence to be summarized, got %#v", summary.CountsByEventType)
 	}
 	if summary.RecentRuntimeDriftDeny != 1 {
 		t.Fatalf("expected runtime drift deny count, got %#v", summary)
