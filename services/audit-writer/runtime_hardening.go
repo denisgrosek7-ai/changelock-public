@@ -81,9 +81,15 @@ type hardeningPolicyDecision struct {
 	AssessmentRef       string   `json:"assessment_ref"`
 	PolicyRef           string   `json:"policy_ref"`
 	AllowedActions      []string `json:"allowed_actions"`
+	ResponseMode        string   `json:"response_mode,omitempty"`
 	ApprovalMode        string   `json:"approval_mode"`
+	ApprovalRequired    bool     `json:"approval_required"`
+	ConfidenceLevel     string   `json:"confidence_level,omitempty"`
+	ForensicFirst       bool     `json:"forensic_first"`
 	TTL                 string   `json:"ttl"`
 	RollbackRequired    bool     `json:"rollback_required"`
+	LeastInvasiveRank   int      `json:"least_invasive_rank,omitempty"`
+	SafetyLimitRef      string   `json:"safety_limit_ref,omitempty"`
 	ForensicRequirement string   `json:"forensic_requirement"`
 	DecisionSummary     string   `json:"decision_summary"`
 }
@@ -560,10 +566,12 @@ func buildHardeningAssessment(finding runtimeIntegrityFinding, workload runtimeW
 		recommendedClass = hardeningModeProcessHardening
 	case runtimeFindingSBOMMismatch, runtimeFindingContainerIDMismatch:
 		recommendedClass = hardeningModeTrustedRecovery
-	case runtimeFindingUnknownBinaryExec, runtimeFindingUnsignedBinaryExec, runtimeFindingMemoryExecAnomaly:
+	case runtimeFindingUnknownBinaryExec, runtimeFindingUnsignedBinaryExec, runtimeFindingMemoryExecAnomaly, runtimeFindingAttestationMismatch:
 		recommendedClass = hardeningModeForensicPreserving
-	case runtimeFindingOutboundDrift:
+	case runtimeFindingOutboundDrift, runtimeFindingTopologyExpansion:
 		recommendedClass = hardeningModeSoftIsolation
+	case runtimeFindingProfileDeviation:
+		recommendedClass = hardeningModeProcessHardening
 	}
 	reasons := []string{
 		"source:9i_runtime_finding",
@@ -653,18 +661,25 @@ func buildHardeningPolicyDecision(trigger hardeningTrigger, assessment hardening
 		ttl,
 		approvalMode,
 	)
-	return hardeningPolicyDecision{
+	decision := hardeningPolicyDecision{
 		SchemaVersion:       hardeningPolicyDecisionSchemaVersion,
 		DecisionID:          recommendationID("hardening-policy", trigger.SubjectRef, trigger.TriggerType),
 		AssessmentRef:       assessment.AssessmentID,
 		PolicyRef:           fmt.Sprintf("runtime_closed_loop_hardening.v1:%s:%s", trigger.TriggerType, assessment.RecommendedHardeningClass),
 		AllowedActions:      uniqueStrings(allowed),
+		ResponseMode:        runtimeResponseModeForApprovalMode(approvalMode),
 		ApprovalMode:        approvalMode,
+		ApprovalRequired:    approvalMode == recommendationApprovalHumanReview,
+		ConfidenceLevel:     firstNonEmpty(strings.TrimSpace(trigger.Confidence), runtimeConfidenceMedium),
+		ForensicFirst:       assessment.ForensicFirst,
 		TTL:                 ttl,
 		RollbackRequired:    true,
+		LeastInvasiveRank:   hardeningLeastInvasiveRank(allowed),
 		ForensicRequirement: forensicRequirement,
 		DecisionSummary:     summary,
 	}
+	decision.SafetyLimitRef = hardeningSafetyLimitRef(assessment, decision)
+	return decision
 }
 
 func planHardeningActions(trigger hardeningTrigger, assessment hardeningAssessment, decision hardeningPolicyDecision, filter runtimeIntegrityFilter, forcedAction string) ([]hardeningAction, error) {
@@ -925,9 +940,15 @@ func (s server) rollbackHardeningExecution(ctx context.Context, principal auth.P
 			AssessmentRef:       recommendationID("hardening-rollback", record.SubjectRef, "assessment"),
 			PolicyRef:           "runtime_closed_loop_hardening.v1:rollback",
 			AllowedActions:      []string{hardeningActionRollbackRestrictions},
+			ResponseMode:        runtimeResponseModeBoundedAutonomous,
 			ApprovalMode:        recommendationApprovalAutoSafe,
+			ApprovalRequired:    false,
+			ConfidenceLevel:     runtimeConfidenceHigh,
+			ForensicFirst:       false,
 			TTL:                 "0s",
 			RollbackRequired:    false,
+			LeastInvasiveRank:   hardeningActionRank(hardeningActionRollbackRestrictions),
+			SafetyLimitRef:      runtimeSafetyLimitAdvisoryOnly,
 			ForensicRequirement: "linked_when_available",
 			DecisionSummary:     "Rollback is allowed because the active hardening record is reversible and bounded by TTL.",
 		},
@@ -1038,9 +1059,15 @@ func (s server) recoverHardenedSubject(ctx context.Context, principal auth.Princ
 			AssessmentRef:       recommendationID("hardening-recovery", record.SubjectRef, "assessment"),
 			PolicyRef:           "runtime_closed_loop_hardening.v1:trusted_recovery",
 			AllowedActions:      []string{hardeningActionRestartTrusted},
+			ResponseMode:        runtimeResponseModeBoundedAutonomous,
 			ApprovalMode:        recommendationApprovalAutoSafe,
+			ApprovalRequired:    false,
+			ConfidenceLevel:     runtimeConfidenceHigh,
+			ForensicFirst:       false,
 			TTL:                 "0s",
 			RollbackRequired:    false,
+			LeastInvasiveRank:   hardeningActionRank(hardeningActionRestartTrusted),
+			SafetyLimitRef:      runtimeSafetyLimitTrustedRecovery,
 			ForensicRequirement: "linked_when_available",
 			DecisionSummary:     "Trusted recovery is allowed because the workload re-verified cleanly before temporary restrictions were removed.",
 		},
@@ -1342,7 +1369,7 @@ func (s server) buildDefensePostureStates(ctx context.Context, filter runtimeInt
 
 func hardeningRequiresForensics(finding runtimeIntegrityFinding) bool {
 	switch finding.FindingType {
-	case runtimeFindingUnknownBinaryExec, runtimeFindingUnsignedBinaryExec, runtimeFindingMemoryExecAnomaly, runtimeFindingFilesystemMutation, runtimeFindingPrivilegeDrift, runtimeFindingSBOMMismatch:
+	case runtimeFindingUnknownBinaryExec, runtimeFindingUnsignedBinaryExec, runtimeFindingMemoryExecAnomaly, runtimeFindingFilesystemMutation, runtimeFindingPrivilegeDrift, runtimeFindingSBOMMismatch, runtimeFindingAttestationMismatch, runtimeFindingProfileDeviation:
 		return true
 	default:
 		return runtimeSeverityRank(finding.Severity) >= runtimeSeverityRank("high")

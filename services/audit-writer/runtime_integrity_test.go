@@ -59,6 +59,12 @@ func TestRuntimeIntegrityStateFindingsAndEnforcement(t *testing.T) {
 	if binaryFinding.ForensicContextURI == "" || len(binaryFinding.ReadbackRefs) == 0 {
 		t.Fatalf("expected forensic and readback lineage on runtime finding, got %#v", binaryFinding)
 	}
+	if binaryFinding.RulePackRef != "binary_execution_integrity" || binaryFinding.Explainability.SchemaVersion != runtimeExplainabilitySchema {
+		t.Fatalf("expected rule-pack and explainability contract on runtime finding, got %#v", binaryFinding)
+	}
+	if binaryFinding.Explainability.ResponsePath.PolicyRef == "" || len(binaryFinding.Explainability.NextSteps) == 0 {
+		t.Fatalf("expected explainable response path and next steps on runtime finding, got %#v", binaryFinding.Explainability)
+	}
 	outboundFinding := findRuntimeFinding(t, findings.Items, runtimeFindingOutboundDrift, "edge-gateway")
 	if outboundFinding.Severity != "medium" {
 		t.Fatalf("expected medium outbound drift severity, got %#v", outboundFinding)
@@ -102,6 +108,9 @@ func TestRuntimeIntegrityStateFindingsAndEnforcement(t *testing.T) {
 	}
 	if evaluated.TopologyContext == nil {
 		t.Fatalf("expected topology-aware containment evaluation, got %#v", evaluated)
+	}
+	if evaluated.RulePackRef != binaryFinding.RulePackRef || evaluated.Explainability.ResponsePath.SelectedAction != runtimeActionApplyNetworkIsolation {
+		t.Fatalf("expected runtime enforcement to retain rule-pack and explainability linkage, got %#v", evaluated)
 	}
 
 	quarantinePendingReq := httptest.NewRequest(
@@ -181,6 +190,50 @@ func TestRuntimeIntegrityStateFindingsAndEnforcement(t *testing.T) {
 	}
 	if !containsRuntimeAction(history.Items, runtimeActionApplyNetworkIsolation) || !containsRuntimeAction(history.Items, runtimeActionCaptureForensics) {
 		t.Fatalf("expected enforcement history to retain quarantine and forensic actions, got %#v", history)
+	}
+}
+
+func TestRuntimeRulePacksAndPostureContracts(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	rulePackReq := httptest.NewRequest(http.MethodGet, "/v1/runtime/rule-packs?tenant_id=acme&environment=prod", nil)
+	rulePackReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rulePackRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rulePackRec, rulePackReq)
+	if rulePackRec.Code != http.StatusOK {
+		t.Fatalf("expected runtime rule-packs 200, got %d: %s", rulePackRec.Code, rulePackRec.Body.String())
+	}
+
+	var rulePacks runtimeRulePackListResponse
+	if err := json.NewDecoder(rulePackRec.Body).Decode(&rulePacks); err != nil {
+		t.Fatalf("decode runtime rule-packs: %v", err)
+	}
+	if rulePacks.SchemaVersion != runtimeRulePackSchemaVersion {
+		t.Fatalf("expected rule-pack schema version, got %#v", rulePacks)
+	}
+	binaryPack := findRuntimeRulePack(t, rulePacks.Items, "binary_execution_integrity")
+	if binaryPack.DefaultNextAction != runtimeActionApplyNetworkIsolation || binaryPack.ExecutionStatus != runtimeRulePackStatusEnforceable {
+		t.Fatalf("expected enforceable binary execution pack, got %#v", binaryPack)
+	}
+
+	postureReq := httptest.NewRequest(http.MethodGet, "/v1/runtime/posture?tenant_id=acme&environment=prod&limit=10", nil)
+	postureReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	postureRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(postureRec, postureReq)
+	if postureRec.Code != http.StatusOK {
+		t.Fatalf("expected runtime posture 200, got %d: %s", postureRec.Code, postureRec.Body.String())
+	}
+
+	var posture runtimePostureListResponse
+	if err := json.NewDecoder(postureRec.Body).Decode(&posture); err != nil {
+		t.Fatalf("decode runtime posture: %v", err)
+	}
+	edgePosture := findRuntimePosture(t, posture.Items, "edge-gateway")
+	if edgePosture.SchemaVersion != runtimePostureSchemaVersion || edgePosture.SchedulingGuidance.Decision != runtimeSchedulingIsolatedReview {
+		t.Fatalf("expected isolated-review runtime posture contract, got %#v", edgePosture)
+	}
+	if !containsRuntimeMismatch(edgePosture.Mismatches, runtimeMismatchCriticalFindings) {
+		t.Fatalf("expected critical finding mismatch in runtime posture, got %#v", edgePosture)
 	}
 }
 
@@ -348,6 +401,37 @@ func findRuntimeFinding(t *testing.T, items []runtimeIntegrityFinding, findingTy
 func containsRuntimeAction(items []runtimeEnforcementDecision, action string) bool {
 	for _, item := range items {
 		if item.Action == action {
+			return true
+		}
+	}
+	return false
+}
+
+func findRuntimeRulePack(t *testing.T, items []runtimeRulePack, packID string) runtimeRulePack {
+	t.Helper()
+	for _, item := range items {
+		if item.PackID == packID {
+			return item
+		}
+	}
+	t.Fatalf("runtime rule-pack %s not found", packID)
+	return runtimeRulePack{}
+}
+
+func findRuntimePosture(t *testing.T, items []runtimePostureState, workload string) runtimePostureState {
+	t.Helper()
+	for _, item := range items {
+		if strings.Contains(item.SubjectRef, workload) {
+			return item
+		}
+	}
+	t.Fatalf("runtime posture for %s not found", workload)
+	return runtimePostureState{}
+}
+
+func containsRuntimeMismatch(items []runtimePostureMismatch, code string) bool {
+	for _, item := range items {
+		if item.Code == code {
 			return true
 		}
 	}

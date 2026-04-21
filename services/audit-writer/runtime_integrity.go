@@ -58,6 +58,9 @@ const (
 	runtimeFindingSBOMMismatch        = "sbom_runtime_mismatch_signal"
 	runtimeFindingMemoryExecAnomaly   = "memory_execution_anomaly"
 	runtimeFindingContainerIDMismatch = "container_identity_mismatch"
+	runtimeFindingAttestationMismatch = "policy_runtime_attestation_mismatch"
+	runtimeFindingTopologyExpansion   = "topology_expansion_under_attack"
+	runtimeFindingProfileDeviation    = "suspicious_runtime_profile_deviation"
 
 	runtimeActionObserveOnly           = "observe_only"
 	runtimeActionAlert                 = "alert"
@@ -139,6 +142,7 @@ type runtimeSBOMVerificationResult struct {
 type runtimeIntegrityFinding struct {
 	SchemaVersion      string                `json:"schema_version"`
 	FindingID          string                `json:"finding_id"`
+	RulePackRef        string                `json:"rule_pack_ref,omitempty"`
 	FindingType        string                `json:"finding_type"`
 	Severity           string                `json:"severity"`
 	SubjectRef         string                `json:"subject_ref"`
@@ -152,6 +156,7 @@ type runtimeIntegrityFinding struct {
 	ForensicContextURI string                `json:"forensic_context_uri,omitempty"`
 	Confidence         string                `json:"confidence"`
 	RecommendedAction  string                `json:"recommended_action"`
+	Explainability     runtimeExplainability `json:"explainability"`
 	Limitations        []string              `json:"limitations,omitempty"`
 }
 
@@ -175,10 +180,19 @@ type runtimeEnforcementTopologyContext struct {
 type runtimeEnforcementDecision struct {
 	SchemaVersion      string                             `json:"schema_version"`
 	DecisionID         string                             `json:"decision_id"`
+	RulePackRef        string                             `json:"rule_pack_ref,omitempty"`
 	SubjectRef         string                             `json:"subject_ref"`
 	TriggerFinding     string                             `json:"trigger_finding,omitempty"`
 	Action             string                             `json:"action"`
+	ResponseMode       string                             `json:"response_mode,omitempty"`
 	ApprovalMode       string                             `json:"approval_mode"`
+	ApprovalRequired   bool                               `json:"approval_required"`
+	ConfidenceLevel    string                             `json:"confidence_level,omitempty"`
+	ForensicFirst      bool                               `json:"forensic_first"`
+	RollbackRequired   bool                               `json:"rollback_required"`
+	TTL                string                             `json:"ttl,omitempty"`
+	LeastInvasiveRank  int                                `json:"least_invasive_rank,omitempty"`
+	SafetyLimitRef     string                             `json:"safety_limit_ref,omitempty"`
 	Executed           bool                               `json:"executed"`
 	ExecutionResult    string                             `json:"execution_result"`
 	PolicyRef          string                             `json:"policy_ref"`
@@ -186,6 +200,7 @@ type runtimeEnforcementDecision struct {
 	ForensicContextURI string                             `json:"forensic_context_uri,omitempty"`
 	TopologyContext    *runtimeEnforcementTopologyContext `json:"topology_context,omitempty"`
 	EvaluatedAt        time.Time                          `json:"evaluated_at"`
+	Explainability     runtimeExplainability              `json:"explainability"`
 	Limitations        []string                           `json:"limitations,omitempty"`
 }
 
@@ -293,6 +308,7 @@ type runtimeIntegrityEventPayload struct {
 	Observation      *runtimeObservationPayload      `json:"observation,omitempty"`
 	SBOMVerification *runtimeSBOMVerificationPayload `json:"sbom_verification,omitempty"`
 	ForensicContext  string                          `json:"forensic_context_uri,omitempty"`
+	Enforcement      *runtimeEnforcementDecision     `json:"enforcement,omitempty"`
 }
 
 type runtimeSnapshotSubject struct {
@@ -701,10 +717,11 @@ func (s server) buildRuntimeFindings(ctx context.Context, filter runtimeIntegrit
 		if err != nil {
 			return nil, nil, err
 		}
-		sbom := s.subjectSBOMVerification(subject)
-		readbackRefs, _ := s.runtimeReadbackRefs(ctx, snapshot.filter, subject)
-		findings = append(findings, s.findingsFromLegacyDrift(subject, profile, sbom, readbackRefs)...)
-		findings = append(findings, s.findingsFromObservations(subject, profile, sbom, readbackRefs)...)
+		items, err := s.findingsForSubject(ctx, snapshot.filter, subject, profile)
+		if err != nil {
+			return nil, nil, err
+		}
+		findings = append(findings, items...)
 	}
 	sort.Slice(findings, func(i, j int) bool {
 		if findings[i].Severity == findings[j].Severity {
@@ -738,6 +755,7 @@ func (s server) buildRuntimeFindings(ctx context.Context, filter runtimeIntegrit
 	}
 	limitations := []string{
 		"Runtime findings are backend-derived from canonical runtime-agent events, artifact trust state, SBOM references, topology context, and explicit runtime observations; they do not create a separate runtime truth layer.",
+		"Each finding now carries a stable rule-pack reference and explainability contract so severity, action semantics, and forensic linkage stay aligned across runtime surfaces.",
 		"Memory-related findings reflect unexpected executable mappings or loaded-state anomalies that are evidenced in runtime signals; they are not presented as absolute full-RAM malware detection.",
 	}
 	return findings, uniqueStrings(limitations), nil
@@ -821,6 +839,30 @@ func (s server) evaluateRuntimeEnforcement(ctx context.Context, filter runtimeIn
 	if err != nil {
 		return runtimeEnforcementDecision{}, err
 	}
+	var (
+		sbom            runtimeSBOMVerificationResult
+		sandboxDecision runtimeSandboxDecision
+		state           runtimeIntegrityState
+		expectedSigners []string
+	)
+	snapshot, err := s.buildRuntimeSnapshot(ctx, filter)
+	if err != nil {
+		return runtimeEnforcementDecision{}, err
+	}
+	if subject := snapshot.snapshotSubject(finding.SubjectRef); subject != nil {
+		profile, err := s.profileFromSubject(ctx, filter, subject)
+		if err != nil {
+			return runtimeEnforcementDecision{}, err
+		}
+		subjectFindings, err := s.findingsForSubject(ctx, filter, subject, profile)
+		if err != nil {
+			return runtimeEnforcementDecision{}, err
+		}
+		sbom = s.subjectSBOMVerification(subject)
+		sandboxDecision = s.buildRuntimeSandboxDecision(subject, subjectFindings, sbom)
+		state = s.buildRuntimeIntegrityState(subject, subjectFindings, sandboxDecision, sbom)
+		expectedSigners = append([]string{}, subject.ExpectedSigners...)
+	}
 	approvalMode := recommendationApprovalAutoSafe
 	limitations := []string{
 		"Observation, decision, and execution remain separate in the runtime integrity layer; evaluation alone does not mutate workload state.",
@@ -835,13 +877,30 @@ func (s server) evaluateRuntimeEnforcement(ctx context.Context, filter runtimeIn
 			approvalMode = recommendationApprovalHumanReview
 		}
 	}
+	forensicFirst := runtimeActionRequiresForensicFirst(action, *finding)
+	ttl := runtimeTTLForAction(action)
+	approvalRequired := approvalMode == recommendationApprovalHumanReview
+	responseMode := runtimeResponseModeForApprovalMode(approvalMode)
+	rollbackRequired := runtimeRollbackRequired(action)
+	leastInvasiveRank := runtimeLeastInvasiveRank(action)
+	safetyLimitRef := runtimeSafetyLimitRef(action, topologyContext, approvalMode)
+	confidenceLevel := firstNonEmpty(strings.TrimSpace(finding.Confidence), runtimeConfidenceThresholdForAction(action))
 	return runtimeEnforcementDecision{
 		SchemaVersion:      runtimeEnforcementSchemaVersion,
 		DecisionID:         recommendationID("runtime-enforcement", finding.SubjectRef, action),
+		RulePackRef:        firstNonEmpty(finding.RulePackRef, runtimeFindingRulePackRef(finding.FindingType)),
 		SubjectRef:         finding.SubjectRef,
 		TriggerFinding:     finding.FindingID,
 		Action:             action,
+		ResponseMode:       responseMode,
 		ApprovalMode:       approvalMode,
+		ApprovalRequired:   approvalRequired,
+		ConfidenceLevel:    confidenceLevel,
+		ForensicFirst:      forensicFirst,
+		RollbackRequired:   rollbackRequired,
+		TTL:                ttl,
+		LeastInvasiveRank:  leastInvasiveRank,
+		SafetyLimitRef:     safetyLimitRef,
 		Executed:           false,
 		ExecutionResult:    "evaluation_only",
 		PolicyRef:          runtimePolicyRef(finding, action),
@@ -849,7 +908,23 @@ func (s server) evaluateRuntimeEnforcement(ctx context.Context, filter runtimeIn
 		ForensicContextURI: firstNonEmpty(finding.ForensicContextURI, runtimeForensicContextURI(filter, finding.SubjectRef, time.Now().UTC())),
 		TopologyContext:    topologyContext,
 		EvaluatedAt:        time.Now().UTC(),
-		Limitations:        uniqueStrings(limitations),
+		Explainability: runtimeExplainabilityForDecision(runtimeEnforcementDecision{
+			Action:             action,
+			ResponseMode:       responseMode,
+			ApprovalMode:       approvalMode,
+			ApprovalRequired:   approvalRequired,
+			ConfidenceLevel:    confidenceLevel,
+			ForensicFirst:      forensicFirst,
+			RollbackRequired:   rollbackRequired,
+			TTL:                ttl,
+			LeastInvasiveRank:  leastInvasiveRank,
+			SafetyLimitRef:     safetyLimitRef,
+			PolicyRef:          runtimePolicyRef(finding, action),
+			ForensicContextURI: firstNonEmpty(finding.ForensicContextURI, runtimeForensicContextURI(filter, finding.SubjectRef, time.Now().UTC())),
+			TopologyContext:    topologyContext,
+			EvidenceRefs:       uniqueStrings(append([]string{}, finding.EvidenceRefs...)),
+		}, *finding, sandboxDecision, state, expectedSigners, sbom),
+		Limitations: uniqueStrings(limitations),
 	}, nil
 }
 
@@ -888,6 +963,7 @@ func (s server) executeRuntimeAction(ctx context.Context, principal auth.Princip
 func (s server) persistRuntimeEnforcementDecision(ctx context.Context, principal auth.Principal, decision runtimeEnforcementDecision, eventType string, summary string) error {
 	payload, err := canonicalJSON(runtimeIntegrityEventPayload{
 		ForensicContext: decision.ForensicContextURI,
+		Enforcement:     &decision,
 	})
 	if err != nil {
 		return err
@@ -1289,6 +1365,22 @@ func (s server) findingsForSubject(ctx context.Context, filter runtimeIntegrityF
 	sbom := s.subjectSBOMVerification(subject)
 	items := s.findingsFromLegacyDrift(subject, profile, sbom, readbackRefs)
 	items = append(items, s.findingsFromObservations(subject, profile, sbom, readbackRefs)...)
+	topologyContext, _ := s.runtimeTopologyForSubject(ctx, filter, subject.SubjectRef)
+	items = append(items, runtimeDerivedContextFindings(subject, profile, items, readbackRefs, topologyContext)...)
+	sandbox := s.buildRuntimeSandboxDecision(subject, items, sbom)
+	state := s.buildRuntimeIntegrityState(subject, items, sandbox, sbom)
+	for i := range items {
+		if items[i].RulePackRef == "" {
+			items[i].RulePackRef = runtimeFindingRulePackRef(items[i].FindingType)
+		}
+		items[i].Explainability = runtimeExplainabilityForFinding(items[i], sbom, sandbox, state, topologyContext, subject.ExpectedSigners)
+		if items[i].Explainability.TrustContext.DesiredStateVerification == "" {
+			items[i].Explainability.TrustContext.DesiredStateVerification = runtimeFindingDesiredStateVerification(subject)
+		}
+		if items[i].Explainability.ResponsePath.PolicyRef == "" {
+			items[i].Explainability.ResponsePath.PolicyRef = items[i].MatchedPolicyRule
+		}
+	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Severity == items[j].Severity {
 			return items[i].FindingID < items[j].FindingID
@@ -1323,6 +1415,7 @@ func (s server) findingsFromLegacyDrift(subject *runtimeSnapshotSubject, profile
 	evidenceRefs := uniqueStrings(append(uniqueStrings(mapKeys(subject.EvidenceRefs)), item.Reasons...))
 	return []runtimeIntegrityFinding{{
 		FindingID:          recommendationID("runtime-finding", subject.SubjectRef, findingType),
+		RulePackRef:        runtimeFindingRulePackRef(findingType),
 		FindingType:        findingType,
 		Severity:           severity,
 		SubjectRef:         subject.SubjectRef,
@@ -1335,6 +1428,12 @@ func (s server) findingsFromLegacyDrift(subject *runtimeSnapshotSubject, profile
 		ForensicContextURI: runtimeForensicContextURI(runtimeIntegrityFilter{TenantID: subject.TenantID, Environment: subject.Environment}, subject.SubjectRef, item.LastUpdatedAt),
 		Confidence:         runtimeConfidenceHigh,
 		RecommendedAction:  runtimeRecommendedAction(findingType, severity, sbom.Status),
+		Explainability: runtimeExplainability{
+			SchemaVersion: runtimeExplainabilitySchema,
+			TrustContext: runtimeExplainabilityTrustContext{
+				DesiredStateVerification: item.DesiredStateVerification,
+			},
+		},
 		Limitations: []string{
 			"Legacy drift findings are carried into the higher-assurance runtime layer to preserve continuity with previously recorded reconciliation events.",
 		},
@@ -1370,6 +1469,7 @@ func (s server) findingsFromObservations(subject *runtimeSnapshotSubject, profil
 		_, severity, summary := runtimeFindingFromObservation(observation, sbom.Status)
 		items = append(items, runtimeIntegrityFinding{
 			FindingID:          recommendationID("runtime-finding", subject.SubjectRef, findingType),
+			RulePackRef:        runtimeFindingRulePackRef(findingType),
 			FindingType:        findingType,
 			Severity:           severity,
 			SubjectRef:         subject.SubjectRef,
@@ -1383,6 +1483,9 @@ func (s server) findingsFromObservations(subject *runtimeSnapshotSubject, profil
 			ForensicContextURI: runtimeForensicContextURI(runtimeIntegrityFilter{TenantID: subject.TenantID, Environment: subject.Environment}, subject.SubjectRef, observation.Timestamp),
 			Confidence:         firstNonEmpty(observation.Confidence, runtimeConfidenceMedium),
 			RecommendedAction:  runtimeRecommendedAction(findingType, severity, sbom.Status),
+			Explainability: runtimeExplainability{
+				SchemaVersion: runtimeExplainabilitySchema,
+			},
 			Limitations: append([]string{
 				"Runtime observations are evidence-backed signals that require backend policy evaluation before containment or recovery actions are chosen.",
 			}, observation.Limitations...),
@@ -1404,7 +1507,7 @@ func (s server) buildRuntimeSandboxDecision(subject *runtimeSnapshotSubject, fin
 	} else {
 		reasons = append(reasons, "sbom_unverifiable")
 	}
-	if subject.DesiredState != nil && len(subject.DesiredState.Containers) > 0 {
+	if subject.DesiredState != nil {
 		inputs = append(inputs, "desired_state_present")
 	} else {
 		reasons = append(reasons, "missing_desired_state")
@@ -1493,7 +1596,7 @@ func (s server) buildRuntimeIntegrityState(subject *runtimeSnapshotSubject, find
 		score -= 8
 		reasons = append(reasons, "identity:weak")
 	}
-	if containsRuntimeFinding(findings, runtimeFindingIdentityDrift) || containsRuntimeFinding(findings, runtimeFindingContainerIDMismatch) {
+	if containsRuntimeFinding(findings, runtimeFindingIdentityDrift) || containsRuntimeFinding(findings, runtimeFindingContainerIDMismatch) || containsRuntimeFinding(findings, runtimeFindingAttestationMismatch) {
 		identityStatus = runtimeIdentityStatusDrift
 		score -= 12
 		reasons = append(reasons, "identity:drift")
@@ -1626,6 +1729,25 @@ func runtimeEnforcementFromRecord(record audit.StoredEvent, payload runtimeInteg
 	default:
 		return runtimeEnforcementDecision{}, false
 	}
+	if payload.Enforcement != nil {
+		copyDecision := *payload.Enforcement
+		if copyDecision.ForensicContextURI == "" {
+			copyDecision.ForensicContextURI = strings.TrimSpace(payload.ForensicContext)
+		}
+		if copyDecision.Action == "" {
+			copyDecision.Action = firstNonEmpty(strings.TrimSpace(record.DriftResult), runtimeActionAlert)
+		}
+		if copyDecision.SubjectRef == "" {
+			copyDecision.SubjectRef = runtimeSubjectRef(record.ClusterID, record.Namespace, record.WorkloadKind, record.Workload)
+		}
+		if copyDecision.EvaluatedAt.IsZero() {
+			copyDecision.EvaluatedAt = record.Timestamp
+		}
+		if len(copyDecision.EvidenceRefs) == 0 {
+			copyDecision.EvidenceRefs = runtimeEventEvidenceRefs(record)
+		}
+		return copyDecision, true
+	}
 	subjectRef := runtimeSubjectRef(record.ClusterID, record.Namespace, record.WorkloadKind, record.Workload)
 	action := firstNonEmpty(strings.TrimSpace(record.DriftResult), runtimeActionAlert)
 	executed := record.EventType != audit.EventTypeRuntimeEnforcementEvaluated || strings.Contains(strings.Join(record.Reasons, " "), "executed")
@@ -1646,15 +1768,25 @@ func runtimeEnforcementFromRecord(record audit.StoredEvent, payload runtimeInteg
 	}
 	return runtimeEnforcementDecision{
 		DecisionID:         recommendationID("runtime-enforcement", subjectRef, action),
+		RulePackRef:        "",
 		SubjectRef:         subjectRef,
 		Action:             action,
+		ResponseMode:       runtimeResponseModeForApprovalMode(approvalModeFromRuntimeEvent(record)),
 		ApprovalMode:       approvalModeFromRuntimeEvent(record),
+		ApprovalRequired:   approvalModeFromRuntimeEvent(record) == recommendationApprovalHumanReview,
+		ConfidenceLevel:    runtimeConfidenceThresholdForAction(action),
+		ForensicFirst:      runtimeActionRequiresForensicFirst(action, runtimeIntegrityFinding{Severity: record.DriftSeverity}),
+		RollbackRequired:   runtimeRollbackRequired(action),
+		TTL:                runtimeTTLForAction(action),
+		LeastInvasiveRank:  runtimeLeastInvasiveRank(action),
+		SafetyLimitRef:     runtimeSafetyLimitRef(action, nil, approvalModeFromRuntimeEvent(record)),
 		Executed:           executed,
 		ExecutionResult:    result,
 		PolicyRef:          "runtime_assurance_policy.v1",
 		EvidenceRefs:       runtimeEventEvidenceRefs(record),
 		ForensicContextURI: strings.TrimSpace(payload.ForensicContext),
 		EvaluatedAt:        record.Timestamp,
+		Explainability:     runtimeExplainability{SchemaVersion: runtimeExplainabilitySchema},
 		Limitations: []string{
 			"Recorded runtime enforcement reflects audit-trailed evaluation or execution results; the action semantics remain policy-gated and reversible where supported.",
 		},
@@ -1772,10 +1904,12 @@ func runtimePolicyRuleForFindingType(findingType string) string {
 		return "binary_execution_lock"
 	case runtimeFindingUnexpectedLibrary, runtimeFindingSBOMMismatch:
 		return "runtime_sbom_verification"
-	case runtimeFindingOutboundDrift:
+	case runtimeFindingOutboundDrift, runtimeFindingTopologyExpansion:
 		return "network_behavior_profile"
-	case runtimeFindingIdentityDrift, runtimeFindingContainerIDMismatch:
+	case runtimeFindingIdentityDrift, runtimeFindingContainerIDMismatch, runtimeFindingAttestationMismatch:
 		return "runtime_identity_correlation"
+	case runtimeFindingProfileDeviation:
+		return "runtime_profile_behavior_baseline"
 	case runtimeFindingMemoryExecAnomaly:
 		return "memory_mapping_guard"
 	default:
@@ -1792,11 +1926,13 @@ func runtimeRecommendedAction(findingType, severity, sbomStatus string) string {
 			return runtimeActionRestartTrusted
 		}
 		return runtimeActionCaptureForensics
-	case runtimeFindingOutboundDrift:
+	case runtimeFindingOutboundDrift, runtimeFindingTopologyExpansion:
 		if severity == "high" || severity == "critical" {
 			return runtimeActionRecommendQuarantine
 		}
 		return runtimeActionAlert
+	case runtimeFindingAttestationMismatch, runtimeFindingProfileDeviation:
+		return runtimeActionCaptureForensics
 	default:
 		return runtimeActionCaptureForensics
 	}
