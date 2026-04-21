@@ -284,6 +284,19 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/recommendation-actions/", srv.recommendationActionsHandler)
 	mux.HandleFunc("/v1/recommendations", srv.recommendationsHandler)
 	mux.HandleFunc("/v1/recommendations/", srv.recommendationByIDHandler)
+	mux.HandleFunc("/v1/foundation/execution", srv.executionFoundationHandler)
+	mux.HandleFunc("/v1/foundation/execution/contracts", srv.executionFoundationContractsHandler)
+	mux.HandleFunc("/v1/foundation/execution/benchmarks", srv.executionFoundationBenchmarksHandler)
+	mux.HandleFunc("/v1/foundation/execution/benchmarks/harness", srv.executionFoundationBenchmarkHarnessHandler)
+	mux.HandleFunc("/v1/foundation/execution/benchmarks/evaluate", srv.executionFoundationBenchmarkEvaluateHandler)
+	mux.HandleFunc("/v1/foundation/execution/async", srv.executionFoundationAsyncHandler)
+	mux.HandleFunc("/v1/foundation/execution/async/tasks", srv.executionFoundationAsyncTasksHandler)
+	mux.HandleFunc("/v1/foundation/execution/async/tasks/", srv.executionFoundationAsyncTaskByIDHandler)
+	mux.HandleFunc("/v1/foundation/execution/traces", srv.executionFoundationTracesHandler)
+	mux.HandleFunc("/v1/foundation/execution/trust", srv.executionFoundationTrustHandler)
+	mux.HandleFunc("/v1/foundation/execution/trust/rotation-drill", srv.executionFoundationTrustRotationDrillHandler)
+	mux.HandleFunc("/v1/foundation/execution/trust/rotation-drills", srv.executionFoundationTrustRotationDrillsHandler)
+	mux.HandleFunc("/v1/foundation/execution/proofs", srv.executionFoundationProofsHandler)
 	mux.HandleFunc("/v1/integrations/identity", srv.integrationIdentityHandler)
 	mux.HandleFunc("/v1/integrations/tickets/catalog", srv.integrationTicketCatalogHandler)
 	mux.HandleFunc("/v1/integrations/tickets/prepare", srv.integrationTicketPrepareHandler)
@@ -357,6 +370,13 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/runtime/response-tuning", srv.runtimeResponsePolicyHandler)
 	mux.HandleFunc("/v1/runtime/boundaries", srv.runtimeBoundaryDisciplineHandler)
 	mux.HandleFunc("/v1/runtime/workloads", srv.runtimeWorkloadsHandler)
+	mux.HandleFunc("/v1/runtime/substrate-truth", srv.runtimeSubstrateTruthHandler)
+	mux.HandleFunc("/v1/runtime/trusted-execution-profiles", srv.runtimeTrustedExecutionProfilesHandler)
+	mux.HandleFunc("/v1/runtime/attestation/verify", srv.runtimeAttestationVerifyHandler)
+	mux.HandleFunc("/v1/runtime/attestation/verifications", srv.runtimeAttestationVerificationsHandler)
+	mux.HandleFunc("/v1/runtime/response/simulate", srv.runtimeResponseSimulationHandler)
+	mux.HandleFunc("/v1/runtime/response/rollback-drill", srv.runtimeRollbackDrillHandler)
+	mux.HandleFunc("/v1/runtime/phase2/proofs", srv.runtimePhase2ProofsHandler)
 	mux.HandleFunc("/v1/execution/coverage/matrix", srv.executionCoverageMatrixHandler)
 	mux.HandleFunc("/v1/execution/coverage", srv.executionCoverageHandler)
 	mux.HandleFunc("/v1/execution/vm-lineage", srv.executionVMLineageHandler)
@@ -483,6 +503,7 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 	} else if s.syncRuntime != nil && s.syncRuntime.config.Mode == audit.SyncModeSpoke && strings.TrimSpace(event.ClusterID) == "" {
 		event.ClusterID = s.syncRuntime.config.ClusterID
 	}
+	event = audit.NormalizeEvent(event, time.Now)
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
@@ -500,8 +521,37 @@ func (s server) ingestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metrics.IncAuditStoreWriteSuccess("audit-writer", s.backend)
-	if err := s.syncRuntime.forwardEvent(ctx, event); err != nil {
-		log.Printf("audit-writer sync forward failed: %v", err)
+	asyncForwardState := "not_applicable"
+	if s.syncRuntime != nil && s.syncRuntime.config.Mode == audit.SyncModeSpoke {
+		if task, err := s.enqueueSyncForwardTask(ctx, event.RequestID, principal.Subject, event); err != nil {
+			log.Printf("audit-writer async sync forward enqueue failed: %v", err)
+			asyncForwardState = "enqueue_failed"
+		} else if task.TaskID != "" {
+			asyncForwardState = "queued"
+		}
+	}
+	trace := audit.NormalizeExecutionTraceRecord(audit.ExecutionTraceRecord{
+		TraceID:       event.TraceID,
+		Component:     "audit-writer",
+		Operation:     "audit_ingest",
+		TenantID:      event.TenantID,
+		Environment:   event.Environment,
+		EventID:       event.EventID,
+		DecisionID:    event.DecisionID,
+		CorrelationID: event.CorrelationID,
+		Status:        "completed",
+		StartedAt:     event.Timestamp,
+		EndedAt:       record.ReceivedAt,
+		Attributes: map[string]string{
+			"async_sync_forward": asyncForwardState,
+			"event_type":         event.EventType,
+		},
+		Notes: []string{
+			"Canonical evidence write completed before any optional background forwarding.",
+		},
+	}, time.Now)
+	if err := s.persistExecutionTrace(ctx, event.RequestID, principal.Subject, trace); err != nil {
+		log.Printf("audit-writer execution trace persist failed: %v", err)
 	}
 
 	httpjson.Write(w, http.StatusCreated, ingestResponse{

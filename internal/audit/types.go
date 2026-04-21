@@ -28,6 +28,10 @@ const (
 	EventTypeRuntimeForensicSnapshotRequested = "runtime_forensic_snapshot_requested"
 	EventTypeRuntimeTrustedRestartRequested   = "runtime_trusted_restart_requested"
 	EventTypeRuntimeNetworkIsolationApplied   = "runtime_network_isolation_applied"
+	EventTypeRuntimeSubstrateTruthRecorded    = "runtime_substrate_truth_recorded"
+	EventTypeRuntimeAttestationVerified       = "runtime_attestation_verified"
+	EventTypeRuntimeResponseSimulated         = "runtime_response_simulated"
+	EventTypeRuntimeRollbackDrillRecorded     = "runtime_rollback_drill_recorded"
 	EventTypeHardeningAssessmentRecorded      = "hardening_assessment_recorded"
 	EventTypeHardeningPolicyEvaluated         = "hardening_policy_evaluated"
 	EventTypeHardeningActionApplied           = "hardening_action_applied"
@@ -45,6 +49,10 @@ const (
 	EventTypeFederationPolicySynced           = "federation_policy_synced"
 	EventTypeFederationAnchorPublished        = "federation_anchor_published"
 	EventTypeValidationHarnessRunRecorded     = "validation_harness_run_recorded"
+	EventTypeExecutionTaskRecorded            = "execution_task_recorded"
+	EventTypeExecutionBenchmarkGateEvaluated  = "execution_benchmark_gate_evaluated"
+	EventTypeExecutionTraceRecorded           = "execution_trace_recorded"
+	EventTypeExecutionTrustRotationDrill      = "execution_trust_rotation_drill_recorded"
 
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
@@ -52,6 +60,14 @@ const (
 )
 
 type Event struct {
+	SchemaVersion                     string           `json:"schema_version,omitempty"`
+	EventID                           string           `json:"event_id,omitempty"`
+	TraceID                           string           `json:"trace_id,omitempty"`
+	CorrelationID                     string           `json:"correlation_id,omitempty"`
+	DecisionID                        string           `json:"decision_id,omitempty"`
+	CausalParent                      string           `json:"causal_parent,omitempty"`
+	IdempotencyKey                    string           `json:"idempotency_key,omitempty"`
+	PayloadHash                       string           `json:"payload_hash,omitempty"`
 	RequestID                         string           `json:"request_id"`
 	Timestamp                         time.Time        `json:"timestamp"`
 	Component                         string           `json:"component"`
@@ -160,6 +176,7 @@ type Event struct {
 	Federation                        json.RawMessage  `json:"federation,omitempty"`
 	RuntimeIntegrity                  json.RawMessage  `json:"runtime_integrity,omitempty"`
 	ValidationHarness                 json.RawMessage  `json:"validation_harness,omitempty"`
+	ExecutionFoundation               json.RawMessage  `json:"execution_foundation,omitempty"`
 }
 
 type VerifierSummary struct {
