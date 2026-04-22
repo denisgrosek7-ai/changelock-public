@@ -422,6 +422,7 @@ func NormalizeRuntimeSubstrateObservedEvent(event RuntimeSubstrateObservedEvent,
 	event.NamespaceMode = strings.TrimSpace(event.NamespaceMode)
 	event.Process.ProcessName = strings.TrimSpace(event.Process.ProcessName)
 	event.Process.ProcessPath = strings.TrimSpace(event.Process.ProcessPath)
+	event.Process.BinaryDigest = strings.TrimSpace(event.Process.BinaryDigest)
 	event.Process.CgroupID = strings.TrimSpace(event.Process.CgroupID)
 	event.Process.NamespaceID = strings.TrimSpace(event.Process.NamespaceID)
 	event.Process.LineageRef = strings.TrimSpace(event.Process.LineageRef)
@@ -617,7 +618,7 @@ func EvaluateRuntimeSubstrateValAObservabilityState(events []RuntimeSubstrateObs
 			return RuntimeSubstrateValAObservabilityStateIncomplete
 		}
 		if event.CurrentState != RuntimeSubstrateEventStateUnsupported {
-			if event.Process.PID == 0 && strings.TrimSpace(event.Process.ProcessName) == "" {
+			if event.Process.PID == 0 || strings.TrimSpace(event.Process.ProcessName) == "" {
 				partial = true
 			}
 			if strings.TrimSpace(event.Workload.ClusterID) == "" || strings.TrimSpace(event.Workload.Namespace) == "" {

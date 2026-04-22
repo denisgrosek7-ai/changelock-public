@@ -85,6 +85,53 @@ func TestValidateRuntimeSubstrateObservedEventRejectsMissingIdentity(t *testing.
 	}
 }
 
+func TestRuntimeSubstrateValAObservabilityStateTreatsMissingNameOrPIDAsPartial(t *testing.T) {
+	events := []RuntimeSubstrateObservedEvent{
+		NormalizeRuntimeSubstrateObservedEvent(RuntimeSubstrateObservedEvent{
+			EventFamily:           RuntimeSubstrateEventFamilyExecLifecycle,
+			CurrentState:          RuntimeSubstrateEventStateObserved,
+			Process:               ProcessIdentity{ProcessPath: "/app/api", PID: 42},
+			Workload:              WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "api"},
+			Node:                  NodeIdentity{NodeID: "node-a", SubstrateClass: SubstrateClassStandard, TrustBoundary: TrustBoundaryKernelRuntimeLayer},
+			AttributionConfidence: RuntimeSubstrateConfidenceHighFidelity,
+			FreshnessState:        RuntimeSubstrateFreshnessFresh,
+		}, runtimeSubstrateNow),
+		NormalizeRuntimeSubstrateObservedEvent(RuntimeSubstrateObservedEvent{
+			EventFamily:           RuntimeSubstrateEventFamilyProcessLineage,
+			CurrentState:          RuntimeSubstrateEventStateStale,
+			Process:               ProcessIdentity{ProcessName: "worker", PID: 2210},
+			Workload:              WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "worker"},
+			Node:                  NodeIdentity{NodeID: "node-a", SubstrateClass: SubstrateClassHardened, TrustBoundary: TrustBoundaryKernelRuntimeLayer},
+			AttributionConfidence: RuntimeSubstrateConfidenceHighFidelity,
+			FreshnessState:        RuntimeSubstrateFreshnessStale,
+		}, runtimeSubstrateNow),
+		NormalizeRuntimeSubstrateObservedEvent(RuntimeSubstrateObservedEvent{
+			EventFamily:           RuntimeSubstrateEventFamilyFileActivity,
+			CurrentState:          RuntimeSubstrateEventStatePartiallyCorrelated,
+			Process:               ProcessIdentity{ProcessName: "batch", PID: 3001},
+			Workload:              WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "batch"},
+			Node:                  NodeIdentity{NodeID: "node-a", SubstrateClass: SubstrateClassStandard, TrustBoundary: TrustBoundaryKernelRuntimeLayer},
+			AttributionConfidence: RuntimeSubstrateConfidenceBoundedCorrelation,
+			FreshnessState:        RuntimeSubstrateFreshnessFresh,
+			UnsupportedFields:     []string{"thread_id"},
+		}, runtimeSubstrateNow),
+		NormalizeRuntimeSubstrateObservedEvent(RuntimeSubstrateObservedEvent{
+			EventFamily:           RuntimeSubstrateEventFamilyNetworkActivity,
+			CurrentState:          RuntimeSubstrateEventStateUnsupported,
+			Process:               ProcessIdentity{ProcessName: "sync-agent", PID: 5100},
+			Workload:              WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "sync"},
+			Node:                  NodeIdentity{NodeID: "node-a", SubstrateClass: SubstrateClassStandard, TrustBoundary: TrustBoundaryKernelRuntimeLayer},
+			AttributionConfidence: RuntimeSubstrateConfidenceUnsupportedSignal,
+			FreshnessState:        RuntimeSubstrateFreshnessUnavailable,
+			UnsupportedFields:     []string{"destination_ip"},
+		}, runtimeSubstrateNow),
+	}
+
+	if got := EvaluateRuntimeSubstrateValAObservabilityState(events); got != RuntimeSubstrateValAObservabilityStatePartial {
+		t.Fatalf("expected partial state when stable identity is incomplete, got %q", got)
+	}
+}
+
 func runtimeSubstrateNow() time.Time {
 	return time.Date(2026, time.April, 22, 12, 0, 0, 0, time.UTC)
 }

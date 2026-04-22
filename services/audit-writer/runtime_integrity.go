@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	attestationruntime "github.com/denisgrosek/changelock/internal/attestation"
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
 	"github.com/denisgrosek/changelock/internal/httpjson"
+	runtimesubstrate "github.com/denisgrosek/changelock/internal/runtime"
 )
 
 const (
@@ -312,26 +314,30 @@ type runtimeIntegrityEventPayload struct {
 }
 
 type runtimeSnapshotSubject struct {
-	SubjectRef       string
-	Cluster          string
-	TenantID         string
-	Environment      string
-	Repo             string
-	Namespace        string
-	WorkloadKind     string
-	Workload         string
-	ServiceAccount   string
-	ImageDigest      string
-	ExpectedSigners  []string
-	TrustInputs      map[string]struct{}
-	DesiredState     *audit.RuntimeDesiredStateView
-	ActiveState      *audit.RuntimeActiveStateView
-	LegacyDrift      *audit.RuntimeDriftFinding
-	Observations     []runtimeObservation
-	ProfileHints     []runtimeProfileHint
-	SBOMVerification *runtimeSBOMVerificationResult
-	Enforcements     []runtimeEnforcementDecision
-	EvidenceRefs     map[string]struct{}
+	SubjectRef                string
+	Cluster                   string
+	TenantID                  string
+	Environment               string
+	Repo                      string
+	Namespace                 string
+	WorkloadKind              string
+	Workload                  string
+	ServiceAccount            string
+	ImageDigest               string
+	ExpectedSigners           []string
+	ArtifactDigests           []string
+	AttestationSubjectDigests []string
+	AttestationPredicates     []string
+	TrustInputs               map[string]struct{}
+	DesiredState              *audit.RuntimeDesiredStateView
+	ActiveState               *audit.RuntimeActiveStateView
+	LegacyDrift               *audit.RuntimeDriftFinding
+	Observations              []runtimeObservation
+	ProfileHints              []runtimeProfileHint
+	SBOMVerification          *runtimeSBOMVerificationResult
+	Enforcements              []runtimeEnforcementDecision
+	LatestAttestation         *attestationruntime.VerificationResult
+	EvidenceRefs              map[string]struct{}
 }
 
 type runtimeSnapshot struct {
@@ -1057,9 +1063,6 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 		}
 	}
 	for _, record := range events {
-		if record.Component != "runtime-agent" && record.Component != runtimeIntegrityComponent {
-			continue
-		}
 		subjectRef := runtimeSubjectRef(record.ClusterID, record.Namespace, record.WorkloadKind, record.Workload)
 		if subjectRef == "" {
 			continue
@@ -1079,8 +1082,19 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 				subject.ExpectedSigners = append(subject.ExpectedSigners, signer)
 				snapshot.addTrustInputs(subject, "signed_artifact")
 			}
-			if record.Repo != "" {
-				subject.Repo = record.Repo
+			if digest := strings.TrimSpace(record.Evidence.Artifact.Digest); digest != "" {
+				subject.ArtifactDigests = append(subject.ArtifactDigests, digest)
+				snapshot.addTrustInputs(subject, "artifact_digest_present")
+			}
+			if digest := strings.TrimSpace(record.Evidence.Artifact.AttestationSubjectDigest); digest != "" {
+				subject.AttestationSubjectDigests = append(subject.AttestationSubjectDigests, digest)
+				snapshot.addTrustInputs(subject, "attestation_subject_digest_present")
+			}
+			if predicate := strings.TrimSpace(record.Evidence.Artifact.AttestationPredicate); predicate != "" {
+				subject.AttestationPredicates = append(subject.AttestationPredicates, predicate)
+			}
+			if repo := strings.TrimSpace(firstNonEmpty(record.Repo, record.Evidence.Artifact.Repository)); repo != "" {
+				subject.Repo = firstNonEmpty(subject.Repo, repo)
 			}
 			if strings.TrimSpace(record.Evidence.Artifact.AttestationPredicate) != "" || strings.TrimSpace(record.Evidence.Artifact.AttestationSubjectDigest) != "" {
 				snapshot.addTrustInputs(subject, "attestation_provenance")
@@ -1089,6 +1103,20 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 				snapshot.addTrustInputs(subject, "sbom_evidence_present")
 				snapshot.addEvidenceRefs(subject, record.Evidence.Artifact.SBOMHash, record.Evidence.Artifact.SBOMArtifactRef, record.Evidence.Artifact.SBOMDigestRef)
 			}
+		}
+		if record.Component == runtimePhase2Component {
+			payload := parseRuntimePhase2Payload(record.RuntimeIntegrity)
+			if payload.Attestation != nil {
+				if subject.LatestAttestation == nil || payload.Attestation.VerifiedAt.After(subject.LatestAttestation.VerifiedAt) {
+					copyAttestation := *payload.Attestation
+					subject.LatestAttestation = &copyAttestation
+				}
+				snapshot.addTrustInputs(subject, "phase2_attestation_verification")
+			}
+			continue
+		}
+		if record.Component != "runtime-agent" && record.Component != runtimeIntegrityComponent {
+			continue
 		}
 		payload := parseRuntimeIntegrityEventPayload(record.RuntimeIntegrity)
 		if observation, ok := runtimeObservationFromRecord(record, payload); ok {
@@ -1109,6 +1137,9 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 	}
 	for _, subject := range snapshot.subjects {
 		subject.ExpectedSigners = uniqueStrings(subject.ExpectedSigners)
+		subject.ArtifactDigests = uniqueStrings(subject.ArtifactDigests)
+		subject.AttestationSubjectDigests = uniqueStrings(subject.AttestationSubjectDigests)
+		subject.AttestationPredicates = uniqueStrings(subject.AttestationPredicates)
 		sort.Slice(subject.Observations, func(i, j int) bool { return subject.Observations[i].Timestamp.After(subject.Observations[j].Timestamp) })
 		sort.Slice(subject.Enforcements, func(i, j int) bool {
 			return subject.Enforcements[i].EvaluatedAt.After(subject.Enforcements[j].EvaluatedAt)
@@ -2319,6 +2350,8 @@ func writeRuntimeIntegrityError(w http.ResponseWriter, err error) {
 	case auth.StatusCode(err) != http.StatusInternalServerError:
 		status = auth.StatusCode(err)
 	case errors.Is(err, audit.ErrInvalidFilter), errors.Is(err, audit.ErrInvalidEvent):
+		status = http.StatusBadRequest
+	case errors.Is(err, runtimesubstrate.ErrInvalidRuntimeSubstrateObservation):
 		status = http.StatusBadRequest
 	case errors.Is(err, errIncidentNotFound):
 		status = http.StatusNotFound

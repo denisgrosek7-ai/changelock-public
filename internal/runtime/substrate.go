@@ -53,12 +53,13 @@ type WorkloadIdentity struct {
 }
 
 type ProcessIdentity struct {
-	ProcessName string `json:"process_name,omitempty"`
-	ProcessPath string `json:"process_path,omitempty"`
-	PID         int    `json:"pid,omitempty"`
-	CgroupID    string `json:"cgroup_id,omitempty"`
-	NamespaceID string `json:"namespace_id,omitempty"`
-	LineageRef  string `json:"lineage_ref,omitempty"`
+	ProcessName  string `json:"process_name,omitempty"`
+	ProcessPath  string `json:"process_path,omitempty"`
+	BinaryDigest string `json:"binary_digest,omitempty"`
+	PID          int    `json:"pid,omitempty"`
+	CgroupID     string `json:"cgroup_id,omitempty"`
+	NamespaceID  string `json:"namespace_id,omitempty"`
+	LineageRef   string `json:"lineage_ref,omitempty"`
 }
 
 type NodeIdentity struct {
@@ -187,6 +188,7 @@ func NormalizeSubstrateTruthRecord(record SubstrateTruthRecord, now func() time.
 	record.Workload.PolicySubject = strings.TrimSpace(record.Workload.PolicySubject)
 	record.Process.ProcessName = strings.TrimSpace(record.Process.ProcessName)
 	record.Process.ProcessPath = strings.TrimSpace(record.Process.ProcessPath)
+	record.Process.BinaryDigest = strings.TrimSpace(record.Process.BinaryDigest)
 	record.Process.CgroupID = strings.TrimSpace(record.Process.CgroupID)
 	record.Process.NamespaceID = strings.TrimSpace(record.Process.NamespaceID)
 	record.Process.LineageRef = strings.TrimSpace(record.Process.LineageRef)
