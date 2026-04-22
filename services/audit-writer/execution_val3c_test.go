@@ -94,19 +94,22 @@ func TestExecutionConfidentialReadiness(t *testing.T) {
 
 func TestHasConfidentialEvidenceUsesStructuredTokens(t *testing.T) {
 	metadataOnly := runtimePostureState{
-		SubjectRef:       "edge-service",
-		ReadinessSignals: []string{"runtime_findings_present"},
-		EvidenceRefs:     []string{"sample://runtime/edge-service"},
+		SubjectRef:   "edge-service",
+		EvidenceRefs: []string{"sample://runtime/service", "sample://runtime/attestation/sev"},
+		Mismatches: []runtimePostureMismatch{{
+			Code:        "runtime_service_drift",
+			EvidenceRef: "sample://runtime/teeing-service",
+		}},
 	}
 	if hasConfidentialEvidence(metadataOnly) {
-		t.Fatalf("expected free-form service names not to trigger confidential evidence, got %#v", metadataOnly)
+		t.Fatalf("expected free-form evidence refs not to trigger confidential evidence, got %#v", metadataOnly)
 	}
 
 	evidenceBacked := runtimePostureState{
-		SubjectRef:       "edge-service",
-		ReadinessSignals: []string{"confidential_execution_requested"},
-		EvidenceRefs:     []string{"sample://attestation/sev"},
-		ActualTrustState: runtimePostureTrustState{AttestationInputs: []string{"sev_attestation"}},
+		SubjectRef: "edge-service",
+		ActualTrustState: runtimePostureTrustState{
+			AttestationInputs: []string{"sev_attestation"},
+		},
 	}
 	if !hasConfidentialEvidence(evidenceBacked) {
 		t.Fatalf("expected structured confidential evidence markers to be detected, got %#v", evidenceBacked)

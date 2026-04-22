@@ -185,6 +185,16 @@ func TestRuntimeHardeningEvaluateApplyRollbackRecommendationsAndHandoff(t *testi
 	}
 }
 
+func TestHardeningActionRankIncludesRollbackRestrictions(t *testing.T) {
+	rank := hardeningActionRank(hardeningActionRollbackRestrictions)
+	if rank != 2 {
+		t.Fatalf("expected rollback restrictions rank 2, got %d", rank)
+	}
+	if rank >= hardeningActionRank(hardeningActionApplyNetworkQuarantine) {
+		t.Fatalf("expected rollback restrictions to rank ahead of quarantine, got rollback=%d quarantine=%d", rank, hardeningActionRank(hardeningActionApplyNetworkQuarantine))
+	}
+}
+
 func TestRuntimeHardeningRecoveryRequiresCleanStateAndSupportsTrustedRecovery(t *testing.T) {
 	fixture := forensicsTestFixture(t)
 
