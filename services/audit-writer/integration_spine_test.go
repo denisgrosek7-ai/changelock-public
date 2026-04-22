@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/denisgrosek/changelock/internal/audit"
 )
 
 func TestIntegrationIdentityAndTicketCatalog(t *testing.T) {
@@ -249,4 +251,54 @@ func TestIntegrationSIEMAndEvidenceExport(t *testing.T) {
 	if len(validationExport.Items) == 0 || validationExport.Items[0].ItemType != "validation_certificate" {
 		t.Fatalf("expected validation certificate export entry, got %#v", validationExport)
 	}
+}
+
+func TestIntegrationSIEMExportUsesParsedEnterprisePayloadForSeverity(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	workflowReq := httptest.NewRequest(http.MethodPost, "/v1/enterprise/workflow/lifecycle?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+	  "input":{
+	    "workflow_id":"wf-siem-severity",
+	    "artifact_type":"finding",
+	    "subject_ref":"cluster-a/acme-prod/Deployment/api",
+	    "severity":"critical",
+	    "requested_state":"resolved",
+	    "validation_required":true,
+	    "validation_state":"pending",
+	    "owners":{"finding_owner":"team-api","remediation_owner":"team-api","approver":"security-admin"},
+	    "evidence_refs":["event://deploy-gate/1"]
+	  }
+	}`))
+	workflowReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	workflowReq.Header.Set("Content-Type", "application/json")
+	workflowRec := httptest.NewRecorder()
+	handler.ServeHTTP(workflowRec, workflowReq)
+	if workflowRec.Code != http.StatusCreated {
+		t.Fatalf("expected workflow 201, got %d: %s", workflowRec.Code, workflowRec.Body.String())
+	}
+
+	siemReq := httptest.NewRequest(http.MethodGet, "/v1/integrations/siem/export?tenant_id=acme&environment=prod&repo=github.com/acme/api&limit=20", nil)
+	siemReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	siemRec := httptest.NewRecorder()
+	handler.ServeHTTP(siemRec, siemReq)
+	if siemRec.Code != http.StatusOK {
+		t.Fatalf("expected SIEM export 200, got %d: %s", siemRec.Code, siemRec.Body.String())
+	}
+
+	var siem integrationSIEMExportResponse
+	if err := json.NewDecoder(siemRec.Body).Decode(&siem); err != nil {
+		t.Fatalf("decode SIEM export: %v", err)
+	}
+	for _, item := range siem.Items {
+		if item.EventType == audit.EventTypeEnterpriseWorkflowRecorded {
+			if item.Severity != "high" {
+				t.Fatalf("expected workflow under_validation event to export high severity, got %#v", item)
+			}
+			if len(item.EvidenceRefs) == 0 {
+				t.Fatalf("expected parsed enterprise payload to contribute evidence refs, got %#v", item)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected SIEM export to include enterprise workflow event, got %#v", siem.Items)
 }

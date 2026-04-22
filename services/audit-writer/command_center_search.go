@@ -535,6 +535,7 @@ func (s server) buildCommandCenterSearch(ctx context.Context, filter audit.Event
 	}
 
 	enterpriseEvents, err := s.store.ListEvents(ctx, audit.EventFilter{
+		ClusterID:   contextFilter.ClusterID,
 		TenantID:    contextFilter.TenantID,
 		Environment: contextFilter.Environment,
 		Repo:        contextFilter.Repo,

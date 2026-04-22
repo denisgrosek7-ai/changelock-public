@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/denisgrosek/changelock/internal/audit"
 )
 
 func TestCommandCenterSearchReturnsExactFocusTargets(t *testing.T) {
@@ -206,4 +208,47 @@ func TestCommandCenterSearchReturnsExactFocusTargets(t *testing.T) {
 			t.Fatalf("expected partner trust result to route to federation, got %#v", result)
 		}
 	})
+}
+
+func TestCommandCenterSearchExcludesPhase4ArtifactsFromOtherClusters(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	workflowReq := httptest.NewRequest(http.MethodPost, "/v1/enterprise/workflow/lifecycle?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+	  "input":{
+	    "workflow_id":"wf-cluster-b",
+	    "artifact_type":"finding",
+	    "subject_ref":"cluster-b/acme-prod/Deployment/api",
+	    "severity":"critical",
+	    "requested_state":"resolved",
+	    "validation_required":true,
+	    "validation_state":"pending",
+	    "owners":{"finding_owner":"team-b","remediation_owner":"team-b","approver":"security-admin"},
+	    "evidence_refs":["event://deploy-gate/cluster-b"]
+	  }
+	}`))
+	workflowReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	workflowReq.Header.Set("Content-Type", "application/json")
+	workflowRec := httptest.NewRecorder()
+	handler.ServeHTTP(workflowRec, workflowReq)
+	if workflowRec.Code != http.StatusCreated {
+		t.Fatalf("expected workflow 201, got %d: %s", workflowRec.Code, workflowRec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/command-center/search?cluster_id=cluster-a&tenant_id=acme&environment=prod&repo=github.com/acme/api&limit=10&q=wf-cluster-b", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected command-center search 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response commandCenterSearchResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode command-center search: %v", err)
+	}
+	for _, result := range response.Results {
+		if result.Target.Ref == "wf-cluster-b" || result.Target.SecondaryRef == "cluster-b/acme-prod/Deployment/api" {
+			t.Fatalf("expected cluster-scoped search to exclude Phase 4 results from other clusters, got %#v", response.Results)
+		}
+	}
 }
