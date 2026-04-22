@@ -10,6 +10,7 @@ import {
   assignRecommendation,
   commentRecommendation,
   downloadHandoffBundle,
+  getCommandCenterNotifications,
   getCommandCenterSearch,
   getAnalyticsAnomalies,
   getAnalyticsDelta,
@@ -125,6 +126,7 @@ import type {
   AnalyticsSegmentsResponse,
   CommandCenterPersona,
   CommandCenterFocusTarget,
+  CommandCenterNotificationsResponse,
   CommandCenterSearchResponse,
   DefensePostureState,
   DriftStatsResponse,
@@ -217,10 +219,11 @@ function isTabKey(value: string | null): value is TabKey {
 function readInitialNavigationState(): {
   tab: TabKey;
   query: string;
+  lifecyclePhase: string;
   focusTarget: CommandCenterFocusTarget | null;
 } {
   if (typeof window === "undefined") {
-    return { tab: "overview", query: "", focusTarget: null };
+    return { tab: "overview", query: "", lifecyclePhase: "", focusTarget: null };
   }
   const params = new URLSearchParams(window.location.search);
   const tab = isTabKey(params.get("tab")) ? (params.get("tab") as TabKey) : "overview";
@@ -230,6 +233,7 @@ function readInitialNavigationState(): {
   return {
     tab,
     query: params.get("q") || "",
+    lifecyclePhase: params.get("lifecycle_phase") || "",
     focusTarget:
       kind && ref
         ? {
@@ -269,6 +273,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>(initialNavigation.tab);
   const [commandCenterPersona, setCommandCenterPersona] = useState<CommandCenterPersona>("developer");
   const [commandCenterQuery, setCommandCenterQuery] = useState(initialNavigation.query);
+  const [commandCenterLifecyclePhase, setCommandCenterLifecyclePhase] = useState(initialNavigation.lifecyclePhase);
+  const [commandCenterNotifications, setCommandCenterNotifications] = useState<CommandCenterNotificationsResponse | null>(null);
   const [commandCenterSearch, setCommandCenterSearch] = useState<CommandCenterSearchResponse | null>(null);
   const [commandCenterSearchLoading, setCommandCenterSearchLoading] = useState(false);
   const [focusTarget, setFocusTarget] = useState<CommandCenterFocusTarget | null>(initialNavigation.focusTarget);
@@ -350,6 +356,11 @@ export default function App() {
     } else {
       params.delete("q");
     }
+    if (commandCenterLifecyclePhase.trim() !== "") {
+      params.set("lifecycle_phase", commandCenterLifecyclePhase.trim());
+    } else {
+      params.delete("lifecycle_phase");
+    }
     if (focusTarget) {
       params.set("focus_tab", focusTarget.tab);
       params.set("focus_kind", focusTarget.kind);
@@ -373,7 +384,7 @@ export default function App() {
     }
     const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
     window.history.replaceState(null, "", next);
-  }, [activeTab, commandCenterQuery, focusTarget]);
+  }, [activeTab, commandCenterLifecyclePhase, commandCenterQuery, focusTarget]);
 
   useEffect(() => {
     let ignore = false;
@@ -407,6 +418,7 @@ export default function App() {
           setSyncStatus(null);
           setSummary(null);
           setSecurityTimeline(null);
+          setCommandCenterNotifications(null);
           setCommandCenterSearch(null);
           setCommandCenterSearchLoading(false);
           setEvents([]);
@@ -476,6 +488,7 @@ export default function App() {
             getSummary({ environment: filters.environment, tenant_id: scopedTenantID }).then(setSummary),
           ];
           if (activeTab !== "overview") {
+            setCommandCenterNotifications(null);
             setCommandCenterSearchLoading(false);
           }
           if (isHumanRole(authResult.value.role)) {
@@ -509,12 +522,28 @@ export default function App() {
                 tenant_id: scopedTenantID,
                 repo: filters.repo,
                 limit: filters.limit,
+                lifecycle_phase: commandCenterLifecyclePhase,
               }).then(setSecurityTimeline).catch((timelineError) => {
                 if (isOptionalFeatureMissing(timelineError)) {
                   setSecurityTimeline(null);
                   return;
                 }
                 throw timelineError;
+              }),
+            );
+            promises.push(
+              getCommandCenterNotifications({
+                environment: filters.environment,
+                tenant_id: scopedTenantID,
+                repo: filters.repo,
+                limit: filters.limit,
+                lifecycle_phase: commandCenterLifecyclePhase,
+              }).then(setCommandCenterNotifications).catch((notificationsError) => {
+                if (isOptionalFeatureMissing(notificationsError)) {
+                  setCommandCenterNotifications(null);
+                  return;
+                }
+                throw notificationsError;
               }),
             );
             if (commandCenterQuery.trim() !== "") {
@@ -1175,7 +1204,7 @@ export default function App() {
     return () => {
       ignore = true;
     };
-  }, [activeTab, filters.component, filters.decision, filters.environment, filters.limit, filters.repo, filters.tenant_id, forensicsTimestamp, metricDrilldown?.metricKey, refreshIndex]);
+  }, [activeTab, commandCenterLifecyclePhase, filters.component, filters.decision, filters.environment, filters.limit, filters.repo, filters.tenant_id, forensicsTimestamp, metricDrilldown?.metricKey, refreshIndex]);
 
   const activeTabMeta = tabs.find((tab) => tab.key === activeTab) || tabs[0];
   const role = authStatus?.role;
@@ -1564,16 +1593,19 @@ export default function App() {
           <CommandCenterPanel
             persona={commandCenterPersona}
             timeline={securityTimeline}
+            notifications={commandCenterNotifications}
             recommendations={recommendations}
             executiveReport={executiveReport}
             loading={loading}
             searchQuery={commandCenterQuery}
+            lifecyclePhase={commandCenterLifecyclePhase}
             searchResults={commandCenterSearch}
             searchLoading={commandCenterSearchLoading}
             focusTarget={focusTarget}
             onPersonaChange={setCommandCenterPersona}
             onOpenTab={handleOpenTab}
             onOpenTarget={handleOpenFocusTarget}
+            onLifecyclePhaseChange={setCommandCenterLifecyclePhase}
             onSearchQueryChange={setCommandCenterQuery}
             onSearchSubmit={handleSubmitCommandCenterSearch}
           />

@@ -304,6 +304,7 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/integrations/evidence/export", srv.integrationEvidenceExportHandler)
 	mux.HandleFunc("/v1/command-center/timeline", srv.securityTimelineHandler)
 	mux.HandleFunc("/v1/command-center/search", srv.commandCenterSearchHandler)
+	mux.HandleFunc("/v1/command-center/notifications", srv.commandCenterNotificationsHandler)
 	mux.HandleFunc("/v1/scorecard/metrics/", srv.scorecardMetricIncidentsHandler)
 	mux.HandleFunc("/v1/incidents/package", srv.incidentPackageHandler)
 	mux.HandleFunc("/v1/incidents", srv.incidentsHandler)

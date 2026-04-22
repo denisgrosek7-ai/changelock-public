@@ -34,6 +34,8 @@ import type {
   AuthStatus,
   BreakGlassGuidance,
   CommandCenterFocusTarget,
+  CommandCenterNotification,
+  CommandCenterNotificationsResponse,
   CommandCenterSearchResponse,
   CommandCenterSearchResult,
   DriftStatsResponse,
@@ -412,6 +414,7 @@ function parseSecurityTimelineEntry(value: unknown): SecurityTimelineEntry {
     subject_type: readString(value.subject_type, "entries[].subject_type"),
     subject_label: readString(value.subject_label, "entries[].subject_label"),
     source_subsystem: readString(value.source_subsystem, "entries[].source_subsystem"),
+    lifecycle_phase: readString(value.lifecycle_phase, "entries[].lifecycle_phase"),
     event_type: readString(value.event_type, "entries[].event_type"),
     severity: readString(value.severity, "entries[].severity"),
     importance: readString(value.importance, "entries[].importance"),
@@ -438,11 +441,16 @@ function parseSecurityTimelineResponse(value: unknown): SecurityTimelineResponse
     throw new Error("Audit API returned invalid security timeline response.");
   }
   const countsBySourceRaw = readOptionalRecord(value.counts_by_source, "counts_by_source") || {};
+  const countsByLifecycleRaw = readOptionalRecord(value.counts_by_lifecycle, "counts_by_lifecycle") || {};
   const countsBySeverityRaw = readOptionalRecord(value.counts_by_severity, "counts_by_severity") || {};
   const countsBySource: Record<string, number> = {};
+  const countsByLifecycle: Record<string, number> = {};
   const countsBySeverity: Record<string, number> = {};
   for (const [key, count] of Object.entries(countsBySourceRaw)) {
     countsBySource[key] = readNumber(count, `counts_by_source.${key}`);
+  }
+  for (const [key, count] of Object.entries(countsByLifecycleRaw)) {
+    countsByLifecycle[key] = readNumber(count, `counts_by_lifecycle.${key}`);
   }
   for (const [key, count] of Object.entries(countsBySeverityRaw)) {
     countsBySeverity[key] = readNumber(count, `counts_by_severity.${key}`);
@@ -451,9 +459,49 @@ function parseSecurityTimelineResponse(value: unknown): SecurityTimelineResponse
     schema_version: readString(value.schema_version, "schema_version"),
     generated_at: readString(value.generated_at, "generated_at"),
     counts_by_source: countsBySource,
+    counts_by_lifecycle: countsByLifecycle,
     counts_by_severity: countsBySeverity,
     entries: value.entries.map(parseSecurityTimelineEntry),
     limitations: readOptionalStringArray(value.limitations, "limitations"),
+  };
+}
+
+function parseCommandCenterNotification(value: unknown): CommandCenterNotification {
+  if (!isRecord(value)) {
+    throw new Error("Audit API returned invalid command-center notification.");
+  }
+  return {
+    schema_version: readString(value.schema_version, "command_center.notifications[].schema_version"),
+    notification_id: readString(value.notification_id, "command_center.notifications[].notification_id"),
+    lifecycle_phase: readString(value.lifecycle_phase, "command_center.notifications[].lifecycle_phase"),
+    severity: readString(value.severity, "command_center.notifications[].severity"),
+    current_state: readString(value.current_state, "command_center.notifications[].current_state"),
+    title: readString(value.title, "command_center.notifications[].title"),
+    summary: readString(value.summary, "command_center.notifications[].summary"),
+    owner_hint: readOptionalString(value.owner_hint, "command_center.notifications[].owner_hint"),
+    next_action: readOptionalString(value.next_action, "command_center.notifications[].next_action"),
+    source_subsystems: readOptionalStringArray(value.source_subsystems, "command_center.notifications[].source_subsystems") || [],
+    evidence_refs: readOptionalStringArray(value.evidence_refs, "command_center.notifications[].evidence_refs"),
+    persona_hints: readOptionalStringArray(value.persona_hints, "command_center.notifications[].persona_hints") as CommandCenterNotification["persona_hints"],
+    target: parseCommandCenterFocusTarget(value.target),
+  };
+}
+
+function parseCommandCenterNotificationsResponse(value: unknown): CommandCenterNotificationsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    throw new Error("Audit API returned invalid command-center notifications response.");
+  }
+  const countsByStateRaw = readOptionalRecord(value.counts_by_state, "command_center.notifications.counts_by_state") || {};
+  const countsByState: Record<string, number> = {};
+  for (const [key, count] of Object.entries(countsByStateRaw)) {
+    countsByState[key] = readNumber(count, `command_center.notifications.counts_by_state.${key}`);
+  }
+  return {
+    schema_version: readString(value.schema_version, "command_center.notifications.schema_version"),
+    generated_at: readString(value.generated_at, "command_center.notifications.generated_at"),
+    counts_by_state: countsByState,
+    items: value.items.map(parseCommandCenterNotification),
+    limitations: readOptionalStringArray(value.limitations, "command_center.notifications.limitations"),
   };
 }
 
@@ -3578,7 +3626,7 @@ export async function getSummary(filters: Pick<EventFilters, "environment" | "te
   return parseSummary(await fetchJSON<unknown>("/v1/reports/summary", { params: filters }));
 }
 
-export async function getSecurityTimeline(filters: Pick<EventFilters, "component" | "decision" | "environment" | "tenant_id" | "repo" | "limit">) {
+export async function getSecurityTimeline(filters: Pick<EventFilters, "component" | "decision" | "environment" | "tenant_id" | "repo" | "limit"> & { lifecycle_phase?: string }) {
   return parseSecurityTimelineResponse(await fetchJSON<unknown>("/v1/command-center/timeline", {
     params: {
       component: filters.component,
@@ -3587,6 +3635,19 @@ export async function getSecurityTimeline(filters: Pick<EventFilters, "component
       tenant_id: filters.tenant_id,
       repo: filters.repo,
       limit: filters.limit,
+      lifecycle_phase: filters.lifecycle_phase,
+    },
+  }));
+}
+
+export async function getCommandCenterNotifications(filters: Pick<EventFilters, "environment" | "tenant_id" | "repo" | "limit"> & { lifecycle_phase?: string }) {
+  return parseCommandCenterNotificationsResponse(await fetchJSON<unknown>("/v1/command-center/notifications", {
+    params: {
+      environment: filters.environment,
+      tenant_id: filters.tenant_id,
+      repo: filters.repo,
+      limit: filters.limit,
+      lifecycle_phase: filters.lifecycle_phase,
     },
   }));
 }

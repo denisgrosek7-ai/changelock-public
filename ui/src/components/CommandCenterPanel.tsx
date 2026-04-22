@@ -1,6 +1,8 @@
 import type { ExecutiveDefenseReport, Recommendation } from "../incidents";
 import type {
   CommandCenterFocusTarget,
+  CommandCenterNotification,
+  CommandCenterNotificationsResponse,
   CommandCenterPersona,
   CommandCenterSearchResponse,
   SecurityTimelineEntry,
@@ -11,16 +13,19 @@ import type {
 type Props = {
   persona: CommandCenterPersona;
   timeline: SecurityTimelineResponse | null;
+  notifications: CommandCenterNotificationsResponse | null;
   recommendations: Recommendation[];
   executiveReport: ExecutiveDefenseReport | null;
   loading: boolean;
   searchQuery: string;
+  lifecyclePhase: string;
   searchResults: CommandCenterSearchResponse | null;
   searchLoading: boolean;
   focusTarget: CommandCenterFocusTarget | null;
   onPersonaChange: (persona: CommandCenterPersona) => void;
   onOpenTab: (tab: TabKey) => void;
   onOpenTarget: (target: CommandCenterFocusTarget) => void;
+  onLifecyclePhaseChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
   onSearchSubmit: () => void;
 };
@@ -96,6 +101,16 @@ function severityClass(value: string) {
   return value === "critical" || value === "high" ? "deny" : value === "medium" ? "warning" : "muted";
 }
 
+const lifecycleLabels: Record<string, string> = {
+  build_verify: "Build / Verify",
+  runtime: "Runtime",
+  validation: "Validation",
+  intelligence: "Intelligence",
+  workflow: "Workflow",
+  partner: "Partner",
+  governance: "Governance",
+};
+
 function recommendationStatusClass(value: Recommendation["status"]) {
   if (value === "verified_successful") {
     return "allow";
@@ -114,6 +129,10 @@ function timelineMatchesPersona(entry: SecurityTimelineEntry, persona: CommandCe
   return entry.persona_hints?.includes(persona) ?? false;
 }
 
+function notificationMatchesPersona(entry: CommandCenterNotification, persona: CommandCenterPersona) {
+  return entry.persona_hints?.includes(persona) ?? false;
+}
+
 function topTimelineForPersona(timeline: SecurityTimelineResponse | null, persona: CommandCenterPersona) {
   if (!timeline) {
     return [];
@@ -126,6 +145,14 @@ function topTimelineForPersona(timeline: SecurityTimelineResponse | null, person
     return timeline.entries.filter((entry) => entry.severity === "critical" || entry.severity === "high").slice(0, 8);
   }
   return timeline.entries.slice(0, 8);
+}
+
+function topNotificationsForPersona(notifications: CommandCenterNotificationsResponse | null, persona: CommandCenterPersona) {
+  if (!notifications) {
+    return [];
+  }
+  const direct = notifications.items.filter((entry) => notificationMatchesPersona(entry, persona));
+  return (direct.length > 0 ? direct : notifications.items).slice(0, 6);
 }
 
 function topRecommendationsForPersona(recommendations: Recommendation[], persona: CommandCenterPersona) {
@@ -149,21 +176,25 @@ function searchResultMatchesFocus(result: NonNullable<CommandCenterSearchRespons
 export function CommandCenterPanel({
   persona,
   timeline,
+  notifications,
   recommendations,
   executiveReport,
   loading,
   searchQuery,
+  lifecyclePhase,
   searchResults,
   searchLoading,
   focusTarget,
   onPersonaChange,
   onOpenTab,
   onOpenTarget,
+  onLifecyclePhaseChange,
   onSearchQueryChange,
   onSearchSubmit,
 }: Props) {
   const config = personaConfig[persona];
   const visibleTimeline = topTimelineForPersona(timeline, persona);
+  const visibleNotifications = topNotificationsForPersona(notifications, persona);
   const visibleRecommendations = topRecommendationsForPersona(recommendations, persona).sort((left, right) => {
     const leftFocused = recommendationMatchesFocus(left, focusTarget);
     const rightFocused = recommendationMatchesFocus(right, focusTarget);
@@ -204,14 +235,14 @@ export function CommandCenterPanel({
         <div className="command-center__search-header">
           <div>
             <span className="summary-label">Contextual command bar</span>
-            <strong>Semantic lookup across incidents, runtime, validation, federation, and sealed handoff objects</strong>
+            <strong>Semantic lookup across canonical subject refs, CVEs, packages, workflow ids, partner refs, and evidence-linked trust objects</strong>
           </div>
         </div>
         <div className="command-center__search-form">
           <input
             type="search"
             value={searchQuery}
-            placeholder="Find service, incident, runtime finding, validation run, handoff package, or federation peer"
+            placeholder="Search subject ref, CVE, package, workflow id, incident id, partner handoff ref, or evidence-linked object"
             onChange={(event) => onSearchQueryChange(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -281,6 +312,63 @@ export function CommandCenterPanel({
       <section className="command-center__grid">
         <article className="panel analytics-panel">
           <div className="table-toolbar">
+            <span className="summary-label">Grouped notifications</span>
+            <strong>{visibleNotifications.length}</strong>
+          </div>
+          <div className="persona-switch" role="tablist" aria-label="Command center lifecycle phases">
+            <button
+              type="button"
+              className={`persona-switch__button ${lifecyclePhase === "" ? "is-active" : ""}`}
+              onClick={() => onLifecyclePhaseChange("")}
+            >
+              All phases
+            </button>
+            {Object.entries(lifecycleLabels).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`persona-switch__button ${lifecyclePhase === key ? "is-active" : ""}`}
+                onClick={() => onLifecyclePhaseChange(key)}
+              >
+                {label} {(timeline?.counts_by_lifecycle[key] || 0) > 0 ? `(${timeline?.counts_by_lifecycle[key] || 0})` : ""}
+              </button>
+            ))}
+          </div>
+          {loading && visibleNotifications.length === 0 ? (
+            <p className="panel-empty">Grouping stateful notifications…</p>
+          ) : visibleNotifications.length === 0 ? (
+            <p className="panel-empty">No grouped notifications matched the current scope and lifecycle filter.</p>
+          ) : (
+            <ul className="analytics-list">
+              {visibleNotifications.map((item) => (
+                <li className="analytics-list__item overview-list-item" key={item.notification_id}>
+                  <div>
+                    <div className="overview-list-item__title">
+                      <strong>{item.title}</strong>
+                      <span className={`chip chip--${severityClass(item.severity)}`}>{item.severity}</span>
+                      <span className="chip chip--muted">{item.current_state.replace(/_/g, " ")}</span>
+                    </div>
+                    <p>{item.summary}</p>
+                    <small>
+                      {lifecycleLabels[item.lifecycle_phase] || item.lifecycle_phase}
+                      {item.owner_hint ? ` · owner ${item.owner_hint}` : ""}
+                    </small>
+                    {item.next_action ? <p className="incident-inline-copy"><strong>Next:</strong> {item.next_action}</p> : null}
+                  </div>
+                  <div className="command-center__timeline-footer">
+                    {item.evidence_refs?.length ? <span className="chip chip--muted">{item.evidence_refs.length} evidence refs</span> : null}
+                    <button type="button" className="button button-secondary" onClick={() => onOpenTarget(item.target)}>
+                      Open
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+
+        <article className="panel analytics-panel">
+          <div className="table-toolbar">
             <span className="summary-label">Next best actions</span>
             <strong>{visibleRecommendations.length}</strong>
           </div>
@@ -325,8 +413,9 @@ export function CommandCenterPanel({
                   <div className="incident-timeline__meta">
                     <strong>{entry.title}</strong>
                     <span className={`chip chip--${severityClass(entry.severity)}`}>{entry.severity}</span>
+                    <span className="chip chip--muted">{lifecycleLabels[entry.lifecycle_phase] || entry.lifecycle_phase}</span>
                     <span className="chip chip--muted">{entry.source_subsystem.replace(/_/g, " ")}</span>
-                <small>{formatTimestamp(entry.timestamp)}</small>
+                    <small>{formatTimestamp(entry.timestamp)}</small>
                   </div>
                   <p>{entry.summary}</p>
                   <small>

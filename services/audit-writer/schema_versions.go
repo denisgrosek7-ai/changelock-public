@@ -5,6 +5,8 @@ const (
 	securityTimelineEntrySchemaVersion    = "2a.security_timeline_entry.v1"
 	commandSearchResponseSchemaVersion    = "2a.command_search.v1"
 	commandSearchResultSchemaVersion      = "2a.command_search_result.v1"
+	commandNotificationsSchemaVersion     = "5a.command_notifications.v1"
+	commandNotificationSchemaVersion      = "5a.command_notification.v1"
 	integrationIdentitySchemaVersion      = "2b.identity.v1"
 	integrationTicketCatalogSchemaVersion = "2b.ticket_catalog.v1"
 	integrationTicketDraftSchemaVersion   = "2b.ticket_draft.v1"

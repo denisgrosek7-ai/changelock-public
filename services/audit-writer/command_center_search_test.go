@@ -73,6 +73,67 @@ func TestCommandCenterSearchReturnsExactFocusTargets(t *testing.T) {
 		AcceptedAudiences: []string{incidentAudienceAuditorSafe},
 	})
 
+	vulnerabilityReq := httptest.NewRequest(http.MethodPost, "/v1/intelligence/vulnerability-relevance?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+	  "input":{
+	    "subject_ref":"cluster-a/acme-prod/Deployment/edge-gateway",
+	    "vulnerability_id":"CVE-2026-4000",
+	    "image_digest":"sha256:edge",
+	    "package_name":"openssl",
+	    "severity":"critical",
+	    "reachability":{"current_state":"observed_reachable","confidence_score":91,"evidence_refs":["runtime:callgraph"]},
+	    "exploitability":{"epss":0.9,"external_exposure":true,"local_confidence":84}
+	  }
+	}`))
+	vulnerabilityReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	vulnerabilityReq.Header.Set("Content-Type", "application/json")
+	vulnerabilityRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(vulnerabilityRec, vulnerabilityReq)
+	if vulnerabilityRec.Code != http.StatusCreated {
+		t.Fatalf("expected vulnerability relevance 201, got %d: %s", vulnerabilityRec.Code, vulnerabilityRec.Body.String())
+	}
+
+	workflowReq := httptest.NewRequest(http.MethodPost, "/v1/enterprise/workflow/lifecycle?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+	  "input":{
+	    "workflow_id":"wf-search-edge",
+	    "artifact_type":"finding",
+	    "subject_ref":"cluster-a/acme-prod/Deployment/edge-gateway",
+	    "severity":"critical",
+	    "requested_state":"resolved",
+	    "validation_required":true,
+	    "validation_state":"pending",
+	    "owners":{"finding_owner":"team-edge","remediation_owner":"team-edge","approver":"security-admin"},
+	    "evidence_refs":["event://deploy-gate/1"]
+	  }
+	}`))
+	workflowReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	workflowReq.Header.Set("Content-Type", "application/json")
+	workflowRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(workflowRec, workflowReq)
+	if workflowRec.Code != http.StatusCreated {
+		t.Fatalf("expected workflow 201, got %d: %s", workflowRec.Code, workflowRec.Body.String())
+	}
+
+	partnerReq := httptest.NewRequest(http.MethodPost, "/v1/enterprise/partner-trust/intake?tenant_id=acme&environment=prod&repo=github.com/acme/api&partner_id=vendor-search", bytes.NewBufferString(`{
+	  "input":{
+	    "partner_id":"vendor-search",
+	    "organization":"Vendor Search",
+	    "trust_domain":"suppliers.acme",
+	    "handoff_ref":"handoff-search",
+	    "verification_status":"verified",
+	    "freshness_state":"fresh",
+	    "policy_compatibility":"compatible",
+	    "partner_visible_evidence":["sealed://proof/search"],
+	    "evidence_refs":["handoff://search"]
+	  }
+	}`))
+	partnerReq.Header.Set("Authorization", "Bearer security-admin-demo-token")
+	partnerReq.Header.Set("Content-Type", "application/json")
+	partnerRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(partnerRec, partnerReq)
+	if partnerRec.Code != http.StatusCreated {
+		t.Fatalf("expected partner intake 201, got %d: %s", partnerRec.Code, partnerRec.Body.String())
+	}
+
 	checkSearch := func(query string, wantKind string, extra func(result commandCenterSearchResult)) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/command-center/search?tenant_id=acme&environment=prod&limit=10&q="+query, nil)
 		req.Header.Set("Authorization", "Bearer viewer-demo-token")
@@ -128,6 +189,21 @@ func TestCommandCenterSearchReturnsExactFocusTargets(t *testing.T) {
 	checkSearch(sealed.PackageID, "handoff_package", func(result commandCenterSearchResult) {
 		if result.Target.ResourceURI == "" || result.Target.Ref != sealed.PackageID {
 			t.Fatalf("expected handoff package result to preserve exact package lookup metadata, got %#v", result)
+		}
+	})
+	checkSearch("CVE-2026-4000", "vulnerability_relevance", func(result commandCenterSearchResult) {
+		if result.Target.Tab != "vulnerabilities" || result.Target.SecondaryRef != "CVE-2026-4000" {
+			t.Fatalf("expected vulnerability relevance result to route to vulnerabilities, got %#v", result)
+		}
+	})
+	checkSearch("wf-search-edge", "workflow_record", func(result commandCenterSearchResult) {
+		if result.Target.Tab != "exceptions" || result.Target.Ref != "wf-search-edge" {
+			t.Fatalf("expected workflow record result to route to workflow view, got %#v", result)
+		}
+	})
+	checkSearch("vendor-search", "partner_trust", func(result commandCenterSearchResult) {
+		if result.Target.Tab != "federation" || result.Target.Ref != "vendor-search" {
+			t.Fatalf("expected partner trust result to route to federation, got %#v", result)
 		}
 	})
 }
