@@ -441,6 +441,10 @@ func (s server) listRuntimeSubstrateValAObservedEvents(ctx context.Context, filt
 	if err != nil {
 		return nil, err
 	}
+	return runtimeSubstrateValAObservedEventsFromSnapshot(snapshot), nil
+}
+
+func runtimeSubstrateValAObservedEventsFromSnapshot(snapshot runtimeSnapshot) []runtimesubstrate.RuntimeSubstrateObservedEvent {
 	items := []runtimesubstrate.RuntimeSubstrateObservedEvent{}
 	for _, subject := range snapshot.sortedSubjects() {
 		for _, observation := range subject.Observations {
@@ -452,10 +456,10 @@ func (s server) listRuntimeSubstrateValAObservedEvents(ctx context.Context, filt
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].ObservedAt.After(items[j].ObservedAt)
 	})
-	if len(items) > filter.Limit {
-		items = items[:filter.Limit]
+	if len(items) > snapshot.filter.Limit {
+		items = items[:snapshot.filter.Limit]
 	}
-	return items, nil
+	return items
 }
 
 func runtimeSubstrateObservedEventFromObservation(observation runtimeObservation, subject *runtimeSnapshotSubject) (runtimesubstrate.RuntimeSubstrateObservedEvent, bool) {

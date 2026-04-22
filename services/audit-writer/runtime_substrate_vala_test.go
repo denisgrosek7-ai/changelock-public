@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -226,6 +227,159 @@ func TestRuntimeSubstrateValARejectsCrossTenantObservationScope(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for cross-tenant substrate observation, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRuntimeSubstrateValARejectsInvalidObservationPayloadsAsBadRequest(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	testCases := []struct {
+		name  string
+		event runtimesubstrate.RuntimeSubstrateObservedEvent
+	}{
+		{
+			name: "missing pid",
+			event: runtimesubstrate.RuntimeSubstrateObservedEvent{
+				EventFamily:           runtimesubstrate.RuntimeSubstrateEventFamilyExecLifecycle,
+				CurrentState:          runtimesubstrate.RuntimeSubstrateEventStateObserved,
+				Process:               runtimesubstrate.ProcessIdentity{ProcessName: "api", ProcessPath: "/app/api"},
+				Workload:              runtimesubstrate.WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "api"},
+				Node:                  runtimesubstrate.NodeIdentity{NodeID: "node-a", SubstrateClass: runtimesubstrate.SubstrateClassStandard, TrustBoundary: runtimesubstrate.TrustBoundaryKernelRuntimeLayer},
+				AttributionConfidence: runtimesubstrate.RuntimeSubstrateConfidenceHighFidelity,
+				FreshnessState:        runtimesubstrate.RuntimeSubstrateFreshnessFresh,
+				ObservedAt:            time.Date(2026, 4, 22, 10, 30, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "missing process name",
+			event: runtimesubstrate.RuntimeSubstrateObservedEvent{
+				EventFamily:           runtimesubstrate.RuntimeSubstrateEventFamilyExecLifecycle,
+				CurrentState:          runtimesubstrate.RuntimeSubstrateEventStateObserved,
+				Process:               runtimesubstrate.ProcessIdentity{ProcessPath: "/app/api", PID: 2048},
+				Workload:              runtimesubstrate.WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "api"},
+				Node:                  runtimesubstrate.NodeIdentity{NodeID: "node-a", SubstrateClass: runtimesubstrate.SubstrateClassStandard, TrustBoundary: runtimesubstrate.TrustBoundaryKernelRuntimeLayer},
+				AttributionConfidence: runtimesubstrate.RuntimeSubstrateConfidenceHighFidelity,
+				FreshnessState:        runtimesubstrate.RuntimeSubstrateFreshnessFresh,
+				ObservedAt:            time.Date(2026, 4, 22, 10, 31, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "missing workload fields",
+			event: runtimesubstrate.RuntimeSubstrateObservedEvent{
+				EventFamily:           runtimesubstrate.RuntimeSubstrateEventFamilyExecLifecycle,
+				CurrentState:          runtimesubstrate.RuntimeSubstrateEventStateObserved,
+				Process:               runtimesubstrate.ProcessIdentity{ProcessName: "api", ProcessPath: "/app/api", PID: 2048},
+				Workload:              runtimesubstrate.WorkloadIdentity{ClusterID: "cluster-a"},
+				Node:                  runtimesubstrate.NodeIdentity{NodeID: "node-a", SubstrateClass: runtimesubstrate.SubstrateClassStandard, TrustBoundary: runtimesubstrate.TrustBoundaryKernelRuntimeLayer},
+				AttributionConfidence: runtimesubstrate.RuntimeSubstrateConfidenceHighFidelity,
+				FreshnessState:        runtimesubstrate.RuntimeSubstrateFreshnessFresh,
+				ObservedAt:            time.Date(2026, 4, 22, 10, 32, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(runtimeSubstrateValAObservationWriteRequest{Event: tc.event})
+			if err != nil {
+				t.Fatalf("marshal event: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/runtime/substrate-depth/vala/observability?tenant_id=acme&environment=prod", bytes.NewReader(body))
+			req.Header.Set("Authorization", "Bearer operator-demo-token")
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for invalid observation payload, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestRuntimeSubstrateValAProofsStayNonActiveWhenStableIdentityIsPartialOnReadback(t *testing.T) {
+	store := audit.NewMemoryStore()
+	handler := newHandlerWithAuth(store, "memory", mustStaticAuthConfig(t))
+
+	for _, event := range []runtimesubstrate.RuntimeSubstrateObservedEvent{
+		{
+			EventFamily:           runtimesubstrate.RuntimeSubstrateEventFamilyExecLifecycle,
+			CurrentState:          runtimesubstrate.RuntimeSubstrateEventStateObserved,
+			Process:               runtimesubstrate.ProcessIdentity{ProcessPath: "/usr/local/bin/api", PID: 2048, LineageRef: "init->api"},
+			Workload:              runtimesubstrate.WorkloadIdentity{ClusterID: "cluster-a", Namespace: "acme-prod", WorkloadKind: "Deployment", Workload: "api", PodUID: "pod-api-0", ImageDigest: "sha256:111"},
+			Node:                  runtimesubstrate.NodeIdentity{NodeID: "node-a", SubstrateClass: runtimesubstrate.SubstrateClassStandard, TrustBoundary: runtimesubstrate.TrustBoundaryKernelRuntimeLayer},
+			AttributionConfidence: runtimesubstrate.RuntimeSubstrateConfidenceHighFidelity,
+			FreshnessState:        runtimesubstrate.RuntimeSubstrateFreshnessFresh,
+			Reasons:               []string{"exec_event_captured"},
+			ObservedAt:            time.Date(2026, 4, 22, 9, 0, 0, 0, time.UTC),
+		},
+		runtimeSubstrateProcessStaleEvent(),
+		runtimeSubstrateFilePartialEvent(),
+		runtimeSubstrateNetworkUnsupportedEvent(),
+	} {
+		event = runtimesubstrate.NormalizeRuntimeSubstrateObservedEvent(event, time.Now)
+		payload, err := canonicalJSON(runtimeIntegrityEventPayload{
+			Observation: &runtimeObservationPayload{
+				Node:         event.Node.NodeID,
+				Pod:          event.Workload.PodUID,
+				EventType:    event.EventFamily,
+				EventPayload: runtimeSubstrateValAEventPayload(event),
+				Confidence:   runtimeSubstrateConfidenceToRuntimeConfidence(event.AttributionConfidence),
+			},
+		})
+		if err != nil {
+			t.Fatalf("canonical payload: %v", err)
+		}
+		if _, err := store.Ingest(context.Background(), audit.Event{
+			RequestID:        audit.NewRequestID(),
+			Component:        runtimeIntegrityComponent,
+			EventType:        audit.EventTypeRuntimeObservationRecorded,
+			Actor:            "tester",
+			ClusterID:        event.Workload.ClusterID,
+			TenantID:         "acme",
+			Environment:      "prod",
+			Namespace:        event.Workload.Namespace,
+			WorkloadKind:     event.Workload.WorkloadKind,
+			Workload:         event.Workload.Workload,
+			Digest:           event.Workload.ImageDigest,
+			Decision:         audit.DecisionAllow,
+			Reasons:          []string{event.EventFamily, event.CurrentState},
+			RuntimeIntegrity: payload,
+			Timestamp:        event.ObservedAt.UTC(),
+		}); err != nil {
+			t.Fatalf("store ingest: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/vala/observability?tenant_id=acme&environment=prod", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected observability 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var observability runtimeSubstrateObservabilityResponse
+	if err := json.NewDecoder(rec.Body).Decode(&observability); err != nil {
+		t.Fatalf("decode observability: %v", err)
+	}
+	if observability.CurrentState != runtimesubstrate.RuntimeSubstrateValAObservabilityStatePartial {
+		t.Fatalf("expected partial observability for incomplete stable identity, got %#v", observability)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/vala/proofs?tenant_id=acme&environment=prod", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected proofs 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var proofs runtimeSubstrateValAProofsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&proofs); err != nil {
+		t.Fatalf("decode proofs: %v", err)
+	}
+	if proofs.CurrentState == runtimesubstrate.RuntimeSubstrateValAStateActive {
+		t.Fatalf("expected proofs to stay non-active when stable process identity is partial, got %#v", proofs)
 	}
 }
 
