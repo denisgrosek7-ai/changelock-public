@@ -28,6 +28,11 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Phase 8 Extended Surface: 8m-8w](../phases/phase-8-extended-surface-8m-8w.md)
    - [Phase 8 Formalized Authority Plan](../formal-phase8-plan.md)
    - [Phase 8 Formalized Authority Core](../formal-phase8-core.md)
+6. Current runtime / substrate depth planning lineage:
+   - [Runtime / Substrate Depth Expansion Plan](../runtime-substrate-depth-expansion-plan.md)
+   - [Runtime / Substrate Depth Entry Gate](../runtime-substrate-depth-entry-gate.md)
+   - [Runtime / Substrate Depth Val A](../runtime-substrate-depth-vala.md)
+   - [Runtime / Substrate Depth Val A Core](../runtime-substrate-depth-vala-core.md)
 
 ## Current documentation shape
 
@@ -42,6 +47,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
   - the main [README](../../README.md)
   - thematic docs
   - current routes, handlers, tests, and merged review history
+  - current runtime / substrate depth planning docs
 
 ## Notes for reviewers
 
