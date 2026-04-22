@@ -270,8 +270,8 @@ func phase8InsuranceExportItems() []phase8InsuranceExportItem {
 			Audience:                rule.Audience,
 			ClaimClass:              claim.ClaimClass,
 			DisclosureScopeProfile:  append([]string{}, rule.SharingScope...),
-			ReleaseLifecycleState:   strings.Join([]string{lifecycle.States[1], lifecycle.States[2], lifecycle.States[3]}, " -> "),
-			WithdrawalState:         lifecycle.WithdrawalBehavior,
+			ReleaseLifecycleState:   insuranceReleaseLifecycleState(lifecycle),
+			WithdrawalState:         insuranceWithdrawalState(lifecycle),
 			ReleaseApprovalRequired: custody.ReleaseApprovalRequired,
 			CanCitePublicly:         rule.CanCitePublicly,
 			AdverseDecisionExplanation: phase8AdverseDecisionSupport{
@@ -379,4 +379,31 @@ func phase8EvidenceCustodyContract() formalcore.EvidenceCustodyContract {
 		return formalcore.EvidenceCustodyContract{}
 	}
 	return contracts[0]
+}
+
+func boundedLifecycleStates(states []string) []string {
+	out := []string{
+		"draft_unavailable",
+		"review_unavailable",
+		"approval_unavailable",
+		"release_unavailable",
+	}
+	for i := 0; i < len(states) && i < len(out); i++ {
+		if trimmed := strings.TrimSpace(states[i]); trimmed != "" {
+			out[i] = trimmed
+		}
+	}
+	return out
+}
+
+func insuranceReleaseLifecycleState(lifecycle formalcore.ArtifactLifecycleWorkflow) string {
+	states := boundedLifecycleStates(lifecycle.States)
+	return strings.Join([]string{states[1], states[2], states[3]}, " -> ")
+}
+
+func insuranceWithdrawalState(lifecycle formalcore.ArtifactLifecycleWorkflow) string {
+	if withdrawal := strings.TrimSpace(lifecycle.WithdrawalBehavior); withdrawal != "" {
+		return withdrawal
+	}
+	return "withdrawal_unavailable"
 }

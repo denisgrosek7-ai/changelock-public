@@ -125,3 +125,14 @@ func TestPhase8IncidentAttributionAndActuarialBenchmarksHandlers(t *testing.T) {
 		t.Fatalf("expected forbidden tenant-level pricing and raw disclosure, got %#v", benchmark.ForbiddenUse)
 	}
 }
+
+func TestInsuranceReleaseLifecycleStateFallsBackWhenLifecycleStatesMissing(t *testing.T) {
+	lifecycle := formalcore.ArtifactLifecycleWorkflow{}
+
+	if got := insuranceReleaseLifecycleState(lifecycle); got != "review_unavailable -> approval_unavailable -> release_unavailable" {
+		t.Fatalf("expected bounded fallback lifecycle state, got %q", got)
+	}
+	if got := insuranceWithdrawalState(lifecycle); got != "withdrawal_unavailable" {
+		t.Fatalf("expected bounded fallback withdrawal state, got %q", got)
+	}
+}
