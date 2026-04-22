@@ -26,6 +26,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
 5. Later advanced trust platform lineage:
    - [Phase 8: Advanced Trust Platform](../phases/phase-8-advanced-trust-platform.md)
    - [Phase 8 Extended Surface: 8m-8w](../phases/phase-8-extended-surface-8m-8w.md)
+   - [Phase 8 Formalized Authority Plan](../formal-phase8-plan.md)
+   - [Phase 8 Formalized Authority Core](../formal-phase8-core.md)
 
 ## Current documentation shape
 
@@ -34,6 +36,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
 - Phase `8` is intentionally split:
   - baseline advanced trust platform
   - extended historical `8m-8w` lineage surface
+  - current formalized-authority planning document
+  - current formalized-authority core slice
 - Phase `9` is primarily represented by:
   - the main [README](../../README.md)
   - thematic docs
