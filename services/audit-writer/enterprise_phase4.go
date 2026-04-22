@@ -377,6 +377,7 @@ func (s server) enterprisePartnerIntakeHandler(w http.ResponseWriter, r *http.Re
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
+		request.Input.PartnerID = firstNonEmpty(strings.TrimSpace(request.Input.PartnerID), filter.PartnerID)
 		record := handoff.EvaluateIntake(request.Input, time.Now)
 		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 		defer cancel()
