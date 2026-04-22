@@ -157,6 +157,13 @@ func (a *App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return a.runInspect(ctx, args[1:], stdout, stderr)
 	case "explain":
 		return a.runExplain(ctx, args[1:], stdout, stderr)
+	case "readiness":
+		result, err := a.runReadiness(ctx, args[1:])
+		return a.finish(result, err, stdout, stderr)
+	case "support":
+		return a.runSupport(ctx, args[1:], stdout, stderr)
+	case "upgrade-readiness":
+		return a.runUpgradeReadiness(ctx, args[1:], stdout, stderr)
 	case "diagnostics":
 		return a.runDiagnostics(args[1:], stdout, stderr)
 	case "guidance":
@@ -1262,6 +1269,9 @@ Usage:
   changelock-cli preview --config path
   changelock-cli inspect --config path
   changelock-cli explain --config path --topic sync
+  changelock-cli readiness --config path --profile production
+  changelock-cli support --config path --profile production
+  changelock-cli upgrade-readiness --config path --target-version 5.6.0
   changelock-cli manifest [--file path | --dir path]
   changelock-cli image --image <ref>
   changelock-cli scan --image <ref>

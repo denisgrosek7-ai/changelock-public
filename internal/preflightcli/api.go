@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -126,6 +127,32 @@ func (c *APIClient) VulnerabilityNet(ctx context.Context, imageDigest, tenantID,
 		return audit.VulnerabilityNetResponse{}, err
 	}
 	return response, nil
+}
+
+func (c *APIClient) Healthz(ctx context.Context) error {
+	req, err := c.newRequest(ctx, http.MethodGet, "/healthz", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("api health probe failed with status %d", resp.StatusCode)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
+}
+
+func (c *APIClient) ProbeJSON(ctx context.Context, path string) error {
+	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return err
+	}
+	var payload map[string]any
+	return c.doJSON(req, &payload)
 }
 
 func (c *APIClient) newRequest(ctx context.Context, method, path string, body []byte) (*http.Request, error) {

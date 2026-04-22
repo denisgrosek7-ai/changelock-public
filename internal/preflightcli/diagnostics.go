@@ -247,6 +247,96 @@ func diagnosticDescriptor(check CheckResult) (reasonCode, category, source, docs
 		default:
 			return "remote_vex_context_failed", "vulnerability", "vex", "docs/vex-exploitability-ops.md", "Verify ChangeLock API reachability before relying on server-side VEX and net-actionable vulnerability context."
 		}
+	case "config-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "config_readiness_confirmed", "config", "policy", "docs/production-phase5-valb.md", "No action required."
+		case StatusWarning, StatusDegraded, StatusInfo:
+			return "config_readiness_partial", "config", "policy", "docs/production-phase5-valb.md", "Review config warnings, defaults, and compatibility notes before treating this environment as rollout-ready."
+		default:
+			return "config_readiness_failed", "config", "policy", "docs/production-phase5-valb.md", "Resolve blocking schema, path, or compatibility findings before go-live."
+		}
+	case "dependency-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "dependency_readiness_confirmed", "dependency", "runtime", "docs/production-phase5-valc.md", "No action required."
+		case StatusInfo, StatusWarning:
+			return "dependency_readiness_partial", "dependency", "runtime", "docs/production-phase5-valc.md", "Install the missing local tooling before relying on full supportability or deterministic rollout checks."
+		default:
+			return "dependency_readiness_failed", "dependency", "runtime", "docs/production-phase5-valc.md", "Install the missing binaries and rerun readiness before production use."
+		}
+	case "api-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "api_readiness_confirmed", "supportability", "evidence", "docs/production-phase5-valc.md", "No action required."
+		case StatusInfo, StatusWarning, StatusDegraded:
+			return "api_readiness_partial", "supportability", "evidence", "docs/production-phase5-valc.md", "Restore API reachability or explicitly operate this profile as offline before rollout."
+		default:
+			return "api_readiness_failed", "supportability", "evidence", "docs/production-phase5-valc.md", "Fix API URL, token, or service health before relying on production support surfaces."
+		}
+	case "sync-readiness", "sync-migration-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "sync_state_ready", "sync", "evidence", "docs/production-phase5-valb.md", "No action required."
+		case StatusWarning, StatusDegraded, StatusInfo:
+			return "sync_state_partial", "sync", "evidence", "docs/production-phase5-valb.md", "Converge revisions or document why bounded divergence is acceptable before rollout or upgrade."
+		default:
+			return "sync_state_blocking", "sync", "evidence", "docs/production-phase5-valb.md", "Resolve sync conflicts before rollout or upgrade."
+		}
+	case "workflow-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "workflow_governance_ready", "workflow", "policy", "docs/production-phase5-valc.md", "No action required."
+		case StatusInfo, StatusWarning, StatusDegraded:
+			return "workflow_governance_partial", "workflow", "policy", "docs/production-phase5-valc.md", "Tighten approval and validation gates before treating closure workflows as production-ready."
+		default:
+			return "workflow_governance_failed", "workflow", "policy", "docs/production-phase5-valc.md", "Declare the missing validation and approval gates before rollout."
+		}
+	case "runtime-self-healing-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "runtime_supportability_ready", "runtime", "runtime", "docs/production-phase5-valc.md", "No action required."
+		case StatusInfo, StatusWarning:
+			return "runtime_supportability_partial", "runtime", "runtime", "docs/production-phase5-valc.md", "Review remediation mode, signed desired-state posture, and quarantine safety before go-live."
+		default:
+			return "runtime_supportability_failed", "runtime", "runtime", "docs/production-phase5-valc.md", "Fix invalid runtime self-healing configuration before rollout."
+		}
+	case "config-compatibility-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "upgrade_config_compatible", "upgrade", "policy", "docs/production-phase5-valc.md", "No action required."
+		case StatusWarning:
+			return "upgrade_config_warning", "upgrade", "policy", "docs/production-phase5-valc.md", "Review config compatibility warnings before changing versions."
+		default:
+			return "upgrade_config_blocked", "upgrade", "policy", "docs/production-phase5-valc.md", "Resolve blocking config issues before attempting the upgrade."
+		}
+	case "version-support-matrix":
+		switch check.Status {
+		case StatusPass:
+			return "upgrade_line_supported", "upgrade", "evidence", "docs/production-phase5-valc.md", "No action required."
+		case StatusWarning:
+			return "upgrade_line_bounded", "upgrade", "evidence", "docs/production-phase5-valc.md", "Proceed only after reviewing the bounded support matrix guidance and rollback cautions."
+		default:
+			return "upgrade_line_unsupported", "upgrade", "evidence", "docs/production-phase5-valc.md", "Choose a supported target line or step through the next bounded upgrade path."
+		}
+	case "rollback-readiness":
+		switch check.Status {
+		case StatusPass:
+			return "rollback_posture_ready", "rollback", "evidence", "docs/production-phase5-valc.md", "No action required."
+		case StatusWarning:
+			return "rollback_posture_caution", "rollback", "evidence", "docs/production-phase5-valc.md", "Review rollback cautions and re-run readiness after any reversal."
+		default:
+			return "rollback_posture_blocked", "rollback", "evidence", "docs/production-phase5-valc.md", "Do not treat rollback as safe until the support matrix and compatibility blockers are cleared."
+		}
+	case "api-upgrade-context":
+		switch check.Status {
+		case StatusPass:
+			return "upgrade_api_context_ready", "upgrade", "evidence", "docs/production-phase5-valc.md", "No action required."
+		case StatusWarning, StatusDegraded, StatusInfo:
+			return "upgrade_api_context_partial", "upgrade", "evidence", "docs/production-phase5-valc.md", "Restore API reachability before relying on remote upgrade verification surfaces."
+		default:
+			return "upgrade_api_context_failed", "upgrade", "evidence", "docs/production-phase5-valc.md", "Fix API health or auth scope before trusting upgrade diagnostics."
+		}
 	default:
 		return "check_unknown", "general", "evidence", "docs/developer-preflight-cli.md", "Review the CLI output for details and rerun with `--output json` if automation needs to inspect the result."
 	}
@@ -266,9 +356,9 @@ func diagnosticRuleID(command, checkName string) string {
 
 func diagnosticSeverity(status Status) DiagnosticSeverity {
 	switch status {
-	case StatusPass:
+	case StatusPass, StatusInfo:
 		return DiagnosticSeverityNote
-	case StatusSkip:
+	case StatusSkip, StatusWarning, StatusDegraded:
 		return DiagnosticSeverityWarning
 	default:
 		return DiagnosticSeverityError
@@ -283,6 +373,8 @@ func evaluationState(status Status) EvaluationState {
 		return EvaluationStateFail
 	case StatusSkip:
 		return EvaluationStateSkipped
+	case StatusInfo:
+		return EvaluationStatePass
 	case StatusError:
 		return EvaluationStateUnknown
 	default:
