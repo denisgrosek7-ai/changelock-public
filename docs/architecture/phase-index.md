@@ -34,6 +34,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Runtime / Substrate Depth Val A](../runtime-substrate-depth-vala.md)
    - [Runtime / Substrate Depth Val A Core](../runtime-substrate-depth-vala-core.md)
    - [Runtime / Substrate Depth Val B Core](../runtime-substrate-depth-valb-core.md)
+   - [Runtime / Substrate Depth Val C Core](../runtime-substrate-depth-valc-core.md)
 
 ## Current documentation shape
 

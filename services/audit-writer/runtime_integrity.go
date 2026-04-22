@@ -1070,14 +1070,27 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 		if !snapshot.matchesFilter(subjectRef, record) {
 			continue
 		}
-		subject := snapshot.ensureSubject(record.ClusterID, record.Namespace, record.WorkloadKind, record.Workload)
+		allowRuntimeSubjectMutation := runtimeSnapshotAllowsRuntimeSubjectMutation(record)
+		allowProvenanceEnrichment := runtimeSnapshotAllowsProvenanceEnrichment(record)
+		if !allowRuntimeSubjectMutation && !allowProvenanceEnrichment {
+			continue
+		}
+		var subject *runtimeSnapshotSubject
+		if allowRuntimeSubjectMutation {
+			subject = snapshot.ensureSubject(record.ClusterID, record.Namespace, record.WorkloadKind, record.Workload)
+		} else {
+			subject = snapshot.snapshotSubject(subjectRef)
+			if subject == nil {
+				continue
+			}
+		}
 		snapshot.ingestStateMetadata(subject, record.ClusterID, record.TenantID, firstNonEmpty(record.Environment, filter.Environment), record.Repo, record.Namespace, record.WorkloadKind, record.Workload, record.ServiceAccount, record.Digest)
 		snapshot.addEvidenceRefs(subject, runtimeEventEvidenceRefs(record)...)
 		var signingIdentity string
-		if record.Evidence != nil && record.Evidence.SigningIdentity != nil {
+		if allowProvenanceEnrichment && record.Evidence != nil && record.Evidence.SigningIdentity != nil {
 			signingIdentity = strings.TrimSpace(record.Evidence.SigningIdentity.SignerIdentity)
 		}
-		if record.Evidence != nil && record.Evidence.Artifact != nil {
+		if allowProvenanceEnrichment && record.Evidence != nil && record.Evidence.Artifact != nil {
 			if signer := strings.TrimSpace(firstNonEmpty(record.Evidence.Artifact.SignerIdentity, signingIdentity)); signer != "" {
 				subject.ExpectedSigners = append(subject.ExpectedSigners, signer)
 				snapshot.addTrustInputs(subject, "signed_artifact")
@@ -1104,7 +1117,7 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 				snapshot.addEvidenceRefs(subject, record.Evidence.Artifact.SBOMHash, record.Evidence.Artifact.SBOMArtifactRef, record.Evidence.Artifact.SBOMDigestRef)
 			}
 		}
-		if record.Component == runtimePhase2Component {
+		if allowProvenanceEnrichment && record.Component == runtimePhase2Component {
 			payload := parseRuntimePhase2Payload(record.RuntimeIntegrity)
 			if payload.Attestation != nil {
 				if subject.LatestAttestation == nil || payload.Attestation.VerifiedAt.After(subject.LatestAttestation.VerifiedAt) {
@@ -1115,7 +1128,7 @@ func (s server) buildRuntimeSnapshot(ctx context.Context, filter runtimeIntegrit
 			}
 			continue
 		}
-		if record.Component != "runtime-agent" && record.Component != runtimeIntegrityComponent {
+		if !allowRuntimeSubjectMutation {
 			continue
 		}
 		payload := parseRuntimeIntegrityEventPayload(record.RuntimeIntegrity)
@@ -1229,6 +1242,32 @@ func (s runtimeSnapshot) matchesFilter(subjectRef string, record audit.StoredEve
 		return false
 	}
 	return true
+}
+
+func runtimeSnapshotAllowsRuntimeSubjectMutation(record audit.StoredEvent) bool {
+	switch strings.TrimSpace(record.Component) {
+	case "runtime-agent", runtimeIntegrityComponent:
+		return true
+	default:
+		return false
+	}
+}
+
+func runtimeSnapshotAllowsProvenanceEnrichment(record audit.StoredEvent) bool {
+	switch {
+	case record.Component == "runtime-agent":
+		return true
+	case record.Component == runtimeIntegrityComponent:
+		return true
+	case record.Component == runtimePhase2Component && record.EventType == audit.EventTypeRuntimeAttestationVerified:
+		return true
+	case record.Component == "attestation-verifier" && record.EventType == audit.EventTypeArtifactVerificationResult:
+		return true
+	case record.Component == "deploy-gate" && record.EventType == audit.EventTypeDeployGateDecision:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s runtimeSnapshot) sortedSubjects() []*runtimeSnapshotSubject {
