@@ -112,6 +112,44 @@ func (s *MemoryStore) ListEvents(_ context.Context, filter EventFilter) ([]Store
 	return records, nil
 }
 
+func (s *MemoryStore) FindExecutionTaskByLogicalKey(_ context.Context, component string, tenantID string, environment string, taskType string, idempotencyKey string) (ExecutionTaskRecord, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	component = strings.TrimSpace(component)
+	tenantID = strings.TrimSpace(tenantID)
+	environment = strings.TrimSpace(environment)
+	taskType = strings.TrimSpace(taskType)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if taskType == "" || idempotencyKey == "" {
+		return ExecutionTaskRecord{}, false, nil
+	}
+
+	for i := len(s.records) - 1; i >= 0; i-- {
+		record := s.records[i]
+		if component != "" && record.Component != component {
+			continue
+		}
+		if record.EventType != EventTypeExecutionTaskRecorded {
+			continue
+		}
+		if tenantID != "" && record.TenantID != tenantID {
+			continue
+		}
+		if environment != "" && record.Environment != environment {
+			continue
+		}
+		task, err := UnmarshalExecutionTaskRecord(record.Event)
+		if err != nil {
+			continue
+		}
+		if task.TaskType == taskType && task.IdempotencyKey == idempotencyKey {
+			return task, true, nil
+		}
+	}
+	return ExecutionTaskRecord{}, false, nil
+}
+
 func (s *MemoryStore) Summary(_ context.Context, filter EventFilter) (Summary, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

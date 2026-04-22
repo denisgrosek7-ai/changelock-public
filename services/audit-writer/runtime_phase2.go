@@ -28,6 +28,17 @@ const (
 	runtimePhase2EventPayloadSchema       = "2.runtime_phase2_event_payload.v1"
 )
 
+var errPhase2PersistScopeViolation = &auth.AccessError{Status: http.StatusForbidden, Message: "runtime subject is outside authorized tenant or environment scope"}
+
+type phase2PersistScope struct {
+	TenantID     string
+	Environment  string
+	ClusterID    string
+	Namespace    string
+	WorkloadKind string
+	Workload     string
+}
+
 type runtimePhase2EventPayload struct {
 	SchemaVersion      string                                 `json:"schema_version"`
 	SubstrateTruth     *runtimesubstrate.SubstrateTruthRecord `json:"substrate_truth,omitempty"`
@@ -177,6 +188,11 @@ func (s server) runtimeSubstrateTruthHandler(w http.ResponseWriter, r *http.Requ
 			},
 		})
 	case http.MethodPost:
+		filter, err := parseRuntimeIntegrityFilter(r)
+		if err != nil {
+			writeRuntimeIntegrityError(w, err)
+			return
+		}
 		var request phase2SubstrateTruthEvaluateRequest
 		if err := httpjson.Decode(r, &request); err != nil && !errors.Is(err, io.EOF) {
 			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -199,7 +215,7 @@ func (s server) runtimeSubstrateTruthHandler(w http.ResponseWriter, r *http.Requ
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 		defer cancel()
-		if err := s.persistPhase2Event(ctx, principal.Subject, audit.EventTypeRuntimeSubstrateTruthRecorded, request.Truth, match, nil, nil, nil); err != nil {
+		if err := s.persistPhase2Event(ctx, principal.Subject, filter, audit.EventTypeRuntimeSubstrateTruthRecorded, request.Truth, match, nil, nil, nil); err != nil {
 			writeRuntimeIntegrityError(w, err)
 			return
 		}
@@ -256,6 +272,11 @@ func (s server) runtimeAttestationVerifyHandler(w http.ResponseWriter, r *http.R
 		httpjson.Write(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
+	filter, err := parseRuntimeIntegrityFilter(r)
+	if err != nil {
+		writeRuntimeIntegrityError(w, err)
+		return
+	}
 	var request attestationruntime.VerificationRequest
 	if err := httpjson.Decode(r, &request); err != nil && !errors.Is(err, io.EOF) {
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -266,7 +287,7 @@ func (s server) runtimeAttestationVerifyHandler(w http.ResponseWriter, r *http.R
 	result := verifier.Verify(request)
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
-	if err := s.persistPhase2Event(ctx, principal.Subject, audit.EventTypeRuntimeAttestationVerified, runtimesubstrate.SubstrateTruthRecord{}, nil, &result, nil, nil); err != nil {
+	if err := s.persistPhase2Event(ctx, principal.Subject, filter, audit.EventTypeRuntimeAttestationVerified, runtimesubstrate.SubstrateTruthRecord{}, nil, &result, nil, nil); err != nil {
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
@@ -365,7 +386,7 @@ func (s server) runtimeResponseSimulationHandler(w http.ResponseWriter, r *http.
 			"Response simulation uses the current bounded runtime enforcement engine and explainability contracts; it does not claim universal kernel-level remediation.",
 		},
 	}
-	if err := s.persistPhase2Event(ctx, principal.Subject, audit.EventTypeRuntimeResponseSimulated, runtimesubstrate.SubstrateTruthRecord{}, nil, nil, &record, nil); err != nil {
+	if err := s.persistPhase2Event(ctx, principal.Subject, filter, audit.EventTypeRuntimeResponseSimulated, runtimesubstrate.SubstrateTruthRecord{}, nil, nil, &record, nil); err != nil {
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
@@ -446,7 +467,7 @@ func (s server) runtimeRollbackDrillHandler(w http.ResponseWriter, r *http.Reque
 			"Rollback drills validate bounded response semantics, trusted target verification, and evidence-lock ordering. They are not a claim of universal GitOps ownership across every delivery system.",
 		},
 	}
-	if err := s.persistPhase2Event(ctx, principal.Subject, audit.EventTypeRuntimeRollbackDrillRecorded, runtimesubstrate.SubstrateTruthRecord{}, nil, nil, nil, &record); err != nil {
+	if err := s.persistPhase2Event(ctx, principal.Subject, filter, audit.EventTypeRuntimeRollbackDrillRecorded, runtimesubstrate.SubstrateTruthRecord{}, nil, nil, nil, &record); err != nil {
 		writeRuntimeIntegrityError(w, err)
 		return
 	}
@@ -516,7 +537,7 @@ func (s server) runtimePhase2ProofsHandler(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (s server) persistPhase2Event(ctx context.Context, actor, eventType string, truth runtimesubstrate.SubstrateTruthRecord, match *runtimesubstrate.ProfileMatch, attestation *attestationruntime.VerificationResult, simulation *phase2ResponseSimulationRecord, drill *phase2RollbackDrillRecord) error {
+func (s server) persistPhase2Event(ctx context.Context, actor string, filter runtimeIntegrityFilter, eventType string, truth runtimesubstrate.SubstrateTruthRecord, match *runtimesubstrate.ProfileMatch, attestation *attestationruntime.VerificationResult, simulation *phase2ResponseSimulationRecord, drill *phase2RollbackDrillRecord) error {
 	payload, err := canonicalJSON(runtimePhase2EventPayload{
 		SchemaVersion:      runtimePhase2EventPayloadSchema,
 		SubstrateTruth:     optionalSubstrateTruth(truth),
@@ -570,17 +591,22 @@ func (s server) persistPhase2Event(ctx context.Context, actor, eventType string,
 			decision = audit.DecisionDeny
 		}
 	}
-	if subjectRef != "" {
-		clusterID, namespace, workloadKind, workload, _ = parseRuntimeSubjectRef(subjectRef)
+	scope, err := phase2PersistScopeFromFilter(filter, subjectRef)
+	if err != nil {
+		return err
 	}
+	clusterID = scope.ClusterID
+	namespace = scope.Namespace
+	workloadKind = scope.WorkloadKind
+	workload = scope.Workload
 	_, err = s.store.Ingest(ctx, audit.Event{
 		RequestID:        audit.NewRequestID(),
 		Component:        runtimePhase2Component,
 		EventType:        eventType,
 		Actor:            strings.TrimSpace(actor),
 		ClusterID:        clusterID,
-		TenantID:         audit.TenantFromNamespace(namespace),
-		Environment:      audit.EnvironmentFromNamespace(namespace),
+		TenantID:         scope.TenantID,
+		Environment:      scope.Environment,
 		Namespace:        namespace,
 		WorkloadKind:     workloadKind,
 		Workload:         workload,
@@ -590,6 +616,38 @@ func (s server) persistPhase2Event(ctx context.Context, actor, eventType string,
 		RuntimeIntegrity: payload,
 	})
 	return err
+}
+
+func phase2PersistScopeFromFilter(filter runtimeIntegrityFilter, subjectRef string) (phase2PersistScope, error) {
+	scope := phase2PersistScope{
+		TenantID:    strings.TrimSpace(filter.TenantID),
+		Environment: strings.TrimSpace(filter.Environment),
+	}
+	subjectRef = normalizePhase2SubjectRef(subjectRef)
+	if subjectRef == "" {
+		return scope, nil
+	}
+
+	clusterID, namespace, workloadKind, workload, err := parseRuntimeSubjectRef(subjectRef)
+	if err != nil {
+		return phase2PersistScope{}, audit.ErrInvalidFilter
+	}
+	subjectTenant := audit.TenantFromNamespace(namespace)
+	subjectEnvironment := audit.EnvironmentFromNamespace(namespace)
+	if scope.TenantID != "" && subjectTenant != "" && scope.TenantID != subjectTenant {
+		return phase2PersistScope{}, errPhase2PersistScopeViolation
+	}
+	if scope.Environment != "" && subjectEnvironment != "" && scope.Environment != subjectEnvironment {
+		return phase2PersistScope{}, errPhase2PersistScopeViolation
+	}
+
+	scope.ClusterID = clusterID
+	scope.Namespace = namespace
+	scope.WorkloadKind = workloadKind
+	scope.Workload = workload
+	scope.TenantID = firstNonEmpty(scope.TenantID, subjectTenant)
+	scope.Environment = firstNonEmpty(scope.Environment, subjectEnvironment)
+	return scope, nil
 }
 
 func (s server) listPhase2SubstrateTruth(ctx context.Context, filter runtimeIntegrityFilter) ([]runtimesubstrate.SubstrateTruthRecord, error) {
