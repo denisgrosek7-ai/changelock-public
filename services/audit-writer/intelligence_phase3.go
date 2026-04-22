@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -31,6 +32,8 @@ const (
 	phase3StrategicStateActive          = "strategic_support_active"
 	phase3QueryStateActive              = "grounded_query_active"
 )
+
+var errPhase3SubjectRequired = errors.New("subject_ref is required for bounded same-subject Phase 3 strategic operations")
 
 type phase3IntelligencePayload struct {
 	SchemaVersion string                                `json:"schema_version"`
@@ -312,11 +315,20 @@ func (s server) intelligenceStrategicSimulationHandler(w http.ResponseWriter, r 
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	filter.SubjectRef = firstNonEmpty(normalizePhase3SubjectRef(request.SubjectRef), filter.SubjectRef)
+	if strings.TrimSpace(filter.SubjectRef) == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": errPhase3SubjectRequired.Error()})
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
 	input, err := s.resolvePhase3StrategicInput(ctx, filter, request)
 	if err != nil {
-		httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		status := http.StatusInternalServerError
+		if errors.Is(err, errPhase3SubjectRequired) {
+			status = http.StatusBadRequest
+		}
+		httpjson.Write(w, status, map[string]string{"error": err.Error()})
 		return
 	}
 	assessment := intelligencecore.Assess(input, time.Now)
@@ -383,11 +395,19 @@ func (s server) intelligenceStrategicQueryHandler(w http.ResponseWriter, r *http
 		filter.SubjectRef = firstNonEmpty(normalizePhase3SubjectRef(request.SubjectRef), filter.SubjectRef)
 		filter.VulnerabilityID = firstNonEmpty(strings.ToUpper(strings.TrimSpace(request.VulnerabilityID)), filter.VulnerabilityID)
 		filter.PackageName = firstNonEmpty(strings.TrimSpace(request.PackageName), filter.PackageName)
+		if strings.TrimSpace(filter.SubjectRef) == "" {
+			httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": errPhase3SubjectRequired.Error()})
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 		defer cancel()
 		response, err := s.buildPhase3GroundedQuery(ctx, filter, request)
 		if err != nil {
-			httpjson.Write(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			status := http.StatusInternalServerError
+			if errors.Is(err, errPhase3SubjectRequired) {
+				status = http.StatusBadRequest
+			}
+			httpjson.Write(w, status, map[string]string{"error": err.Error()})
 			return
 		}
 		if err := s.persistPhase3Event(ctx, requestIDFromHeader(r), principal.Subject, audit.EventTypeIntelligenceQueryRecorded, filter, nil, nil, nil, &response); err != nil {
@@ -494,6 +514,9 @@ func (s server) resolvePhase3StrategicInput(ctx context.Context, filter phase3In
 	filter.SubjectRef = firstNonEmpty(normalizePhase3SubjectRef(request.SubjectRef), filter.SubjectRef)
 	filter.VulnerabilityID = firstNonEmpty(strings.ToUpper(strings.TrimSpace(request.VulnerabilityID)), filter.VulnerabilityID)
 	filter.PackageName = firstNonEmpty(strings.TrimSpace(request.PackageName), filter.PackageName)
+	if strings.TrimSpace(filter.SubjectRef) == "" {
+		return intelligencecore.StrategicAssessmentInput{}, errPhase3SubjectRequired
+	}
 
 	vulnerabilities, err := s.listPhase3VulnerabilityRelevance(ctx, filter)
 	if err != nil {
@@ -567,6 +590,9 @@ func (s server) buildPhase3GroundedQuery(ctx context.Context, filter phase3Intel
 	filter.SubjectRef = firstNonEmpty(normalizePhase3SubjectRef(request.SubjectRef), filter.SubjectRef)
 	filter.VulnerabilityID = firstNonEmpty(strings.ToUpper(strings.TrimSpace(request.VulnerabilityID)), filter.VulnerabilityID)
 	filter.PackageName = firstNonEmpty(strings.TrimSpace(request.PackageName), filter.PackageName)
+	if strings.TrimSpace(filter.SubjectRef) == "" {
+		return intelligencecore.QueryResponse{}, errPhase3SubjectRequired
+	}
 
 	vulnerabilities, err := s.listPhase3VulnerabilityRelevance(ctx, filter)
 	if err != nil {
@@ -730,7 +756,7 @@ func (s server) listPhase3VulnerabilityRelevance(ctx context.Context, filter pha
 		items = append(items, *payload.Vulnerability)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].EvaluatedAt.After(items[j].EvaluatedAt) })
-	return items, nil
+	return limitPhase3Items(items, filter.Limit), nil
 }
 
 func (s server) listPhase3SupplyChainPatterns(ctx context.Context, filter phase3IntelligenceFilter) ([]supplychaincore.PatternVerdict, error) {
@@ -753,7 +779,7 @@ func (s server) listPhase3SupplyChainPatterns(ctx context.Context, filter phase3
 		items = append(items, *payload.SupplyChain)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ObservedAt.After(items[j].ObservedAt) })
-	return items, nil
+	return limitPhase3Items(items, filter.Limit), nil
 }
 
 func (s server) listPhase3StrategicAssessments(ctx context.Context, filter phase3IntelligenceFilter) ([]intelligencecore.StrategicAssessment, error) {
@@ -773,7 +799,7 @@ func (s server) listPhase3StrategicAssessments(ctx context.Context, filter phase
 		items = append(items, *payload.Strategic)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].EvaluatedAt.After(items[j].EvaluatedAt) })
-	return items, nil
+	return limitPhase3Items(items, filter.Limit), nil
 }
 
 func (s server) listPhase3Queries(ctx context.Context, filter phase3IntelligenceFilter) ([]intelligencecore.QueryResponse, error) {
@@ -793,7 +819,7 @@ func (s server) listPhase3Queries(ctx context.Context, filter phase3Intelligence
 		items = append(items, *payload.Query)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].AnsweredAt.After(items[j].AnsweredAt) })
-	return items, nil
+	return limitPhase3Items(items, filter.Limit), nil
 }
 
 func (s server) listPhase3Events(ctx context.Context, filter phase3IntelligenceFilter, eventType string) ([]audit.StoredEvent, error) {
@@ -882,6 +908,13 @@ func matchesPhase3QueryScope(filter phase3IntelligenceFilter, scope intelligence
 		return false
 	}
 	return true
+}
+
+func limitPhase3Items[T any](items []T, limit int) []T {
+	if limit > 0 && len(items) > limit {
+		return items[:limit]
+	}
+	return items
 }
 
 func normalizePhase3SubjectRef(value string) string {
