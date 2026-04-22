@@ -800,6 +800,8 @@ func buildPhase6TrustBadgeVerification(badgeID, scope string, asOf time.Time) (p
 
 	currentState := mark.CurrentState
 	switch {
+	case currentState == "revoked":
+		currentState = "revoked"
 	case verification.CurrentState == verifiercore.StateExpired || verification.FreshnessState != verifiercore.FreshnessStateFresh || claim.CurrentState == claimscore.StateStale || anchor.CurrentState != transparencyAnchorStateActive:
 		currentState = "stale"
 	case claim.CurrentState == claimscore.StateBlocked || verification.CurrentState != verifiercore.StateVerified:
