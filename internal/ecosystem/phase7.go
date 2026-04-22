@@ -1060,15 +1060,15 @@ func DataBoundaries() []DataBoundary {
 
 func ContractsCoverage() Coverage {
 	return Coverage{
-		SignalContracts:        len(SignalContracts()),
-		AuthoritySurfaces:      len(AuthoritySurfaceMatrix()),
-		FailSafeContracts:      len(FailSafeContracts()),
-		PerformanceBudgets:     len(PerformanceBudgets()),
-		ObservabilitySLOs:      len(ObservabilitySLOs()),
-		CompatibilityContracts: len(CompatibilityContracts()),
-		AbuseControls:          len(AbuseControls()),
-		RolloutContracts:       len(RolloutContracts()),
-		DataBoundaries:         len(DataBoundaries()),
+		SignalContracts:        countCoreSignalContracts(),
+		AuthoritySurfaces:      countCoreAuthoritySurfaces(),
+		FailSafeContracts:      countCoreFailSafeContracts(),
+		PerformanceBudgets:     countCorePerformanceBudgets(),
+		ObservabilitySLOs:      countCoreObservabilitySLOs(),
+		CompatibilityContracts: countCoreCompatibilityContracts(),
+		AbuseControls:          countCoreAbuseControls(),
+		RolloutContracts:       countCoreRolloutContracts(),
+		DataBoundaries:         countCoreDataBoundaries(),
 	}
 }
 
@@ -1098,20 +1098,46 @@ func EvaluatePhase7State(entryGateState, foundationState, developerState, ossSta
 	if strings.TrimSpace(entryGateState) != EntryGateStateReady || strings.TrimSpace(foundationState) != FoundationStateActive {
 		return Phase7StateIncomplete
 	}
-	hasPartial := false
-	for _, state := range []string{developerState, ossState, distributionState} {
-		switch strings.TrimSpace(state) {
-		case DeveloperPresenceStateActive, OSSPresenceStateActive, DistributionPresenceStateActive:
-		case DeveloperPresenceStatePartial, OSSPresenceStatePartial, DistributionPresenceStatePartial:
-			hasPartial = true
-		default:
-			return Phase7StateIncomplete
-		}
+	developerState = strings.TrimSpace(developerState)
+	ossState = strings.TrimSpace(ossState)
+	distributionState = strings.TrimSpace(distributionState)
+	if !isDeveloperPhase7State(developerState) || !isOSSPhase7State(ossState) || !isDistributionPhase7State(distributionState) {
+		return Phase7StateIncomplete
 	}
-	if hasPartial {
+	if developerState == DeveloperPresenceStateIncomplete || ossState == OSSPresenceStateIncomplete || distributionState == DistributionPresenceStateIncomplete {
+		return Phase7StateIncomplete
+	}
+	if developerState == DeveloperPresenceStatePartial || ossState == OSSPresenceStatePartial || distributionState == DistributionPresenceStatePartial {
 		return Phase7StateSubstantial
 	}
 	return Phase7StateActive
+}
+
+func isDeveloperPhase7State(state string) bool {
+	switch strings.TrimSpace(state) {
+	case DeveloperPresenceStateActive, DeveloperPresenceStatePartial, DeveloperPresenceStateIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+func isOSSPhase7State(state string) bool {
+	switch strings.TrimSpace(state) {
+	case OSSPresenceStateActive, OSSPresenceStatePartial, OSSPresenceStateIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+func isDistributionPhase7State(state string) bool {
+	switch strings.TrimSpace(state) {
+	case DistributionPresenceStateActive, DistributionPresenceStatePartial, DistributionPresenceStateIncomplete:
+		return true
+	default:
+		return false
+	}
 }
 
 func SignalContractsForGroup(group string) []SignalContract {
@@ -1248,6 +1274,53 @@ func DataBoundariesForGroup(group string) []DataBoundary {
 		}
 	}
 	return out
+}
+
+func countCoreSignalContracts() int {
+	return countCoreItems(SignalContracts(), func(item SignalContract) string { return item.SurfaceID })
+}
+
+func countCoreAuthoritySurfaces() int {
+	return countCoreItems(AuthoritySurfaceMatrix(), func(item AuthoritySurface) string { return item.SurfaceID })
+}
+
+func countCoreFailSafeContracts() int {
+	return countCoreItems(FailSafeContracts(), func(item FailSafeContract) string { return item.SurfaceID })
+}
+
+func countCorePerformanceBudgets() int {
+	return countCoreItems(PerformanceBudgets(), func(item PerformanceBudget) string { return item.SurfaceID })
+}
+
+func countCoreObservabilitySLOs() int {
+	return countCoreItems(ObservabilitySLOs(), func(item SLOSpec) string { return item.SurfaceID })
+}
+
+func countCoreCompatibilityContracts() int {
+	return countCoreItems(CompatibilityContracts(), func(item CompatibilityContract) string { return item.SurfaceID })
+}
+
+func countCoreAbuseControls() int {
+	return countCoreItems(AbuseControls(), func(item AbuseControl) string { return item.SurfaceID })
+}
+
+func countCoreRolloutContracts() int {
+	return countCoreItems(RolloutContracts(), func(item RolloutContract) string { return item.SurfaceID })
+}
+
+func countCoreDataBoundaries() int {
+	return countCoreItems(DataBoundaries(), func(item DataBoundary) string { return item.SurfaceID })
+}
+
+func countCoreItems[T any](items []T, surfaceID func(T) string) int {
+	count := 0
+	for _, item := range items {
+		if isDeferredExpandedSurface(surfaceID(item)) {
+			continue
+		}
+		count++
+	}
+	return count
 }
 
 func buildSurfaceCoverageMap() map[string]surfaceCoverage {
