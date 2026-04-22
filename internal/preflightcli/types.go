@@ -147,11 +147,6 @@ func finalizeResult(result Result) Result {
 			hasInfo = true
 		}
 	}
-	if hasPass {
-		result.OverallResult = StatusPass
-		result.ExitCode = ExitSuccess
-		return attachDiagnostics(result)
-	}
 	if hasDegraded {
 		result.OverallResult = StatusDegraded
 		result.ExitCode = ExitSuccess
@@ -159,6 +154,11 @@ func finalizeResult(result Result) Result {
 	}
 	if hasWarning {
 		result.OverallResult = StatusWarning
+		result.ExitCode = ExitSuccess
+		return attachDiagnostics(result)
+	}
+	if hasPass {
+		result.OverallResult = StatusPass
 		result.ExitCode = ExitSuccess
 		return attachDiagnostics(result)
 	}
