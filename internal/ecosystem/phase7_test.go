@@ -25,6 +25,9 @@ func TestEvaluatePhase7StateRequiresEntryGateFoundationAndAllPresenceSurfaces(t 
 	if got := EvaluatePhase7State(EntryGateStateIncomplete, FoundationStateActive, DeveloperPresenceStateActive, OSSPresenceStateActive, DistributionPresenceStateActive); got != Phase7StateIncomplete {
 		t.Fatalf("expected incomplete without entry gate, got %q", got)
 	}
+	if got := EvaluatePhase7State(EntryGateStateReady, FoundationStateActive, OSSPresenceStateActive, OSSPresenceStateActive, DistributionPresenceStateActive); got != Phase7StateIncomplete {
+		t.Fatalf("expected incomplete with invalid developer slot state, got %q", got)
+	}
 	if got := EvaluatePhase7State(EntryGateStateReady, FoundationStateActive, DeveloperPresenceStateActive, OSSPresenceStatePartial, DistributionPresenceStateActive); got != Phase7StateSubstantial {
 		t.Fatalf("expected substantial with partial oss presence, got %q", got)
 	}
@@ -76,6 +79,19 @@ func TestOSSPresenceIgnoresDeferredExpandedRemediationSurface(t *testing.T) {
 	}
 	if got := EvaluateOSSPresenceState(); got != OSSPresenceStateActive {
 		t.Fatalf("expected active OSS presence from observation and claim pipelines only, got %q", got)
+	}
+}
+
+func TestContractsCoverageCountsOnlyCorePassSurfaces(t *testing.T) {
+	coverage := ContractsCoverage()
+	if coverage.SignalContracts != 9 {
+		t.Fatalf("expected 9 core signal contracts without deferred remediation PR, got %#v", coverage)
+	}
+	if coverage.AuthoritySurfaces != 8 {
+		t.Fatalf("expected 8 core authority surfaces without deferred remediation PR, got %#v", coverage)
+	}
+	if coverage.AbuseControls != 5 {
+		t.Fatalf("expected 5 core abuse controls without deferred remediation PR, got %#v", coverage)
 	}
 }
 

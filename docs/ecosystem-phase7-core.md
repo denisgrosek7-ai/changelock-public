@@ -81,6 +81,8 @@ The gate is active only when:
 - OSS trust presence is active
 - distribution presence is active
 
+Core-pass coverage metrics exclude deferred expanded surfaces such as automated remediation PR contracts, even when those deferred contracts remain visible in the wider matrix for review.
+
 ## Boundaries
 
 This slice does not claim:
