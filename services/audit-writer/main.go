@@ -382,6 +382,7 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/ecosystem/phase7/distribution/msp-isolation", srv.phase7MSPIsolationHandler)
 	mux.HandleFunc("/v1/ecosystem/phase7/distribution/partner-export", srv.phase7PartnerExportHandler)
 	mux.HandleFunc("/v1/ecosystem/phase7/proofs", srv.phase7ProofsHandler)
+	mux.HandleFunc("/v1/ecosystem/phase7/final-summary", srv.phase7FinalSummaryHandler)
 	mux.HandleFunc("/v1/integrations/identity-fabric", srv.identityFabricHandler)
 	mux.HandleFunc("/v1/integrations/itsm-lifecycle", srv.itsmLifecycleHandler)
 	mux.HandleFunc("/v1/integrations/itsm-lifecycle/flows", srv.itsmLifecycleFlowsHandler)
