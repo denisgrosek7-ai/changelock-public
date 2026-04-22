@@ -244,19 +244,22 @@ func (s server) integrationSIEMExportHandler(w http.ResponseWriter, r *http.Requ
 		},
 	}
 	for _, event := range items {
+		intelligencePayload := parsePhase3IntelligencePayload(event.Intelligence)
+		enterprisePayload := parsePhase4EnterprisePayload(event.Enterprise)
+		validationRecord := parseSecurityTimelineValidation(event.ValidationHarness)
 		response.Items = append(response.Items, integrationSIEMEvent{
 			EventID:           event.ID,
 			EmittedAt:         eventTimestamp(event).UTC(),
 			EventType:         event.EventType,
 			SourceComponent:   event.Component,
-			Severity:          securityTimelineSeverity(event, nil, parseSecurityTimelineValidation(event.ValidationHarness), securityTimelineSource(event), phase3IntelligencePayload{}, phase4EnterprisePayload{}),
+			Severity:          securityTimelineSeverity(event, nil, validationRecord, securityTimelineSource(event), intelligencePayload, enterprisePayload),
 			Decision:          event.Decision,
 			CorrelationID:     firstNonEmpty(strings.TrimSpace(event.RequestID), strings.TrimSpace(event.IncidentID), strings.TrimSpace(event.RecommendationID)),
 			SubjectRef:        firstNonEmpty(strings.TrimSpace(event.IncidentScopeRef), strings.TrimSpace(event.Workload), strings.TrimSpace(event.RecommendationSubjectRef), strings.TrimSpace(event.Repo)),
 			SubjectType:       integrationSIEMSubjectType(event),
 			IncidentRef:       strings.TrimSpace(event.IncidentID),
 			RecommendationRef: strings.TrimSpace(event.RecommendationID),
-			EvidenceRefs:      limitStrings(securityTimelineEvidenceRefs(event, nil, nil, phase3IntelligencePayload{}, phase4EnterprisePayload{}), 8),
+			EvidenceRefs:      limitStrings(securityTimelineEvidenceRefs(event, nil, nil, intelligencePayload, enterprisePayload), 8),
 		})
 	}
 	if len(response.Items) > 0 {

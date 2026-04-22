@@ -184,6 +184,24 @@ func ValidateProductionConfig(path string, cfg ProductionConfig, now func() time
 			})
 		}
 	}
+	switch strings.ToLower(strings.TrimSpace(cfg.Spec.Sync.Precedence)) {
+	case "", "local", "remote":
+	default:
+		issues = append(issues, ValidationIssue{
+			Severity: IssueSeverityError,
+			Code:     "sync_precedence_invalid",
+			Field:    "spec.sync.precedence",
+			Message:  "spec.sync.precedence must be local or remote when set",
+		})
+	}
+	if cfg.Spec.CLI.Offline && strings.TrimSpace(cfg.Spec.APIURL) != "" {
+		issues = append(issues, ValidationIssue{
+			Severity: IssueSeverityWarning,
+			Code:     "api_url_ignored_offline",
+			Field:    "spec.cli.offline",
+			Message:  "spec.cli.offline=true keeps remote API URL configured but disables API-assisted preview and check paths",
+		})
+	}
 	validatePath := func(field, key string) {
 		resolved := resolvedPaths[key]
 		info, err := os.Stat(resolved)
