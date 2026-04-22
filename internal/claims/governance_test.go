@@ -42,6 +42,49 @@ func TestEvaluateRequiresIndependentVerificationForVerificationClaim(t *testing.
 	}
 }
 
+func TestEvaluateRequiresIndependentVerificationForConformanceClaim(t *testing.T) {
+	decision := Evaluate(Input{
+		ClaimID:    "conformance",
+		ClaimClass: "conformance_claim",
+		Scope:      ScopePublic,
+		VerifiedAt: time.Date(2026, time.April, 22, 10, 0, 0, 0, time.UTC),
+		ValidUntil: time.Date(2026, time.July, 1, 10, 0, 0, 0, time.UTC),
+		EvidenceRefs: []string{
+			"/v1/public/reference/conformance",
+		},
+		MethodologyRef:           "/v1/public/benchmarks/methodology",
+		SupportsIndependentCheck: false,
+	}, time.Date(2026, time.April, 22, 10, 0, 0, 0, time.UTC))
+
+	if decision.CurrentState == StateReady {
+		t.Fatalf("expected conformance claim to be blocked without independent verification, got %#v", decision)
+	}
+	if !containsReason(decision.ReasonCodes, "independent_verification_not_available") {
+		t.Fatalf("expected independent verification blocker, got %#v", decision)
+	}
+}
+
+func TestEvaluateRequiresIndependentVerificationForAuditorReadyClaim(t *testing.T) {
+	decision := Evaluate(Input{
+		ClaimID:    "auditor-ready",
+		ClaimClass: "auditor_ready_claim",
+		Scope:      ScopeAuditor,
+		VerifiedAt: time.Date(2026, time.April, 22, 10, 0, 0, 0, time.UTC),
+		ValidUntil: time.Date(2026, time.July, 1, 10, 0, 0, 0, time.UTC),
+		EvidenceRefs: []string{
+			"/v1/public/auditor/workflows",
+		},
+		SupportsIndependentCheck: false,
+	}, time.Date(2026, time.April, 22, 10, 0, 0, 0, time.UTC))
+
+	if decision.CurrentState == StateReady {
+		t.Fatalf("expected auditor-ready claim to be blocked without independent verification, got %#v", decision)
+	}
+	if !containsReason(decision.ReasonCodes, "independent_verification_not_available") {
+		t.Fatalf("expected independent verification blocker, got %#v", decision)
+	}
+}
+
 func TestEvaluateBlocksBenchmarkClaimWithoutMethodology(t *testing.T) {
 	decision := Evaluate(Input{
 		ClaimID:    "benchmark",

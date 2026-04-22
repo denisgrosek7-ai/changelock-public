@@ -105,10 +105,10 @@ func Evaluate(input Input, asOf time.Time) Decision {
 		currentState = StateBlocked
 		reasons = append(reasons, "missing_required_evidence")
 	}
-	if input.ClaimClass == "verification_claim" || input.ClaimClass == "conformance_claim" || input.ClaimClass == "auditor_ready_claim" {
+	if requiresIndependentVerification(input.ClaimClass) {
 		preconditions = append(preconditions, "independent_verification_required")
 	}
-	if input.ClaimClass == "verification_claim" && !input.SupportsIndependentCheck {
+	if requiresIndependentVerification(input.ClaimClass) && !input.SupportsIndependentCheck {
 		currentState = StateBlocked
 		reasons = append(reasons, "independent_verification_not_available")
 	}
@@ -216,4 +216,13 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func requiresIndependentVerification(claimClass string) bool {
+	switch strings.TrimSpace(claimClass) {
+	case "verification_claim", "conformance_claim", "auditor_ready_claim":
+		return true
+	default:
+		return false
+	}
 }

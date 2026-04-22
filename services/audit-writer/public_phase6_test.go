@@ -185,6 +185,25 @@ func TestPhase6TrustBadgeBecomesStaleWhenUnderlyingProofIsStale(t *testing.T) {
 	}
 }
 
+func TestPhase6RevokedBadgeStateIsPreserved(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/public/trust-program/badges/verify?badge_id=public_benchmark_disciplined&scope=public&as_of=2026-04-22T10:00:00Z", nil)
+	rec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected trust badge verification 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var badge phase6TrustBadgeVerificationResponse
+	if err := json.NewDecoder(rec.Body).Decode(&badge); err != nil {
+		t.Fatalf("decode revoked trust badge: %v", err)
+	}
+	if badge.CurrentState != "revoked" {
+		t.Fatalf("expected revoked badge state to be preserved, got %#v", badge)
+	}
+}
+
 func TestPhase6ClaimsAndPortalKeepScopesSeparated(t *testing.T) {
 	fixture := forensicsTestFixture(t)
 
