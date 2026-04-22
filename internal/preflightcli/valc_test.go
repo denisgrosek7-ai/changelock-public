@@ -197,6 +197,27 @@ spec:
 	}
 }
 
+func TestSupportBundleStatePrefersFailingReadinessOverDegradedHealth(t *testing.T) {
+	readiness := finalizeResult(Result{
+		Command: "readiness",
+		Mode:    ModeLocalOnly,
+		Checks: []CheckResult{
+			{Name: "config-readiness", Status: StatusPass, Summary: "config valid"},
+			{Name: "api-readiness", Status: StatusFail, Summary: "api unavailable"},
+		},
+	})
+	health := healthSnapshot{
+		CurrentState: healthStateDegraded,
+		Items: []healthComponent{
+			{Component: "api", CurrentState: healthStateDegraded, Summary: "api probe degraded"},
+		},
+	}
+
+	if got := supportBundleState(readiness, health); got != healthStateFailing {
+		t.Fatalf("expected failing support state, got %q", got)
+	}
+}
+
 func supportHealthContains(items []healthComponent, component, state string) bool {
 	for _, item := range items {
 		if item.Component == component && item.CurrentState == state {

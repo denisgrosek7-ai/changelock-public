@@ -864,20 +864,22 @@ func summarizeHealthStates(items []healthComponent) string {
 }
 
 func supportBundleState(readiness Result, health healthSnapshot) string {
+	switch readiness.OverallResult {
+	case StatusFail, StatusError:
+		return healthStateFailing
+	case StatusWarning, StatusDegraded:
+		if health.CurrentState == healthStateFailing {
+			return healthStateFailing
+		}
+		return healthStateDegraded
+	}
 	switch health.CurrentState {
 	case healthStateFailing:
 		return healthStateFailing
 	case healthStateDegraded:
 		return healthStateDegraded
 	}
-	switch readiness.OverallResult {
-	case StatusFail, StatusError:
-		return healthStateFailing
-	case StatusWarning, StatusDegraded:
-		return healthStateDegraded
-	default:
-		return health.CurrentState
-	}
+	return health.CurrentState
 }
 
 func redactRuntimeInspection(report runtimecfg.SelfHealingInspection) runtimecfg.SelfHealingInspection {
