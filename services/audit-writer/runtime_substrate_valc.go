@@ -23,57 +23,57 @@ const (
 )
 
 type runtimeSubstrateValCEnforcementTaxonomyResponse struct {
-	SchemaVersion string                                                `json:"schema_version"`
-	GeneratedAt   time.Time                                             `json:"generated_at"`
-	CurrentState  string                                                `json:"current_state"`
-	Taxonomy      runtimesubstrate.RuntimeSubstrateEnforcementTaxonomy  `json:"taxonomy"`
-	RouteRefs     []string                                              `json:"route_refs,omitempty"`
-	Limitations   []string                                              `json:"limitations,omitempty"`
+	SchemaVersion string                                               `json:"schema_version"`
+	GeneratedAt   time.Time                                            `json:"generated_at"`
+	CurrentState  string                                               `json:"current_state"`
+	Taxonomy      runtimesubstrate.RuntimeSubstrateEnforcementTaxonomy `json:"taxonomy"`
+	RouteRefs     []string                                             `json:"route_refs,omitempty"`
+	Limitations   []string                                             `json:"limitations,omitempty"`
 }
 
 type runtimeSubstrateValCActionCatalogResponse struct {
-	SchemaVersion string                                                       `json:"schema_version"`
-	GeneratedAt   time.Time                                                    `json:"generated_at"`
-	CurrentState  string                                                       `json:"current_state"`
+	SchemaVersion string                                                          `json:"schema_version"`
+	GeneratedAt   time.Time                                                       `json:"generated_at"`
+	CurrentState  string                                                          `json:"current_state"`
 	Items         []runtimesubstrate.RuntimeSubstrateEnforcementActionCatalogItem `json:"items,omitempty"`
-	RouteRefs     []string                                                     `json:"route_refs,omitempty"`
-	Limitations   []string                                                     `json:"limitations,omitempty"`
+	RouteRefs     []string                                                        `json:"route_refs,omitempty"`
+	Limitations   []string                                                        `json:"limitations,omitempty"`
 }
 
 type runtimeSubstrateValCPolicyHookMappingResponse struct {
-	SchemaVersion string                                                `json:"schema_version"`
-	GeneratedAt   time.Time                                             `json:"generated_at"`
-	CurrentState  string                                                `json:"current_state"`
-	Items         []runtimesubstrate.RuntimeSubstratePolicyHookMapping   `json:"items,omitempty"`
-	RouteRefs     []string                                              `json:"route_refs,omitempty"`
-	Limitations   []string                                              `json:"limitations,omitempty"`
+	SchemaVersion string                                               `json:"schema_version"`
+	GeneratedAt   time.Time                                            `json:"generated_at"`
+	CurrentState  string                                               `json:"current_state"`
+	Items         []runtimesubstrate.RuntimeSubstratePolicyHookMapping `json:"items,omitempty"`
+	RouteRefs     []string                                             `json:"route_refs,omitempty"`
+	Limitations   []string                                             `json:"limitations,omitempty"`
 }
 
 type runtimeSubstrateValCDecisionAuditResponse struct {
-	SchemaVersion string                                                `json:"schema_version"`
-	GeneratedAt   time.Time                                             `json:"generated_at"`
-	CurrentState  string                                                `json:"current_state"`
+	SchemaVersion string                                                 `json:"schema_version"`
+	GeneratedAt   time.Time                                              `json:"generated_at"`
+	CurrentState  string                                                 `json:"current_state"`
 	Items         []runtimesubstrate.RuntimeSubstrateDecisionAuditRecord `json:"items,omitempty"`
-	RouteRefs     []string                                              `json:"route_refs,omitempty"`
-	Limitations   []string                                              `json:"limitations,omitempty"`
+	RouteRefs     []string                                               `json:"route_refs,omitempty"`
+	Limitations   []string                                               `json:"limitations,omitempty"`
 }
 
 type runtimeSubstrateValCProofsResponse struct {
-	SchemaVersion           string                                                          `json:"schema_version"`
-	GeneratedAt             time.Time                                                       `json:"generated_at"`
-	CurrentState            string                                                          `json:"current_state"`
-	CoverageScope           string                                                          `json:"coverage_scope"`
-	ValBState               string                                                          `json:"val_b_state"`
-	TaxonomyState           string                                                          `json:"taxonomy_state"`
-	ActionCatalogState      string                                                          `json:"action_catalog_state"`
-	PolicyHookMappingState  string                                                          `json:"policy_hook_mapping_state"`
-	DecisionAuditState      string                                                          `json:"decision_audit_state"`
-	ActionCatalogItems      []runtimesubstrate.RuntimeSubstrateEnforcementActionCatalogItem `json:"action_catalog_items,omitempty"`
-	PolicyHookMappings      []runtimesubstrate.RuntimeSubstratePolicyHookMapping            `json:"policy_hook_mappings,omitempty"`
-	DecisionAuditItems      []runtimesubstrate.RuntimeSubstrateDecisionAuditRecord          `json:"decision_audit_items,omitempty"`
-	RemainingDeferredScope  []string                                                        `json:"remaining_deferred_scope,omitempty"`
-	RouteRefs               []string                                                        `json:"route_refs,omitempty"`
-	Limitations             []string                                                        `json:"limitations,omitempty"`
+	SchemaVersion          string                                                          `json:"schema_version"`
+	GeneratedAt            time.Time                                                       `json:"generated_at"`
+	CurrentState           string                                                          `json:"current_state"`
+	CoverageScope          string                                                          `json:"coverage_scope"`
+	ValBState              string                                                          `json:"val_b_state"`
+	TaxonomyState          string                                                          `json:"taxonomy_state"`
+	ActionCatalogState     string                                                          `json:"action_catalog_state"`
+	PolicyHookMappingState string                                                          `json:"policy_hook_mapping_state"`
+	DecisionAuditState     string                                                          `json:"decision_audit_state"`
+	ActionCatalogItems     []runtimesubstrate.RuntimeSubstrateEnforcementActionCatalogItem `json:"action_catalog_items,omitempty"`
+	PolicyHookMappings     []runtimesubstrate.RuntimeSubstratePolicyHookMapping            `json:"policy_hook_mappings,omitempty"`
+	DecisionAuditItems     []runtimesubstrate.RuntimeSubstrateDecisionAuditRecord          `json:"decision_audit_items,omitempty"`
+	RemainingDeferredScope []string                                                        `json:"remaining_deferred_scope,omitempty"`
+	RouteRefs              []string                                                        `json:"route_refs,omitempty"`
+	Limitations            []string                                                        `json:"limitations,omitempty"`
 }
 
 type runtimeSubstrateValCBundle struct {
@@ -439,9 +439,9 @@ func runtimeSubstrateValCRuntimeDecisionAuditRecord(event audit.StoredEvent) (ru
 			"/v1/runtime/enforcement",
 			"audit_request_id:" + strings.TrimSpace(event.RequestID),
 		},
-		EvidenceRefs:    append([]string{}, decision.EvidenceRefs...),
-		Guarantees:      runtimeSubstrateValCGuarantees(actionID, class, mode),
-		NonGuarantees:   runtimeSubstrateValCNonGuarantees(actionID, class, mode),
+		EvidenceRefs:  append([]string{}, decision.EvidenceRefs...),
+		Guarantees:    runtimeSubstrateValCGuarantees(actionID, class, mode),
+		NonGuarantees: runtimeSubstrateValCNonGuarantees(actionID, class, mode),
 	}, true
 }
 
