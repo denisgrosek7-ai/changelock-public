@@ -32,9 +32,9 @@ type Metadata struct {
 }
 
 type CLISpec struct {
-	Output         string `yaml:"output,omitempty" json:"output,omitempty"`
-	Offline        bool   `yaml:"offline,omitempty" json:"offline,omitempty"`
-	Scanner        string `yaml:"scanner,omitempty" json:"scanner,omitempty"`
+	Output          string `yaml:"output,omitempty" json:"output,omitempty"`
+	Offline         bool   `yaml:"offline,omitempty" json:"offline,omitempty"`
+	Scanner         string `yaml:"scanner,omitempty" json:"scanner,omitempty"`
 	FailureSeverity string `yaml:"failure_severity,omitempty" json:"failure_severity,omitempty"`
 }
 
