@@ -32,9 +32,9 @@ type Metadata struct {
 }
 
 type CLISpec struct {
-	Output         string `yaml:"output,omitempty" json:"output,omitempty"`
-	Offline        bool   `yaml:"offline,omitempty" json:"offline,omitempty"`
-	Scanner        string `yaml:"scanner,omitempty" json:"scanner,omitempty"`
+	Output          string `yaml:"output,omitempty" json:"output,omitempty"`
+	Offline         bool   `yaml:"offline,omitempty" json:"offline,omitempty"`
+	Scanner         string `yaml:"scanner,omitempty" json:"scanner,omitempty"`
 	FailureSeverity string `yaml:"failure_severity,omitempty" json:"failure_severity,omitempty"`
 }
 
@@ -183,6 +183,24 @@ func ValidateProductionConfig(path string, cfg ProductionConfig, now func() time
 				Message:  "spec.api_url must use http or https",
 			})
 		}
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.Spec.Sync.Precedence)) {
+	case "", "local", "remote":
+	default:
+		issues = append(issues, ValidationIssue{
+			Severity: IssueSeverityError,
+			Code:     "sync_precedence_invalid",
+			Field:    "spec.sync.precedence",
+			Message:  "spec.sync.precedence must be local or remote when set",
+		})
+	}
+	if cfg.Spec.CLI.Offline && strings.TrimSpace(cfg.Spec.APIURL) != "" {
+		issues = append(issues, ValidationIssue{
+			Severity: IssueSeverityWarning,
+			Code:     "api_url_ignored_offline",
+			Field:    "spec.cli.offline",
+			Message:  "spec.cli.offline=true keeps remote API URL configured but disables API-assisted preview and check paths",
+		})
 	}
 	validatePath := func(field, key string) {
 		resolved := resolvedPaths[key]

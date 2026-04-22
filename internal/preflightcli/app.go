@@ -23,19 +23,20 @@ var defaultAllowedOIDCIssuers = []string{
 }
 
 type Config struct {
-	Output           string
-	APIURL           string
-	Token            string
-	Timeout          time.Duration
-	Offline          bool
-	PolicyDir        string
-	KyvernoPolicyDir string
-	FailureSeverity  string
-	Scanner          string
-	KyvernoBin       string
-	CosignBin        string
-	TrivyBin         string
-	GrypeBin         string
+	Output               string
+	APIURL               string
+	Token                string
+	Timeout              time.Duration
+	Offline              bool
+	ProductionConfigPath string
+	PolicyDir            string
+	KyvernoPolicyDir     string
+	FailureSeverity      string
+	Scanner              string
+	KyvernoBin           string
+	CosignBin            string
+	TrivyBin             string
+	GrypeBin             string
 }
 
 type App struct {
@@ -103,19 +104,20 @@ func loadConfig(getenv func(string) string) (Config, error) {
 	}
 
 	return Config{
-		Output:           output,
-		APIURL:           strings.TrimSpace(getenv("CHANGELOCK_CLI_API_URL")),
-		Token:            strings.TrimSpace(getenv("CHANGELOCK_CLI_TOKEN")),
-		Timeout:          timeout,
-		Offline:          offline,
-		PolicyDir:        firstNonEmpty(getenv("CHANGELOCK_CLI_POLICY_DIR"), "policies"),
-		KyvernoPolicyDir: firstNonEmpty(getenv("CHANGELOCK_CLI_KYVERNO_POLICY_DIR"), "deploy/kyverno"),
-		FailureSeverity:  failureSeverity,
-		Scanner:          scanner,
-		KyvernoBin:       firstNonEmpty(getenv("CHANGELOCK_CLI_KYVERNO_BIN"), "kyverno"),
-		CosignBin:        firstNonEmpty(getenv("CHANGELOCK_CLI_COSIGN_BIN"), "cosign"),
-		TrivyBin:         firstNonEmpty(getenv("CHANGELOCK_CLI_TRIVY_BIN"), "trivy"),
-		GrypeBin:         firstNonEmpty(getenv("CHANGELOCK_CLI_GRYPE_BIN"), "grype"),
+		Output:               output,
+		APIURL:               strings.TrimSpace(getenv("CHANGELOCK_CLI_API_URL")),
+		Token:                strings.TrimSpace(getenv("CHANGELOCK_CLI_TOKEN")),
+		Timeout:              timeout,
+		Offline:              offline,
+		ProductionConfigPath: strings.TrimSpace(getenv("CHANGELOCK_CLI_CONFIG")),
+		PolicyDir:            firstNonEmpty(getenv("CHANGELOCK_CLI_POLICY_DIR"), "policies"),
+		KyvernoPolicyDir:     firstNonEmpty(getenv("CHANGELOCK_CLI_KYVERNO_POLICY_DIR"), "deploy/kyverno"),
+		FailureSeverity:      failureSeverity,
+		Scanner:              scanner,
+		KyvernoBin:           firstNonEmpty(getenv("CHANGELOCK_CLI_KYVERNO_BIN"), "kyverno"),
+		CosignBin:            firstNonEmpty(getenv("CHANGELOCK_CLI_COSIGN_BIN"), "cosign"),
+		TrivyBin:             firstNonEmpty(getenv("CHANGELOCK_CLI_TRIVY_BIN"), "trivy"),
+		GrypeBin:             firstNonEmpty(getenv("CHANGELOCK_CLI_GRYPE_BIN"), "grype"),
 	}, nil
 }
 
@@ -145,6 +147,16 @@ func (a *App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	case "preflight":
 		result, err := a.runPreflight(ctx, args[1:])
 		return a.finish(result, err, stdout, stderr)
+	case "check":
+		result, err := a.runCheck(ctx, args[1:])
+		return a.finish(result, err, stdout, stderr)
+	case "preview":
+		result, err := a.runPreview(ctx, args[1:])
+		return a.finish(result, err, stdout, stderr)
+	case "inspect":
+		return a.runInspect(ctx, args[1:], stdout, stderr)
+	case "explain":
+		return a.runExplain(ctx, args[1:], stdout, stderr)
 	case "diagnostics":
 		return a.runDiagnostics(args[1:], stdout, stderr)
 	case "guidance":
@@ -1246,6 +1258,10 @@ func (a *App) usage() string {
 	return strings.TrimSpace(`
 Usage:
   changelock-cli preflight [flags]
+  changelock-cli check --config path
+  changelock-cli preview --config path
+  changelock-cli inspect --config path
+  changelock-cli explain --config path --topic sync
   changelock-cli manifest [--file path | --dir path]
   changelock-cli image --image <ref>
   changelock-cli scan --image <ref>

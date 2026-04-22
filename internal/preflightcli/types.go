@@ -11,10 +11,13 @@ import (
 type Status string
 
 const (
-	StatusPass  Status = "PASS"
-	StatusFail  Status = "FAIL"
-	StatusSkip  Status = "SKIP"
-	StatusError Status = "ERROR"
+	StatusPass     Status = "PASS"
+	StatusFail     Status = "FAIL"
+	StatusSkip     Status = "SKIP"
+	StatusError    Status = "ERROR"
+	StatusWarning  Status = "WARNING"
+	StatusDegraded Status = "DEGRADED"
+	StatusInfo     Status = "INFO"
 )
 
 type CheckMode string
@@ -104,6 +107,8 @@ type Result struct {
 	Checks            []CheckResult     `json:"checks"`
 	Diagnostics       []Diagnostic      `json:"diagnostics,omitempty"`
 	DiagnosticSummary DiagnosticSummary `json:"diagnostic_summary,omitempty"`
+	ReasonCodes       []string          `json:"reason_codes,omitempty"`
+	Limitations       []string          `json:"limitations,omitempty"`
 	OverallResult     Status            `json:"overall_result"`
 	ExitCode          int               `json:"exit_code"`
 }
@@ -119,6 +124,9 @@ func finalizeResult(result Result) Result {
 		return attachDiagnostics(result)
 	}
 	hasPass := false
+	hasWarning := false
+	hasDegraded := false
+	hasInfo := false
 	for _, check := range result.Checks {
 		switch check.Status {
 		case StatusError:
@@ -131,10 +139,31 @@ func finalizeResult(result Result) Result {
 			return attachDiagnostics(result)
 		case StatusPass:
 			hasPass = true
+		case StatusWarning:
+			hasWarning = true
+		case StatusDegraded:
+			hasDegraded = true
+		case StatusInfo:
+			hasInfo = true
 		}
 	}
 	if hasPass {
 		result.OverallResult = StatusPass
+		result.ExitCode = ExitSuccess
+		return attachDiagnostics(result)
+	}
+	if hasDegraded {
+		result.OverallResult = StatusDegraded
+		result.ExitCode = ExitSuccess
+		return attachDiagnostics(result)
+	}
+	if hasWarning {
+		result.OverallResult = StatusWarning
+		result.ExitCode = ExitSuccess
+		return attachDiagnostics(result)
+	}
+	if hasInfo {
+		result.OverallResult = StatusInfo
 		result.ExitCode = ExitSuccess
 		return attachDiagnostics(result)
 	}
@@ -151,6 +180,8 @@ func exitCodeForResult(result Result) int {
 		return ExitFailed
 	case StatusError:
 		return ExitExecution
+	case StatusWarning, StatusDegraded, StatusInfo:
+		return ExitSuccess
 	default:
 		return ExitExecution
 	}
@@ -210,6 +241,26 @@ func renderHuman(w io.Writer, result Result) error {
 		}
 		for _, detail := range check.Details {
 			if _, err := fmt.Fprintf(w, "- %s\n", detail); err != nil {
+				return err
+			}
+		}
+	}
+	if len(result.ReasonCodes) > 0 {
+		if _, err := fmt.Fprintln(w, "\nReason codes:"); err != nil {
+			return err
+		}
+		for _, reason := range result.ReasonCodes {
+			if _, err := fmt.Fprintf(w, "- %s\n", reason); err != nil {
+				return err
+			}
+		}
+	}
+	if len(result.Limitations) > 0 {
+		if _, err := fmt.Fprintln(w, "\nLimitations:"); err != nil {
+			return err
+		}
+		for _, limitation := range result.Limitations {
+			if _, err := fmt.Fprintf(w, "- %s\n", limitation); err != nil {
 				return err
 			}
 		}
