@@ -164,6 +164,8 @@ func (a *App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return a.runSupport(ctx, args[1:], stdout, stderr)
 	case "upgrade-readiness":
 		return a.runUpgradeReadiness(ctx, args[1:], stdout, stderr)
+	case "phase5-summary":
+		return a.runPhase5Summary(ctx, args[1:], stdout, stderr)
 	case "diagnostics":
 		return a.runDiagnostics(args[1:], stdout, stderr)
 	case "guidance":
@@ -1272,6 +1274,7 @@ Usage:
   changelock-cli readiness --config path --profile production
   changelock-cli support --config path --profile production
   changelock-cli upgrade-readiness --config path --target-version 5.6.0
+  changelock-cli phase5-summary --config path --profile production
   changelock-cli manifest [--file path | --dir path]
   changelock-cli image --image <ref>
   changelock-cli scan --image <ref>
