@@ -372,18 +372,20 @@ func hardeningActionRank(action string) int {
 	switch strings.TrimSpace(action) {
 	case hardeningActionRequestForensics:
 		return 1
-	case hardeningActionRequireHumanReview:
+	case hardeningActionRollbackRestrictions:
 		return 2
-	case hardeningActionApplyNetworkQuarantine:
+	case hardeningActionRequireHumanReview:
 		return 3
-	case hardeningActionRemoveFromTraffic:
+	case hardeningActionApplyNetworkQuarantine:
 		return 4
-	case hardeningActionDivertIngress:
+	case hardeningActionRemoveFromTraffic:
 		return 5
-	case hardeningActionTightenRuntimeProfile, hardeningActionBlockExecClass:
+	case hardeningActionDivertIngress:
 		return 6
-	case hardeningActionRestartTrusted:
+	case hardeningActionTightenRuntimeProfile, hardeningActionBlockExecClass:
 		return 7
+	case hardeningActionRestartTrusted:
+		return 8
 	default:
 		return 50
 	}

@@ -159,6 +159,9 @@ func TestRuntimeHardeningEvaluateApplyRollbackRecommendationsAndHandoff(t *testi
 	if rollback.Execution.ExecutionResult != "rollback_applied" || rollback.Posture.CurrentMode != hardeningModeObserveOnly {
 		t.Fatalf("expected rollback into observe-only posture, got %#v", rollback)
 	}
+	if rollback.PolicyDecision.LeastInvasiveRank != hardeningActionRank(hardeningActionRollbackRestrictions) || rollback.PolicyDecision.LeastInvasiveRank >= hardeningActionRank(hardeningActionApplyNetworkQuarantine) {
+		t.Fatalf("expected rollback to have an explicit least-invasive rank ahead of quarantine, got %#v", rollback.PolicyDecision)
+	}
 
 	sealReq := httptest.NewRequest(
 		http.MethodPost,

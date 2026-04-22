@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
@@ -532,22 +533,49 @@ func summarizeConfidentialReadiness(items []runtimePostureState) executionConfid
 }
 
 func hasConfidentialEvidence(item runtimePostureState) bool {
-	keywords := []string{"confidential", "enclave", "tee", "tdx", "sev", "sgx"}
-	values := []string{item.SubjectRef}
+	structuredMarkers := map[string]struct{}{
+		"confidential":                            {},
+		"confidential_execution_requested":        {},
+		"confidential_execution_required":         {},
+		"confidential_execution_fallback_allowed": {},
+		"confidential_attestation":                {},
+		"enclave":                                 {},
+		"enclave_attestation":                     {},
+		"tee":                                     {},
+		"tee_attestation":                         {},
+		"tdx":                                     {},
+		"tdx_attestation":                         {},
+		"sev":                                     {},
+		"sev_attestation":                         {},
+		"sgx":                                     {},
+		"sgx_attestation":                         {},
+	}
+	values := []string{}
 	values = append(values, item.ReadinessSignals...)
 	values = append(values, item.EvidenceRefs...)
 	values = append(values, item.ExpectedTrustState.AttestationInputs...)
 	values = append(values, item.ActualTrustState.AttestationInputs...)
 	for _, mismatch := range item.Mismatches {
-		values = append(values, mismatch.Code, mismatch.Summary, mismatch.EvidenceRef)
+		values = append(values, mismatch.Code, mismatch.EvidenceRef)
 	}
-	joined := strings.ToLower(strings.Join(values, " "))
-	for _, keyword := range keywords {
-		if strings.Contains(joined, keyword) {
+	for _, value := range values {
+		for _, token := range confidentialEvidenceTokens(value) {
+			if _, ok := structuredMarkers[token]; ok {
+				return true
+			}
+		}
+		if _, ok := structuredMarkers[strings.ToLower(strings.TrimSpace(value))]; ok {
 			return true
 		}
 	}
 	return false
+}
+
+func confidentialEvidenceTokens(value string) []string {
+	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(r rune) bool {
+		return !(unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_')
+	})
+	return uniqueStrings(parts)
 }
 
 func sortedAllowedKinds(values map[string]struct{}) []string {
