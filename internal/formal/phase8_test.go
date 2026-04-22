@@ -26,6 +26,30 @@ func TestEvaluatePhase8StateRequiresGroupSpecificStates(t *testing.T) {
 	}
 }
 
+func TestEvaluatePhase8StateTrimsWhitespaceBeforeAggregateChecks(t *testing.T) {
+	got := EvaluatePhase8State(
+		EntryGateStateReady,
+		FoundationStateActive,
+		" "+FormalDisciplineStatePartial+" ",
+		ComplianceCodificationStateActive,
+		GovernedAutonomyStateActive,
+	)
+	if got != Phase8StateSubstantial {
+		t.Fatalf("expected substantial state after trimming whitespace, got %q", got)
+	}
+
+	got = EvaluatePhase8State(
+		EntryGateStateReady,
+		FoundationStateActive,
+		" "+FormalDisciplineStateIncomplete+" ",
+		ComplianceCodificationStateActive,
+		GovernedAutonomyStateActive,
+	)
+	if got != Phase8StateIncomplete {
+		t.Fatalf("expected incomplete state after trimming whitespace, got %q", got)
+	}
+}
+
 func TestDeferredInstitutionalExpansionStaysOutsideCoreState(t *testing.T) {
 	deferred := DeferredInstitutionalExpansion()
 	if len(deferred) == 0 {

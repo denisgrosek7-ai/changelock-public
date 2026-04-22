@@ -805,7 +805,13 @@ func EvaluateGovernedAutonomyState() string {
 }
 
 func EvaluatePhase8State(entryGateState, foundationState, formalState, complianceState, governanceState string) string {
-	if strings.TrimSpace(entryGateState) != EntryGateStateReady || strings.TrimSpace(foundationState) != FoundationStateActive {
+	entryGateState = strings.TrimSpace(entryGateState)
+	foundationState = strings.TrimSpace(foundationState)
+	formalState = strings.TrimSpace(formalState)
+	complianceState = strings.TrimSpace(complianceState)
+	governanceState = strings.TrimSpace(governanceState)
+
+	if entryGateState != EntryGateStateReady || foundationState != FoundationStateActive {
 		return Phase8StateIncomplete
 	}
 	if !isFormalDisciplineState(formalState) || !isComplianceCodificationState(complianceState) || !isGovernedAutonomyState(governanceState) {
