@@ -403,6 +403,7 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/formal/phase8/institutional/insurance-exports", srv.phase8InsuranceExportsHandler)
 	mux.HandleFunc("/v1/formal/phase8/institutional/incident-attribution", srv.phase8IncidentAttributionHandler)
 	mux.HandleFunc("/v1/formal/phase8/institutional/actuarial-benchmarks", srv.phase8ActuarialBenchmarksHandler)
+	mux.HandleFunc("/v1/formal/phase8/final-summary", srv.phase8FinalSummaryHandler)
 	mux.HandleFunc("/v1/integrations/identity-fabric", srv.identityFabricHandler)
 	mux.HandleFunc("/v1/integrations/itsm-lifecycle", srv.itsmLifecycleHandler)
 	mux.HandleFunc("/v1/integrations/itsm-lifecycle/flows", srv.itsmLifecycleFlowsHandler)
