@@ -118,7 +118,6 @@ func TestAdmissionReviewDeniesUnknownTrustedExecutionProfile(t *testing.T) {
 		t.Fatalf("expected unknown trusted execution profile in denial message, got %#v", response.Response)
 	}
 }
-
 func containsReason(value, expected string) bool {
 	return value != "" && expected != "" && strings.Contains(value, expected)
 }
