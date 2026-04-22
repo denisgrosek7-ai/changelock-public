@@ -176,6 +176,58 @@ func (s *PostgresStore) ListEvents(ctx context.Context, filter EventFilter) ([]S
 	})
 }
 
+func (s *PostgresStore) FindExecutionTaskByLogicalKey(ctx context.Context, component string, tenantID string, environment string, taskType string, idempotencyKey string) (ExecutionTaskRecord, bool, error) {
+	component = strings.TrimSpace(component)
+	tenantID = strings.TrimSpace(tenantID)
+	environment = strings.TrimSpace(environment)
+	taskType = strings.TrimSpace(taskType)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if taskType == "" || idempotencyKey == "" {
+		return ExecutionTaskRecord{}, false, nil
+	}
+
+	args := []any{component, EventTypeExecutionTaskRecorded, taskType, idempotencyKey}
+	conditions := []string{
+		"component = $1",
+		"event_type = $2",
+		"raw_event -> 'execution_foundation' ->> 'task_type' = $3",
+		"raw_event -> 'execution_foundation' ->> 'idempotency_key' = $4",
+	}
+	if tenantID != "" {
+		args = append(args, tenantID)
+		conditions = append(conditions, fmt.Sprintf("tenant_id = $%d", len(args)))
+	}
+	if environment != "" {
+		args = append(args, environment)
+		conditions = append(conditions, fmt.Sprintf("environment = $%d", len(args)))
+	}
+
+	query := `
+SELECT raw_event
+FROM audit_events
+WHERE ` + strings.Join(conditions, " AND ") + `
+ORDER BY received_at DESC
+LIMIT 1`
+
+	var rawEvent json.RawMessage
+	if err := s.pool.QueryRow(ctx, query, args...).Scan(&rawEvent); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ExecutionTaskRecord{}, false, nil
+		}
+		return ExecutionTaskRecord{}, false, err
+	}
+
+	var event Event
+	if err := json.Unmarshal(rawEvent, &event); err != nil {
+		return ExecutionTaskRecord{}, false, err
+	}
+	task, err := UnmarshalExecutionTaskRecord(event)
+	if err != nil {
+		return ExecutionTaskRecord{}, false, err
+	}
+	return task, true, nil
+}
+
 func (s *PostgresStore) Summary(ctx context.Context, filter EventFilter) (Summary, error) {
 	filter, err := NormalizeFilter(filter)
 	if err != nil {

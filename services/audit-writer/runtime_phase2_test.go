@@ -176,6 +176,44 @@ func TestRuntimePhase2ProofsRequireAllEvidenceTypes(t *testing.T) {
 	}
 }
 
+func TestRuntimePhase2RejectsCrossTenantSubjectScope(t *testing.T) {
+	store := audit.NewMemoryStore()
+	cfg, signer := newOIDCHandlerConfig(t, true, true)
+	handler := newHandlerWithAuth(store, "memory", cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runtime/substrate-truth?tenant_id=acme&environment=prod", bytes.NewBufferString(`{
+	  "truth":{
+	    "subject_ref":"cluster-a/globex-prod/Deployment/api",
+	    "workload":{"cluster_id":"cluster-a","namespace":"globex-prod","workload_kind":"Deployment","workload":"api","image_digest":"sha256:globex"},
+	    "process":{"process_name":"api","cgroup_id":"cg-1"},
+	    "node":{"node_id":"node-a","substrate_class":"confidential","trust_boundary":"attestation_provider_layer"},
+	    "attestation":{"provider":"sgx","quote_type":"sgx_quote","measurement":"m-1","lifecycle_state":"active","observed_state":"verified","credential_release_state":"released"}
+	  }
+	}`))
+	req.Header.Set("Authorization", "Bearer "+signer.token(t, map[string]any{
+		"sub":       "operator@example.com",
+		"groups":    []string{"changelock-operators"},
+		"tenant_id": "acme",
+	}))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cross-tenant subject scope, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	events, err := store.ListEvents(context.Background(), audit.EventFilter{
+		Component: runtimePhase2Component,
+		Limit:     20,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents() error = %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected no persisted phase2 events after scope violation, got %#v", events)
+	}
+}
+
 func mustSeedRuntimeFinding(t *testing.T, store audit.Store) {
 	t.Helper()
 

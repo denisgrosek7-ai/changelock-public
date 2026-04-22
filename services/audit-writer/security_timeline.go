@@ -12,16 +12,23 @@ import (
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
+	"github.com/denisgrosek/changelock/internal/compliance"
+	"github.com/denisgrosek/changelock/internal/connectors"
+	"github.com/denisgrosek/changelock/internal/handoff"
 	"github.com/denisgrosek/changelock/internal/httpjson"
+	supplychaincore "github.com/denisgrosek/changelock/internal/supplychain"
+	vulnerabilitycore "github.com/denisgrosek/changelock/internal/vulnerability"
+	"github.com/denisgrosek/changelock/internal/workflow"
 )
 
 type securityTimelineResponse struct {
-	SchemaVersion    string                  `json:"schema_version"`
-	GeneratedAt      time.Time               `json:"generated_at"`
-	CountsBySource   map[string]int          `json:"counts_by_source"`
-	CountsBySeverity map[string]int          `json:"counts_by_severity"`
-	Entries          []securityTimelineEntry `json:"entries"`
-	Limitations      []string                `json:"limitations,omitempty"`
+	SchemaVersion     string                  `json:"schema_version"`
+	GeneratedAt       time.Time               `json:"generated_at"`
+	CountsBySource    map[string]int          `json:"counts_by_source"`
+	CountsByLifecycle map[string]int          `json:"counts_by_lifecycle"`
+	CountsBySeverity  map[string]int          `json:"counts_by_severity"`
+	Entries           []securityTimelineEntry `json:"entries"`
+	Limitations       []string                `json:"limitations,omitempty"`
 }
 
 type securityTimelineEntry struct {
@@ -32,6 +39,7 @@ type securityTimelineEntry struct {
 	SubjectType                 string    `json:"subject_type"`
 	SubjectLabel                string    `json:"subject_label"`
 	SourceSubsystem             string    `json:"source_subsystem"`
+	LifecyclePhase              string    `json:"lifecycle_phase"`
 	EventType                   string    `json:"event_type"`
 	Severity                    string    `json:"severity"`
 	Importance                  string    `json:"importance"`
@@ -80,9 +88,10 @@ func (s server) securityTimelineHandler(w http.ResponseWriter, r *http.Request) 
 		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	lifecyclePhase := normalizeCommandCenterLifecyclePhase(r.URL.Query().Get("lifecycle_phase"))
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
-	response, err := s.buildSecurityTimeline(ctx, filter)
+	response, err := s.buildSecurityTimeline(ctx, filter, lifecyclePhase)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, audit.ErrInvalidFilter) {
@@ -96,7 +105,7 @@ func (s server) securityTimelineHandler(w http.ResponseWriter, r *http.Request) 
 	httpjson.Write(w, http.StatusOK, response)
 }
 
-func (s server) buildSecurityTimeline(ctx context.Context, filter audit.EventFilter) (securityTimelineResponse, error) {
+func (s server) buildSecurityTimeline(ctx context.Context, filter audit.EventFilter, lifecyclePhase string) (securityTimelineResponse, error) {
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 25
@@ -121,10 +130,26 @@ func (s server) buildSecurityTimeline(ctx context.Context, filter audit.EventFil
 	}
 
 	incidentIndex := buildSecurityTimelineIncidentIndex(incidents)
-	entries := make([]securityTimelineEntry, 0, len(events))
+	allEntries := make([]securityTimelineEntry, 0, len(events))
 	for _, event := range events {
 		entry := buildSecurityTimelineEntry(event, incidentIndex, recommendations)
 		if strings.TrimSpace(entry.EntryID) == "" {
+			continue
+		}
+		allEntries = append(allEntries, entry)
+	}
+	countsBySource := map[string]int{}
+	countsByLifecycle := map[string]int{}
+	countsBySeverity := map[string]int{}
+	for _, entry := range allEntries {
+		countsBySource[entry.SourceSubsystem]++
+		countsByLifecycle[entry.LifecyclePhase]++
+		countsBySeverity[entry.Severity]++
+	}
+
+	entries := make([]securityTimelineEntry, 0, len(allEntries))
+	for _, entry := range allEntries {
+		if lifecyclePhase != "" && entry.LifecyclePhase != lifecyclePhase {
 			continue
 		}
 		entries = append(entries, entry)
@@ -146,21 +171,16 @@ func (s server) buildSecurityTimeline(ctx context.Context, filter audit.EventFil
 	if len(entries) > 0 {
 		generatedAt = entries[0].Timestamp.UTC()
 	}
-	countsBySource := map[string]int{}
-	countsBySeverity := map[string]int{}
-	for _, entry := range entries {
-		countsBySource[entry.SourceSubsystem]++
-		countsBySeverity[entry.Severity]++
-	}
-
 	return securityTimelineResponse{
-		SchemaVersion:    securityTimelineSchemaVersion,
-		GeneratedAt:      generatedAt,
-		CountsBySource:   countsBySource,
-		CountsBySeverity: countsBySeverity,
-		Entries:          entries,
+		SchemaVersion:     securityTimelineSchemaVersion,
+		GeneratedAt:       generatedAt,
+		CountsBySource:    countsBySource,
+		CountsByLifecycle: countsByLifecycle,
+		CountsBySeverity:  countsBySeverity,
+		Entries:           entries,
 		Limitations: []string{
 			"Unified security timeline aggregates existing evidence-backed audit, incident, recommendation, runtime, validation, handoff, and federation signals; it does not introduce a new canonical truth store.",
+			"Lifecycle-phase filtering is a bounded projection over canonical events and never replaces the underlying event stream.",
 			"Drill-down routing stays bounded to existing operator surfaces and preserves approval or verification semantics from the source subsystem.",
 		},
 	}, nil
@@ -220,12 +240,14 @@ func buildSecurityTimelineEntry(event audit.StoredEvent, incidents securityTimel
 	validationRecord := parseSecurityTimelineValidation(event.ValidationHarness)
 	hardeningPayload := parseSecurityTimelineHardening(event.RuntimeIntegrity)
 	runtimePayload := parseSecurityTimelineRuntime(event.RuntimeIntegrity)
+	intelligencePayload := parsePhase3IntelligencePayload(event.Intelligence)
+	enterprisePayload := parsePhase4EnterprisePayload(event.Enterprise)
 
-	subjectRef, subjectType, subjectLabel := securityTimelineSubject(event, incident, handoffRecord, federationEvent, validationRecord, hardeningPayload)
-	title, summary := securityTimelineNarrative(event, incident, source, subjectLabel, handoffRecord, federationEvent, validationRecord, hardeningPayload, runtimePayload)
+	subjectRef, subjectType, subjectLabel := securityTimelineSubject(event, incident, handoffRecord, federationEvent, validationRecord, hardeningPayload, intelligencePayload, enterprisePayload)
+	title, summary := securityTimelineNarrative(event, incident, source, subjectLabel, handoffRecord, federationEvent, validationRecord, hardeningPayload, runtimePayload, intelligencePayload, enterprisePayload)
 	drilldownTab, drilldownLabel := securityTimelineDrilldown(source)
-	drilldownKind, drilldownRef, drilldownSecondaryRef, resourceURI := securityTimelineTarget(source, event, incident, recommendation, handoffRecord, federationEvent, validationRecord, hardeningPayload)
-	severity := securityTimelineSeverity(event, incident, validationRecord)
+	drilldownKind, drilldownRef, drilldownSecondaryRef, resourceURI := securityTimelineTarget(source, event, incident, recommendation, handoffRecord, federationEvent, validationRecord, hardeningPayload, intelligencePayload, enterprisePayload)
+	severity := securityTimelineSeverity(event, incident, validationRecord, source, intelligencePayload, enterprisePayload)
 
 	entry := securityTimelineEntry{
 		SchemaVersion:               securityTimelineEntrySchemaVersion,
@@ -235,6 +257,7 @@ func buildSecurityTimelineEntry(event audit.StoredEvent, incidents securityTimel
 		SubjectType:                 subjectType,
 		SubjectLabel:                subjectLabel,
 		SourceSubsystem:             source,
+		LifecyclePhase:              commandCenterLifecyclePhase(source),
 		EventType:                   strings.TrimSpace(event.EventType),
 		Severity:                    severity,
 		Importance:                  securityTimelineImportance(severity),
@@ -249,7 +272,7 @@ func buildSecurityTimelineEntry(event audit.StoredEvent, incidents securityTimel
 		DrilldownTargetSecondaryRef: drilldownSecondaryRef,
 		ResourceURI:                 resourceURI,
 		PersonaHints:                securityTimelinePersonaHints(source, severity),
-		Limitations:                 securityTimelineEventLimitations(source, event, validationRecord),
+		Limitations:                 securityTimelineEventLimitations(source, event, validationRecord, intelligencePayload, enterprisePayload),
 	}
 	if recommendation != nil {
 		entry.RecommendationRef = recommendation.RecommendationID
@@ -257,12 +280,23 @@ func buildSecurityTimelineEntry(event audit.StoredEvent, incidents securityTimel
 	} else {
 		entry.NextAction = securityTimelineDefaultNextAction(source)
 	}
-	entry.EvidenceRefs = securityTimelineEvidenceRefs(event, incident, recommendation)
+	entry.EvidenceRefs = securityTimelineEvidenceRefs(event, incident, recommendation, intelligencePayload, enterprisePayload)
 	return entry
 }
 
 func securityTimelineSource(event audit.StoredEvent) string {
 	switch {
+	case strings.TrimSpace(event.Component) == phase3IntelligenceComponent:
+		return "intelligence"
+	case strings.TrimSpace(event.Component) == phase4EnterpriseComponent:
+		switch event.EventType {
+		case audit.EventTypeEnterprisePartnerTrustRecorded:
+			return "partner"
+		case audit.EventTypeEnterpriseComplianceMappingRecorded, audit.EventTypeEnterprisePolicyDriftRecorded, audit.EventTypeEnterpriseExecutiveReportRecorded:
+			return "governance"
+		default:
+			return "workflow"
+		}
 	case strings.HasPrefix(event.EventType, "incident_"):
 		return "incident"
 	case strings.HasPrefix(event.EventType, "recommendation_"):
@@ -328,6 +362,9 @@ func matchSecurityTimelineRecommendation(event audit.StoredEvent, incident *inve
 			}
 		}
 	}
+	if source == "intelligence" || source == "workflow" || source == "partner" || source == "governance" {
+		return nil
+	}
 	repo := strings.TrimSpace(event.Repo)
 	if repo != "" {
 		for i := range recommendations {
@@ -365,7 +402,56 @@ func matchSecurityTimelineRecommendation(event audit.StoredEvent, incident *inve
 	return nil
 }
 
-func securityTimelineSubject(event audit.StoredEvent, incident *investigationIncident, handoffRecord *handoffStoredRecord, federationEvent *federationProofEvent, validationRecord *validationHarnessStoredRecord, hardeningPayload *hardeningEventPayload) (string, string, string) {
+func securityTimelineSubject(event audit.StoredEvent, incident *investigationIncident, handoffRecord *handoffStoredRecord, federationEvent *federationProofEvent, validationRecord *validationHarnessStoredRecord, hardeningPayload *hardeningEventPayload, intelligencePayload phase3IntelligencePayload, enterprisePayload phase4EnterprisePayload) (string, string, string) {
+	if intelligencePayload.Vulnerability != nil {
+		ref := firstNonEmpty(strings.TrimSpace(intelligencePayload.Vulnerability.SubjectRef), strings.TrimSpace(intelligencePayload.Vulnerability.VerdictID), strings.TrimSpace(intelligencePayload.Vulnerability.VulnerabilityID))
+		label := firstNonEmpty(strings.TrimSpace(intelligencePayload.Vulnerability.VulnerabilityID), strings.TrimSpace(intelligencePayload.Vulnerability.PackageName), ref)
+		return ref, "vulnerability", label
+	}
+	if intelligencePayload.SupplyChain != nil {
+		ref := firstNonEmpty(strings.TrimSpace(intelligencePayload.SupplyChain.SubjectRef), strings.TrimSpace(intelligencePayload.SupplyChain.PatternID), strings.TrimSpace(intelligencePayload.SupplyChain.PackageName))
+		label := firstNonEmpty(strings.TrimSpace(intelligencePayload.SupplyChain.PackageName), ref)
+		return ref, "package", label
+	}
+	if intelligencePayload.Strategic != nil {
+		ref := firstNonEmpty(strings.TrimSpace(intelligencePayload.Strategic.SubjectRef), strings.TrimSpace(intelligencePayload.Strategic.AssessmentID))
+		return ref, "strategic_assessment", ref
+	}
+	if intelligencePayload.Query != nil {
+		ref := firstNonEmpty(strings.TrimSpace(intelligencePayload.Query.Scope.SubjectRef), strings.TrimSpace(intelligencePayload.Query.QueryID))
+		label := firstNonEmpty(strings.TrimSpace(intelligencePayload.Query.Scope.SubjectRef), strings.TrimSpace(intelligencePayload.Query.Query))
+		return ref, "grounded_query", label
+	}
+	if enterprisePayload.Workflow != nil {
+		ref := firstNonEmpty(strings.TrimSpace(enterprisePayload.Workflow.SubjectRef), strings.TrimSpace(enterprisePayload.Workflow.WorkflowID))
+		label := firstNonEmpty(strings.TrimSpace(enterprisePayload.Workflow.WorkflowID), ref)
+		return ref, "workflow", label
+	}
+	if enterprisePayload.Reconciliation != nil {
+		ref := firstNonEmpty(strings.TrimSpace(enterprisePayload.Reconciliation.SubjectRef), strings.TrimSpace(enterprisePayload.Reconciliation.WorkflowID), strings.TrimSpace(enterprisePayload.Reconciliation.ConnectorRef))
+		label := firstNonEmpty(strings.TrimSpace(enterprisePayload.Reconciliation.WorkflowID), strings.TrimSpace(enterprisePayload.Reconciliation.ConnectorRef), ref)
+		return ref, "workflow_reconciliation", label
+	}
+	if enterprisePayload.PartnerIntake != nil {
+		ref := firstNonEmpty(strings.TrimSpace(enterprisePayload.PartnerIntake.PartnerID), strings.TrimSpace(enterprisePayload.PartnerIntake.HandoffRef))
+		label := firstNonEmpty(strings.TrimSpace(enterprisePayload.PartnerIntake.Organization), strings.TrimSpace(enterprisePayload.PartnerIntake.PartnerID), ref)
+		return ref, "partner", label
+	}
+	if enterprisePayload.Compliance != nil {
+		ref := firstNonEmpty(strings.TrimSpace(enterprisePayload.Compliance.SubjectRef), strings.TrimSpace(enterprisePayload.Compliance.ControlID))
+		label := firstNonEmpty(strings.TrimSpace(enterprisePayload.Compliance.ControlID), strings.TrimSpace(enterprisePayload.Compliance.ControlFamily), ref)
+		return ref, "control_mapping", label
+	}
+	if enterprisePayload.PolicyDrift != nil {
+		ref := firstNonEmpty(strings.TrimSpace(enterprisePayload.PolicyDrift.SubjectRef), strings.TrimSpace(enterprisePayload.PolicyDrift.ExceptionID), strings.TrimSpace(enterprisePayload.PolicyDrift.Actor))
+		label := firstNonEmpty(strings.TrimSpace(enterprisePayload.PolicyDrift.ExceptionID), strings.TrimSpace(enterprisePayload.PolicyDrift.SubjectRef), ref)
+		return ref, "policy_drift", label
+	}
+	if enterprisePayload.Executive != nil {
+		ref := firstNonEmpty(strings.TrimSpace(enterprisePayload.Executive.ScopeRef), "executive_report")
+		label := firstNonEmpty(strings.TrimSpace(enterprisePayload.Executive.ScopeRef), "executive report")
+		return ref, "executive_report", label
+	}
 	if handoffRecord != nil && strings.TrimSpace(handoffRecord.PackageID) != "" {
 		return handoffRecord.PackageID, "handoff_package", handoffRecord.PackageID
 	}
@@ -407,7 +493,40 @@ func securityTimelineSubject(event audit.StoredEvent, incident *investigationInc
 	return ref, "event", ref
 }
 
-func securityTimelineNarrative(event audit.StoredEvent, incident *investigationIncident, source string, subjectLabel string, handoffRecord *handoffStoredRecord, federationEvent *federationProofEvent, validationRecord *validationHarnessStoredRecord, hardeningPayload *hardeningEventPayload, runtimePayload *runtimeIntegrityEventPayload) (string, string) {
+func securityTimelineNarrative(event audit.StoredEvent, incident *investigationIncident, source string, subjectLabel string, handoffRecord *handoffStoredRecord, federationEvent *federationProofEvent, validationRecord *validationHarnessStoredRecord, hardeningPayload *hardeningEventPayload, runtimePayload *runtimeIntegrityEventPayload, intelligencePayload phase3IntelligencePayload, enterprisePayload phase4EnterprisePayload) (string, string) {
+	switch source {
+	case "intelligence":
+		switch {
+		case intelligencePayload.Vulnerability != nil:
+			return fmt.Sprintf("Vulnerability relevance updated for %s", subjectLabel), firstNonEmpty(firstString(intelligencePayload.Vulnerability.Explanation.Derived), securityTimelineReasonSummary(event, incident, "Bounded vulnerability relevance was recalculated from reachability and exploitability evidence."))
+		case intelligencePayload.SupplyChain != nil:
+			return fmt.Sprintf("Supply-chain pattern updated for %s", subjectLabel), firstNonEmpty(firstString(intelligencePayload.SupplyChain.Explanation.Derived), securityTimelineReasonSummary(event, incident, "Bounded supply-chain anomaly and trust-drift evaluation recorded a new pattern verdict."))
+		case intelligencePayload.Strategic != nil:
+			return fmt.Sprintf("Strategic advisory updated for %s", subjectLabel), firstNonEmpty(firstString(intelligencePayload.Strategic.RecommendedActions), securityTimelineReasonSummary(event, incident, "Strategic advisory assessment recorded a new ranked next action."))
+		case intelligencePayload.Query != nil:
+			return fmt.Sprintf("Grounded query answered for %s", subjectLabel), firstNonEmpty(firstString(intelligencePayload.Query.RecommendedActions), securityTimelineReasonSummary(event, incident, "A bounded retrieval-grounded security query response was recorded."))
+		}
+	case "workflow":
+		switch {
+		case enterprisePayload.Workflow != nil:
+			return fmt.Sprintf("Workflow state updated for %s", subjectLabel), securityTimelineReasonSummary(event, incident, "Enterprise workflow lifecycle state changed under validation and approval discipline.")
+		case enterprisePayload.Reconciliation != nil:
+			return fmt.Sprintf("Connector reconciliation updated for %s", subjectLabel), securityTimelineReasonSummary(event, incident, "External workflow projection was reconciled against canonical technical truth.")
+		}
+	case "partner":
+		if enterprisePayload.PartnerIntake != nil {
+			return fmt.Sprintf("Partner trust updated for %s", subjectLabel), securityTimelineReasonSummary(event, incident, "Partner intake lifecycle recorded a new verification, freshness, or compatibility state.")
+		}
+	case "governance":
+		switch {
+		case enterprisePayload.Compliance != nil:
+			return fmt.Sprintf("Compliance mapping updated for %s", subjectLabel), securityTimelineReasonSummary(event, incident, "Control coverage and evidence-vault posture were recorded for the current subject.")
+		case enterprisePayload.PolicyDrift != nil:
+			return fmt.Sprintf("Policy drift recorded for %s", subjectLabel), securityTimelineReasonSummary(event, incident, "Policy posture changed and the identity-linked governance trail was updated.")
+		case enterprisePayload.Executive != nil:
+			return fmt.Sprintf("Executive report updated for %s", subjectLabel), securityTimelineReasonSummary(event, incident, "Executive governance posture was recalculated from workflow, partner, compliance, and drift artifacts.")
+		}
+	}
 	switch event.EventType {
 	case audit.EventTypeDeployGateDecision:
 		if event.Decision == audit.DecisionDeny {
@@ -496,10 +615,16 @@ func securityTimelineDrilldown(source string) (string, string) {
 		return "runtime", "Open Runtime"
 	case "validation":
 		return "validation", "Open Validation"
-	case "federation":
+	case "federation", "partner":
 		return "federation", "Open Federation"
+	case "intelligence":
+		return "guidance", "Open Guidance"
+	case "governance":
+		return "analytics", "Open Governance"
 	case "handoff", "incident", "recommendation", "deploy":
 		return "events", "Open Investigations"
+	case "workflow":
+		return "exceptions", "Open Workflow"
 	case "topology":
 		return "topology", "Open Topology"
 	case "forensics":
@@ -509,7 +634,7 @@ func securityTimelineDrilldown(source string) (string, string) {
 	}
 }
 
-func securityTimelineTarget(source string, event audit.StoredEvent, incident *investigationIncident, recommendation *recommendation, handoffRecord *handoffStoredRecord, federationEvent *federationProofEvent, validationRecord *validationHarnessStoredRecord, hardeningPayload *hardeningEventPayload) (string, string, string, string) {
+func securityTimelineTarget(source string, event audit.StoredEvent, incident *investigationIncident, recommendation *recommendation, handoffRecord *handoffStoredRecord, federationEvent *federationProofEvent, validationRecord *validationHarnessStoredRecord, hardeningPayload *hardeningEventPayload, intelligencePayload phase3IntelligencePayload, enterprisePayload phase4EnterprisePayload) (string, string, string, string) {
 	if recommendation != nil && strings.TrimSpace(recommendation.RecommendationID) != "" {
 		return "recommendation", recommendation.RecommendationID, firstNonEmpty(recommendation.RelatedIncidentRefs...), ""
 	}
@@ -520,6 +645,37 @@ func securityTimelineTarget(source string, event audit.StoredEvent, incident *in
 		return "incident", incidentID, "", ""
 	}
 	switch source {
+	case "intelligence":
+		switch {
+		case intelligencePayload.Vulnerability != nil:
+			return "vulnerability_relevance", strings.TrimSpace(intelligencePayload.Vulnerability.VerdictID), strings.TrimSpace(intelligencePayload.Vulnerability.VulnerabilityID), fmt.Sprintf("/v1/intelligence/vulnerability-relevance?subject_ref=%s&vulnerability_id=%s", intelligencePayload.Vulnerability.SubjectRef, intelligencePayload.Vulnerability.VulnerabilityID)
+		case intelligencePayload.SupplyChain != nil:
+			return "supply_chain_pattern", strings.TrimSpace(intelligencePayload.SupplyChain.PatternID), strings.TrimSpace(intelligencePayload.SupplyChain.PackageName), fmt.Sprintf("/v1/intelligence/supply-chain/patterns?subject_ref=%s&package_name=%s", intelligencePayload.SupplyChain.SubjectRef, intelligencePayload.SupplyChain.PackageName)
+		case intelligencePayload.Strategic != nil:
+			return "strategic_assessment", strings.TrimSpace(intelligencePayload.Strategic.AssessmentID), strings.TrimSpace(intelligencePayload.Strategic.SubjectRef), fmt.Sprintf("/v1/intelligence/strategic/query?subject_ref=%s", intelligencePayload.Strategic.SubjectRef)
+		case intelligencePayload.Query != nil:
+			return "grounded_query", strings.TrimSpace(intelligencePayload.Query.QueryID), strings.TrimSpace(intelligencePayload.Query.Scope.SubjectRef), fmt.Sprintf("/v1/intelligence/strategic/query?subject_ref=%s&vulnerability_id=%s&package_name=%s", intelligencePayload.Query.Scope.SubjectRef, intelligencePayload.Query.Scope.VulnerabilityID, intelligencePayload.Query.Scope.PackageName)
+		}
+	case "workflow":
+		switch {
+		case enterprisePayload.Workflow != nil:
+			return "workflow_record", strings.TrimSpace(enterprisePayload.Workflow.WorkflowID), strings.TrimSpace(enterprisePayload.Workflow.SubjectRef), fmt.Sprintf("/v1/enterprise/workflow/lifecycle?subject_ref=%s&workflow_id=%s", enterprisePayload.Workflow.SubjectRef, enterprisePayload.Workflow.WorkflowID)
+		case enterprisePayload.Reconciliation != nil:
+			return "workflow_reconciliation", strings.TrimSpace(enterprisePayload.Reconciliation.WorkflowID), strings.TrimSpace(enterprisePayload.Reconciliation.ConnectorRef), fmt.Sprintf("/v1/enterprise/workflow/connectors/reconcile?subject_ref=%s&workflow_id=%s", enterprisePayload.Reconciliation.SubjectRef, enterprisePayload.Reconciliation.WorkflowID)
+		}
+	case "partner":
+		if enterprisePayload.PartnerIntake != nil {
+			return "partner_trust", strings.TrimSpace(enterprisePayload.PartnerIntake.PartnerID), strings.TrimSpace(enterprisePayload.PartnerIntake.HandoffRef), fmt.Sprintf("/v1/enterprise/partner-trust/dashboard?partner_id=%s", enterprisePayload.PartnerIntake.PartnerID)
+		}
+	case "governance":
+		switch {
+		case enterprisePayload.Compliance != nil:
+			return "compliance_mapping", strings.TrimSpace(enterprisePayload.Compliance.ControlID), strings.TrimSpace(enterprisePayload.Compliance.SubjectRef), fmt.Sprintf("/v1/enterprise/governance/compliance-mapping?subject_ref=%s", enterprisePayload.Compliance.SubjectRef)
+		case enterprisePayload.PolicyDrift != nil:
+			return "policy_drift", firstNonEmpty(strings.TrimSpace(enterprisePayload.PolicyDrift.ExceptionID), strings.TrimSpace(enterprisePayload.PolicyDrift.SubjectRef)), strings.TrimSpace(enterprisePayload.PolicyDrift.SubjectRef), fmt.Sprintf("/v1/enterprise/governance/policy-drift?subject_ref=%s", enterprisePayload.PolicyDrift.SubjectRef)
+		case enterprisePayload.Executive != nil:
+			return "executive_report", firstNonEmpty(strings.TrimSpace(enterprisePayload.Executive.ScopeRef), "executive_report"), "", fmt.Sprintf("/v1/enterprise/governance/executive-report?scope_ref=%s", enterprisePayload.Executive.ScopeRef)
+		}
 	case "runtime":
 		if subjectRef := firstNonEmpty(strings.TrimSpace(event.RecommendationSubjectRef), strings.TrimSpace(event.Workload), strings.TrimSpace(event.Namespace)); subjectRef != "" {
 			if findingID := strings.TrimSpace(event.RecommendationSourceRef); findingID != "" {
@@ -556,7 +712,7 @@ func securityTimelineTarget(source string, event audit.StoredEvent, incident *in
 	return "", "", "", ""
 }
 
-func securityTimelineSeverity(event audit.StoredEvent, incident *investigationIncident, validationRecord *validationHarnessStoredRecord) string {
+func securityTimelineSeverity(event audit.StoredEvent, incident *investigationIncident, validationRecord *validationHarnessStoredRecord, source string, intelligencePayload phase3IntelligencePayload, enterprisePayload phase4EnterprisePayload) string {
 	if incident != nil && strings.TrimSpace(incident.Severity) != "" {
 		return incident.Severity
 	}
@@ -568,6 +724,76 @@ func securityTimelineSeverity(event audit.StoredEvent, incident *investigationIn
 	}
 	if validationRecord != nil && validationRecord.Bundle.Certificate.OverallStatus == validationStatusFail {
 		return "high"
+	}
+	switch source {
+	case "intelligence":
+		switch {
+		case intelligencePayload.Vulnerability != nil:
+			if intelligencePayload.Vulnerability.CurrentState == vulnerabilitycore.RelevanceActivePriority || intelligencePayload.Vulnerability.CurrentState == vulnerabilitycore.RelevanceReachableExternally {
+				return "high"
+			}
+			if intelligencePayload.Vulnerability.CurrentState == vulnerabilitycore.RelevanceReachableLowExploit {
+				return "medium"
+			}
+		case intelligencePayload.SupplyChain != nil:
+			if intelligencePayload.SupplyChain.CurrentState == supplychaincore.PatternStateCrossClusterConcern || intelligencePayload.SupplyChain.CurrentState == supplychaincore.PatternStateTyposquat {
+				return "high"
+			}
+			if intelligencePayload.SupplyChain.CurrentState != supplychaincore.PatternStateStableTrusted {
+				return "medium"
+			}
+		case intelligencePayload.Strategic != nil:
+			if intelligencePayload.Strategic.Recommendation.PriorityBand == "critical" || intelligencePayload.Strategic.Recommendation.PriorityBand == "high" {
+				return "high"
+			}
+			return "medium"
+		case intelligencePayload.Query != nil:
+			return "low"
+		}
+	case "workflow":
+		if enterprisePayload.Workflow != nil {
+			if enterprisePayload.Workflow.CanonicalState == workflow.StateRejected || enterprisePayload.Workflow.CurrentState == workflow.StateUnderValidation {
+				return "high"
+			}
+			if enterprisePayload.Workflow.ExceptionActive {
+				return "medium"
+			}
+		}
+		if enterprisePayload.Reconciliation != nil {
+			if enterprisePayload.Reconciliation.CurrentState == connectors.StateExternalClosurePendingValidation || enterprisePayload.Reconciliation.CurrentState == connectors.StateReopenedForValidation {
+				return "high"
+			}
+			if enterprisePayload.Reconciliation.CurrentState == connectors.StateConnectorDegraded || enterprisePayload.Reconciliation.CurrentState == connectors.StateAwaitingExternalReconciliation {
+				return "medium"
+			}
+		}
+	case "partner":
+		if enterprisePayload.PartnerIntake != nil {
+			if enterprisePayload.PartnerIntake.CurrentState == handoff.IntakeStateRejected || enterprisePayload.PartnerIntake.CurrentState == handoff.IntakeStateExpired {
+				return "high"
+			}
+			if enterprisePayload.PartnerIntake.CurrentState != handoff.IntakeStateAccepted {
+				return "medium"
+			}
+		}
+	case "governance":
+		if enterprisePayload.Compliance != nil {
+			if enterprisePayload.Compliance.CoverageState == compliance.CoverageMissing {
+				return "high"
+			}
+			if enterprisePayload.Compliance.CoverageState != compliance.CoverageFull {
+				return "medium"
+			}
+		}
+		if enterprisePayload.PolicyDrift != nil {
+			if enterprisePayload.PolicyDrift.CurrentState == compliance.DriftStateSoftened {
+				return "high"
+			}
+			return "medium"
+		}
+		if enterprisePayload.Executive != nil && enterprisePayload.Executive.CurrentState == "executive_governance_attention_required" {
+			return "high"
+		}
 	}
 	switch event.Decision {
 	case audit.DecisionError:
@@ -614,9 +840,13 @@ func securityTimelinePersonaHints(source, severity string) []string {
 	switch source {
 	case "deploy", "recommendation":
 		hints = append(hints, "developer")
-	case "runtime", "hardening", "forensics", "topology":
+	case "runtime", "hardening", "forensics", "topology", "workflow":
 		hints = append(hints, "platform_operator")
-	case "handoff", "validation", "federation":
+	case "handoff", "validation", "federation", "partner":
+		hints = append(hints, "auditor")
+	case "intelligence":
+		hints = append(hints, "developer")
+	case "governance":
 		hints = append(hints, "auditor")
 	case "incident":
 		hints = append(hints, "platform_operator")
@@ -644,7 +874,7 @@ func securityTimelineDefaultNextAction(source string) string {
 	}
 }
 
-func securityTimelineEventLimitations(source string, event audit.StoredEvent, validationRecord *validationHarnessStoredRecord) []string {
+func securityTimelineEventLimitations(source string, event audit.StoredEvent, validationRecord *validationHarnessStoredRecord, intelligencePayload phase3IntelligencePayload, enterprisePayload phase4EnterprisePayload) []string {
 	limitations := []string{}
 	if source == "validation" {
 		limitations = append(limitations, "Validation events remain bounded dry-run or simulated control checks and do not become production incident truth.")
@@ -655,16 +885,28 @@ func securityTimelineEventLimitations(source string, event audit.StoredEvent, va
 	if source == "federation" {
 		limitations = append(limitations, "Federation events describe local proof evaluation outcomes and never import remote canonical truth wholesale.")
 	}
+	if source == "intelligence" {
+		limitations = append(limitations, "Intelligence events remain advisory and explanation-backed; they do not overwrite canonical runtime or workflow truth.")
+	}
+	if source == "workflow" || source == "partner" || source == "governance" {
+		limitations = append(limitations, "Enterprise events remain workflow and governance projections anchored to canonical audit evidence rather than a separate truth layer.")
+	}
 	if source == "runtime" && event.EventType == audit.EventTypeRuntimeSBOMVerificationRecorded {
 		limitations = append(limitations, "Runtime loaded-state verification is evidence-backed and bounded; unverifiable states remain explicit rather than implied safe.")
 	}
 	if validationRecord != nil && validationRecord.Bundle.SimulationDerived {
 		limitations = append(limitations, "Compatibility-oriented validation output is simulation-derived and must not be interpreted as historical production fact.")
 	}
+	if intelligencePayload.Query != nil {
+		limitations = append(limitations, "Grounded query entries reflect retrieval-bounded answers and preserve uncertainty as first-class output.")
+	}
+	if enterprisePayload.PartnerIntake != nil {
+		limitations = append(limitations, "Partner entries remain redaction-aware and do not expose internal-only sensitive investigation context.")
+	}
 	return uniqueStrings(limitations)
 }
 
-func securityTimelineEvidenceRefs(event audit.StoredEvent, incident *investigationIncident, recommendation *recommendation) []string {
+func securityTimelineEvidenceRefs(event audit.StoredEvent, incident *investigationIncident, recommendation *recommendation, intelligencePayload phase3IntelligencePayload, enterprisePayload phase4EnterprisePayload) []string {
 	refs := append([]string{}, event.IncidentEvidenceRefs...)
 	refs = append(refs, event.RecommendationEvidenceRefs...)
 	refs = append(refs, event.IncidentResolutionRefs...)
@@ -686,7 +928,74 @@ func securityTimelineEvidenceRefs(event audit.StoredEvent, incident *investigati
 			strings.TrimSpace(event.Evidence.Artifact.VulnerabilityReportRef),
 		)
 	}
+	if intelligencePayload.Vulnerability != nil {
+		refs = append(refs, intelligencePayload.Vulnerability.EvidenceRefs...)
+		if intelligencePayload.Vulnerability.VEXCandidate != nil {
+			refs = append(refs, intelligencePayload.Vulnerability.VEXCandidate.EvidenceRefs...)
+		}
+	}
+	if intelligencePayload.SupplyChain != nil {
+		refs = append(refs, intelligencePayload.SupplyChain.EvidenceRefs...)
+	}
+	if intelligencePayload.Strategic != nil {
+		refs = append(refs, intelligencePayload.Strategic.EvidenceRefs...)
+		refs = append(refs, intelligencePayload.Strategic.Recommendation.EvidenceRefs...)
+	}
+	if intelligencePayload.Query != nil {
+		refs = append(refs, intelligencePayload.Query.EvidenceRefs...)
+	}
+	if enterprisePayload.Workflow != nil {
+		refs = append(refs, enterprisePayload.Workflow.EvidenceRefs...)
+	}
+	if enterprisePayload.Reconciliation != nil {
+		refs = append(refs, enterprisePayload.Reconciliation.EvidenceRefs...)
+	}
+	if enterprisePayload.PartnerIntake != nil {
+		refs = append(refs, enterprisePayload.PartnerIntake.EvidenceRefs...)
+		refs = append(refs, enterprisePayload.PartnerIntake.Dashboard.PartnerVisibleEvidence...)
+	}
+	if enterprisePayload.Compliance != nil {
+		refs = append(refs, enterprisePayload.Compliance.EvidenceRefs...)
+		refs = append(refs, enterprisePayload.Compliance.TechnicalEventRefs...)
+		refs = append(refs, enterprisePayload.Compliance.EvidenceVault.EvidenceRefs...)
+	}
+	if enterprisePayload.PolicyDrift != nil {
+		refs = append(refs, enterprisePayload.PolicyDrift.EvidenceRefs...)
+	}
+	if enterprisePayload.Executive != nil {
+		refs = append(refs, enterprisePayload.Executive.EvidenceTraceRefs...)
+	}
 	return uniqueStrings(refs)
+}
+
+func commandCenterLifecyclePhase(source string) string {
+	switch source {
+	case "deploy":
+		return "build_verify"
+	case "runtime", "hardening", "forensics", "topology":
+		return "runtime"
+	case "validation":
+		return "validation"
+	case "intelligence":
+		return "intelligence"
+	case "incident", "recommendation", "workflow":
+		return "workflow"
+	case "handoff", "federation", "partner":
+		return "partner"
+	case "governance":
+		return "governance"
+	default:
+		return "workflow"
+	}
+}
+
+func normalizeCommandCenterLifecyclePhase(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "build_verify", "runtime", "validation", "intelligence", "workflow", "partner", "governance":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func incidentRef(incident *investigationIncident) string {

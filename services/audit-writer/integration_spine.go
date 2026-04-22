@@ -249,14 +249,14 @@ func (s server) integrationSIEMExportHandler(w http.ResponseWriter, r *http.Requ
 			EmittedAt:         eventTimestamp(event).UTC(),
 			EventType:         event.EventType,
 			SourceComponent:   event.Component,
-			Severity:          securityTimelineSeverity(event, nil, parseSecurityTimelineValidation(event.ValidationHarness)),
+			Severity:          securityTimelineSeverity(event, nil, parseSecurityTimelineValidation(event.ValidationHarness), securityTimelineSource(event), phase3IntelligencePayload{}, phase4EnterprisePayload{}),
 			Decision:          event.Decision,
 			CorrelationID:     firstNonEmpty(strings.TrimSpace(event.RequestID), strings.TrimSpace(event.IncidentID), strings.TrimSpace(event.RecommendationID)),
 			SubjectRef:        firstNonEmpty(strings.TrimSpace(event.IncidentScopeRef), strings.TrimSpace(event.Workload), strings.TrimSpace(event.RecommendationSubjectRef), strings.TrimSpace(event.Repo)),
 			SubjectType:       integrationSIEMSubjectType(event),
 			IncidentRef:       strings.TrimSpace(event.IncidentID),
 			RecommendationRef: strings.TrimSpace(event.RecommendationID),
-			EvidenceRefs:      limitStrings(securityTimelineEvidenceRefs(event, nil, nil), 8),
+			EvidenceRefs:      limitStrings(securityTimelineEvidenceRefs(event, nil, nil, phase3IntelligencePayload{}, phase4EnterprisePayload{}), 8),
 		})
 	}
 	if len(response.Items) > 0 {

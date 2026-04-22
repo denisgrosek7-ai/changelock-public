@@ -401,6 +401,328 @@ func (s server) buildCommandCenterSearch(ctx context.Context, filter audit.Event
 		})
 	}
 
+	intelligenceEvents, err := s.store.ListEvents(ctx, audit.EventFilter{
+		ClusterID:   contextFilter.ClusterID,
+		TenantID:    contextFilter.TenantID,
+		Environment: contextFilter.Environment,
+		Repo:        contextFilter.Repo,
+		Component:   phase3IntelligenceComponent,
+		Limit:       maxInt(limit*10, 120),
+	})
+	if err != nil {
+		return commandCenterSearchResponse{}, err
+	}
+	for _, event := range intelligenceEvents {
+		payload := parsePhase3IntelligencePayload(event.Intelligence)
+		switch {
+		case payload.Vulnerability != nil:
+			item := payload.Vulnerability
+			score := commandCenterMatchScore(trimmedQuery, item.VerdictID, item.SubjectRef, item.VulnerabilityID, item.PackageName, item.ImageDigest, item.PURL)
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.EvaluatedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "vulnerability_relevance:" + item.VerdictID,
+					ResultType:      "vulnerability_relevance",
+					Title:           firstNonEmpty(item.VulnerabilityID, item.PackageName, item.VerdictID),
+					Summary:         firstNonEmpty(firstString(item.Explanation.Derived), firstString(item.Explanation.Recommended), "Bounded vulnerability relevance verdict is available."),
+					Subtitle:        firstNonEmpty(item.SubjectRef, item.PackageName, item.ImageDigest),
+					SourceSubsystem: "intelligence",
+					Severity:        commandCenterIntelligenceSeverity(item.CurrentState),
+					Target: commandCenterFocusTarget{
+						Tab:          "vulnerabilities",
+						Kind:         "vulnerability_relevance",
+						Ref:          item.VerdictID,
+						SecondaryRef: item.VulnerabilityID,
+						ResourceURI:  fmt.Sprintf("/v1/intelligence/vulnerability-relevance?subject_ref=%s&vulnerability_id=%s", item.SubjectRef, item.VulnerabilityID),
+					},
+					EvidenceRefs: limitStrings(append([]string{}, item.EvidenceRefs...), 8),
+					PersonaHints: []string{"developer", "security_engineer", "executive"},
+				},
+			})
+		case payload.SupplyChain != nil:
+			item := payload.SupplyChain
+			score := commandCenterMatchScore(trimmedQuery, item.PatternID, item.SubjectRef, item.PackageName, item.PackageVersion, strings.Join(item.ReasonCodes, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.ObservedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "supply_chain_pattern:" + item.PatternID,
+					ResultType:      "supply_chain_pattern",
+					Title:           firstNonEmpty(item.PackageName, item.PatternID),
+					Summary:         firstNonEmpty(firstString(item.Explanation.Derived), "Bounded supply-chain pattern verdict is available."),
+					Subtitle:        firstNonEmpty(item.SubjectRef, item.PackageVersion),
+					SourceSubsystem: "intelligence",
+					Severity:        commandCenterSupplyChainSeverity(item.CurrentState),
+					Target: commandCenterFocusTarget{
+						Tab:          "guidance",
+						Kind:         "supply_chain_pattern",
+						Ref:          item.PatternID,
+						SecondaryRef: item.PackageName,
+						ResourceURI:  fmt.Sprintf("/v1/intelligence/supply-chain/patterns?subject_ref=%s&package_name=%s", item.SubjectRef, item.PackageName),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"developer", "security_engineer", "auditor"},
+				},
+			})
+		case payload.Strategic != nil:
+			item := payload.Strategic
+			score := commandCenterMatchScore(trimmedQuery, item.AssessmentID, item.SubjectRef, strings.Join(item.RecommendedActions, " "), item.Recommendation.Action)
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.EvaluatedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "strategic_assessment:" + item.AssessmentID,
+					ResultType:      "strategic_assessment",
+					Title:           "Strategic advisory",
+					Summary:         firstNonEmpty(item.Recommendation.Summary, firstString(item.RecommendedActions), "Bounded strategic assessment is available."),
+					Subtitle:        firstNonEmpty(item.SubjectRef, item.Recommendation.Action),
+					SourceSubsystem: "intelligence",
+					Severity:        strings.ToLower(item.Recommendation.PriorityBand),
+					Target: commandCenterFocusTarget{
+						Tab:          "guidance",
+						Kind:         "strategic_assessment",
+						Ref:          item.AssessmentID,
+						SecondaryRef: item.SubjectRef,
+						ResourceURI:  fmt.Sprintf("/v1/intelligence/strategic/query?subject_ref=%s", item.SubjectRef),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"security_engineer", "platform_operator", "executive"},
+				},
+			})
+		case payload.Query != nil:
+			item := payload.Query
+			score := commandCenterMatchScore(trimmedQuery, item.QueryID, item.Query, item.Scope.SubjectRef, item.Scope.VulnerabilityID, item.Scope.PackageName)
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.AnsweredAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "grounded_query:" + item.QueryID,
+					ResultType:      "grounded_query",
+					Title:           firstNonEmpty(item.Query, item.QueryID),
+					Summary:         firstNonEmpty(firstString(item.RecommendedActions), firstString(item.InferredConclusions), "Grounded security query response is available."),
+					Subtitle:        firstNonEmpty(item.Scope.SubjectRef, item.Scope.VulnerabilityID, item.Scope.PackageName),
+					SourceSubsystem: "intelligence",
+					Severity:        "low",
+					Target: commandCenterFocusTarget{
+						Tab:          "guidance",
+						Kind:         "grounded_query",
+						Ref:          item.QueryID,
+						SecondaryRef: item.Scope.SubjectRef,
+						ResourceURI:  fmt.Sprintf("/v1/intelligence/strategic/query?subject_ref=%s&vulnerability_id=%s&package_name=%s", item.Scope.SubjectRef, item.Scope.VulnerabilityID, item.Scope.PackageName),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"developer", "security_engineer", "auditor"},
+				},
+			})
+		}
+	}
+
+	enterpriseEvents, err := s.store.ListEvents(ctx, audit.EventFilter{
+		TenantID:    contextFilter.TenantID,
+		Environment: contextFilter.Environment,
+		Repo:        contextFilter.Repo,
+		Component:   phase4EnterpriseComponent,
+		Limit:       maxInt(limit*10, 120),
+	})
+	if err != nil {
+		return commandCenterSearchResponse{}, err
+	}
+	for _, event := range enterpriseEvents {
+		payload := parsePhase4EnterprisePayload(event.Enterprise)
+		switch {
+		case payload.Workflow != nil:
+			item := payload.Workflow
+			score := commandCenterMatchScore(trimmedQuery, item.WorkflowID, item.SubjectRef, item.CurrentState, item.CanonicalState, item.Routing.PrimaryOwner, strings.Join(item.ReasonCodes, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.ObservedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "workflow_record:" + item.WorkflowID,
+					ResultType:      "workflow_record",
+					Title:           firstNonEmpty(item.WorkflowID, item.SubjectRef),
+					Summary:         firstNonEmpty(firstString(item.ReasonCodes), "Enterprise workflow lifecycle record is available."),
+					Subtitle:        firstNonEmpty(item.Routing.PrimaryOwner, item.SubjectRef, item.CurrentState),
+					SourceSubsystem: "workflow",
+					Severity:        commandCenterWorkflowSeverity(item.CurrentState, item.CanonicalState),
+					Target: commandCenterFocusTarget{
+						Tab:          "exceptions",
+						Kind:         "workflow_record",
+						Ref:          item.WorkflowID,
+						SecondaryRef: item.SubjectRef,
+						ResourceURI:  fmt.Sprintf("/v1/enterprise/workflow/lifecycle?subject_ref=%s&workflow_id=%s", item.SubjectRef, item.WorkflowID),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"platform_operator", "security_engineer", "executive"},
+				},
+			})
+		case payload.Reconciliation != nil:
+			item := payload.Reconciliation
+			score := commandCenterMatchScore(trimmedQuery, item.WorkflowID, item.SubjectRef, item.ConnectorRef, item.CurrentState, item.ConnectorSystem, strings.Join(item.ReasonCodes, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.ObservedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "workflow_reconciliation:" + item.WorkflowID,
+					ResultType:      "workflow_reconciliation",
+					Title:           firstNonEmpty(item.WorkflowID, item.ConnectorRef),
+					Summary:         firstNonEmpty(firstString(item.ReasonCodes), "Connector reconciliation record is available."),
+					Subtitle:        firstNonEmpty(item.ConnectorSystem, item.ConnectorRef, item.SubjectRef),
+					SourceSubsystem: "workflow",
+					Severity:        commandCenterConnectorSeverity(item.CurrentState),
+					Target: commandCenterFocusTarget{
+						Tab:          "exceptions",
+						Kind:         "workflow_reconciliation",
+						Ref:          item.WorkflowID,
+						SecondaryRef: item.ConnectorRef,
+						ResourceURI:  fmt.Sprintf("/v1/enterprise/workflow/connectors/reconcile?subject_ref=%s&workflow_id=%s", item.SubjectRef, item.WorkflowID),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"platform_operator", "security_engineer", "auditor"},
+				},
+			})
+		case payload.PartnerIntake != nil:
+			item := payload.PartnerIntake
+			score := commandCenterMatchScore(trimmedQuery, item.PartnerID, item.Organization, item.HandoffRef, item.TrustDomain, strings.Join(item.ReasonCodes, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.ObservedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "partner_trust:" + item.PartnerID,
+					ResultType:      "partner_trust",
+					Title:           firstNonEmpty(item.Organization, item.PartnerID),
+					Summary:         item.Dashboard.TrustSummary,
+					Subtitle:        firstNonEmpty(item.HandoffRef, item.TrustDomain, item.PartnerID),
+					SourceSubsystem: "partner",
+					Severity:        commandCenterPartnerSeverity(item.CurrentState),
+					Target: commandCenterFocusTarget{
+						Tab:          "federation",
+						Kind:         "partner_trust",
+						Ref:          item.PartnerID,
+						SecondaryRef: item.HandoffRef,
+						ResourceURI:  fmt.Sprintf("/v1/enterprise/partner-trust/dashboard?partner_id=%s", item.PartnerID),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"security_engineer", "auditor", "executive"},
+				},
+			})
+		case payload.Compliance != nil:
+			item := payload.Compliance
+			score := commandCenterMatchScore(trimmedQuery, item.ControlID, item.ControlFamily, item.SubjectRef, item.CoverageState, strings.Join(item.ReasonCodes, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.ObservedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "compliance_mapping:" + item.ControlID,
+					ResultType:      "compliance_mapping",
+					Title:           firstNonEmpty(item.ControlID, item.ControlFamily),
+					Summary:         firstNonEmpty(firstString(item.ReasonCodes), "Compliance mapping record is available."),
+					Subtitle:        firstNonEmpty(item.SubjectRef, item.ControlFamily, item.CoverageState),
+					SourceSubsystem: "governance",
+					Severity:        commandCenterGovernanceSeverity(item.CoverageState),
+					Target: commandCenterFocusTarget{
+						Tab:          "scorecard",
+						Kind:         "compliance_mapping",
+						Ref:          item.ControlID,
+						SecondaryRef: item.SubjectRef,
+						ResourceURI:  fmt.Sprintf("/v1/enterprise/governance/compliance-mapping?subject_ref=%s", item.SubjectRef),
+					},
+					EvidenceRefs: limitStrings(append(append([]string{}, item.EvidenceRefs...), item.TechnicalEventRefs...), 8),
+					PersonaHints: []string{"security_engineer", "auditor", "executive"},
+				},
+			})
+		case payload.PolicyDrift != nil:
+			item := payload.PolicyDrift
+			score := commandCenterMatchScore(trimmedQuery, item.SubjectRef, item.ExceptionID, item.Actor, item.CurrentMode, item.PreviousMode, strings.Join(item.ImpactSummary, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.ObservedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "policy_drift:" + firstNonEmpty(item.ExceptionID, item.SubjectRef, item.Actor),
+					ResultType:      "policy_drift",
+					Title:           firstNonEmpty(item.ExceptionID, item.SubjectRef, "policy drift"),
+					Summary:         firstNonEmpty(firstString(item.ImpactSummary), item.ChangeReason, "Policy drift record is available."),
+					Subtitle:        firstNonEmpty(item.Actor, item.SubjectRef, item.CurrentMode),
+					SourceSubsystem: "governance",
+					Severity:        commandCenterDriftSeverity(item.CurrentState),
+					Target: commandCenterFocusTarget{
+						Tab:          "analytics",
+						Kind:         "policy_drift",
+						Ref:          firstNonEmpty(item.ExceptionID, item.SubjectRef, item.Actor),
+						SecondaryRef: item.SubjectRef,
+						ResourceURI:  fmt.Sprintf("/v1/enterprise/governance/policy-drift?subject_ref=%s", item.SubjectRef),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceRefs, 8),
+					PersonaHints: []string{"security_engineer", "auditor", "executive"},
+				},
+			})
+		case payload.Executive != nil:
+			item := payload.Executive
+			score := commandCenterMatchScore(trimmedQuery, item.ScopeRef, strings.Join(item.Highlights, " "), strings.Join(item.EvidenceTraceRefs, " "))
+			if score == 0 {
+				continue
+			}
+			candidates = append(candidates, commandCenterSearchCandidate{
+				score:     score,
+				timestamp: item.GeneratedAt.UTC(),
+				result: commandCenterSearchResult{
+					SchemaVersion:   commandSearchResultSchemaVersion,
+					ResultID:        "executive_report:" + firstNonEmpty(item.ScopeRef, "executive_report"),
+					ResultType:      "executive_report",
+					Title:           firstNonEmpty(item.ScopeRef, "Executive report"),
+					Summary:         firstNonEmpty(firstString(item.Highlights), "Executive governance summary is available."),
+					Subtitle:        item.CurrentState,
+					SourceSubsystem: "governance",
+					Severity:        commandCenterExecutiveSeverity(item.CurrentState),
+					Target: commandCenterFocusTarget{
+						Tab:         "analytics",
+						Kind:        "executive_report",
+						Ref:         firstNonEmpty(item.ScopeRef, "executive_report"),
+						ResourceURI: fmt.Sprintf("/v1/enterprise/governance/executive-report?scope_ref=%s", item.ScopeRef),
+					},
+					EvidenceRefs: limitStrings(item.EvidenceTraceRefs, 8),
+					PersonaHints: []string{"executive", "security_engineer", "auditor"},
+				},
+			})
+		}
+	}
+
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].score != candidates[j].score {
 			return candidates[i].score > candidates[j].score
@@ -432,7 +754,7 @@ func (s server) buildCommandCenterSearch(ctx context.Context, filter audit.Event
 		Query:         trimmedQuery,
 		Results:       results,
 		Limitations: []string{
-			"Command-center search is semantic and bounded to evidence-backed incidents, recommendations, runtime, validation, federation, and sealed handoff objects; it is not a generic full-text index.",
+			"Command-center search is semantic and bounded to evidence-backed incidents, runtime, validation, intelligence, workflow, partner, governance, federation, and sealed handoff objects; it is not a generic full-text index.",
 			"Deep links route to existing operator surfaces or exact package metadata targets without introducing a new command-center truth store.",
 		},
 	}, nil
@@ -514,6 +836,90 @@ func commandCenterHandoffSeverity(status string) string {
 	default:
 		return "low"
 	}
+}
+
+func commandCenterIntelligenceSeverity(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "active_priority_candidate", "reachable_and_externally_exposed", "cross_cluster_concern_active", "suspected_typo_squat":
+		return "high"
+	case "reachable_but_low_exploitability", "trust_drift_observed", "suspicious_publication_pattern", "under_review", "strategic_advisory_ready":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterSupplyChainSeverity(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "cross_cluster_concern_active", "suspected_typo_squat":
+		return "high"
+	case "trust_drift_observed", "suspicious_publication_pattern", "under_review":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterWorkflowSeverity(currentState, canonicalState string) string {
+	switch firstNonEmpty(strings.ToLower(strings.TrimSpace(canonicalState)), strings.ToLower(strings.TrimSpace(currentState))) {
+	case "rejected", "under_validation":
+		return "high"
+	case "exception_active", "reopened", "assigned":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterConnectorSeverity(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "external_closure_pending_validation", "reopened_for_validation":
+		return "high"
+	case "connector_degraded_core_preserved", "awaiting_external_reconciliation":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterPartnerSeverity(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "rejected", "expired":
+		return "high"
+	case "under_review", "superseded", "received":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterGovernanceSeverity(coverageState string) string {
+	switch strings.ToLower(strings.TrimSpace(coverageState)) {
+	case "missing":
+		return "high"
+	case "partial", "inferred":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterDriftSeverity(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "policy_softened":
+		return "high"
+	case "under_review", "policy_strengthened":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func commandCenterExecutiveSeverity(state string) string {
+	if strings.EqualFold(strings.TrimSpace(state), "executive_governance_attention_required") {
+		return "high"
+	}
+	return "medium"
 }
 
 func commandCenterSeverityRank(severity string) int {

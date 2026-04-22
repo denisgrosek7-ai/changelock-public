@@ -2316,6 +2316,8 @@ func (s server) runtimeFilterFromReadbackDescriptor(ctx context.Context, descrip
 func writeRuntimeIntegrityError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	switch {
+	case auth.StatusCode(err) != http.StatusInternalServerError:
+		status = auth.StatusCode(err)
 	case errors.Is(err, audit.ErrInvalidFilter), errors.Is(err, audit.ErrInvalidEvent):
 		status = http.StatusBadRequest
 	case errors.Is(err, errIncidentNotFound):

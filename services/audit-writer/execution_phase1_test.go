@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -307,6 +308,98 @@ func TestExecutionFoundationAsyncTaskLifecycleHandlers(t *testing.T) {
 	}
 	if replayed.Task.ReplayOfTaskID != created.Task.TaskID || replayed.Task.CurrentState != audit.ExecutionTaskStateReplayQueued {
 		t.Fatalf("expected replay lineage, got %#v", replayed)
+	}
+}
+
+func TestExecutionFoundationAsyncTaskIdempotencyLookupEscapesLastFiftyTaskWindow(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/foundation/execution/async/tasks?tenant_id=acme&environment=prod", bytes.NewBufferString(`{
+		"task_type":"connector_dispatch",
+		"queue_class":"connector",
+		"backpressure_tier":"bounded",
+		"idempotency_key":"dispatch-acme-stable",
+		"payload_hash":"sha256:task-payload",
+		"max_attempts":4
+	}`))
+	createReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected async task create 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	var created phase1AsyncTaskMutationResponse
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created task: %v", err)
+	}
+
+	for i := 0; i < 75; i++ {
+		task := audit.NormalizeExecutionTaskRecord(audit.ExecutionTaskRecord{
+			TaskType:         "connector_dispatch",
+			CurrentState:     audit.ExecutionTaskStateQueued,
+			SourceComponent:  "audit-writer",
+			TenantID:         "acme",
+			Environment:      "prod",
+			QueueClass:       "connector",
+			BackpressureTier: "bounded",
+			TraceID:          fmt.Sprintf("trace-seed-%03d", i),
+			CorrelationID:    fmt.Sprintf("correlation-seed-%03d", i),
+			DecisionID:       fmt.Sprintf("decision-seed-%03d", i),
+			IdempotencyKey:   fmt.Sprintf("dispatch-acme-seed-%03d", i),
+			PayloadHash:      fmt.Sprintf("sha256:seed-%03d", i),
+			MaxAttempts:      4,
+		}, time.Now)
+		mustIngestExecutionTaskRecord(t, fixture.store, fmt.Sprintf("seed-%03d", i), task)
+	}
+
+	repeatReq := httptest.NewRequest(http.MethodPost, "/v1/foundation/execution/async/tasks?tenant_id=acme&environment=prod", bytes.NewBufferString(`{
+		"task_type":"connector_dispatch",
+		"queue_class":"connector",
+		"backpressure_tier":"bounded",
+		"idempotency_key":"dispatch-acme-stable",
+		"payload_hash":"sha256:task-payload",
+		"max_attempts":4
+	}`))
+	repeatReq.Header.Set("Authorization", "Bearer operator-demo-token")
+	repeatReq.Header.Set("Content-Type", "application/json")
+	repeatRec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(repeatRec, repeatReq)
+	if repeatRec.Code != http.StatusOK {
+		t.Fatalf("expected existing task 200, got %d: %s", repeatRec.Code, repeatRec.Body.String())
+	}
+
+	var repeated phase1AsyncTaskMutationResponse
+	if err := json.NewDecoder(repeatRec.Body).Decode(&repeated); err != nil {
+		t.Fatalf("decode repeated task: %v", err)
+	}
+	if repeated.Status != "existing" || repeated.Task.TaskID != created.Task.TaskID {
+		t.Fatalf("expected canonical existing task, got %#v", repeated)
+	}
+
+	events, err := fixture.store.ListEvents(context.Background(), audit.EventFilter{
+		Component:   "audit-writer",
+		EventType:   audit.EventTypeExecutionTaskRecorded,
+		TenantID:    "acme",
+		Environment: "prod",
+		Limit:       5000,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents(task events) error = %v", err)
+	}
+	logicalTaskIDs := map[string]struct{}{}
+	for _, item := range events {
+		task, err := audit.UnmarshalExecutionTaskRecord(item.Event)
+		if err != nil {
+			continue
+		}
+		if task.TaskType == "connector_dispatch" && task.IdempotencyKey == "dispatch-acme-stable" {
+			logicalTaskIDs[task.TaskID] = struct{}{}
+		}
+	}
+	if len(logicalTaskIDs) != 1 {
+		t.Fatalf("expected one canonical task for idempotency key, got %#v", logicalTaskIDs)
 	}
 }
 
@@ -661,6 +754,34 @@ func TestExecutionFoundationProofsRequireBenchmarkEvidence(t *testing.T) {
 	}
 	if proofs.CurrentState != "phase1_closure_incomplete" {
 		t.Fatalf("expected incomplete proof state without benchmark evidence, got %#v", proofs)
+	}
+}
+
+func mustIngestExecutionTaskRecord(t *testing.T, store audit.Store, requestID string, task audit.ExecutionTaskRecord) {
+	t.Helper()
+
+	payload, err := audit.MarshalExecutionTaskRecord(task)
+	if err != nil {
+		t.Fatalf("MarshalExecutionTaskRecord() error = %v", err)
+	}
+	if _, err := store.Ingest(context.Background(), audit.Event{
+		RequestID:           requestID,
+		Component:           "audit-writer",
+		EventType:           audit.EventTypeExecutionTaskRecorded,
+		Actor:               "seed",
+		TraceID:             task.TraceID,
+		CorrelationID:       task.CorrelationID,
+		DecisionID:          task.DecisionID,
+		CausalParent:        task.CausalParent,
+		IdempotencyKey:      task.TaskType + ":" + task.TaskID + ":" + task.CurrentState,
+		PayloadHash:         task.PayloadHash,
+		TenantID:            task.TenantID,
+		Environment:         task.Environment,
+		Decision:            audit.DecisionAllow,
+		Reasons:             []string{"phase 1 async task recorded", task.CurrentState, task.TaskType},
+		ExecutionFoundation: payload,
+	}); err != nil {
+		t.Fatalf("Ingest(task event) error = %v", err)
 	}
 }
 

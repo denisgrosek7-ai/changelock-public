@@ -91,6 +91,9 @@ func Reconcile(input ReconciliationInput, now func() time.Time) ReconciliationRe
 	case input.Health.CurrentState == HealthFailing:
 		currentState = StateConnectorDegraded
 		reasons = append(reasons, "connector_failure_does_not_block_core")
+	case input.InternalState == "reopened" && externalClosed(input.ExternalState):
+		currentState = StateReopenedForValidation
+		reasons = append(reasons, "local_reopen_overrides_external_closure")
 	case externalClosed(input.ExternalState) && input.ValidationState != "verified":
 		currentState = StateExternalClosurePendingValidation
 		canonicalState = "under_validation"
@@ -102,9 +105,6 @@ func Reconcile(input ReconciliationInput, now func() time.Time) ReconciliationRe
 	case input.InternalState == "resolved" && !externalClosed(input.ExternalState):
 		currentState = StateAwaitingExternalReconciliation
 		reasons = append(reasons, "external_projection_stale")
-	case input.InternalState == "reopened" && externalClosed(input.ExternalState):
-		currentState = StateReopenedForValidation
-		reasons = append(reasons, "local_reopen_overrides_external_closure")
 	}
 	if input.Health.CurrentState == HealthDegraded {
 		reasons = append(reasons, "connector_health_degraded")

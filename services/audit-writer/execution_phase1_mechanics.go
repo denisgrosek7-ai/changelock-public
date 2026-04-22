@@ -376,19 +376,16 @@ func (s server) findExecutionTaskByID(ctx context.Context, r *http.Request, task
 }
 
 func (s server) findExecutionTaskByIdempotency(ctx context.Context, r *http.Request, taskType, idempotencyKey string) (audit.ExecutionTaskRecord, bool, error) {
-	if strings.TrimSpace(idempotencyKey) == "" {
+	taskType = strings.TrimSpace(taskType)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" || taskType == "" {
 		return audit.ExecutionTaskRecord{}, false, nil
 	}
-	tasks, err := s.listExecutionTasks(ctx, r)
+	filter, err := parseFilter(r)
 	if err != nil {
 		return audit.ExecutionTaskRecord{}, false, err
 	}
-	for _, task := range tasks {
-		if task.TaskType == strings.TrimSpace(taskType) && task.IdempotencyKey == strings.TrimSpace(idempotencyKey) {
-			return task, true, nil
-		}
-	}
-	return audit.ExecutionTaskRecord{}, false, nil
+	return s.store.FindExecutionTaskByLogicalKey(ctx, "audit-writer", filter.TenantID, filter.Environment, taskType, idempotencyKey)
 }
 
 func (s server) persistExecutionTask(ctx context.Context, requestID, actor string, task audit.ExecutionTaskRecord) error {

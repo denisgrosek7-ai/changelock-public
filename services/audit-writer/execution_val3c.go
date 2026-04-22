@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/denisgrosek/changelock/internal/audit"
 	"github.com/denisgrosek/changelock/internal/auth"
@@ -533,49 +532,32 @@ func summarizeConfidentialReadiness(items []runtimePostureState) executionConfid
 }
 
 func hasConfidentialEvidence(item runtimePostureState) bool {
-	structuredMarkers := map[string]struct{}{
-		"confidential":                            {},
-		"confidential_execution_requested":        {},
-		"confidential_execution_required":         {},
-		"confidential_execution_fallback_allowed": {},
-		"confidential_attestation":                {},
-		"enclave":                                 {},
-		"enclave_attestation":                     {},
-		"tee":                                     {},
-		"tee_attestation":                         {},
-		"tdx":                                     {},
-		"tdx_attestation":                         {},
-		"sev":                                     {},
-		"sev_attestation":                         {},
-		"sgx":                                     {},
-		"sgx_attestation":                         {},
-	}
-	values := []string{}
-	values = append(values, item.ReadinessSignals...)
-	values = append(values, item.EvidenceRefs...)
-	values = append(values, item.ExpectedTrustState.AttestationInputs...)
-	values = append(values, item.ActualTrustState.AttestationInputs...)
-	for _, mismatch := range item.Mismatches {
-		values = append(values, mismatch.Code, mismatch.EvidenceRef)
-	}
-	for _, value := range values {
-		for _, token := range confidentialEvidenceTokens(value) {
-			if _, ok := structuredMarkers[token]; ok {
-				return true
-			}
+	for _, value := range item.ExpectedTrustState.AttestationInputs {
+		if isStructuredConfidentialEvidenceMarker(value) {
+			return true
 		}
-		if _, ok := structuredMarkers[strings.ToLower(strings.TrimSpace(value))]; ok {
+	}
+	for _, value := range item.ActualTrustState.AttestationInputs {
+		if isStructuredConfidentialEvidenceMarker(value) {
 			return true
 		}
 	}
 	return false
 }
 
-func confidentialEvidenceTokens(value string) []string {
-	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(r rune) bool {
-		return !(unicode.IsLetter(r) || unicode.IsNumber(r) || r == '_')
-	})
-	return uniqueStrings(parts)
+func isStructuredConfidentialEvidenceMarker(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "confidential_attestation",
+		"confidential_substrate",
+		"enclave_attestation",
+		"tee_attestation",
+		"tdx_attestation",
+		"sev_attestation",
+		"sgx_attestation":
+		return true
+	default:
+		return false
+	}
 }
 
 func sortedAllowedKinds(values map[string]struct{}) []string {

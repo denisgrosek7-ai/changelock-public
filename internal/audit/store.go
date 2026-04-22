@@ -20,6 +20,7 @@ var (
 type Store interface {
 	Ingest(ctx context.Context, event Event) (StoredEvent, error)
 	ListEvents(ctx context.Context, filter EventFilter) ([]StoredEvent, error)
+	FindExecutionTaskByLogicalKey(ctx context.Context, component string, tenantID string, environment string, taskType string, idempotencyKey string) (ExecutionTaskRecord, bool, error)
 	Summary(ctx context.Context, filter EventFilter) (Summary, error)
 	IngestSBOM(ctx context.Context, request SBOMIngestRequest) (SBOMIngestResult, error)
 	GetSBOMImage(ctx context.Context, imageDigest string, limit int) (SBOMImageResponse, error)

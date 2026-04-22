@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/denisgrosek/changelock/internal/audit"
@@ -265,5 +266,90 @@ func TestPhase3ProofsIgnoreCrossScopeQueryArtifacts(t *testing.T) {
 	}
 	if proofs.CurrentState != phase3ProofStateIncomplete {
 		t.Fatalf("expected incomplete proofs when only cross-scope query exists, got %#v", proofs)
+	}
+}
+
+func TestPhase3StrategicSimulateRequiresSubjectRef(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/intelligence/strategic/simulate?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+	  "candidate_action":"prioritize_patch_and_validate",
+	  "delay_days":7,
+	  "effort_band":"moderate",
+	  "blast_radius_score":75
+	}`))
+	req.Header.Set("Authorization", "Bearer operator-demo-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected strategic simulate without subject_ref to fail 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "subject_ref is required") {
+		t.Fatalf("expected subject_ref requirement error, got %s", rec.Body.String())
+	}
+}
+
+func TestPhase3GroundedQueryRequiresSubjectRef(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/intelligence/strategic/query?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+	  "query":"What should I prioritize?"
+	}`))
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected grounded query without subject_ref to fail 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "subject_ref is required") {
+		t.Fatalf("expected subject_ref requirement error, got %s", rec.Body.String())
+	}
+}
+
+func TestPhase3ListEndpointsRespectLimit(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	for _, item := range []struct {
+		subject string
+		cve     string
+	}{
+		{subject: "cluster-a/acme-prod/Deployment/api", cve: "CVE-2026-1111"},
+		{subject: "cluster-a/acme-prod/Deployment/worker", cve: "CVE-2026-2222"},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/v1/intelligence/vulnerability-relevance?tenant_id=acme&environment=prod&repo=github.com/acme/api", bytes.NewBufferString(`{
+		  "input":{
+		    "subject_ref":"`+item.subject+`",
+		    "vulnerability_id":"`+item.cve+`",
+		    "image_digest":"sha256:`+strings.ToLower(strings.TrimPrefix(item.cve, "CVE-2026-"))+`",
+		    "package_name":"openssl",
+		    "severity":"critical",
+		    "reachability":{"current_state":"observed_reachable","confidence_score":90,"evidence_refs":["runtime:callgraph"]},
+		    "exploitability":{"epss":0.91,"external_exposure":true,"local_confidence":88}
+		  }
+		}`))
+		req.Header.Set("Authorization", "Bearer operator-demo-token")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected vulnerability relevance 201, got %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/intelligence/vulnerability-relevance?tenant_id=acme&environment=prod&repo=github.com/acme/api&limit=1", nil)
+	listReq.Header.Set("Authorization", "Bearer viewer-demo-token")
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected vulnerability list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var response phase3VulnerabilityListResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode vulnerability list: %v", err)
+	}
+	if len(response.Items) != 1 {
+		t.Fatalf("expected vulnerability list to respect limit=1, got %#v", response)
 	}
 }

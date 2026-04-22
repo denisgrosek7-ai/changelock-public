@@ -623,7 +623,7 @@ func (s server) listSelfAuditEvents(ctx context.Context, filter audit.EventFilte
 			Component:     event.Component,
 			SubjectRef:    firstNonEmpty(strings.TrimSpace(event.IncidentScopeRef), strings.TrimSpace(event.Workload), strings.TrimSpace(event.RecommendationSubjectRef), strings.TrimSpace(event.Repo)),
 			ResourceURI:   resourceURI,
-			EvidenceRefs:  limitStrings(securityTimelineEvidenceRefs(event, nil, nil), 8),
+			EvidenceRefs:  limitStrings(securityTimelineEvidenceRefs(event, nil, nil, phase3IntelligencePayload{}, phase4EnterprisePayload{}), 8),
 			Limitations: []string{
 				"Self-audit event is a derived summary over canonical audit truth rather than a separate mutable control-plane state.",
 			},

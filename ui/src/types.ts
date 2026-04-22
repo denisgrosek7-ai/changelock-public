@@ -14,7 +14,17 @@ export type CommandCenterFocusKind =
   | "validation_run"
   | "validation_scenario"
   | "federation_peer"
-  | "handoff_package";
+  | "handoff_package"
+  | "vulnerability_relevance"
+  | "supply_chain_pattern"
+  | "strategic_assessment"
+  | "grounded_query"
+  | "workflow_record"
+  | "workflow_reconciliation"
+  | "partner_trust"
+  | "compliance_mapping"
+  | "policy_drift"
+  | "executive_report";
 
 export interface CommandCenterFocusTarget {
   tab: TabKey;
@@ -592,6 +602,7 @@ export interface SecurityTimelineEntry {
   subject_type: string;
   subject_label: string;
   source_subsystem: string;
+  lifecycle_phase: string;
   event_type: string;
   severity: string;
   importance: string;
@@ -616,8 +627,33 @@ export interface SecurityTimelineResponse {
   schema_version: string;
   generated_at: string;
   counts_by_source: Record<string, number>;
+  counts_by_lifecycle: Record<string, number>;
   counts_by_severity: Record<string, number>;
   entries: SecurityTimelineEntry[];
+  limitations?: string[];
+}
+
+export interface CommandCenterNotification {
+  schema_version: string;
+  notification_id: string;
+  lifecycle_phase: string;
+  severity: string;
+  current_state: string;
+  title: string;
+  summary: string;
+  owner_hint?: string;
+  next_action?: string;
+  source_subsystems: string[];
+  evidence_refs?: string[];
+  persona_hints?: CommandCenterPersona[];
+  target: CommandCenterFocusTarget;
+}
+
+export interface CommandCenterNotificationsResponse {
+  schema_version: string;
+  generated_at: string;
+  counts_by_state: Record<string, number>;
+  items: CommandCenterNotification[];
   limitations?: string[];
 }
 
