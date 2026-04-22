@@ -30,6 +30,12 @@ func evaluateTrustedExecutionProfile(request admissionRequest, primaryImage stri
 	if measurement := strings.TrimSpace(annotations["changelock.io/trusted-measurement"]); measurement != "" && len(profile.RequiredMeasurements) == 0 {
 		profile.RequiredMeasurements = []string{measurement}
 	}
+	validUntil, err := parseOptionalTime(annotations["changelock.io/attestation-valid-until"])
+	if err != nil {
+		return nil, []string{
+			fmt.Sprintf("trusted execution profile %s rejected workload: attestation expiry annotation is invalid", profile.ProfileID),
+		}
+	}
 
 	verifier := attestationruntime.NewVerifier()
 	verification := verifier.Verify(attestationruntime.VerificationRequest{
@@ -44,7 +50,7 @@ func evaluateTrustedExecutionProfile(request admissionRequest, primaryImage stri
 		SubstrateClass:           strings.TrimSpace(annotations["changelock.io/node-substrate-class"]),
 		TrustedMeasurements:      profile.RequiredMeasurements,
 		RequireCredentialRelease: profile.RequireCredentialRelease,
-		ValidUntil:               parseOptionalTime(annotations["changelock.io/attestation-valid-until"]),
+		ValidUntil:               validUntil,
 	})
 
 	truth := runtimesubstrate.NormalizeSubstrateTruthRecord(runtimesubstrate.SubstrateTruthRecord{
@@ -135,13 +141,13 @@ func credentialReleaseState(allowed bool) string {
 	return runtimesubstrate.CredentialReleaseWithheld
 }
 
-func parseOptionalTime(raw string) time.Time {
+func parseOptionalTime(raw string) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return time.Time{}
+		return time.Time{}, nil
 	}
 	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
-		return parsed.UTC()
+		return parsed.UTC(), nil
 	}
-	return time.Time{}
+	return time.Time{}, fmt.Errorf("invalid RFC3339 timestamp")
 }
