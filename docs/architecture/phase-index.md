@@ -45,6 +45,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Measured Public Proof Expansion Val C Core](../measured-public-proof-expansion-valc-core.md)
    - [Measured Public Proof Expansion Val D Core](../measured-public-proof-expansion-vald-core.md)
    - [Measured Public Proof Expansion Val E Core](../measured-public-proof-expansion-vale-core.md)
+8. Current enterprise workflow authority expansion lineage:
+   - [Enterprise Workflow Authority Expansion Val 0 Core](../enterprise-workflow-authority-expansion-val0-core.md)
 
 ## Current documentation shape
 
