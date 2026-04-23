@@ -25,6 +25,35 @@ func TestEnterpriseWorkflowAuthorityValAEventOrchestrationIsPartialWithoutReplay
 	}
 }
 
+func TestEnterpriseWorkflowAuthorityValALifecycleConnectorsStateIsPartialWithSingleConnector(t *testing.T) {
+	items := EnterpriseWorkflowAuthorityValALifecycleConnectors()[:1]
+	if got := EvaluateEnterpriseWorkflowAuthorityValALifecycleConnectorsState(items); got != EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial {
+		t.Fatalf("expected partial lifecycle connectors with single connector coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValALifecycleConnectorsStateIsPartialWithTwoConnectors(t *testing.T) {
+	items := EnterpriseWorkflowAuthorityValALifecycleConnectors()[:2]
+	if got := EvaluateEnterpriseWorkflowAuthorityValALifecycleConnectorsState(items); got != EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial {
+		t.Fatalf("expected partial lifecycle connectors with incomplete connector coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValALifecycleConnectorsStateIsPartialWithDuplicateConnector(t *testing.T) {
+	items := EnterpriseWorkflowAuthorityValALifecycleConnectors()
+	items[1].ConnectorSystem = WorkflowAuthorityConnectorJira
+	if got := EvaluateEnterpriseWorkflowAuthorityValALifecycleConnectorsState(items); got != EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial {
+		t.Fatalf("expected partial lifecycle connectors with duplicate connector coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValALifecycleConnectorsStateIsActiveWithExpectedConnectorSet(t *testing.T) {
+	items := EnterpriseWorkflowAuthorityValALifecycleConnectors()
+	if got := EvaluateEnterpriseWorkflowAuthorityValALifecycleConnectorsState(items); got != EnterpriseWorkflowAuthorityValALifecycleConnectorsStateActive {
+		t.Fatalf("expected active lifecycle connectors with jira/servicenow/github coverage, got %q", got)
+	}
+}
+
 func TestEnterpriseWorkflowAuthorityValAEvidenceInjectionIsPartialWithoutExternalTicketSafeTier(t *testing.T) {
 	items := EnterpriseWorkflowAuthorityValAEvidenceBundleInjection()
 	items[0].SupportedRedactionTiers = []string{WorkflowAuthorityEvidenceTierInternalFull, WorkflowAuthorityEvidenceTierPartnerScoped}

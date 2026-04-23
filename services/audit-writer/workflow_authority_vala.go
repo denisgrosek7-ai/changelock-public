@@ -295,6 +295,26 @@ func buildEnterpriseWorkflowAuthorityValAIdempotent() enterpriseWorkflowAuthorit
 	}
 }
 
+func enterpriseWorkflowAuthorityValAProofsCurrentState(
+	val0State string,
+	eventOrchestration workflow.WorkflowEventOrchestrationBaseline,
+	lifecycleConnectors []workflow.WorkflowLifecycleConnectorBaseline,
+	evidenceBundle []workflow.WorkflowEvidenceBundleInjectionBaseline,
+	projection []workflow.WorkflowTicketChangeProjectionBaseline,
+	reconciliation []workflow.WorkflowReconciliationBaseline,
+	idempotent []workflow.WorkflowIdempotentMutationBaseline,
+) string {
+	return workflow.EvaluateEnterpriseWorkflowAuthorityValAState(
+		val0State,
+		workflow.EvaluateEnterpriseWorkflowAuthorityValAEventOrchestrationState(eventOrchestration),
+		workflow.EvaluateEnterpriseWorkflowAuthorityValALifecycleConnectorsState(lifecycleConnectors),
+		workflow.EvaluateEnterpriseWorkflowAuthorityValAEvidenceBundleInjectionState(evidenceBundle),
+		workflow.EvaluateEnterpriseWorkflowAuthorityValATicketChangeProjectionState(projection),
+		workflow.EvaluateEnterpriseWorkflowAuthorityValAReconciliationBaselineState(reconciliation),
+		workflow.EvaluateEnterpriseWorkflowAuthorityValAIdempotentMutationState(idempotent),
+	)
+}
+
 func (s server) buildEnterpriseWorkflowAuthorityValAProofs(ctx context.Context, filter phase4EnterpriseFilter) (enterpriseWorkflowAuthorityValAProofsResponse, error) {
 	val0, err := s.buildEnterpriseWorkflowAuthorityVal0Proofs(ctx, filter)
 	if err != nil {
@@ -308,14 +328,14 @@ func (s server) buildEnterpriseWorkflowAuthorityValAProofs(ctx context.Context, 
 	reconciliation := buildEnterpriseWorkflowAuthorityValAReconciliation()
 	idempotent := buildEnterpriseWorkflowAuthorityValAIdempotent()
 
-	currentState := workflow.EvaluateEnterpriseWorkflowAuthorityValAState(
+	currentState := enterpriseWorkflowAuthorityValAProofsCurrentState(
 		val0.CurrentState,
-		eventOrchestration.CurrentState,
-		lifecycleConnectors.CurrentState,
-		evidenceBundle.CurrentState,
-		projection.CurrentState,
-		reconciliation.CurrentState,
-		idempotent.CurrentState,
+		eventOrchestration.Model,
+		lifecycleConnectors.Items,
+		evidenceBundle.Items,
+		projection.Items,
+		reconciliation.Items,
+		idempotent.Items,
 	)
 
 	return enterpriseWorkflowAuthorityValAProofsResponse{

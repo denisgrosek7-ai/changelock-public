@@ -152,3 +152,25 @@ func TestEnterpriseWorkflowAuthorityValAProofsStayInactiveWithoutVal0(t *testing
 		t.Fatalf("expected inactive Val 0 dependency, got %#v", response)
 	}
 }
+
+func TestEnterpriseWorkflowAuthorityValAProofsStateStaysInactiveWithoutFullConnectorSet(t *testing.T) {
+	eventOrchestration := workflow.EnterpriseWorkflowAuthorityValAEventOrchestration()
+	lifecycleConnectors := workflow.EnterpriseWorkflowAuthorityValALifecycleConnectors()[:2]
+	evidenceBundle := workflow.EnterpriseWorkflowAuthorityValAEvidenceBundleInjection()
+	projection := workflow.EnterpriseWorkflowAuthorityValATicketChangeProjection()
+	reconciliation := workflow.EnterpriseWorkflowAuthorityValAReconciliationBaseline()
+	idempotent := workflow.EnterpriseWorkflowAuthorityValAIdempotentMutationDiscipline()
+
+	got := enterpriseWorkflowAuthorityValAProofsCurrentState(
+		workflow.EnterpriseWorkflowAuthorityVal0StateActive,
+		eventOrchestration,
+		lifecycleConnectors,
+		evidenceBundle,
+		projection,
+		reconciliation,
+		idempotent,
+	)
+	if got == workflow.EnterpriseWorkflowAuthorityValAStateActive {
+		t.Fatalf("expected non-active Val A proofs state without full jira/servicenow/github connector coverage, got %q", got)
+	}
+}

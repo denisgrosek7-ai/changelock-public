@@ -344,13 +344,30 @@ func EvaluateEnterpriseWorkflowAuthorityValALifecycleConnectorsState(items []Wor
 	if len(items) == 0 {
 		return EnterpriseWorkflowAuthorityValALifecycleConnectorsStateIncomplete
 	}
+	expected := map[string]struct{}{
+		WorkflowAuthorityConnectorJira:       {},
+		WorkflowAuthorityConnectorServiceNow: {},
+		WorkflowAuthorityConnectorGitHub:     {},
+	}
+	seen := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		if strings.TrimSpace(item.ConnectorSystem) == "" || strings.TrimSpace(item.CurrentState) == "" {
+		connector := strings.TrimSpace(item.ConnectorSystem)
+		if connector == "" || strings.TrimSpace(item.CurrentState) == "" {
 			return EnterpriseWorkflowAuthorityValALifecycleConnectorsStateIncomplete
 		}
+		if _, ok := expected[connector]; !ok {
+			return EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial
+		}
+		if _, duplicate := seen[connector]; duplicate {
+			return EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial
+		}
+		seen[connector] = struct{}{}
 		if len(item.ObjectClasses) == 0 || !item.CreateSupported || !item.UpdateSupported || !item.SyncBackSupported || strings.TrimSpace(item.EvidenceBundleField) == "" || strings.TrimSpace(item.ClosureFeedbackField) == "" || strings.TrimSpace(item.ApprovalReflectionField) == "" || len(item.ReplayRecoveryPath) == 0 {
 			return EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial
 		}
+	}
+	if len(seen) != len(expected) {
+		return EnterpriseWorkflowAuthorityValALifecycleConnectorsStatePartial
 	}
 	return EnterpriseWorkflowAuthorityValALifecycleConnectorsStateActive
 }
