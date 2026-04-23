@@ -115,6 +115,17 @@ func (s *signingRuntime) verifySyncSnapshot(ctx context.Context, snapshot audit.
 	return s.runtime.Verify(ctx, signing.PurposeSyncSnapshots, payload, *snapshot.Signature)
 }
 
+func (s *signingRuntime) signPublicProofArtifact(ctx context.Context, payload []byte) (*signing.Envelope, error) {
+	if !s.enabledForPurpose(signing.PurposePublicProofArtifact) {
+		return nil, nil
+	}
+	envelope, err := s.runtime.Sign(ctx, signing.PurposePublicProofArtifact, payload)
+	if err != nil {
+		return nil, err
+	}
+	return &envelope, nil
+}
+
 func (s server) signAndPersistException(ctx context.Context, exception audit.PolicyException) (audit.PolicyException, error) {
 	if s.signing == nil || !s.signing.enabledForPurpose(signing.PurposeExceptions) {
 		exception.VerificationState = signing.StateDisabled

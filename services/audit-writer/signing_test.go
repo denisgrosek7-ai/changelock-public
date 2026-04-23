@@ -18,7 +18,7 @@ func newTestSoftwareSigningRuntime(t *testing.T, secret string) *signingRuntime 
 
 	runtime, err := signing.NewRuntime(signing.Config{
 		Mode:             signing.ModeSoftware,
-		Purposes:         map[string]struct{}{signing.PurposeExceptions: {}, signing.PurposeSyncSnapshots: {}},
+		Purposes:         map[string]struct{}{signing.PurposeExceptions: {}, signing.PurposeSyncSnapshots: {}, signing.PurposePublicProofArtifact: {}},
 		KeyID:            "test-signing-key",
 		Algorithm:        signing.AlgorithmHMACSHA256,
 		VerifyOnRead:     true,

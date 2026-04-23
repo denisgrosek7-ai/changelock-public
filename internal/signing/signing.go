@@ -17,8 +17,9 @@ const (
 	ModeSoftware     = "software"
 	ModeVaultTransit = "vault-transit"
 
-	PurposeExceptions    = "exceptions"
-	PurposeSyncSnapshots = "sync-snapshots"
+	PurposeExceptions          = "exceptions"
+	PurposeSyncSnapshots       = "sync-snapshots"
+	PurposePublicProofArtifact = "public-proof-artifacts"
 
 	StateVerified   = "verified"
 	StateUnverified = "unverified"
@@ -30,8 +31,9 @@ const (
 )
 
 var supportedPurposes = map[string]struct{}{
-	PurposeExceptions:    {},
-	PurposeSyncSnapshots: {},
+	PurposeExceptions:          {},
+	PurposeSyncSnapshots:       {},
+	PurposePublicProofArtifact: {},
 }
 
 type Envelope struct {

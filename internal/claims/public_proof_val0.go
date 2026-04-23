@@ -398,7 +398,26 @@ func EvaluateMeasuredPublicProofVal0SigningAuthorityState(model PublicProofSigni
 	if strings.TrimSpace(model.Provider.ProviderMode) == "" || strings.TrimSpace(model.Provider.TrustBoundary) == "" {
 		return MeasuredPublicProofVal0SigningAuthorityStateIncomplete
 	}
+	if model.Provider.ProviderMode == signing.ModeDisabled || model.Provider.TrustBoundary == signing.TrustBoundaryDisabled {
+		return MeasuredPublicProofVal0SigningAuthorityStateIncomplete
+	}
 	if len(model.TrustRoots) == 0 || len(model.KeyRotationPolicy) == 0 || len(model.RevokedSignerBehavior) == 0 || len(model.TimestampingDiscipline) == 0 || len(model.RequiredArtifactFields) == 0 {
+		return MeasuredPublicProofVal0SigningAuthorityStatePartial
+	}
+	if !model.Provider.SupportsRotation || !model.Provider.SupportsVerifyOnlyRetirement || !model.Provider.SupportsRevocation || !model.Provider.SupportsHistoricalVerification {
+		return MeasuredPublicProofVal0SigningAuthorityStatePartial
+	}
+	hasSealing := false
+	hasVerificationRoot := false
+	for _, keyClass := range model.Provider.KeyClasses {
+		switch strings.TrimSpace(keyClass) {
+		case signing.KeyClassSealing:
+			hasSealing = true
+		case signing.KeyClassVerificationRoot:
+			hasVerificationRoot = true
+		}
+	}
+	if !hasSealing || !hasVerificationRoot {
 		return MeasuredPublicProofVal0SigningAuthorityStatePartial
 	}
 	for _, root := range model.TrustRoots {

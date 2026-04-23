@@ -38,6 +38,18 @@ func TestMeasuredPublicProofVal0SigningAuthorityRequiresTrustRootFields(t *testi
 	}
 }
 
+func TestMeasuredPublicProofVal0SigningAuthorityDisabledProviderIsNotActive(t *testing.T) {
+	model := MeasuredPublicProofVal0SigningAuthority(signing.ProviderDescriptor{
+		ProviderMode:         signing.ModeDisabled,
+		TrustBoundary:        signing.TrustBoundaryDisabled,
+		ActiveLifecycleState: signing.KeyStateProvisioned,
+		KeyClasses:           []string{signing.KeyClassSealing, signing.KeyClassVerificationRoot},
+	})
+	if got := EvaluateMeasuredPublicProofVal0SigningAuthorityState(model); got != MeasuredPublicProofVal0SigningAuthorityStateIncomplete {
+		t.Fatalf("expected incomplete signing authority for disabled provider, got %q", got)
+	}
+}
+
 func TestMeasuredPublicProofVal0FoundationIsActive(t *testing.T) {
 	registry := MeasuredPublicProofVal0ClaimRegistryModel()
 	if got := EvaluateMeasuredPublicProofVal0ClaimRegistryState(registry); got != MeasuredPublicProofVal0ClaimRegistryStateActive {
