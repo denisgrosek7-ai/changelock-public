@@ -336,6 +336,8 @@ func runtimeSubstrateValCActionCatalog() []runtimesubstrate.RuntimeSubstrateEnfo
 	}
 	for _, hardeningAction := range []string{
 		hardeningActionRequestForensics,
+		hardeningActionRequireHumanReview,
+		hardeningActionRollbackRestrictions,
 		hardeningActionApplyNetworkQuarantine,
 		hardeningActionRemoveFromTraffic,
 		hardeningActionDivertIngress,
@@ -414,6 +416,9 @@ func (s server) runtimeSubstrateValCDecisionAudit(ctx context.Context, filter ru
 }
 
 func runtimeSubstrateValCRuntimeDecisionAuditRecord(event audit.StoredEvent) (runtimesubstrate.RuntimeSubstrateDecisionAuditRecord, bool) {
+	if !runtimeSubstrateValCAllowsRuntimeDecisionAudit(event) {
+		return runtimesubstrate.RuntimeSubstrateDecisionAuditRecord{}, false
+	}
 	payload := parseRuntimeIntegrityEventPayload(event.RuntimeIntegrity)
 	decision, ok := runtimeEnforcementFromRecord(event, payload)
 	if !ok {
@@ -446,6 +451,9 @@ func runtimeSubstrateValCRuntimeDecisionAuditRecord(event audit.StoredEvent) (ru
 }
 
 func runtimeSubstrateValCHardeningDecisionAuditRecords(event audit.StoredEvent) ([]runtimesubstrate.RuntimeSubstrateDecisionAuditRecord, bool) {
+	if !runtimeSubstrateValCAllowsHardeningDecisionAudit(event) {
+		return nil, false
+	}
 	switch event.EventType {
 	case audit.EventTypeHardeningActionApplied, audit.EventTypeHardeningRollbackApplied, audit.EventTypeHardeningRecoveryCompleted:
 	default:
@@ -488,6 +496,24 @@ func runtimeSubstrateValCHardeningDecisionAuditRecords(event audit.StoredEvent) 
 		})
 	}
 	return items, len(items) > 0
+}
+
+func runtimeSubstrateValCAllowsRuntimeDecisionAudit(event audit.StoredEvent) bool {
+	switch strings.TrimSpace(event.Component) {
+	case runtimeIntegrityComponent:
+		return true
+	default:
+		return false
+	}
+}
+
+func runtimeSubstrateValCAllowsHardeningDecisionAudit(event audit.StoredEvent) bool {
+	switch strings.TrimSpace(event.Component) {
+	case hardeningComponent:
+		return true
+	default:
+		return false
+	}
 }
 
 func runtimeSubstrateValCRuntimeActionID(action string) string {
