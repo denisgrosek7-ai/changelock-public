@@ -19,6 +19,10 @@ const (
 	publicProofValCProofsSchema              = "point2.measured_public_proof.valc.proofs.v1"
 )
 
+func publicProofValCPhase6PortalRef(scope string) string {
+	return "/v1/public/proof-portal?scope=" + strings.TrimSpace(scope)
+}
+
 type publicProofValCPortalResponse struct {
 	SchemaVersion string                                       `json:"schema_version"`
 	GeneratedAt   time.Time                                    `json:"generated_at"`
@@ -167,7 +171,7 @@ func (s server) buildPublicProofValCPortal(ctx context.Context, asOf time.Time, 
 		"Val C public portal remains a public-safe projection over sealed artifacts, claims, and verifier state; it does not expose partner-only evidence or tenant-sensitive raw data.",
 	}
 	routeRefs := []string{
-		"/v1/public/phase6/proof-portal?scope=public",
+		publicProofValCPhase6PortalRef(phase6PublicScopePublic),
 		"/v1/public/claims/summary?scope=public",
 		"/v1/public/proof-expansion/vala/downloadable-packs",
 		"/v1/public/proof-expansion/valb/proofs",
@@ -180,7 +184,7 @@ func (s server) buildPublicProofValCPortal(ctx context.Context, asOf time.Time, 
 			"Val C partner portal remains partner-scoped and bounded by explicit redaction tiers; it is not an internal_full evidence view.",
 		}
 		routeRefs = []string{
-			"/v1/public/phase6/proof-portal?scope=partner",
+			publicProofValCPhase6PortalRef(phase6PublicScopePartner),
 			"/v1/public/claims/summary?scope=partner",
 			"/v1/public/proof-expansion/vala/downloadable-packs",
 			"/v1/public/proof-expansion/valb/proofs",
@@ -302,7 +306,7 @@ func (s server) buildPublicProofValCProofs(ctx context.Context, asOf time.Time) 
 			"/v1/public/proof-expansion/valc/proofs",
 		},
 		EvidenceRefs: []string{
-			"/v1/public/phase6/proof-portal?scope=public",
+			publicProofValCPhase6PortalRef(phase6PublicScopePublic),
 			"/v1/public/claims/summary?scope=public",
 			"/v1/public/proof-expansion/vala/downloadable-packs",
 			"/v1/public/proof-expansion/valb/signature-verification",
