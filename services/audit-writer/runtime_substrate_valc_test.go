@@ -102,6 +102,12 @@ func TestRuntimeSubstrateValCHandlersAndProofs(t *testing.T) {
 	if !hasValCActionClass(catalog.Items, runtimesubstrate.RuntimeSubstrateEnforcementClassTerminate) {
 		t.Fatalf("expected terminate class in action catalog, got %#v", catalog.Items)
 	}
+	if !hasValCActionID(catalog.Items, "hardening."+hardeningActionRequireHumanReview) {
+		t.Fatalf("expected review action in action catalog, got %#v", catalog.Items)
+	}
+	if !hasValCActionID(catalog.Items, "hardening."+hardeningActionRollbackRestrictions) {
+		t.Fatalf("expected rollback action in action catalog, got %#v", catalog.Items)
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/valc/policy-hook-mapping?tenant_id=acme&environment=prod", nil)
 	req.Header.Set("Authorization", "Bearer viewer-demo-token")
@@ -120,6 +126,12 @@ func TestRuntimeSubstrateValCHandlersAndProofs(t *testing.T) {
 	}
 	if !hasValCHookMapping(hooks.Items, "hardening.block_exec_class_next_restart") {
 		t.Fatalf("expected hardening next-restart hook mapping, got %#v", hooks.Items)
+	}
+	if !hasValCHookMapping(hooks.Items, "hardening."+hardeningActionRequireHumanReview) {
+		t.Fatalf("expected review hook mapping, got %#v", hooks.Items)
+	}
+	if !hasValCHookMapping(hooks.Items, "hardening."+hardeningActionRollbackRestrictions) {
+		t.Fatalf("expected rollback hook mapping, got %#v", hooks.Items)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/valc/decision-audit?tenant_id=acme&environment=prod&limit=50", nil)
@@ -167,6 +179,88 @@ func TestRuntimeSubstrateValCHandlersAndProofs(t *testing.T) {
 	}
 	if proofs.DecisionAuditState != runtimesubstrate.RuntimeSubstrateDecisionAuditStateActive {
 		t.Fatalf("expected active decision audit state, got %#v", proofs)
+	}
+	for _, item := range proofs.DecisionAuditItems {
+		if !hasValCActionID(proofs.ActionCatalogItems, item.ActionID) {
+			t.Fatalf("expected proof action %q to exist in catalog, got %#v", item.ActionID, proofs.ActionCatalogItems)
+		}
+		if !hasValCHookMapping(proofs.PolicyHookMappings, item.ActionID) {
+			t.Fatalf("expected proof action %q to exist in hook mapping, got %#v", item.ActionID, proofs.PolicyHookMappings)
+		}
+	}
+}
+
+func TestRuntimeSubstrateValCDecisionAuditIgnoresForeignComponents(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	seedRuntimeSubstrateValCForeignRuntimeDecision(t, fixture.store)
+	seedRuntimeSubstrateValCForeignHardeningDecision(t, fixture.store)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/valc/decision-audit?tenant_id=acme&environment=prod&limit=50", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected valc decision audit 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var auditResponse runtimeSubstrateValCDecisionAuditResponse
+	if err := json.NewDecoder(rec.Body).Decode(&auditResponse); err != nil {
+		t.Fatalf("decode valc decision audit: %v", err)
+	}
+	if auditResponse.CurrentState != runtimesubstrate.RuntimeSubstrateDecisionAuditStateIncomplete {
+		t.Fatalf("expected incomplete decision audit for foreign-only events, got %#v", auditResponse)
+	}
+	if len(auditResponse.Items) != 0 {
+		t.Fatalf("expected no decision audit items from foreign components, got %#v", auditResponse.Items)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/valc/proofs?tenant_id=acme&environment=prod&limit=50", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec = httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected valc proofs 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var proofs runtimeSubstrateValCProofsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&proofs); err != nil {
+		t.Fatalf("decode valc proofs: %v", err)
+	}
+	if proofs.DecisionAuditState != runtimesubstrate.RuntimeSubstrateDecisionAuditStateIncomplete {
+		t.Fatalf("expected incomplete decision audit state for foreign-only events, got %#v", proofs)
+	}
+	if proofs.CurrentState == runtimesubstrate.RuntimeSubstrateValCStateActive {
+		t.Fatalf("expected proofs to stay non-active for foreign-only audit events, got %#v", proofs)
+	}
+}
+
+func TestRuntimeSubstrateValCDecisionAuditAcceptsCanonicalComponents(t *testing.T) {
+	fixture := forensicsTestFixture(t)
+
+	seedRuntimeSubstrateValCCanonicalRuntimeDecision(t, fixture.store)
+	seedRuntimeSubstrateValCCanonicalHardeningReviewAndRollback(t, fixture.store)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/runtime/substrate-depth/valc/decision-audit?tenant_id=acme&environment=prod&limit=50", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected valc decision audit 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var auditResponse runtimeSubstrateValCDecisionAuditResponse
+	if err := json.NewDecoder(rec.Body).Decode(&auditResponse); err != nil {
+		t.Fatalf("decode valc decision audit: %v", err)
+	}
+	if !hasValCDecisionAction(auditResponse.Items, "runtime."+runtimeActionApplyNetworkIsolation) {
+		t.Fatalf("expected canonical runtime decision audit item, got %#v", auditResponse.Items)
+	}
+	if !hasValCDecisionAction(auditResponse.Items, "hardening."+hardeningActionRequireHumanReview) {
+		t.Fatalf("expected canonical review decision audit item, got %#v", auditResponse.Items)
+	}
+	if !hasValCDecisionAction(auditResponse.Items, "hardening."+hardeningActionRollbackRestrictions) {
+		t.Fatalf("expected canonical rollback decision audit item, got %#v", auditResponse.Items)
 	}
 }
 
@@ -259,6 +353,15 @@ func hasValCActionClass(items []runtimesubstrate.RuntimeSubstrateEnforcementActi
 	return false
 }
 
+func hasValCActionID(items []runtimesubstrate.RuntimeSubstrateEnforcementActionCatalogItem, actionID string) bool {
+	for _, item := range items {
+		if item.ActionID == actionID {
+			return true
+		}
+	}
+	return false
+}
+
 func hasValCHookMapping(items []runtimesubstrate.RuntimeSubstratePolicyHookMapping, actionID string) bool {
 	for _, item := range items {
 		if item.ActionID == actionID {
@@ -275,4 +378,189 @@ func hasValCDecisionAction(items []runtimesubstrate.RuntimeSubstrateDecisionAudi
 		}
 	}
 	return false
+}
+
+func seedRuntimeSubstrateValCForeignRuntimeDecision(t *testing.T, store audit.Store) {
+	t.Helper()
+	executedAt := time.Date(2026, 4, 22, 12, 10, 0, 0, time.UTC)
+	payload, err := canonicalJSON(runtimeIntegrityEventPayload{
+		Enforcement: &runtimeEnforcementDecision{
+			SchemaVersion:    runtimeEnforcementSchemaVersion,
+			DecisionID:       "foreign-runtime-decision",
+			SubjectRef:       runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+			Action:           runtimeActionApplyNetworkIsolation,
+			ApprovalRequired: true,
+			RollbackRequired: true,
+			Executed:         true,
+			ExecutionResult:  "network_isolation_applied",
+			EvaluatedAt:      executedAt,
+		},
+	})
+	if err != nil {
+		t.Fatalf("canonical foreign runtime payload: %v", err)
+	}
+	_, err = store.Ingest(context.Background(), audit.Event{
+		RequestID:        "foreign-runtime-decision",
+		Timestamp:        executedAt,
+		Component:        "foreign-runtime-producer",
+		EventType:        audit.EventTypeRuntimeNetworkIsolationApplied,
+		TenantID:         "acme",
+		Environment:      "prod",
+		ClusterID:        "local",
+		Namespace:        "acme-prod",
+		WorkloadKind:     "Deployment",
+		Workload:         "edge-gateway",
+		Decision:         audit.DecisionDeny,
+		DriftResult:      runtimeActionApplyNetworkIsolation,
+		RuntimeIntegrity: payload,
+	})
+	if err != nil {
+		t.Fatalf("seed foreign runtime decision: %v", err)
+	}
+}
+
+func seedRuntimeSubstrateValCForeignHardeningDecision(t *testing.T, store audit.Store) {
+	t.Helper()
+	executedAt := time.Date(2026, 4, 22, 12, 11, 0, 0, time.UTC)
+	payload, err := canonicalJSON(hardeningEventPayload{
+		Execution: &hardeningExecutionRecord{
+			SchemaVersion:   hardeningExecutionSchemaVersion,
+			ExecutionID:     "foreign-hardening-exec",
+			SubjectRef:      runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+			DecisionRef:     "foreign-hardening-decision",
+			ExecutedAt:      executedAt,
+			ExecutionResult: "rollback_restrictions_active",
+			ActionsApplied: []hardeningAction{{
+				SchemaVersion: hardeningActionSchemaVersion,
+				ActionID:      "foreign-hardening-rollback",
+				ActionType:    hardeningActionRollbackRestrictions,
+				SubjectRef:    runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+				Scope:         "workload_only",
+				IsImmediate:   true,
+				IsReversible:  false,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("canonical foreign hardening payload: %v", err)
+	}
+	_, err = store.Ingest(context.Background(), audit.Event{
+		RequestID:        "foreign-hardening-exec",
+		Timestamp:        executedAt,
+		Component:        "foreign-hardening-producer",
+		EventType:        audit.EventTypeHardeningRollbackApplied,
+		TenantID:         "acme",
+		Environment:      "prod",
+		ClusterID:        "local",
+		Namespace:        "acme-prod",
+		WorkloadKind:     "Deployment",
+		Workload:         "edge-gateway",
+		Decision:         audit.DecisionAllow,
+		RuntimeIntegrity: payload,
+	})
+	if err != nil {
+		t.Fatalf("seed foreign hardening decision: %v", err)
+	}
+}
+
+func seedRuntimeSubstrateValCCanonicalRuntimeDecision(t *testing.T, store audit.Store) {
+	t.Helper()
+	executedAt := time.Date(2026, 4, 22, 12, 12, 0, 0, time.UTC)
+	payload, err := canonicalJSON(runtimeIntegrityEventPayload{
+		Enforcement: &runtimeEnforcementDecision{
+			SchemaVersion:    runtimeEnforcementSchemaVersion,
+			DecisionID:       "canonical-runtime-decision",
+			SubjectRef:       runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+			Action:           runtimeActionApplyNetworkIsolation,
+			ApprovalRequired: true,
+			RollbackRequired: true,
+			Executed:         true,
+			ExecutionResult:  "network_isolation_applied",
+			EvaluatedAt:      executedAt,
+		},
+	})
+	if err != nil {
+		t.Fatalf("canonical runtime payload: %v", err)
+	}
+	_, err = store.Ingest(context.Background(), audit.Event{
+		RequestID:        "canonical-runtime-decision",
+		Timestamp:        executedAt,
+		Component:        runtimeIntegrityComponent,
+		EventType:        audit.EventTypeRuntimeNetworkIsolationApplied,
+		TenantID:         "acme",
+		Environment:      "prod",
+		ClusterID:        "local",
+		Namespace:        "acme-prod",
+		WorkloadKind:     "Deployment",
+		Workload:         "edge-gateway",
+		Decision:         audit.DecisionDeny,
+		DriftResult:      runtimeActionApplyNetworkIsolation,
+		RuntimeIntegrity: payload,
+	})
+	if err != nil {
+		t.Fatalf("seed canonical runtime decision: %v", err)
+	}
+}
+
+func seedRuntimeSubstrateValCCanonicalHardeningReviewAndRollback(t *testing.T, store audit.Store) {
+	t.Helper()
+	executedAt := time.Date(2026, 4, 22, 12, 13, 0, 0, time.UTC)
+	payload, err := canonicalJSON(hardeningEventPayload{
+		PolicyDecision: &hardeningPolicyDecision{
+			SchemaVersion:    hardeningPolicyDecisionSchemaVersion,
+			DecisionID:       "canonical-hardening-decision",
+			PolicyRef:        "runtime_closed_loop_hardening.v1:rollback_and_review",
+			ApprovalMode:     recommendationApprovalHumanReview,
+			ApprovalRequired: true,
+			RollbackRequired: true,
+		},
+		Execution: &hardeningExecutionRecord{
+			SchemaVersion:   hardeningExecutionSchemaVersion,
+			ExecutionID:     "canonical-hardening-exec",
+			SubjectRef:      runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+			DecisionRef:     "canonical-hardening-decision",
+			ExecutedAt:      executedAt,
+			ExecutionResult: "rollback_and_review_staged",
+			ActionsApplied: []hardeningAction{
+				{
+					SchemaVersion: hardeningActionSchemaVersion,
+					ActionID:      "canonical-hardening-review",
+					ActionType:    hardeningActionRequireHumanReview,
+					SubjectRef:    runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+					Scope:         "workload_only",
+					IsImmediate:   false,
+					IsReversible:  false,
+				},
+				{
+					SchemaVersion: hardeningActionSchemaVersion,
+					ActionID:      "canonical-hardening-rollback",
+					ActionType:    hardeningActionRollbackRestrictions,
+					SubjectRef:    runtimeSubjectRef("local", "acme-prod", "Deployment", "edge-gateway"),
+					Scope:         "workload_only",
+					IsImmediate:   true,
+					IsReversible:  false,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("canonical hardening review/rollback payload: %v", err)
+	}
+	_, err = store.Ingest(context.Background(), audit.Event{
+		RequestID:        "canonical-hardening-exec",
+		Timestamp:        executedAt,
+		Component:        hardeningComponent,
+		EventType:        audit.EventTypeHardeningRollbackApplied,
+		TenantID:         "acme",
+		Environment:      "prod",
+		ClusterID:        "local",
+		Namespace:        "acme-prod",
+		WorkloadKind:     "Deployment",
+		Workload:         "edge-gateway",
+		Decision:         audit.DecisionAllow,
+		RuntimeIntegrity: payload,
+	})
+	if err != nil {
+		t.Fatalf("seed canonical hardening review/rollback decision: %v", err)
+	}
 }
