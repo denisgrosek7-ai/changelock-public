@@ -90,7 +90,7 @@ func TestPhase5SummaryCommandConsolidatesValAValBValC(t *testing.T) {
 		},
 	})
 
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -110,11 +110,11 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
+    last_synced_at: {{fresh_last_synced_at}}
   workflow:
     validation_required: true
     approval_required: true
-`)
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -165,7 +165,7 @@ func TestPhase5SummaryRemainsRedacted(t *testing.T) {
 	defer server.Close()
 
 	app := newTestApp(t, Runtime{HTTPClient: server.Client(), VersionInfo: VersionInfo{Version: "5.5.0"}})
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -181,11 +181,11 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
+    last_synced_at: {{fresh_last_synced_at}}
   workflow:
     validation_required: true
     approval_required: true
-`)
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -205,7 +205,7 @@ func TestPhase5SummaryDoesNotActivateOnCriticalSupportabilityBaseline(t *testing
 		},
 	})
 
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -220,11 +220,11 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
+    last_synced_at: {{fresh_last_synced_at}}
   workflow:
     validation_required: true
     approval_required: true
-`)
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
