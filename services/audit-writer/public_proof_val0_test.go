@@ -6,15 +6,23 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/denisgrosek/changelock/internal/audit"
 	claimscore "github.com/denisgrosek/changelock/internal/claims"
 )
 
 func TestPublicProofVal0FoundationHandlers(t *testing.T) {
-	fixture := forensicsTestFixture(t)
+	handler := newHandlerWithRuntimesAndSigning(
+		audit.NewMemoryStore(),
+		"memory",
+		mustStaticAuthConfig(t),
+		nil,
+		newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}),
+		newTestSoftwareSigningRuntime(t, "proof-val0-secret"),
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/claim-registry-model", nil)
 	rec := httptest.NewRecorder()
-	fixture.handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected val0 claim registry 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -32,7 +40,7 @@ func TestPublicProofVal0FoundationHandlers(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/redaction-tiers", nil)
 	rec = httptest.NewRecorder()
-	fixture.handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected val0 redaction tiers 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -50,7 +58,7 @@ func TestPublicProofVal0FoundationHandlers(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/signing-authority", nil)
 	rec = httptest.NewRecorder()
-	fixture.handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected val0 signing authority 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -68,7 +76,7 @@ func TestPublicProofVal0FoundationHandlers(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/compatibility-baseline", nil)
 	rec = httptest.NewRecorder()
-	fixture.handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected val0 compatibility baseline 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -86,11 +94,18 @@ func TestPublicProofVal0FoundationHandlers(t *testing.T) {
 }
 
 func TestPublicProofVal0ProofsHandler(t *testing.T) {
-	fixture := forensicsTestFixture(t)
+	handler := newHandlerWithRuntimesAndSigning(
+		audit.NewMemoryStore(),
+		"memory",
+		mustStaticAuthConfig(t),
+		nil,
+		newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}),
+		newTestSoftwareSigningRuntime(t, "proof-val0-secret"),
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/proofs?as_of=2026-04-22T10:00:00Z", nil)
 	rec := httptest.NewRecorder()
-	fixture.handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected val0 proofs 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -110,12 +125,41 @@ func TestPublicProofVal0ProofsHandler(t *testing.T) {
 	}
 }
 
-func TestPublicProofVal0ProofsStayInactiveWhenPhase6IsNotActive(t *testing.T) {
+func TestPublicProofVal0ProofsStayInactiveWhenSigningIsDisabled(t *testing.T) {
 	fixture := forensicsTestFixture(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/proofs?as_of=2026-04-22T10:00:00Z", nil)
+	rec := httptest.NewRecorder()
+	fixture.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected val0 proofs 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response publicProofVal0ProofsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode disabled-signer val0 proofs: %v", err)
+	}
+	if response.CurrentState == claimscore.MeasuredPublicProofVal0StateActive {
+		t.Fatalf("expected inactive val0 proofs when signing is disabled, got %#v", response)
+	}
+	if response.SigningAuthorityState == claimscore.MeasuredPublicProofVal0SigningAuthorityStateActive {
+		t.Fatalf("expected inactive signing authority when signer is disabled, got %#v", response)
+	}
+}
+
+func TestPublicProofVal0ProofsStayInactiveWhenPhase6IsNotActive(t *testing.T) {
+	handler := newHandlerWithRuntimesAndSigning(
+		audit.NewMemoryStore(),
+		"memory",
+		mustStaticAuthConfig(t),
+		nil,
+		newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}),
+		newTestSoftwareSigningRuntime(t, "proof-val0-secret"),
+	)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/val0/proofs?as_of=2026-09-30T10:00:00Z", nil)
 	rec := httptest.NewRecorder()
-	fixture.handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected val0 proofs 200, got %d: %s", rec.Code, rec.Body.String())
 	}

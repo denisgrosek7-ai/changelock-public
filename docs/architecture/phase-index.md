@@ -40,6 +40,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Runtime / Substrate Depth Complete](../runtime-substrate-depth-complete.md)
 7. Current measured public proof expansion lineage:
    - [Measured Public Proof Expansion Val 0 Core](../measured-public-proof-expansion-val0-core.md)
+   - [Measured Public Proof Expansion Val A Core](../measured-public-proof-expansion-vala-core.md)
 
 ## Current documentation shape
 
