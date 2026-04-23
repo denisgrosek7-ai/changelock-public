@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -146,6 +147,10 @@ func (s server) publicProofValAPackByIDHandler(w http.ResponseWriter, r *http.Re
 	artifactID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/v1/public/proof-expansion/vala/downloadable-packs/"))
 	if artifactID == "" {
 		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "pack not found"})
+		return
+	}
+	if strings.TrimSpace(r.URL.Query().Get("as_of")) == "" {
+		httpjson.Write(w, http.StatusBadRequest, map[string]string{"error": "as_of is required for downloadable packs"})
 		return
 	}
 	asOf, err := parsePhase6AsOf(r)
@@ -430,6 +435,18 @@ func (s server) publicProofValAEnvironmentBindings(asOf time.Time) ([]claimscore
 }
 
 func (s server) publicProofValAPacks(ctx context.Context, asOf time.Time) ([]claimscore.PublicSealedProofPack, error) {
+	built, err := s.publicProofValABuiltPacks(ctx, asOf)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]claimscore.PublicSealedProofPack, 0, len(built))
+	for _, item := range built {
+		items = append(items, item.Pack)
+	}
+	return items, nil
+}
+
+func (s server) publicProofValABuiltPacks(ctx context.Context, asOf time.Time) ([]publicProofValABuiltPack, error) {
 	phase6, err := buildPhase6Proofs(asOf)
 	if err != nil {
 		return nil, err
@@ -468,6 +485,7 @@ func (s server) publicProofValAPacks(ctx context.Context, asOf time.Time) ([]cla
 		IssuedAt:          issuedAt,
 		ValidThrough:      validThrough,
 		MeasurementSource: "runtime_substrate_vale_latency.standard_node.v1",
+		AsOf:              asOf,
 		EvidenceRefs: []string{
 			"/v1/runtime/substrate-depth/complete",
 			"/v1/runtime/substrate-depth/vale/proofs",
@@ -500,6 +518,7 @@ func (s server) publicProofValAPacks(ctx context.Context, asOf time.Time) ([]cla
 		IssuedAt:          issuedAt,
 		ValidThrough:      validThrough,
 		MeasurementSource: "phase6_verifier_sdk.reference_pack.v1",
+		AsOf:              asOf,
 		EvidenceRefs: []string{
 			"/v1/public/verifier/sdk",
 			"/v1/public/claims/summary",
@@ -515,7 +534,7 @@ func (s server) publicProofValAPacks(ctx context.Context, asOf time.Time) ([]cla
 			"Pack remains partner-scoped because verifier-safe evidence still excludes tenant-sensitive runtime raw data.",
 		},
 	}
-	items := make([]claimscore.PublicSealedProofPack, 0, 2)
+	items := make([]publicProofValABuiltPack, 0, 2)
 	for _, seed := range []publicProofValAPackSeed{performanceSeed, verificationSeed} {
 		binding := byID[seed.ArtifactID]
 		item, err := s.publicProofValABuildPack(ctx, seed, binding)
@@ -527,7 +546,7 @@ func (s server) publicProofValAPacks(ctx context.Context, asOf time.Time) ([]cla
 	return items, nil
 }
 
-func (s server) publicProofValABuildPack(ctx context.Context, seed publicProofValAPackSeed, binding claimscore.PublicProofEnvironmentBindingItem) (claimscore.PublicSealedProofPack, error) {
+func (s server) publicProofValABuildPack(ctx context.Context, seed publicProofValAPackSeed, binding claimscore.PublicProofEnvironmentBindingItem) (publicProofValABuiltPack, error) {
 	payload := publicProofValAPackPayload{
 		ArtifactID:        seed.ArtifactID,
 		ClaimID:           seed.ClaimID,
@@ -551,13 +570,13 @@ func (s server) publicProofValABuildPack(ctx context.Context, seed publicProofVa
 	}
 	payloadBytes, err := canonicalJSON(payload)
 	if err != nil {
-		return claimscore.PublicSealedProofPack{}, err
+		return publicProofValABuiltPack{}, err
 	}
 	sum := sha256.Sum256(payloadBytes)
 	payloadDigest := "sha256:" + hex.EncodeToString(sum[:])
 	envelope, err := s.signing.signPublicProofArtifact(ctx, payloadBytes)
 	if err != nil {
-		return claimscore.PublicSealedProofPack{}, err
+		return publicProofValABuiltPack{}, err
 	}
 	if envelope != nil {
 		payloadDigest = envelope.PayloadDigest
@@ -574,38 +593,42 @@ func (s server) publicProofValABuildPack(ctx context.Context, seed publicProofVa
 		{Path: "timestamp/receipt.json", MediaType: "application/json", Role: "timestamp_receipt", SHA256: digestBytesMust(timestampBytes)},
 	}
 	currentState := "sealed_artifact_ready"
-	timestampRef := "/v1/public/proof-expansion/vala/downloadable-packs/" + seed.ArtifactID + "#timestamp"
+	downloadRef := publicProofValADownloadRef(seed.ArtifactID, seed.AsOf)
+	timestampRef := publicProofValATimestampRef(seed.ArtifactID, seed.AsOf)
 	if envelope == nil {
 		currentState = "sealed_artifact_signing_pending"
 		timestampRef = ""
 	}
-	return claimscore.PublicSealedProofPack{
-		ArtifactID:            seed.ArtifactID,
-		ArtifactSchemaVersion: "public.proof.sealed_artifact.v1",
-		ArtifactType:          seed.ArtifactType,
-		CurrentState:          currentState,
-		ClaimID:               seed.ClaimID,
-		ClaimClass:            seed.ClaimClass,
-		RedactionTier:         seed.RedactionTier,
-		EnvironmentClass:      seed.EnvironmentClass,
-		ExecutionProfile:      seed.ExecutionProfile,
-		WorkloadShape:         seed.WorkloadShape,
-		BuildIdentity:         seed.BuildIdentity,
-		HarnessVersion:        seed.HarnessVersion,
-		MethodologyRef:        seed.MethodologyRef,
-		IssuedAt:              seed.IssuedAt,
-		ValidThrough:          seed.ValidThrough,
-		MeasurementSource:     seed.MeasurementSource,
-		EvidenceRefs:          seed.EvidenceRefs,
-		DownloadRef:           "/v1/public/proof-expansion/vala/downloadable-packs/" + seed.ArtifactID,
-		PayloadDigest:         payloadDigest,
-		SignatureEnvelope:     envelope,
-		TrustRootID:           "public_proof_primary_root",
-		KeyVersion:            publicProofValAKeyVersion(envelope),
-		TimestampRef:          timestampRef,
-		PackagingFiles:        files,
-		MetricSummaries:       seed.MetricSummaries,
-		Limitations:           seed.Limitations,
+	return publicProofValABuiltPack{
+		Payload: payloadBytes,
+		Pack: claimscore.PublicSealedProofPack{
+			ArtifactID:            seed.ArtifactID,
+			ArtifactSchemaVersion: "public.proof.sealed_artifact.v1",
+			ArtifactType:          seed.ArtifactType,
+			CurrentState:          currentState,
+			ClaimID:               seed.ClaimID,
+			ClaimClass:            seed.ClaimClass,
+			RedactionTier:         seed.RedactionTier,
+			EnvironmentClass:      seed.EnvironmentClass,
+			ExecutionProfile:      seed.ExecutionProfile,
+			WorkloadShape:         seed.WorkloadShape,
+			BuildIdentity:         seed.BuildIdentity,
+			HarnessVersion:        seed.HarnessVersion,
+			MethodologyRef:        seed.MethodologyRef,
+			IssuedAt:              seed.IssuedAt,
+			ValidThrough:          seed.ValidThrough,
+			MeasurementSource:     seed.MeasurementSource,
+			EvidenceRefs:          seed.EvidenceRefs,
+			DownloadRef:           downloadRef,
+			PayloadDigest:         payloadDigest,
+			SignatureEnvelope:     envelope,
+			TrustRootID:           "public_proof_primary_root",
+			KeyVersion:            publicProofValAKeyVersion(envelope),
+			TimestampRef:          timestampRef,
+			PackagingFiles:        files,
+			MetricSummaries:       seed.MetricSummaries,
+			Limitations:           seed.Limitations,
+		},
 	}, nil
 }
 
@@ -628,9 +651,15 @@ type publicProofValAPackSeed struct {
 	IssuedAt          time.Time
 	ValidThrough      time.Time
 	MeasurementSource string
+	AsOf              time.Time
 	EvidenceRefs      []string
 	MetricSummaries   []string
 	Limitations       []string
+}
+
+type publicProofValABuiltPack struct {
+	Pack    claimscore.PublicSealedProofPack
+	Payload []byte
 }
 
 type publicProofValAPackPayload struct {
@@ -694,10 +723,22 @@ func publicProofValATimestampFile(seed publicProofValAPackSeed, envelope *signin
 		timestampedAt = envelope.SignedAt.UTC()
 	}
 	return map[string]any{
-		"timestamp_ref":  "/v1/public/proof-expansion/vala/downloadable-packs/" + seed.ArtifactID + "#timestamp",
+		"timestamp_ref":  publicProofValATimestampRef(seed.ArtifactID, seed.AsOf),
 		"timestamped_at": timestampedAt,
 		"issued_window":  "2026-04-01T00:00:00Z/2026-06-01T00:00:00Z",
 	}
+}
+
+func publicProofValADownloadRef(artifactID string, asOf time.Time) string {
+	downloadRef := "/v1/public/proof-expansion/vala/downloadable-packs/" + strings.TrimSpace(artifactID)
+	if asOf.IsZero() {
+		return downloadRef
+	}
+	return downloadRef + "?as_of=" + url.QueryEscape(asOf.UTC().Format(time.RFC3339))
+}
+
+func publicProofValATimestampRef(artifactID string, asOf time.Time) string {
+	return publicProofValADownloadRef(artifactID, asOf) + "#timestamp"
 }
 
 func publicProofValAKeyVersion(envelope *signing.Envelope) string {

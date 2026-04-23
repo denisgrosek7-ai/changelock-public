@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/denisgrosek/changelock/internal/audit"
@@ -111,6 +114,9 @@ func TestPublicProofValADownloadablePacksAndProofsHandlers(t *testing.T) {
 	if pack.Pack.ArtifactID != "point2_runtime_performance_public_pack" || pack.CurrentState != "sealed_artifact_ready" {
 		t.Fatalf("expected runtime performance pack, got %#v", pack)
 	}
+	if !strings.Contains(pack.Pack.DownloadRef, "as_of="+url.QueryEscape("2026-04-22T10:00:00Z")) {
+		t.Fatalf("expected pack download ref to preserve as_of, got %#v", pack.Pack)
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/vala/proofs?as_of=2026-04-22T10:00:00Z", nil)
 	rec = httptest.NewRecorder()
@@ -128,6 +134,100 @@ func TestPublicProofValADownloadablePacksAndProofsHandlers(t *testing.T) {
 	}
 	if proofs.Val0State != claimscore.MeasuredPublicProofVal0StateActive {
 		t.Fatalf("expected active val0 dependency, got %#v", proofs)
+	}
+}
+
+func TestPublicProofValADownloadRefPreservesAsOfAndArtifactDeterminism(t *testing.T) {
+	handler := newHandlerWithRuntimesAndSigning(
+		audit.NewMemoryStore(),
+		"memory",
+		mustStaticAuthConfig(t),
+		nil,
+		newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}),
+		newTestSoftwareSigningRuntime(t, "proof-vala-secret"),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/vala/downloadable-packs?as_of=2026-04-22T10:00:00Z", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected vala downloadable packs 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var packs publicProofValADownloadablePacksResponse
+	if err := json.NewDecoder(rec.Body).Decode(&packs); err != nil {
+		t.Fatalf("decode vala downloadable packs: %v", err)
+	}
+	listed, ok := findValAPack(packs.Items, "point2_runtime_performance_public_pack")
+	if !ok {
+		t.Fatalf("expected runtime performance pack in list, got %#v", packs.Items)
+	}
+	if !strings.Contains(listed.DownloadRef, "as_of="+url.QueryEscape("2026-04-22T10:00:00Z")) {
+		t.Fatalf("expected download ref to preserve as_of, got %#v", listed)
+	}
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, listed.DownloadRef, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected vala pack by download ref 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var pack publicProofValAPackResponse
+	if err := json.NewDecoder(rec.Body).Decode(&pack); err != nil {
+		t.Fatalf("decode vala pack by download ref: %v", err)
+	}
+	if pack.Pack.PayloadDigest != listed.PayloadDigest {
+		t.Fatalf("expected identical payload digest from list and download, got list=%q download=%q", listed.PayloadDigest, pack.Pack.PayloadDigest)
+	}
+	if !reflect.DeepEqual(pack.Pack.MetricSummaries, listed.MetricSummaries) {
+		t.Fatalf("expected identical metric summaries from list and download, got list=%#v download=%#v", listed.MetricSummaries, pack.Pack.MetricSummaries)
+	}
+}
+
+func TestPublicProofValAPackByIDRequiresAsOf(t *testing.T) {
+	handler := newHandlerWithRuntimesAndSigning(
+		audit.NewMemoryStore(),
+		"memory",
+		mustStaticAuthConfig(t),
+		nil,
+		newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}),
+		newTestSoftwareSigningRuntime(t, "proof-vala-secret"),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/vala/downloadable-packs/point2_runtime_performance_public_pack", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected vala pack by id without as_of to fail, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPublicProofValADifferentAsOfYieldDifferentRefsAndDigests(t *testing.T) {
+	handler := newHandlerWithRuntimesAndSigning(
+		audit.NewMemoryStore(),
+		"memory",
+		mustStaticAuthConfig(t),
+		nil,
+		newSyncRuntime(syncConfig{Mode: audit.SyncModeDisabled}),
+		newTestSoftwareSigningRuntime(t, "proof-vala-secret"),
+	)
+
+	a := mustValAPacksAt(t, handler, "2026-04-22T10:00:00Z")
+	b := mustValAPacksAt(t, handler, "2026-09-30T10:00:00Z")
+
+	packA, ok := findValAPack(a.Items, "point2_runtime_performance_public_pack")
+	if !ok {
+		t.Fatalf("expected runtime performance pack in first list, got %#v", a.Items)
+	}
+	packB, ok := findValAPack(b.Items, "point2_runtime_performance_public_pack")
+	if !ok {
+		t.Fatalf("expected runtime performance pack in second list, got %#v", b.Items)
+	}
+	if packA.DownloadRef == packB.DownloadRef {
+		t.Fatalf("expected as_of-specific download refs to differ, got %#v and %#v", packA.DownloadRef, packB.DownloadRef)
+	}
+	if packA.PayloadDigest == packB.PayloadDigest {
+		t.Fatalf("expected as_of-dependent payload digest to differ, got %#v and %#v", packA.PayloadDigest, packB.PayloadDigest)
 	}
 }
 
@@ -154,4 +254,30 @@ func TestPublicProofValAProofsStayInactiveWithoutPublicProofArtifactSigningPurpo
 	if proofs.DownloadablePackState == claimscore.MeasuredPublicProofValADownloadablePackStateActive {
 		t.Fatalf("expected inactive downloadable pack state when signing purpose is unavailable, got %#v", proofs)
 	}
+}
+
+func mustValAPacksAt(t *testing.T, handler http.Handler, asOf string) publicProofValADownloadablePacksResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/public/proof-expansion/vala/downloadable-packs?as_of="+url.QueryEscape(asOf), nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected vala downloadable packs 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response publicProofValADownloadablePacksResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode vala downloadable packs: %v", err)
+	}
+	return response
+}
+
+func findValAPack(items []claimscore.PublicSealedProofPack, artifactID string) (claimscore.PublicSealedProofPack, bool) {
+	for _, item := range items {
+		if item.ArtifactID == artifactID {
+			return item, true
+		}
+	}
+	return claimscore.PublicSealedProofPack{}, false
 }
