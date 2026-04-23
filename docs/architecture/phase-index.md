@@ -42,6 +42,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Measured Public Proof Expansion Val 0 Core](../measured-public-proof-expansion-val0-core.md)
    - [Measured Public Proof Expansion Val A Core](../measured-public-proof-expansion-vala-core.md)
    - [Measured Public Proof Expansion Val B Core](../measured-public-proof-expansion-valb-core.md)
+   - [Measured Public Proof Expansion Val C Core](../measured-public-proof-expansion-valc-core.md)
 
 ## Current documentation shape
 
