@@ -12,7 +12,7 @@ import (
 
 func TestReadinessCommandProductionFailsWithoutAPI(t *testing.T) {
 	app := newTestApp(t, Runtime{})
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -27,11 +27,11 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
+    last_synced_at: {{fresh_last_synced_at}}
   workflow:
     validation_required: true
     approval_required: true
-`)
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -90,7 +90,7 @@ func TestSupportCommandReturnsRedactedBundleAndHealthSnapshot(t *testing.T) {
 	})
 	app.config.Token = "demo-token"
 
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -110,11 +110,11 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
+    last_synced_at: {{fresh_last_synced_at}}
   workflow:
     validation_required: true
     approval_required: true
-`)
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -151,7 +151,7 @@ func TestUpgradeReadinessCommandShowsSupportMatrixAndRollbackCautions(t *testing
 		},
 	})
 
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -166,11 +166,11 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
+    last_synced_at: {{fresh_last_synced_at}}
   workflow:
     validation_required: true
     approval_required: true
-`)
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

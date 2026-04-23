@@ -126,6 +126,13 @@ func (s *signingRuntime) signPublicProofArtifact(ctx context.Context, payload []
 	return &envelope, nil
 }
 
+func (s *signingRuntime) verifyPublicProofArtifact(ctx context.Context, payload []byte, envelope signing.Envelope) (signing.VerificationResult, error) {
+	if !s.enabledForPurpose(signing.PurposePublicProofArtifact) {
+		return signing.VerificationResult{State: signing.StateDisabled}, nil
+	}
+	return s.runtime.Verify(ctx, signing.PurposePublicProofArtifact, payload, envelope)
+}
+
 func (s server) signAndPersistException(ctx context.Context, exception audit.PolicyException) (audit.PolicyException, error) {
 	if s.signing == nil || !s.signing.enabledForPurpose(signing.PurposeExceptions) {
 		exception.VerificationState = signing.StateDisabled

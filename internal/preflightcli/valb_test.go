@@ -8,13 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	prodcfg "github.com/denisgrosek/changelock/internal/config"
 )
 
 func TestCheckCommandValidatesConfigAndTrustedExecutionProfile(t *testing.T) {
 	app := newTestApp(t, Runtime{})
-	configPath := writeProductionConfigForCLI(t, `
+	configPath := writeProductionConfigForCLI(t, withFreshLastSyncedAt(`
 apiVersion: changelock.io/v1alpha1
 kind: ProductionConfig
 metadata:
@@ -32,8 +33,8 @@ spec:
     local_revision: rev-1
     remote_revision: rev-1
     precedence: remote
-    last_synced_at: 2026-04-22T08:00:00Z
-`)
+    last_synced_at: {{fresh_last_synced_at}}
+`))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -170,6 +171,10 @@ func writeProductionConfigForCLI(t *testing.T, body string) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
+}
+
+func withFreshLastSyncedAt(body string) string {
+	return strings.ReplaceAll(body, "{{fresh_last_synced_at}}", time.Now().Add(-1*time.Hour).UTC().Format(time.RFC3339))
 }
 
 func containsCheck(checks []CheckResult, name string, status Status) bool {
