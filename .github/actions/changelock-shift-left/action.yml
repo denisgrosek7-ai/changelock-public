@@ -122,13 +122,12 @@ runs:
         if [ ${#args[@]} -eq 0 ]; then
           printf '## ChangeLock Shift-Left Summary\n\nNo manifest or image inputs were provided.\n' > "${summary_path}"
           cat "${summary_path}" >> "${GITHUB_STEP_SUMMARY}"
-          cat > "${sarif_path}" <<'EOF'
-          {
-            "version": "2.1.0",
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "runs": []
-          }
-          EOF
+          printf '%s\n' \
+            '{' \
+            '  "version": "2.1.0",' \
+            '  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",' \
+            '  "runs": []' \
+            '}' > "${sarif_path}"
           echo "result-path=" >> "${GITHUB_OUTPUT}"
           echo "summary-path=${summary_path}" >> "${GITHUB_OUTPUT}"
           echo "guidance-path=${guidance_path}" >> "${GITHUB_OUTPUT}"
