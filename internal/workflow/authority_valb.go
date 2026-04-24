@@ -168,6 +168,16 @@ func EnterpriseWorkflowAuthorityValBSignedAuthorizations() WorkflowSignedAuthori
 	return model
 }
 
+func enterpriseWorkflowAuthorityValBExpectedSignedAuthorizationActionClasses() []string {
+	return []string{
+		WorkflowAuthorityActionApprovalRequired,
+		WorkflowAuthoritySensitiveActionBreakGlass,
+		WorkflowAuthoritySensitiveActionBroadScopeOverride,
+		WorkflowAuthoritySensitiveActionProductionClosure,
+		WorkflowAuthoritySensitiveActionLongLivedException,
+	}
+}
+
 func EnterpriseWorkflowAuthorityValBBreakGlassFlow() WorkflowBreakGlassControlBaseline {
 	model := WorkflowBreakGlassControlBaseline{
 		RequiredStages: []string{
@@ -331,6 +341,14 @@ func EnterpriseWorkflowAuthorityValBAntiReplayProtection() WorkflowAntiReplayPro
 	return model
 }
 
+func enterpriseWorkflowAuthorityValBExpectedAntiReplayTokenTypes() []string {
+	return []string{
+		"signed_authorization_artifact",
+		"break_glass_authorization",
+		"exception_activation_grant",
+	}
+}
+
 func EnterpriseWorkflowAuthorityValBApprovalTraceability() WorkflowApprovalTraceabilityBaseline {
 	model := WorkflowApprovalTraceabilityBaseline{
 		RequiredTraceFields: []string{
@@ -390,6 +408,9 @@ func EvaluateEnterpriseWorkflowAuthorityValBSignedAuthorizationsState(model Work
 		"revocation_status",
 		"consumption_mode",
 		"anti_replay_marker_jti",
+	) || !containsExactTrimmedStringSet(
+		model.SupportedActionClasses,
+		enterpriseWorkflowAuthorityValBExpectedSignedAuthorizationActionClasses()...,
 	) || !containsAllTrimmedStrings(model.ConsumptionModes,
 		WorkflowAuthorityConsumptionSingleUse,
 		WorkflowAuthorityConsumptionMultiUseBounded,
@@ -478,7 +499,10 @@ func EvaluateEnterpriseWorkflowAuthorityValBAntiReplayState(model WorkflowAntiRe
 	if len(model.TokenTypes) == 0 || len(model.NonceOrJTIFields) == 0 {
 		return EnterpriseWorkflowAuthorityValBAntiReplayStateIncomplete
 	}
-	if !containsAllTrimmedStrings(model.NonceOrJTIFields,
+	if !containsExactTrimmedStringSet(
+		model.TokenTypes,
+		enterpriseWorkflowAuthorityValBExpectedAntiReplayTokenTypes()...,
+	) || !containsAllTrimmedStrings(model.NonceOrJTIFields,
 		"anti_replay_marker_jti",
 		"subject_nonce_binding",
 		"consumed_at",
@@ -565,4 +589,36 @@ func containsAllTrimmedStrings(values []string, needles ...string) bool {
 		}
 	}
 	return true
+}
+
+func containsExactTrimmedStringSet(values []string, expected ...string) bool {
+	if len(values) != len(expected) {
+		return false
+	}
+	expectedSet := make(map[string]struct{}, len(expected))
+	for _, item := range expected {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			return false
+		}
+		expectedSet[trimmed] = struct{}{}
+	}
+	if len(expectedSet) != len(expected) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, item := range values {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			return false
+		}
+		if _, ok := expectedSet[trimmed]; !ok {
+			return false
+		}
+		if _, duplicate := seen[trimmed]; duplicate {
+			return false
+		}
+		seen[trimmed] = struct{}{}
+	}
+	return len(seen) == len(expectedSet)
 }

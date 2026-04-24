@@ -25,6 +25,54 @@ func TestEnterpriseWorkflowAuthorityValBSignedAuthorizationsIsPartialWithoutJTIC
 	}
 }
 
+func TestEnterpriseWorkflowAuthorityValBSignedAuthorizationsIsPartialWithoutBreakGlassActionClass(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBSignedAuthorizations()
+	model.SupportedActionClasses = []string{
+		WorkflowAuthorityActionApprovalRequired,
+		WorkflowAuthoritySensitiveActionBroadScopeOverride,
+		WorkflowAuthoritySensitiveActionProductionClosure,
+		WorkflowAuthoritySensitiveActionLongLivedException,
+	}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBSignedAuthorizationsState(model); got != EnterpriseWorkflowAuthorityValBSignedAuthorizationsStatePartial {
+		t.Fatalf("expected partial signed authorizations without break-glass action-class coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBSignedAuthorizationsIsPartialWithSinglePlaceholderActionClass(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBSignedAuthorizations()
+	model.SupportedActionClasses = []string{WorkflowAuthorityActionApprovalRequired}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBSignedAuthorizationsState(model); got != EnterpriseWorkflowAuthorityValBSignedAuthorizationsStatePartial {
+		t.Fatalf("expected partial signed authorizations with only a single placeholder action class, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBSignedAuthorizationsIsPartialWithoutProductionClosureActionClass(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBSignedAuthorizations()
+	model.SupportedActionClasses = []string{
+		WorkflowAuthorityActionApprovalRequired,
+		WorkflowAuthoritySensitiveActionBreakGlass,
+		WorkflowAuthoritySensitiveActionBroadScopeOverride,
+		WorkflowAuthoritySensitiveActionLongLivedException,
+	}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBSignedAuthorizationsState(model); got != EnterpriseWorkflowAuthorityValBSignedAuthorizationsStatePartial {
+		t.Fatalf("expected partial signed authorizations without production-closure action-class coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBSignedAuthorizationsIsPartialWithDuplicateActionClass(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBSignedAuthorizations()
+	model.SupportedActionClasses = []string{
+		WorkflowAuthorityActionApprovalRequired,
+		WorkflowAuthoritySensitiveActionBreakGlass,
+		WorkflowAuthoritySensitiveActionBreakGlass,
+		WorkflowAuthoritySensitiveActionBroadScopeOverride,
+		WorkflowAuthoritySensitiveActionProductionClosure,
+	}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBSignedAuthorizationsState(model); got != EnterpriseWorkflowAuthorityValBSignedAuthorizationsStatePartial {
+		t.Fatalf("expected partial signed authorizations with duplicate action-class coverage, got %q", got)
+	}
+}
+
 func TestEnterpriseWorkflowAuthorityValBBreakGlassIsPartialWithoutDistinctApproverExecutor(t *testing.T) {
 	model := EnterpriseWorkflowAuthorityValBBreakGlassFlow()
 	model.DistinctApproverExecutor = false
@@ -46,6 +94,37 @@ func TestEnterpriseWorkflowAuthorityValBAntiReplayIsPartialWithoutReplayCache(t 
 	model.ReplayCacheRules = nil
 	if got := EvaluateEnterpriseWorkflowAuthorityValBAntiReplayState(model); got != EnterpriseWorkflowAuthorityValBAntiReplayStatePartial {
 		t.Fatalf("expected partial anti-replay protection without replay cache rules, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBAntiReplayIsPartialWithoutExceptionActivationGrantTokenType(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBAntiReplayProtection()
+	model.TokenTypes = []string{
+		"signed_authorization_artifact",
+		"break_glass_authorization",
+	}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBAntiReplayState(model); got != EnterpriseWorkflowAuthorityValBAntiReplayStatePartial {
+		t.Fatalf("expected partial anti-replay protection without full token-type coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBAntiReplayIsPartialWithSingleTokenType(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBAntiReplayProtection()
+	model.TokenTypes = []string{"signed_authorization_artifact"}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBAntiReplayState(model); got != EnterpriseWorkflowAuthorityValBAntiReplayStatePartial {
+		t.Fatalf("expected partial anti-replay protection with only a single token type, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBAntiReplayIsPartialWithDuplicateTokenType(t *testing.T) {
+	model := EnterpriseWorkflowAuthorityValBAntiReplayProtection()
+	model.TokenTypes = []string{
+		"signed_authorization_artifact",
+		"break_glass_authorization",
+		"break_glass_authorization",
+	}
+	if got := EvaluateEnterpriseWorkflowAuthorityValBAntiReplayState(model); got != EnterpriseWorkflowAuthorityValBAntiReplayStatePartial {
+		t.Fatalf("expected partial anti-replay protection with duplicate token-type coverage, got %q", got)
 	}
 }
 

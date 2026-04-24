@@ -152,3 +152,57 @@ func TestEnterpriseWorkflowAuthorityValBProofsStayInactiveWithoutValA(t *testing
 		t.Fatalf("expected inactive Val A dependency, got %#v", response)
 	}
 }
+
+func TestEnterpriseWorkflowAuthorityValBProofsStateStaysInactiveWithoutFullSignedAuthorizationActionClassCoverage(t *testing.T) {
+	signedAuthorizations := workflow.EnterpriseWorkflowAuthorityValBSignedAuthorizations()
+	signedAuthorizations.SupportedActionClasses = []string{
+		workflow.WorkflowAuthorityActionApprovalRequired,
+		workflow.WorkflowAuthoritySensitiveActionBreakGlass,
+		workflow.WorkflowAuthoritySensitiveActionBroadScopeOverride,
+		workflow.WorkflowAuthoritySensitiveActionLongLivedException,
+	}
+	breakGlass := workflow.EnterpriseWorkflowAuthorityValBBreakGlassFlow()
+	exceptionRegistry := workflow.EnterpriseWorkflowAuthorityValBManagedExceptionRegistry()
+	expiryRevocation := workflow.EnterpriseWorkflowAuthorityValBExpiryRevocationEnforcement()
+	antiReplay := workflow.EnterpriseWorkflowAuthorityValBAntiReplayProtection()
+	traceability := workflow.EnterpriseWorkflowAuthorityValBApprovalTraceability()
+
+	got := enterpriseWorkflowAuthorityValBProofsCurrentState(
+		workflow.EnterpriseWorkflowAuthorityValAStateActive,
+		signedAuthorizations,
+		breakGlass,
+		exceptionRegistry,
+		expiryRevocation,
+		antiReplay,
+		traceability,
+	)
+	if got == workflow.EnterpriseWorkflowAuthorityValBStateActive {
+		t.Fatalf("expected non-active Val B proofs state without full signed-authorization action-class coverage, got %q", got)
+	}
+}
+
+func TestEnterpriseWorkflowAuthorityValBProofsStateStaysInactiveWithoutFullAntiReplayTokenCoverage(t *testing.T) {
+	signedAuthorizations := workflow.EnterpriseWorkflowAuthorityValBSignedAuthorizations()
+	breakGlass := workflow.EnterpriseWorkflowAuthorityValBBreakGlassFlow()
+	exceptionRegistry := workflow.EnterpriseWorkflowAuthorityValBManagedExceptionRegistry()
+	expiryRevocation := workflow.EnterpriseWorkflowAuthorityValBExpiryRevocationEnforcement()
+	antiReplay := workflow.EnterpriseWorkflowAuthorityValBAntiReplayProtection()
+	antiReplay.TokenTypes = []string{
+		"signed_authorization_artifact",
+		"break_glass_authorization",
+	}
+	traceability := workflow.EnterpriseWorkflowAuthorityValBApprovalTraceability()
+
+	got := enterpriseWorkflowAuthorityValBProofsCurrentState(
+		workflow.EnterpriseWorkflowAuthorityValAStateActive,
+		signedAuthorizations,
+		breakGlass,
+		exceptionRegistry,
+		expiryRevocation,
+		antiReplay,
+		traceability,
+	)
+	if got == workflow.EnterpriseWorkflowAuthorityValBStateActive {
+		t.Fatalf("expected non-active Val B proofs state without full anti-replay token coverage, got %q", got)
+	}
+}
