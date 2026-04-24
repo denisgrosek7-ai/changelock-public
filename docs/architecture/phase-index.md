@@ -49,6 +49,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Enterprise Workflow Authority Expansion Val 0 Core](../enterprise-workflow-authority-expansion-val0-core.md)
    - [Enterprise Workflow Authority Expansion Val A Core](../enterprise-workflow-authority-expansion-vala-core.md)
    - [Enterprise Workflow Authority Expansion Val B Core](../enterprise-workflow-authority-expansion-valb-core.md)
+   - [Enterprise Workflow Authority Expansion Val C Core](../enterprise-workflow-authority-expansion-valc-core.md)
 
 ## Current documentation shape
 
