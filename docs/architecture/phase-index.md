@@ -48,6 +48,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
 8. Current enterprise workflow authority expansion lineage:
    - [Enterprise Workflow Authority Expansion Val 0 Core](../enterprise-workflow-authority-expansion-val0-core.md)
    - [Enterprise Workflow Authority Expansion Val A Core](../enterprise-workflow-authority-expansion-vala-core.md)
+   - [Enterprise Workflow Authority Expansion Val B Core](../enterprise-workflow-authority-expansion-valb-core.md)
 
 ## Current documentation shape
 
