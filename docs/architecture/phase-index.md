@@ -51,6 +51,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Enterprise Workflow Authority Expansion Val B Core](../enterprise-workflow-authority-expansion-valb-core.md)
    - [Enterprise Workflow Authority Expansion Val C Core](../enterprise-workflow-authority-expansion-valc-core.md)
    - [Enterprise Workflow Authority Expansion Val D Core](../enterprise-workflow-authority-expansion-vald-core.md)
+9. Current production usability, operability, and recovery hardening lineage:
+   - [Production Usability, Operability & Recovery Hardening Val 0 Core](../production-usability-operability-recovery-val0-core.md)
 
 ## Current documentation shape
 
