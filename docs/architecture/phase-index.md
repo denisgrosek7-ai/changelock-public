@@ -54,6 +54,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
 9. Current production usability, operability, and recovery hardening lineage:
    - [Production Usability, Operability & Recovery Hardening Val 0 Core](../production-usability-operability-recovery-val0-core.md)
    - [Production Usability, Operability & Recovery Hardening Val A Core](../production-usability-operability-recovery-vala-core.md)
+   - [Production Usability, Operability & Recovery Hardening Val B Core](../production-usability-operability-recovery-valb-core.md)
 
 ## Current documentation shape
 
