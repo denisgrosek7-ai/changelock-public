@@ -58,6 +58,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Production Usability, Operability & Recovery Hardening Val C Core](../production-usability-operability-recovery-valc-core.md)
    - [Production Usability, Operability & Recovery Hardening Val D Core](../production-usability-operability-recovery-vald-core.md)
    - [Production Usability, Operability & Recovery Hardening Val E Core](../production-usability-operability-recovery-vale-core.md)
+10. Current intelligence calibration lineage:
+   - [Intelligence Calibration Val 0 Core](../intelligence-calibration-val0-core.md)
 
 ## Current documentation shape
 
