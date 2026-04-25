@@ -644,6 +644,8 @@ func EvaluateProductionUsabilityValCSupportBundleState(model SupportBundleQualit
 		return ProductionUsabilityValCSupportBundleStateIncomplete
 	}
 	if !containsTrimmedString(productionUsabilityValCSecretScanStatuses(), model.SecretScanResult) ||
+		!containsTrimmedString(productionUsabilityValAExplainScopes(), model.VisibilityScope) ||
+		!containsTrimmedString(ProductionUsabilityVal0ExplainabilityContract().SupportedRedactionTiers, model.RedactionTier) ||
 		!strings.Contains(strings.TrimSpace(model.ProjectionDisclaimer), "not_canonical_truth") ||
 		!model.ManifestPresent ||
 		model.RawSecretDetected ||
@@ -672,6 +674,8 @@ func EvaluateProductionUsabilityValCDiagnosticsState(model DiagnosticsHardeningM
 		return ProductionUsabilityValCDiagnosticsStateIncomplete
 	}
 	if !containsTrimmedString(productionUsabilityValCSecretScanStatuses(), model.SecretScanStatus) ||
+		!containsTrimmedString(productionUsabilityValAExplainScopes(), model.PermissionScope) ||
+		!containsTrimmedString(ProductionUsabilityVal0ExplainabilityContract().SupportedRedactionTiers, model.RedactionTier) ||
 		!strings.Contains(strings.TrimSpace(model.ProjectionDisclaimer), "not_canonical_truth") {
 		return ProductionUsabilityValCDiagnosticsStatePartial
 	}
@@ -825,6 +829,7 @@ func EvaluateProductionUsabilityValCExportSafetyState(model RedactionSafeExportM
 		return ProductionUsabilityValCExportSafetyStateIncomplete
 	}
 	if !containsTrimmedString(productionUsabilityValCSecretScanStatuses(), model.SecretScanStatus) ||
+		!containsTrimmedString(ProductionUsabilityVal0ExplainabilityContract().SupportedRedactionTiers, model.RedactionTier) ||
 		!containsTrimmedString([]string{ProductionUsabilityEvidenceFull, ProductionUsabilityEvidenceMetadataOnly, ProductionUsabilityEvidenceRedacted, ProductionUsabilityEvidenceHidden}, model.EvidenceHandling) ||
 		!strings.Contains(strings.TrimSpace(model.ProjectionDisclaimer), "not_canonical_truth") {
 		return ProductionUsabilityValCExportSafetyStatePartial

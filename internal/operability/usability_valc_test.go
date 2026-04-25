@@ -142,6 +142,45 @@ func TestProductionUsabilityValCSupportBundleWithoutManifestFailsClosed(t *testi
 	}
 }
 
+func TestProductionUsabilityValCSupportBundleFailsClosedForTypoScope(t *testing.T) {
+	model := ProductionUsabilityValCSupportBundleQualityGate()
+	model.VisibilityScope = "partnr"
+	if got := EvaluateProductionUsabilityValCSupportBundleState(model); got == ProductionUsabilityValCSupportBundleStateActive {
+		t.Fatalf("expected non-active support bundle state for typo scope, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCSupportBundleFailsClosedForUnknownRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValCSupportBundleQualityGate()
+	model.RedactionTier = "medum"
+	if got := EvaluateProductionUsabilityValCSupportBundleState(model); got == ProductionUsabilityValCSupportBundleStateActive {
+		t.Fatalf("expected non-active support bundle state for unknown redaction tier, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCSupportBundlePassesWithValidScopeAndRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValCSupportBundleQualityGate()
+	if got := EvaluateProductionUsabilityValCSupportBundleState(model); got != ProductionUsabilityValCSupportBundleStateActive {
+		t.Fatalf("expected active support bundle state for valid scope and redaction tier, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCSupportBundlePreservesPartnerPublicRestrictions(t *testing.T) {
+	model := ProductionUsabilityValCSupportBundleQualityGate()
+	model.VisibilityScope = ProductionUsabilityVisibilityPublicSafe
+	model.RedactionTier = ProductionUsabilityRedactionHigh
+	if got := EvaluateProductionUsabilityValCSupportBundleState(model); got == ProductionUsabilityValCSupportBundleStateActive {
+		t.Fatalf("expected non-active support bundle state when public_safe scope uses non-public_safe tier, got %q", got)
+	}
+
+	model = ProductionUsabilityValCSupportBundleQualityGate()
+	model.VisibilityScope = ProductionUsabilityVisibilityPartner
+	model.RedactionTier = ProductionUsabilityRedactionNone
+	if got := EvaluateProductionUsabilityValCSupportBundleState(model); got == ProductionUsabilityValCSupportBundleStateActive {
+		t.Fatalf("expected non-active support bundle state when partner scope uses none redaction tier, got %q", got)
+	}
+}
+
 func TestProductionUsabilityValCSupportBundleWithRawSecretsTokensOrEnvFailsClosed(t *testing.T) {
 	model := ProductionUsabilityValCSupportBundleQualityGate()
 	model.RawSecretDetected = true
@@ -197,6 +236,29 @@ func TestProductionUsabilityValCDiagnosticsSafeToShareRequiresRedactionAndSecret
 	model.SecretScanStatus = ProductionUsabilitySecretScanFailed
 	if got := EvaluateProductionUsabilityValCDiagnosticsState(model); got == ProductionUsabilityValCDiagnosticsStateActive {
 		t.Fatalf("expected non-active diagnostics with failed secret scan, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCDiagnosticsFailsClosedForTypoPermissionScope(t *testing.T) {
+	model := ProductionUsabilityValCDiagnosticsHardening()
+	model.PermissionScope = "operater"
+	if got := EvaluateProductionUsabilityValCDiagnosticsState(model); got == ProductionUsabilityValCDiagnosticsStateActive {
+		t.Fatalf("expected non-active diagnostics for typo permission scope, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCDiagnosticsFailsClosedForTypoRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValCDiagnosticsHardening()
+	model.RedactionTier = "publik_safe"
+	if got := EvaluateProductionUsabilityValCDiagnosticsState(model); got == ProductionUsabilityValCDiagnosticsStateActive {
+		t.Fatalf("expected non-active diagnostics for typo redaction tier, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCDiagnosticsPassWithValidPermissionScopeAndRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValCDiagnosticsHardening()
+	if got := EvaluateProductionUsabilityValCDiagnosticsState(model); got != ProductionUsabilityValCDiagnosticsStateActive {
+		t.Fatalf("expected active diagnostics state for valid permission scope and redaction tier, got %q", got)
 	}
 }
 
@@ -398,6 +460,21 @@ func TestProductionUsabilityValCExportFailsClosedWhenPolicyDisallowsExport(t *te
 	model.PolicyAllowsExport = false
 	if got := EvaluateProductionUsabilityValCExportSafetyState(model); got == ProductionUsabilityValCExportSafetyStateActive {
 		t.Fatalf("expected non-active export safety state when policy disallows export, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCExportFailsClosedForTypoRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValCRedactionSafeExport()
+	model.RedactionTier = "hihg"
+	if got := EvaluateProductionUsabilityValCExportSafetyState(model); got == ProductionUsabilityValCExportSafetyStateActive {
+		t.Fatalf("expected non-active export safety state for typo redaction tier, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValCExportPassesWithValidRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValCRedactionSafeExport()
+	if got := EvaluateProductionUsabilityValCExportSafetyState(model); got != ProductionUsabilityValCExportSafetyStateActive {
+		t.Fatalf("expected active export safety state for valid redaction tier, got %q", got)
 	}
 }
 
