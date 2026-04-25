@@ -56,6 +56,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Production Usability, Operability & Recovery Hardening Val A Core](../production-usability-operability-recovery-vala-core.md)
    - [Production Usability, Operability & Recovery Hardening Val B Core](../production-usability-operability-recovery-valb-core.md)
    - [Production Usability, Operability & Recovery Hardening Val C Core](../production-usability-operability-recovery-valc-core.md)
+   - [Production Usability, Operability & Recovery Hardening Val D Core](../production-usability-operability-recovery-vald-core.md)
 
 ## Current documentation shape
 
