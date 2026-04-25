@@ -61,6 +61,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
 10. Current intelligence calibration lineage:
    - [Intelligence Calibration Val 0 Core](../intelligence-calibration-val0-core.md)
    - [Intelligence Calibration Val A Core](../intelligence-calibration-vala-core.md)
+   - [Intelligence Calibration Val B Core](../intelligence-calibration-valb-core.md)
 
 ## Current documentation shape
 
