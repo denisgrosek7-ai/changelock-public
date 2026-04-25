@@ -623,6 +623,10 @@ func EvaluateProductionUsabilityValBCommandCenterState(model CommandCenterTaskMo
 		if strings.TrimSpace(item.TaskID) == "" || strings.TrimSpace(item.TaskType) == "" || strings.TrimSpace(item.DecisionPriority) == "" || strings.TrimSpace(item.ActionRequired) == "" || strings.TrimSpace(item.WhyThisMatters) == "" || len(item.AffectedSubjects) == 0 || strings.TrimSpace(item.BlastRadiusHint) == "" || strings.TrimSpace(item.RecommendedNextStep) == "" || len(item.LinkedSurfaceRefs) == 0 || strings.TrimSpace(item.VisibilityScope) == "" || strings.TrimSpace(item.RedactionTier) == "" {
 			return ProductionUsabilityValBCommandCenterStateIncomplete
 		}
+		if !containsTrimmedString(productionUsabilityValAExplainScopes(), item.VisibilityScope) ||
+			!containsTrimmedString([]string{ProductionUsabilityRedactionNone, ProductionUsabilityRedactionLow, ProductionUsabilityRedactionMedium, ProductionUsabilityRedactionHigh, ProductionUsabilityRedactionPublicSafe}, item.RedactionTier) {
+			return ProductionUsabilityValBCommandCenterStatePartial
+		}
 		if !containsTrimmedString(model.SupportedDecisionPriorities, item.DecisionPriority) || !containsTrimmedString(model.SupportedActionRequired, item.ActionRequired) || !item.DecisionSupportOnly || item.AcknowledgementEqualsRemediation || item.ResolvedEqualsCanonicalClosure || !item.WorkflowEvidenceRequired {
 			return ProductionUsabilityValBCommandCenterStatePartial
 		}

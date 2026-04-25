@@ -154,6 +154,29 @@ func TestProductionUsabilityValBTaskResolvedDoesNotEqualCanonicalClosureWithoutW
 	}
 }
 
+func TestProductionUsabilityValBCommandCenterFailsClosedForTypoVisibilityScope(t *testing.T) {
+	model := ProductionUsabilityValBCommandCenterTasks()
+	model.Items[0].VisibilityScope = "partnr"
+	if got := EvaluateProductionUsabilityValBCommandCenterState(model); got == ProductionUsabilityValBCommandCenterStateActive {
+		t.Fatalf("expected non-active command center state for typo visibility scope, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValBCommandCenterFailsClosedForTypoRedactionTier(t *testing.T) {
+	model := ProductionUsabilityValBCommandCenterTasks()
+	model.Items[0].RedactionTier = "medum"
+	if got := EvaluateProductionUsabilityValBCommandCenterState(model); got == ProductionUsabilityValBCommandCenterStateActive {
+		t.Fatalf("expected non-active command center state for typo redaction tier, got %q", got)
+	}
+}
+
+func TestProductionUsabilityValBCommandCenterPassesForSupportedVisibilityAndRedactionValues(t *testing.T) {
+	model := ProductionUsabilityValBCommandCenterTasks()
+	if got := EvaluateProductionUsabilityValBCommandCenterState(model); got != ProductionUsabilityValBCommandCenterStateActive {
+		t.Fatalf("expected active command center state for supported visibility and redaction values, got %q", got)
+	}
+}
+
 func TestProductionUsabilityValBNoiseSuppressionDoesNotHideCriticalBlockers(t *testing.T) {
 	model := ProductionUsabilityValBNoiseBudget()
 	model.Items[0].AcknowledgementState = ProductionUsabilityAckSuppressedDup
