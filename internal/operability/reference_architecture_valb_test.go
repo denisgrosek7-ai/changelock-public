@@ -203,6 +203,11 @@ func TestReferenceArchitectureValBValidationHookDescriptors(t *testing.T) {
 	if got := EvaluateReferenceArchitectureValBHookPackState(hookPack); got == ReferenceArchitectureValBHookStateActive {
 		t.Fatalf("expected non-active hook state with missing expected refs, got %q", got)
 	}
+	hookPack = collection.HookPacks[0]
+	hookPack.HookPackRef = "validation-pack/" + hookPack.BlueprintFamily
+	if got := EvaluateReferenceArchitectureValBHookPackState(hookPack); got == ReferenceArchitectureValBHookStateActive {
+		t.Fatalf("expected non-active hook state when hook pack ref does not use hook-pack identity, got %q", got)
+	}
 }
 
 func TestReferenceArchitectureValBConformanceKitEvaluation(t *testing.T) {
@@ -249,6 +254,95 @@ func TestReferenceArchitectureValBConformanceKitEvaluation(t *testing.T) {
 	kit.ConformanceState = "matchd"
 	if got := EvaluateReferenceArchitectureValBConformanceKitState(packState, manifestState, bundleState, readinessState, hookState, deviationState, kit, registry.Packs[0], deviations.Reports[0]); got == ReferenceArchitectureConformanceMatched {
 		t.Fatalf("expected unknown conformance state to fail closed, got %q", got)
+	}
+	kit = kits.Kits[0]
+	kit.ValidationHookPackRef = "validation-pack/" + kit.BlueprintFamily
+	if got := EvaluateReferenceArchitectureValBConformanceKitState(packState, manifestState, bundleState, readinessState, hookState, deviationState, kit, registry.Packs[0], deviations.Reports[0]); got == ReferenceArchitectureConformanceMatched {
+		t.Fatalf("expected invalid hook pack ref to block matched conformance state, got %q", got)
+	}
+}
+
+func TestReferenceArchitectureValBConformanceKitCollectionRequiresActiveDependencies(t *testing.T) {
+	registry, manifests, bundles, readiness, hooks, deviations, kits := activeReferenceArchitectureValBComponents()
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifests, bundles, readiness, hooks, deviations); got != ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected active conformance kit collection state for valid fixtures, got %q", got)
+	}
+
+	manifestPartial := ReferenceArchitectureValBArtifactManifestCollection()
+	manifestPartial.Manifests[0].Artifacts = manifestPartial.Manifests[0].Artifacts[1:]
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifestPartial, bundles, readiness, hooks, deviations); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected non-active conformance kit collection when artifact manifest collection is partial, got %q", got)
+	}
+
+	bundlePartial := ReferenceArchitectureValBBundleCollection()
+	bundlePartial.Bundles[0].EvidenceRequirements = nil
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifests, bundlePartial, readiness, hooks, deviations); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected non-active conformance kit collection when bundle collection is partial, got %q", got)
+	}
+
+	readinessPartial := ReferenceArchitectureValBReadinessCollection()
+	readinessPartial.Bundles[0].Checks[0].State = ReferenceArchitectureValBReadinessUnknown
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifests, bundles, readinessPartial, hooks, deviations); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected non-active conformance kit collection when readiness collection is partial, got %q", got)
+	}
+
+	hookPartial := ReferenceArchitectureValBValidationHookCollection()
+	hookPartial.HookPacks[0].Hooks[0].Category = "schema_validation"
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifests, bundles, readiness, hookPartial, deviations); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected non-active conformance kit collection when hook collection is partial, got %q", got)
+	}
+
+	deviationPartial := ReferenceArchitectureValBDeviationCollection()
+	deviationPartial.Reports[0].Deviations = []ReferenceArchitectureDeviation{
+		{DeviationID: "dev-unknown", Category: "unknown_category", Severity: ReferenceArchitectureValBSeverityMedium, AffectedScope: "pack", Explanation: "unsupported"},
+	}
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifests, bundles, readiness, hooks, deviationPartial); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected non-active conformance kit collection when deviation collection is partial, got %q", got)
+	}
+
+	manifestDuplicate := ReferenceArchitectureValBArtifactManifestCollection()
+	manifestDuplicate.Manifests = append(manifestDuplicate.Manifests, manifestDuplicate.Manifests[0])
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifestDuplicate, bundles, readiness, hooks, deviations); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected duplicate dependency records to remain visible and block active state, got %q", got)
+	}
+
+	bundleExtra := ReferenceArchitectureValBBundleCollection()
+	extraBundle := bundleExtra.Bundles[0]
+	extraBundle.BundleID = "bundle/extra"
+	extraBundle.PackID = "pack/extra"
+	extraBundle.BlueprintFamily = "extra_family"
+	bundleExtra.Bundles = append(bundleExtra.Bundles, extraBundle)
+	if got := EvaluateReferenceArchitectureValBConformanceKitCollectionState(kits, registry, manifests, bundleExtra, readiness, hooks, deviations); got == ReferenceArchitectureValBConformanceKitStateActive {
+		t.Fatalf("expected extra dependency records to remain visible and block active state, got %q", got)
+	}
+}
+
+func TestReferenceArchitectureValBValidationHookPackRefUsesHookCollectionIdentity(t *testing.T) {
+	registry := ReferenceArchitectureValBPackRegistry()
+	hooks := ReferenceArchitectureValBValidationHookCollection()
+	kits := ReferenceArchitectureValBConformanceKitCollection()
+
+	pack := registry.Packs[0]
+	hookPack := hooks.HookPacks[0]
+	kit := kits.Kits[0]
+	expectedRef := referenceArchitectureValBHookPackRefForPack(pack)
+
+	if hookPack.HookPackRef != expectedRef {
+		t.Fatalf("expected hook pack ref %q, got %q", expectedRef, hookPack.HookPackRef)
+	}
+	if kit.ValidationHookPackRef != expectedRef {
+		t.Fatalf("expected conformance kit hook pack ref %q, got %q", expectedRef, kit.ValidationHookPackRef)
+	}
+
+	found := false
+	for _, candidate := range hooks.HookPacks {
+		if candidate.HookPackRef == kit.ValidationHookPackRef {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected ValidationHookPackRef %q to dereference against the validation hook collection", kit.ValidationHookPackRef)
 	}
 }
 

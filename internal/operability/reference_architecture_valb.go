@@ -250,6 +250,7 @@ type ReferenceArchitectureValidationHookDescriptor struct {
 
 type ReferenceArchitectureValidationHookPack struct {
 	CurrentState         string                                          `json:"current_state"`
+	HookPackRef          string                                          `json:"hook_pack_ref"`
 	PackID               string                                          `json:"pack_id"`
 	BlueprintFamily      string                                          `json:"blueprint_family"`
 	SupportedCategories  []string                                        `json:"supported_categories,omitempty"`
@@ -432,6 +433,10 @@ func referenceArchitectureValBDeviationSeverities() []string {
 
 func referenceArchitectureValBProjectionDisclaimer() string {
 	return "projection_only not_canonical_truth bounded_blueprint_as_code_validation"
+}
+
+func referenceArchitectureValBHookPackRefForPack(pack ReferenceArchitectureBlueprintPack) string {
+	return "hook-pack/" + strings.TrimSpace(pack.BlueprintFamily)
 }
 
 func referenceArchitectureValBPackCaveat(profile ReferenceArchitectureBlueprintFamilyProfile) string {
@@ -656,6 +661,7 @@ func referenceArchitectureValBHookPackForPack(pack ReferenceArchitectureBlueprin
 	}
 	return ReferenceArchitectureValidationHookPack{
 		CurrentState:         "reference_architecture_valb_hook_pack_ready",
+		HookPackRef:          referenceArchitectureValBHookPackRefForPack(pack),
 		PackID:               pack.PackID,
 		BlueprintFamily:      pack.BlueprintFamily,
 		SupportedCategories:  referenceArchitectureValBHookCategories(),
@@ -718,7 +724,7 @@ func referenceArchitectureValBConformanceKitForPack(pack ReferenceArchitectureBl
 		ManifestRef:           "artifact-manifest/" + pack.BlueprintFamily,
 		BundleRef:             "bundle/" + pack.BlueprintFamily,
 		ReadinessBundleRef:    "readiness/" + pack.BlueprintFamily,
-		ValidationHookPackRef: pack.ValidationPackRef,
+		ValidationHookPackRef: referenceArchitectureValBHookPackRefForPack(pack),
 		DeviationReportRef:    "deviations/" + pack.BlueprintFamily,
 		EvidenceRefs:          append([]ReferenceArchitectureEvidenceReference{}, pack.EvidenceRefs...),
 		ConformanceState:      ReferenceArchitectureConformanceMatched,
@@ -1061,10 +1067,13 @@ func EvaluateReferenceArchitectureValBReadinessCollectionState(collection Refere
 }
 
 func EvaluateReferenceArchitectureValBHookPackState(pack ReferenceArchitectureValidationHookPack) string {
-	if !referenceArchitectureValBRequiredRefsPresent(pack.PackID, pack.BlueprintFamily, pack.ProjectionDisclaimer) || len(pack.Hooks) == 0 {
+	if !referenceArchitectureValBRequiredRefsPresent(pack.HookPackRef, pack.PackID, pack.BlueprintFamily, pack.ProjectionDisclaimer) || len(pack.Hooks) == 0 {
 		return ReferenceArchitectureValBHookStateIncomplete
 	}
 	if !containsExactTrimmedStringSet(pack.SupportedCategories, referenceArchitectureValBHookCategories()...) || !referenceArchitectureValBHasProjectionDisclaimer(pack.ProjectionDisclaimer) {
+		return ReferenceArchitectureValBHookStatePartial
+	}
+	if strings.TrimSpace(pack.HookPackRef) != referenceArchitectureValBHookPackRefForPack(ReferenceArchitectureBlueprintPack{BlueprintFamily: pack.BlueprintFamily}) {
 		return ReferenceArchitectureValBHookStatePartial
 	}
 	seenCategories := map[string]struct{}{}
@@ -1215,6 +1224,9 @@ func EvaluateReferenceArchitectureValBConformanceKitState(
 		!referenceArchitectureValBHasProjectionDisclaimer(kit.ProjectionDisclaimer) {
 		return ReferenceArchitectureValBConformanceKitStateUnknown
 	}
+	if strings.TrimSpace(kit.ValidationHookPackRef) != referenceArchitectureValBHookPackRefForPack(pack) {
+		return ReferenceArchitectureConformancePartiallyMatched
+	}
 	allFresh, stale, ok := referenceArchitectureValBEvidenceValid(kit.EvidenceRefs)
 	if !ok {
 		return ReferenceArchitectureValBConformanceKitStateUnknown
@@ -1272,6 +1284,46 @@ func EvaluateReferenceArchitectureValBConformanceKitCollectionState(
 		len(kits.Kits) != len(referenceArchitectureVal0Families()) {
 		return ReferenceArchitectureValBConformanceKitStatePartial
 	}
+	registryState := EvaluateReferenceArchitectureValBPackRegistryState(registry)
+	manifestState := EvaluateReferenceArchitectureValBArtifactManifestCollectionState(manifestCollection)
+	bundleState := EvaluateReferenceArchitectureValBBundleCollectionState(bundleCollection)
+	readinessState := EvaluateReferenceArchitectureValBReadinessCollectionState(readinessCollection)
+	hookState := EvaluateReferenceArchitectureValBValidationHookCollectionState(hookCollection)
+	deviationState := EvaluateReferenceArchitectureValBDeviationCollectionState(deviationCollection)
+	dependencyStates := []string{registryState, manifestState, bundleState, readinessState, hookState, deviationState}
+	for _, state := range dependencyStates {
+		switch strings.TrimSpace(state) {
+		case ReferenceArchitectureValBPackStateActive,
+			ReferenceArchitectureValBManifestStateActive,
+			ReferenceArchitectureValBBundleStateActive,
+			ReferenceArchitectureValBReadinessStateActive,
+			ReferenceArchitectureValBHookStateActive,
+			ReferenceArchitectureValBDeviationStateActive:
+		case ReferenceArchitectureValBPackStateIncomplete,
+			ReferenceArchitectureValBManifestStateIncomplete,
+			ReferenceArchitectureValBBundleStateIncomplete,
+			ReferenceArchitectureValBReadinessStateIncomplete,
+			ReferenceArchitectureValBHookStateIncomplete,
+			ReferenceArchitectureValBDeviationStateIncomplete:
+			return ReferenceArchitectureValBConformanceKitStateIncomplete
+		case ReferenceArchitectureValBPackStateBlocked,
+			ReferenceArchitectureValBManifestStateBlocked,
+			ReferenceArchitectureValBBundleStateBlocked,
+			ReferenceArchitectureValBReadinessStateBlocked,
+			ReferenceArchitectureValBHookStateBlocked,
+			ReferenceArchitectureValBDeviationStateBlocked:
+			return ReferenceArchitectureValBConformanceKitStateBlocked
+		case ReferenceArchitectureValBPackStateUnknown,
+			ReferenceArchitectureValBManifestStateUnknown,
+			ReferenceArchitectureValBBundleStateUnknown,
+			ReferenceArchitectureValBReadinessStateUnknown,
+			ReferenceArchitectureValBHookStateUnknown,
+			ReferenceArchitectureValBDeviationStateUnknown:
+			return ReferenceArchitectureValBConformanceKitStateUnknown
+		default:
+			return ReferenceArchitectureValBConformanceKitStatePartial
+		}
+	}
 	packsByFamily := map[string]ReferenceArchitectureBlueprintPack{}
 	for _, pack := range registry.Packs {
 		packsByFamily[strings.TrimSpace(pack.BlueprintFamily)] = pack
@@ -1288,9 +1340,9 @@ func EvaluateReferenceArchitectureValBConformanceKitCollectionState(
 	for _, bundle := range readinessCollection.Bundles {
 		readinessByFamily[strings.TrimSpace(bundle.BlueprintFamily)] = bundle
 	}
-	hooksByFamily := map[string]ReferenceArchitectureValidationHookPack{}
+	hooksByRef := map[string]ReferenceArchitectureValidationHookPack{}
 	for _, hookPack := range hookCollection.HookPacks {
-		hooksByFamily[strings.TrimSpace(hookPack.BlueprintFamily)] = hookPack
+		hooksByRef[strings.TrimSpace(hookPack.HookPackRef)] = hookPack
 	}
 	deviationsByFamily := map[string]ReferenceArchitectureDeviationReport{}
 	for _, report := range deviationCollection.Reports {
@@ -1307,7 +1359,13 @@ func EvaluateReferenceArchitectureValBConformanceKitCollectionState(
 		manifest := manifestsByFamily[family]
 		bundle := bundlesByFamily[family]
 		readiness := readinessByFamily[family]
-		hookPack := hooksByFamily[family]
+		hookPack, ok := hooksByRef[strings.TrimSpace(kit.ValidationHookPackRef)]
+		if !ok {
+			return ReferenceArchitectureValBConformanceKitStatePartial
+		}
+		if strings.TrimSpace(hookPack.BlueprintFamily) != family || strings.TrimSpace(hookPack.PackID) != strings.TrimSpace(kit.PackID) {
+			return ReferenceArchitectureValBConformanceKitStatePartial
+		}
 		report := deviationsByFamily[family]
 		conformanceState := EvaluateReferenceArchitectureValBConformanceKitState(
 			EvaluateReferenceArchitectureValBPackState(pack),

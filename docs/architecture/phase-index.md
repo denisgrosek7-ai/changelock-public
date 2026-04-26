@@ -69,6 +69,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Reference Architecture Hardening Val 0 Core](../reference-architecture-val0-core.md)
    - [Reference Architecture Hardening Val A Core](../reference-architecture-vala-core.md)
    - [Reference Architecture Hardening Val B Core](../reference-architecture-valb-core.md)
+   - [Reference Architecture Hardening Val C Core](../reference-architecture-valc-core.md)
 
 ## Current documentation shape
 
