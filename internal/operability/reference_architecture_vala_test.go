@@ -9,6 +9,74 @@ func activeReferenceArchitectureValAPrereqs() (string, string, string, string) {
 		ReferenceArchitecturePoint6StateNotComplete
 }
 
+func TestReferenceArchitectureValAProofsRequireExactSurfaceSet(t *testing.T) {
+	valAState, point6State, supportedFamilies, surfaceRefs, evidenceRefs, limitations, disclaimer := activeReferenceArchitectureValAProofInputs()
+	if got := EvaluateReferenceArchitectureValAProofsState(valAState, point6State, supportedFamilies, surfaceRefs, evidenceRefs, limitations, disclaimer); got != ReferenceArchitectureValAStateActive {
+		t.Fatalf("expected active proofs state with all required surfaces present, got %q", got)
+	}
+
+	testCases := []struct {
+		name        string
+		surfaceRefs []string
+	}{
+		{
+			name:        "missing val0 proofs",
+			surfaceRefs: []string{"/v1/reference-architecture/vala/family-registry", "/v1/reference-architecture/vala/family-profiles", "/v1/reference-architecture/vala/proofs"},
+		},
+		{
+			name:        "missing family registry",
+			surfaceRefs: []string{"/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/vala/family-profiles", "/v1/reference-architecture/vala/proofs"},
+		},
+		{
+			name:        "missing family profiles",
+			surfaceRefs: []string{"/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/vala/family-registry", "/v1/reference-architecture/vala/proofs"},
+		},
+		{
+			name:        "missing vala proofs",
+			surfaceRefs: []string{"/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/vala/family-registry", "/v1/reference-architecture/vala/family-profiles"},
+		},
+		{
+			name:        "duplicate does not compensate",
+			surfaceRefs: []string{"/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/vala/family-registry", "/v1/reference-architecture/vala/proofs"},
+		},
+		{
+			name:        "unknown extra does not compensate",
+			surfaceRefs: []string{"/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/vala/family-registry", "/v1/reference-architecture/vala/proofs", "/v1/reference-architecture/vala/unknown"},
+		},
+		{
+			name:        "whitespace ref fails closed",
+			surfaceRefs: []string{"/v1/reference-architecture/val0/proofs", "/v1/reference-architecture/vala/family-registry", "/v1/reference-architecture/vala/proofs", "   "},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := EvaluateReferenceArchitectureValAProofsState(valAState, point6State, supportedFamilies, tc.surfaceRefs, evidenceRefs, limitations, disclaimer); got == ReferenceArchitectureValAStateActive {
+				t.Fatalf("expected non-active proofs state for %s, got %q", tc.name, got)
+			}
+		})
+	}
+}
+
+func activeReferenceArchitectureValAProofInputs() (string, string, []string, []string, []string, []string, string) {
+	return ReferenceArchitectureValAStateActive,
+		ReferenceArchitecturePoint6StateNotComplete,
+		referenceArchitectureVal0Families(),
+		referenceArchitectureValAProofSurfaceRefs(),
+		[]string{
+			"point5_integrated_closure",
+			"point6_val0_proofs",
+			"registry",
+			"p1",
+			"p2",
+			"p3",
+			"p4",
+			"p5",
+			"p6",
+		},
+		[]string{"Val A keeps Točka 6 not complete."},
+		"projection_only not_canonical_truth bounded_reference_architecture_family_profiles"
+}
 func TestReferenceArchitectureValARegistryContainsAllSixFamilies(t *testing.T) {
 	registry := ReferenceArchitectureValAFamilyRegistry()
 	if len(registry.Profiles) != 6 {

@@ -898,10 +898,19 @@ func EvaluateReferenceArchitectureValAState(point5State, val0CurrentState, val0S
 	}
 }
 
+func referenceArchitectureValAProofSurfaceRefs() []string {
+	return []string{
+		"/v1/reference-architecture/val0/proofs",
+		"/v1/reference-architecture/vala/family-registry",
+		"/v1/reference-architecture/vala/family-profiles",
+		"/v1/reference-architecture/vala/proofs",
+	}
+}
+
 func EvaluateReferenceArchitectureValAProofsState(valAState, point6State string, supportedFamilies, surfaceRefs, evidenceRefs, limitations []string, projectionDisclaimer string) string {
 	baseState := strings.TrimSpace(valAState)
 	if !containsExactTrimmedStringSet(supportedFamilies, referenceArchitectureVal0Families()...) ||
-		len(surfaceRefs) < 3 ||
+		!containsExactTrimmedStringSet(surfaceRefs, referenceArchitectureValAProofSurfaceRefs()...) ||
 		len(evidenceRefs) < 8 ||
 		len(limitations) == 0 ||
 		!strings.Contains(strings.TrimSpace(projectionDisclaimer), "projection_only") ||
