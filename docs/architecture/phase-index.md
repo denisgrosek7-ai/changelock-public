@@ -67,6 +67,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Intelligence Calibration Val E Core](../intelligence-calibration-vale-core.md)
 11. Current reference architecture hardening lineage:
    - [Reference Architecture Hardening Val 0 Core](../reference-architecture-val0-core.md)
+   - [Reference Architecture Hardening Val A Core](../reference-architecture-vala-core.md)
 
 ## Current documentation shape
 
