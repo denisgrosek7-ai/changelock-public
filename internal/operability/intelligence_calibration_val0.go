@@ -66,6 +66,7 @@ const (
 	IntelligenceCalibrationVal0StateSubstantial = "intelligence_calibration_val0_substantially_ready"
 	IntelligenceCalibrationVal0StateActive      = "intelligence_calibration_val0_active"
 
+	IntelligenceCalibrationPoint5StatePass        = "intelligence_calibration_point_5_pass"
 	IntelligenceCalibrationPoint5StateNotComplete = "intelligence_calibration_point_5_not_complete"
 
 	IntelligenceCalibrationFreshnessFresh       = "fresh"

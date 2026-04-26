@@ -64,6 +64,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Intelligence Calibration Val B Core](../intelligence-calibration-valb-core.md)
    - [Intelligence Calibration Val C Core](../intelligence-calibration-valc-core.md)
    - [Intelligence Calibration Val D Core](../intelligence-calibration-vald-core.md)
+   - [Intelligence Calibration Val E Core](../intelligence-calibration-vale-core.md)
 
 ## Current documentation shape
 
