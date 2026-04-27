@@ -121,3 +121,44 @@ func TestReferenceArchitectureValDProofsHandler(t *testing.T) {
 		t.Fatalf("expected projection-only disclaimer, got %#v", response)
 	}
 }
+
+func TestReferenceArchitectureValDFinalGateSurfaceReflectsUnderlyingRegression(t *testing.T) {
+	visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility, _ := buildReferenceArchitectureValDSharedCollections()
+	visibility.Reports[0].ProjectionDisclaimer = ""
+	finalGate := operability.ReferenceArchitectureValDFinalGateCollectionFromComponents(
+		visibility,
+		alignment,
+		alerts,
+		support,
+		migration,
+		topology,
+		security,
+		operabilityCollection,
+		compatibility,
+	)
+	response := buildReferenceArchitectureValDFinalGateResponse(
+		visibility,
+		alignment,
+		alerts,
+		support,
+		migration,
+		topology,
+		security,
+		operabilityCollection,
+		compatibility,
+		finalGate,
+	)
+	if response.CurrentState == operability.ReferenceArchitectureValDFinalGateStateActive {
+		t.Fatalf("expected regressed visibility collection to keep final-gate surface non-active, got %#v", response)
+	}
+	model, ok := response.Model.(operability.ReferenceArchitectureFinalGateCollection)
+	if !ok {
+		t.Fatalf("expected final-gate model type, got %#v", response.Model)
+	}
+	if len(model.Reports) == 0 || model.Reports[0].OperationalVisibilityState == operability.ReferenceArchitectureValDVisibilityStateActive {
+		t.Fatalf("expected final-gate report to reflect non-active underlying visibility state, got %#v", model)
+	}
+	if len(response.FamilyStates) == 0 || response.FamilyStates[0].FinalGateState == operability.ReferenceArchitectureValDFinalGateStateActive {
+		t.Fatalf("expected family status final gate to remain non-active when an underlying collection regresses, got %#v", response.FamilyStates)
+	}
+}

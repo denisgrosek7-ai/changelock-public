@@ -352,6 +352,145 @@ func TestReferenceArchitectureValDCompatibilityGateValidation(t *testing.T) {
 	}
 }
 
+func TestReferenceArchitectureValDFinalGateReportsReflectUnderlyingComponentRegressions(t *testing.T) {
+	visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility, _ := activeReferenceArchitectureValDComponents()
+	finalGate := ReferenceArchitectureValDFinalGateCollectionFromComponents(visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility)
+	report := finalGate.Reports[0]
+	if report.OperationalVisibilityState != ReferenceArchitectureValDVisibilityStateActive ||
+		report.AlignmentSummaryState != ReferenceArchitectureValDAlignmentStateActive ||
+		report.DeviationAlertState != ReferenceArchitectureValDAlertStateActive ||
+		report.SupportBoundaryState != ReferenceArchitectureValDSupportBoundaryStateActive ||
+		report.MigrationUpgradeState != ReferenceArchitectureValDMigrationStateActive ||
+		report.TopologyGateState != ReferenceArchitectureValDTopologyGateStateActive ||
+		report.SecurityBoundaryGateState != ReferenceArchitectureValDSecurityGateStateActive ||
+		report.OperabilityGateState != ReferenceArchitectureValDOperabilityGateStateActive ||
+		report.CompatibilityGateState != ReferenceArchitectureValDCompatibilityGateStateActive {
+		t.Fatalf("expected active component states to feed active final gate report, got %#v", report)
+	}
+	if got := EvaluateReferenceArchitectureValDFinalGateReportState(report); got != ReferenceArchitectureValDFinalGateStateActive {
+		t.Fatalf("expected fully active underlying component states to produce active final gate report, got %q", got)
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(
+			*ReferenceArchitectureOperationalVisibilityCollection,
+			*ReferenceArchitectureBlueprintAlignmentCollection,
+			*ReferenceArchitectureDeviationAlertCollection,
+			*ReferenceArchitectureSupportBoundaryCollection,
+			*ReferenceArchitectureMigrationUpgradeCollection,
+			*ReferenceArchitectureTopologyGateCollection,
+			*ReferenceArchitectureSecurityBoundaryCollection,
+			*ReferenceArchitectureOperabilityGateCollection,
+			*ReferenceArchitectureCompatibilityGateCollection,
+		)
+		derivedStateName    string
+		expectedActiveState string
+		derivedState        func(ReferenceArchitectureFinalGateReport) string
+	}{
+		{
+			name: "operational visibility regression blocks final gate",
+			mutate: func(visibility *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				visibility.Reports[0].ProjectionDisclaimer = ""
+			},
+			derivedStateName:    "operational visibility",
+			expectedActiveState: ReferenceArchitectureValDVisibilityStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.OperationalVisibilityState },
+		},
+		{
+			name: "alignment regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, alignment *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				alignment.Summaries[0].BlockingDeviations = []string{"family alignment gap"}
+			},
+			derivedStateName:    "alignment summary",
+			expectedActiveState: ReferenceArchitectureValDAlignmentStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.AlignmentSummaryState },
+		},
+		{
+			name: "deviation alert regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, alerts *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				alert := validReferenceArchitectureValDAlert()
+				alert.DeviationCategory = ReferenceArchitectureValDDeviationOverclaimDetected
+				alert.BlocksAlignment = true
+				alerts.Reports[0].Alerts = []ReferenceArchitectureDeviationAlert{alert}
+			},
+			derivedStateName:    "deviation alerts",
+			expectedActiveState: ReferenceArchitectureValDAlertStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.DeviationAlertState },
+		},
+		{
+			name: "support boundary regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, support *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				support.Views[0].SupportBoundaryRef = ""
+			},
+			derivedStateName:    "support boundary",
+			expectedActiveState: ReferenceArchitectureValDSupportBoundaryStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.SupportBoundaryState },
+		},
+		{
+			name: "migration regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, migration *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				migration.Views[0].ExecutesMigration = true
+			},
+			derivedStateName:    "migration or upgrade",
+			expectedActiveState: ReferenceArchitectureValDMigrationStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.MigrationUpgradeState },
+		},
+		{
+			name: "topology regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, topology *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				topology.Checks[0].SupportedTopology = false
+			},
+			derivedStateName:    "topology gate",
+			expectedActiveState: ReferenceArchitectureValDTopologyGateStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.TopologyGateState },
+		},
+		{
+			name: "security boundary regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, security *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				security.Checks[0].MutationAuthorityBlocked = false
+			},
+			derivedStateName:    "security boundary gate",
+			expectedActiveState: ReferenceArchitectureValDSecurityGateStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.SecurityBoundaryGateState },
+		},
+		{
+			name: "operability regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, operabilityCollection *ReferenceArchitectureOperabilityGateCollection, _ *ReferenceArchitectureCompatibilityGateCollection) {
+				operabilityCollection.Checks[0].OperatorActionGuidance = ""
+			},
+			derivedStateName:    "operability gate",
+			expectedActiveState: ReferenceArchitectureValDOperabilityGateStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.OperabilityGateState },
+		},
+		{
+			name: "compatibility regression blocks final gate",
+			mutate: func(_ *ReferenceArchitectureOperationalVisibilityCollection, _ *ReferenceArchitectureBlueprintAlignmentCollection, _ *ReferenceArchitectureDeviationAlertCollection, _ *ReferenceArchitectureSupportBoundaryCollection, _ *ReferenceArchitectureMigrationUpgradeCollection, _ *ReferenceArchitectureTopologyGateCollection, _ *ReferenceArchitectureSecurityBoundaryCollection, _ *ReferenceArchitectureOperabilityGateCollection, compatibility *ReferenceArchitectureCompatibilityGateCollection) {
+				compatibility.Checks[0].CompatibilityState = ReferenceArchitectureCompatibilityUnsupported
+			},
+			derivedStateName:    "compatibility gate",
+			expectedActiveState: ReferenceArchitectureValDCompatibilityGateStateActive,
+			derivedState:        func(report ReferenceArchitectureFinalGateReport) string { return report.CompatibilityGateState },
+		},
+	}
+
+	for _, tc := range testCases {
+		visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility, _ := activeReferenceArchitectureValDComponents()
+		tc.mutate(&visibility, &alignment, &alerts, &support, &migration, &topology, &security, &operabilityCollection, &compatibility)
+		finalGate := ReferenceArchitectureValDFinalGateCollectionFromComponents(visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility)
+		report := finalGate.Reports[0]
+		if derivedState := tc.derivedState(report); derivedState == "" || derivedState == tc.expectedActiveState {
+			t.Fatalf("expected %s regression to change derived %s state, got %#v", tc.name, tc.derivedStateName, report)
+		}
+		if got := EvaluateReferenceArchitectureValDFinalGateReportState(report); got == ReferenceArchitectureValDFinalGateStateActive {
+			t.Fatalf("expected %s to keep final gate report non-active, got %#v", tc.name, report)
+		}
+		if got := EvaluateReferenceArchitectureValDFinalGateCollectionState(finalGate); got == ReferenceArchitectureValDFinalGateStateActive {
+			t.Fatalf("expected %s to keep final gate collection non-active, got %#v", tc.name, finalGate)
+		}
+	}
+}
+
 func TestReferenceArchitectureValDFinalGateReportRequiresExactComponentStates(t *testing.T) {
 	report := ReferenceArchitectureValDFinalGateCollection().Reports[0]
 	if got := EvaluateReferenceArchitectureValDFinalGateReportState(report); got != ReferenceArchitectureValDFinalGateStateActive {

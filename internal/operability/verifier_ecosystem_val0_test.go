@@ -1,0 +1,404 @@
+package operability
+
+import "testing"
+
+func activeVerifierEcosystemVal0Inputs() (
+	VerifierEcosystemVal0DependencySnapshot,
+	VerifierEcosystemVal0VerifierContract,
+	VerifierEcosystemVal0ProofEnvelope,
+	VerifierEcosystemVal0VerificationScopeCatalog,
+	VerifierEcosystemVal0SchemaCompatibilityBaseline,
+	VerifierEcosystemVal0TrustIssuerDiscipline,
+	VerifierEcosystemVal0DiagnosticsModel,
+	VerifierEcosystemVal0OutputBoundaryCollection,
+) {
+	return VerifierEcosystemVal0DependencySnapshot{
+			Point5State:                    IntelligenceCalibrationPoint5StatePass,
+			Point5DependencyState:          IntelligenceCalibrationValEStateActive,
+			Point6State:                    ReferenceArchitecturePoint6StatePass,
+			Point6ClosureState:             ReferenceArchitectureValEStateActive,
+			Point6ClosurePrerequisiteState: ReferenceArchitectureValEPrerequisiteStateActive,
+			Point6ClosureInvariantState:    ReferenceArchitectureValEInvariantStateActive,
+			Point6ProofSurfaceState:        ReferenceArchitectureValEProofSurfaceStateActive,
+			Point6PassRuleState:            ReferenceArchitectureValEPassRuleStateActive,
+			Point6PassAllowed:              true,
+		},
+		VerifierEcosystemVal0VerifierContractModel(),
+		VerifierEcosystemVal0ProofEnvelopeModel(),
+		VerifierEcosystemVal0VerificationScopeCatalogModel(),
+		VerifierEcosystemVal0SchemaCompatibilityBaselineModel(),
+		VerifierEcosystemVal0TrustIssuerDisciplineModel(),
+		VerifierEcosystemVal0DiagnosticsCatalogModel(),
+		VerifierEcosystemVal0OutputBoundaryCollectionModel()
+}
+
+func activeVerifierEcosystemVal0States() (
+	VerifierEcosystemVal0DependencySnapshot,
+	VerifierEcosystemVal0VerifierContract,
+	VerifierEcosystemVal0ProofEnvelope,
+	VerifierEcosystemVal0VerificationScopeCatalog,
+	VerifierEcosystemVal0SchemaCompatibilityBaseline,
+	VerifierEcosystemVal0TrustIssuerDiscipline,
+	VerifierEcosystemVal0DiagnosticsModel,
+	VerifierEcosystemVal0OutputBoundaryCollection,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+) {
+	dependency, contract, envelope, scopeCatalog, compatibility, trust, diagnostics, outputBoundaries := activeVerifierEcosystemVal0Inputs()
+	contractState := EvaluateVerifierEcosystemVal0VerifierContractState(contract)
+	envelopeState := EvaluateVerifierEcosystemVal0ProofEnvelopeState(envelope)
+	scopeState := EvaluateVerifierEcosystemVal0VerificationScopeState(scopeCatalog)
+	compatibilityState := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(compatibility)
+	trustState := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(trust)
+	diagnosticsState := EvaluateVerifierEcosystemVal0DiagnosticsState(diagnostics)
+	outputBoundaryState := EvaluateVerifierEcosystemVal0OutputBoundaryState(outputBoundaries)
+	val0State := EvaluateVerifierEcosystemVal0State(
+		dependency,
+		contractState,
+		envelopeState,
+		scopeState,
+		compatibilityState,
+		trustState,
+		diagnosticsState,
+		outputBoundaryState,
+	)
+	return dependency, contract, envelope, scopeCatalog, compatibility, trust, diagnostics, outputBoundaries, contractState, envelopeState, scopeState, compatibilityState, trustState, diagnosticsState, outputBoundaryState, val0State
+}
+
+func TestVerifierEcosystemVal0DependencyGates(t *testing.T) {
+	dependency, _, _, _, _, _, _, _, contractState, envelopeState, scopeState, compatibilityState, trustState, diagnosticsState, outputBoundaryState, val0State := activeVerifierEcosystemVal0States()
+	if val0State != VerifierEcosystemVal0StateActive {
+		t.Fatalf("expected active Val 0 state with active Točka 6 closure dependency, got %q", val0State)
+	}
+	if got := EvaluateVerifierEcosystemPoint7State(val0State); got != VerifierEcosystemPoint7StateNotComplete {
+		t.Fatalf("expected point 7 to remain not complete in Val 0, got %q", got)
+	}
+
+	testCases := []struct {
+		name     string
+		mutate   func(*VerifierEcosystemVal0DependencySnapshot)
+		expected string
+	}{
+		{name: "missing point 6 pass blocks active", mutate: func(s *VerifierEcosystemVal0DependencySnapshot) {
+			s.Point6State = ReferenceArchitecturePoint6StateNotComplete
+		}, expected: VerifierEcosystemVal0StateBlocked},
+		{name: "point 5 not pass blocks active", mutate: func(s *VerifierEcosystemVal0DependencySnapshot) {
+			s.Point5State = IntelligenceCalibrationPoint5StateNotComplete
+		}, expected: VerifierEcosystemVal0StateBlocked},
+		{name: "stale closure dependency blocks active", mutate: func(s *VerifierEcosystemVal0DependencySnapshot) {
+			s.Point6ClosureState = ReferenceArchitectureValEStatePartial
+		}, expected: VerifierEcosystemVal0StateBlocked},
+		{name: "closure proof surface regression blocks active", mutate: func(s *VerifierEcosystemVal0DependencySnapshot) {
+			s.Point6ProofSurfaceState = ReferenceArchitectureValEProofSurfaceStatePartial
+		}, expected: VerifierEcosystemVal0StateBlocked},
+	}
+
+	for _, tc := range testCases {
+		snapshot := dependency
+		tc.mutate(&snapshot)
+		if got := EvaluateVerifierEcosystemVal0State(snapshot, contractState, envelopeState, scopeState, compatibilityState, trustState, diagnosticsState, outputBoundaryState); got != tc.expected {
+			t.Fatalf("expected %s to return %q, got %q", tc.name, tc.expected, got)
+		}
+	}
+}
+
+func TestVerifierEcosystemVal0VerifierContractValidation(t *testing.T) {
+	contract := VerifierEcosystemVal0VerifierContractModel()
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got != VerifierEcosystemVal0ContractStateActive {
+		t.Fatalf("expected valid verifier contract to be active, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.VerifierContractID = ""
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got != VerifierEcosystemVal0ContractStateIncomplete {
+		t.Fatalf("expected missing verifier_contract_id to fail closed, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.VerifierProfile = "global_public"
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got == VerifierEcosystemVal0ContractStateActive {
+		t.Fatalf("expected unknown verifier profile to fail closed, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.VerifierMode = VerifierEcosystemModeUnknown
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got == VerifierEcosystemVal0ContractStateActive {
+		t.Fatalf("expected unknown verifier mode to fail closed, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.LifecycleState = "acitve"
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got == VerifierEcosystemVal0ContractStateActive {
+		t.Fatalf("expected typo lifecycle to fail closed, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.CompatibilityState = ReferenceArchitectureCompatibilityUnsupported
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got != VerifierEcosystemVal0ContractStateBlocked {
+		t.Fatalf("expected unsupported compatibility to block active state, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.ProjectionDisclaimer = ""
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got == VerifierEcosystemVal0ContractStateActive {
+		t.Fatalf("expected missing projection disclaimer to fail closed, got %q", got)
+	}
+
+	contract = VerifierEcosystemVal0VerifierContractModel()
+	contract.RegulatorApprovedClaim = true
+	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got != VerifierEcosystemVal0ContractStateBlocked {
+		t.Fatalf("expected overclaim language to block active state, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemVal0ProofEnvelopeBoundary(t *testing.T) {
+	envelope := VerifierEcosystemVal0ProofEnvelopeModel()
+	if got := EvaluateVerifierEcosystemVal0ProofEnvelopeState(envelope); got != VerifierEcosystemVal0EnvelopeStateActive {
+		t.Fatalf("expected valid proof envelope boundary to be active, got %q", got)
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(*VerifierEcosystemVal0ProofEnvelope)
+	}{
+		{name: "missing schema version", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.SchemaVersion = "" }},
+		{name: "missing artifact digest ref", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.ArtifactDigestRef = "" }},
+		{name: "missing signature ref", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.SignatureRef = "" }},
+		{name: "missing issuer ref", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.IssuerRef = "" }},
+		{name: "missing trust root ref", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.TrustRootRef = "" }},
+		{name: "unknown proof type", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.ProofType = "signature_bundle_v9" }},
+		{name: "missing scope", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.Scope = "" }},
+		{name: "malformed timestamp", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.IssuedAt = "2026-04-27 07:05:00Z" }},
+		{name: "stale expiry", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.ExpiresAt = "2026-04-26T07:05:00Z" }},
+		{name: "claims truth outside scope", mutate: func(model *VerifierEcosystemVal0ProofEnvelope) { model.ClaimsTruthOutsideScope = true }},
+	}
+
+	for _, tc := range testCases {
+		model := VerifierEcosystemVal0ProofEnvelopeModel()
+		tc.mutate(&model)
+		if got := EvaluateVerifierEcosystemVal0ProofEnvelopeState(model); got == VerifierEcosystemVal0EnvelopeStateActive {
+			t.Fatalf("expected %s to fail closed, got %q", tc.name, got)
+		}
+	}
+}
+
+func TestVerifierEcosystemVal0VerificationScopeValidation(t *testing.T) {
+	catalog := VerifierEcosystemVal0VerificationScopeCatalogModel()
+	if got := EvaluateVerifierEcosystemVal0VerificationScopeState(catalog); got != VerifierEcosystemVal0ScopeStateActive {
+		t.Fatalf("expected supported verification scopes to be active, got %q", got)
+	}
+
+	catalog = VerifierEcosystemVal0VerificationScopeCatalogModel()
+	catalog.Scopes[0].ScopeClass = VerifierEcosystemModeUnknown
+	if got := EvaluateVerifierEcosystemVal0VerificationScopeState(catalog); got == VerifierEcosystemVal0ScopeStateActive {
+		t.Fatalf("expected unknown scope to fail closed, got %q", got)
+	}
+
+	catalog = VerifierEcosystemVal0VerificationScopeCatalogModel()
+	catalog.Scopes[0].RedactionAware = false
+	if got := EvaluateVerifierEcosystemVal0VerificationScopeState(catalog); got == VerifierEcosystemVal0ScopeStateActive {
+		t.Fatalf("expected public_safe without redaction discipline to fail closed, got %q", got)
+	}
+
+	catalog = VerifierEcosystemVal0VerificationScopeCatalogModel()
+	catalog.Scopes[2].EvidenceTraceable = false
+	if got := EvaluateVerifierEcosystemVal0VerificationScopeState(catalog); got == VerifierEcosystemVal0ScopeStateActive {
+		t.Fatalf("expected auditor_safe without evidence traceability to fail closed, got %q", got)
+	}
+
+	catalog = VerifierEcosystemVal0VerificationScopeCatalogModel()
+	catalog.Scopes[3].InternalOnly = false
+	if got := EvaluateVerifierEcosystemVal0VerificationScopeState(catalog); got == VerifierEcosystemVal0ScopeStateActive {
+		t.Fatalf("expected internal_diagnostic reused as public-safe to fail closed, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemVal0SchemaCompatibilityBaseline(t *testing.T) {
+	baseline := VerifierEcosystemVal0SchemaCompatibilityBaselineModel()
+	if got := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(baseline); got != VerifierEcosystemVal0CompatibilityStateActive {
+		t.Fatalf("expected compatible baseline to be active, got %q", got)
+	}
+	if len(baseline.MixedVersionDiagnostics) == 0 {
+		t.Fatalf("expected mixed-version diagnostic representation in baseline, got %#v", baseline)
+	}
+
+	baseline = VerifierEcosystemVal0SchemaCompatibilityBaselineModel()
+	baseline.CompatibilityState = ReferenceArchitectureCompatibilityCompatibleWithWarning
+	if got := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(baseline); got != VerifierEcosystemVal0CompatibilityStatePartial {
+		t.Fatalf("expected compatible_with_warnings to require caveat handling, got %q", got)
+	}
+
+	baseline = VerifierEcosystemVal0SchemaCompatibilityBaselineModel()
+	baseline.CompatibilityState = ReferenceArchitectureCompatibilityDeprecated
+	if got := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(baseline); got == VerifierEcosystemVal0CompatibilityStateActive {
+		t.Fatalf("expected deprecated compatibility not to return clean verified state, got %q", got)
+	}
+
+	baseline = VerifierEcosystemVal0SchemaCompatibilityBaselineModel()
+	baseline.CompatibilityState = ReferenceArchitectureCompatibilitySuperseded
+	if got := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(baseline); got == VerifierEcosystemVal0CompatibilityStateActive {
+		t.Fatalf("expected superseded compatibility not to return clean verified state, got %q", got)
+	}
+
+	baseline = VerifierEcosystemVal0SchemaCompatibilityBaselineModel()
+	baseline.CompatibilityState = ReferenceArchitectureCompatibilityUnsupported
+	if got := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(baseline); got != VerifierEcosystemVal0CompatibilityStateBlocked {
+		t.Fatalf("expected unsupported compatibility to fail closed, got %q", got)
+	}
+
+	baseline = VerifierEcosystemVal0SchemaCompatibilityBaselineModel()
+	baseline.CompatibilityState = ReferenceArchitectureCompatibilityUnknown
+	if got := EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(baseline); got != VerifierEcosystemVal0CompatibilityStateUnknown {
+		t.Fatalf("expected unknown compatibility to fail closed, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemVal0TrustRootIssuerDiscipline(t *testing.T) {
+	model := VerifierEcosystemVal0TrustIssuerDisciplineModel()
+	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got != VerifierEcosystemVal0TrustStateActive {
+		t.Fatalf("expected trusted trust-root to be active, got %q", got)
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(*VerifierEcosystemVal0TrustIssuerDiscipline)
+	}{
+		{name: "revoked trust root", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+			model.TrustRootState = VerifierEcosystemTrustRootRevoked
+		}},
+		{name: "expired trust root", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+			model.TrustRootState = VerifierEcosystemTrustRootExpired
+		}},
+		{name: "unsupported trust root", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+			model.TrustRootState = VerifierEcosystemTrustRootUnsupported
+		}},
+		{name: "unknown trust root", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+			model.TrustRootState = VerifierEcosystemTrustRootUnknown
+		}},
+		{name: "rotated without rollover metadata", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+			model.TrustRootState = VerifierEcosystemTrustRootRotated
+			model.RolloverMetadataRef = ""
+		}},
+		{name: "offline distribution unscoped", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) { model.OfflineDistributionScope = "" }},
+		{name: "global key directory claim", mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) { model.GlobalKeyDirectoryClaim = true }},
+	}
+
+	for _, tc := range testCases {
+		model := VerifierEcosystemVal0TrustIssuerDisciplineModel()
+		tc.mutate(&model)
+		if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got == VerifierEcosystemVal0TrustStateActive {
+			t.Fatalf("expected %s to fail closed, got %q", tc.name, got)
+		}
+	}
+}
+
+func TestVerifierEcosystemVal0DiagnosticsModel(t *testing.T) {
+	model := VerifierEcosystemVal0DiagnosticsCatalogModel()
+	if got := EvaluateVerifierEcosystemVal0DiagnosticsState(model); got != VerifierEcosystemVal0DiagnosticsStateActive {
+		t.Fatalf("expected verified diagnostics to be active, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0DiagnosticsCatalogModel()
+	model.SupportedDiagnosticClasses = append(model.SupportedDiagnosticClasses[:0], model.SupportedDiagnosticClasses[1:]...)
+	if got := EvaluateVerifierEcosystemVal0DiagnosticsState(model); got == VerifierEcosystemVal0DiagnosticsStateActive {
+		t.Fatalf("expected missing diagnostic class to fail closed, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0DiagnosticsCatalogModel()
+	model.ObservedDiagnosticClass = VerifierEcosystemDiagnosticUnknown
+	if got := EvaluateVerifierEcosystemVal0DiagnosticsState(model); got == VerifierEcosystemVal0DiagnosticsStateActive {
+		t.Fatalf("expected unknown diagnostic class not to become verified, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0DiagnosticsCatalogModel()
+	model.ObservedDiagnosticClass = VerifierEcosystemDiagnosticStaleArtifact
+	if got := EvaluateVerifierEcosystemVal0DiagnosticsState(model); got == VerifierEcosystemVal0DiagnosticsStateActive {
+		t.Fatalf("expected stale artifact diagnostic not to become verified, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0DiagnosticsCatalogModel()
+	model.RedactionKeepsFailuresVisible = false
+	if got := EvaluateVerifierEcosystemVal0DiagnosticsState(model); got == VerifierEcosystemVal0DiagnosticsStateActive {
+		t.Fatalf("expected redaction hiding failures to fail closed, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemVal0OutputBoundaryDiscipline(t *testing.T) {
+	collection := VerifierEcosystemVal0OutputBoundaryCollectionModel()
+	if got := EvaluateVerifierEcosystemVal0OutputBoundaryState(collection); got != VerifierEcosystemVal0OutputBoundaryStateActive {
+		t.Fatalf("expected valid output boundaries to be active, got %q", got)
+	}
+
+	collection = VerifierEcosystemVal0OutputBoundaryCollectionModel()
+	if len(collection.Boundaries[0].RedactedFields) == 0 {
+		t.Fatalf("expected public boundary test fixture to include redactions")
+	}
+	collection.Boundaries[0].RedactedFields = nil
+	if got := EvaluateVerifierEcosystemVal0OutputBoundaryState(collection); got == VerifierEcosystemVal0OutputBoundaryStateActive {
+		t.Fatalf("expected public output without redaction to fail closed, got %q", got)
+	}
+
+	collection = VerifierEcosystemVal0OutputBoundaryCollectionModel()
+	collection.Boundaries[2].EvidenceRefPolicy = "public_caveated"
+	if got := EvaluateVerifierEcosystemVal0OutputBoundaryState(collection); got == VerifierEcosystemVal0OutputBoundaryStateActive {
+		t.Fatalf("expected auditor output without evidence traceability to fail closed, got %q", got)
+	}
+
+	collection = VerifierEcosystemVal0OutputBoundaryCollectionModel()
+	collection.Boundaries[3].PublicReuseAllowed = true
+	if got := EvaluateVerifierEcosystemVal0OutputBoundaryState(collection); got == VerifierEcosystemVal0OutputBoundaryStateActive {
+		t.Fatalf("expected internal diagnostic output reused as public output to fail closed, got %q", got)
+	}
+
+	collection = VerifierEcosystemVal0OutputBoundaryCollectionModel()
+	collection.Boundaries[1].RequiredCaveats = nil
+	if got := EvaluateVerifierEcosystemVal0OutputBoundaryState(collection); got == VerifierEcosystemVal0OutputBoundaryStateActive {
+		t.Fatalf("expected missing caveats to fail closed, got %q", got)
+	}
+
+	collection = VerifierEcosystemVal0OutputBoundaryCollectionModel()
+	collection.Boundaries[2].PreservesInvalidDiagnostics = false
+	if got := EvaluateVerifierEcosystemVal0OutputBoundaryState(collection); got == VerifierEcosystemVal0OutputBoundaryStateActive {
+		t.Fatalf("expected output boundary not to convert invalid into verified, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemVal0NoOverclaimAndPoint7PassImpossibility(t *testing.T) {
+	dependency, contract, envelope, scopeCatalog, compatibility, trust, diagnostics, outputBoundaries := activeVerifierEcosystemVal0Inputs()
+	contract.CertifiedLanguagePresent = true
+	contractState := EvaluateVerifierEcosystemVal0VerifierContractState(contract)
+	val0State := EvaluateVerifierEcosystemVal0State(
+		dependency,
+		contractState,
+		EvaluateVerifierEcosystemVal0ProofEnvelopeState(envelope),
+		EvaluateVerifierEcosystemVal0VerificationScopeState(scopeCatalog),
+		EvaluateVerifierEcosystemVal0SchemaCompatibilityBaselineState(compatibility),
+		EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(trust),
+		EvaluateVerifierEcosystemVal0DiagnosticsState(diagnostics),
+		EvaluateVerifierEcosystemVal0OutputBoundaryState(outputBoundaries),
+	)
+	if val0State == VerifierEcosystemVal0StateActive {
+		t.Fatalf("expected overclaim language to block active verifier discipline state, got %q", val0State)
+	}
+	if got := EvaluateVerifierEcosystemPoint7State(val0State); got != VerifierEcosystemPoint7StateNotComplete {
+		t.Fatalf("expected point_7_pass to remain impossible in Val 0, got %q", got)
+	}
+	if got := EvaluateVerifierEcosystemVal0ProofsState(
+		VerifierEcosystemVal0StateActive,
+		VerifierEcosystemPoint7StatePass,
+		verifierEcosystemVal0SupportedProfiles(),
+		verifierEcosystemVal0SupportedModes(),
+		VerifierEcosystemVal0ProofSurfaceRefs(),
+		[]string{"e1", "e2", "e3", "e4", "e5"},
+		[]string{"Val 0 cannot return point_7_pass."},
+		verifierEcosystemVal0ProjectionDisclaimer(),
+	); got == VerifierEcosystemVal0StateActive {
+		t.Fatalf("expected point_7_pass to remain impossible in Val 0 proofs, got %q", got)
+	}
+}

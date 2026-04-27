@@ -425,16 +425,36 @@ func buildReferenceArchitectureValDSharedCollections() (
 	operability.ReferenceArchitectureCompatibilityGateCollection,
 	operability.ReferenceArchitectureFinalGateCollection,
 ) {
-	return operability.ReferenceArchitectureValDOperationalVisibilityCollection(),
-		operability.ReferenceArchitectureValDAlignmentSummaryCollection(),
-		operability.ReferenceArchitectureValDDeviationAlertCollection(),
-		operability.ReferenceArchitectureValDSupportBoundaryCollection(),
-		operability.ReferenceArchitectureValDMigrationUpgradeCollection(),
-		operability.ReferenceArchitectureValDTopologyGateCollection(),
-		operability.ReferenceArchitectureValDSecurityBoundaryCollection(),
-		operability.ReferenceArchitectureValDOperabilityGateCollection(),
-		operability.ReferenceArchitectureValDCompatibilityGateCollection(),
-		operability.ReferenceArchitectureValDFinalGateCollection()
+	visibility := operability.ReferenceArchitectureValDOperationalVisibilityCollection()
+	alignment := operability.ReferenceArchitectureValDAlignmentSummaryCollection()
+	alerts := operability.ReferenceArchitectureValDDeviationAlertCollection()
+	support := operability.ReferenceArchitectureValDSupportBoundaryCollection()
+	migration := operability.ReferenceArchitectureValDMigrationUpgradeCollection()
+	topology := operability.ReferenceArchitectureValDTopologyGateCollection()
+	security := operability.ReferenceArchitectureValDSecurityBoundaryCollection()
+	operabilityCollection := operability.ReferenceArchitectureValDOperabilityGateCollection()
+	compatibility := operability.ReferenceArchitectureValDCompatibilityGateCollection()
+	finalGate := operability.ReferenceArchitectureValDFinalGateCollectionFromComponents(
+		visibility,
+		alignment,
+		alerts,
+		support,
+		migration,
+		topology,
+		security,
+		operabilityCollection,
+		compatibility,
+	)
+	return visibility,
+		alignment,
+		alerts,
+		support,
+		migration,
+		topology,
+		security,
+		operabilityCollection,
+		compatibility,
+		finalGate
 }
 
 func buildReferenceArchitectureValDOperationalVisibility() referenceArchitectureValDVisibilityResponse {
@@ -617,6 +637,21 @@ func buildReferenceArchitectureValDCompatibilityGate() referenceArchitectureValD
 
 func buildReferenceArchitectureValDFinalGate() referenceArchitectureValDCollectionResponse {
 	visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility, finalGate := buildReferenceArchitectureValDSharedCollections()
+	return buildReferenceArchitectureValDFinalGateResponse(visibility, alignment, alerts, support, migration, topology, security, operabilityCollection, compatibility, finalGate)
+}
+
+func buildReferenceArchitectureValDFinalGateResponse(
+	visibility operability.ReferenceArchitectureOperationalVisibilityCollection,
+	alignment operability.ReferenceArchitectureBlueprintAlignmentCollection,
+	alerts operability.ReferenceArchitectureDeviationAlertCollection,
+	support operability.ReferenceArchitectureSupportBoundaryCollection,
+	migration operability.ReferenceArchitectureMigrationUpgradeCollection,
+	topology operability.ReferenceArchitectureTopologyGateCollection,
+	security operability.ReferenceArchitectureSecurityBoundaryCollection,
+	operabilityCollection operability.ReferenceArchitectureOperabilityGateCollection,
+	compatibility operability.ReferenceArchitectureCompatibilityGateCollection,
+	finalGate operability.ReferenceArchitectureFinalGateCollection,
+) referenceArchitectureValDCollectionResponse {
 	return referenceArchitectureValDCollectionResponse{
 		SchemaVersion: referenceArchitectureValDFinalGateSchema,
 		GeneratedAt:   publicSampleTime(),

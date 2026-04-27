@@ -871,28 +871,175 @@ func ReferenceArchitectureValDCompatibilityGateCollection() ReferenceArchitectur
 	}
 }
 
-func referenceArchitectureValDFinalGateReportForFamily(family string) ReferenceArchitectureFinalGateReport {
-	return ReferenceArchitectureFinalGateReport{
-		CurrentState:               "reference_architecture_vald_final_gate_report_ready",
-		GateID:                     "final-gate/" + family,
-		BlueprintFamily:            family,
-		OperationalVisibilityState: ReferenceArchitectureValDVisibilityStateActive,
-		AlignmentSummaryState:      ReferenceArchitectureValDAlignmentStateActive,
-		DeviationAlertState:        ReferenceArchitectureValDAlertStateActive,
-		SupportBoundaryState:       ReferenceArchitectureValDSupportBoundaryStateActive,
-		MigrationUpgradeState:      ReferenceArchitectureValDMigrationStateActive,
-		TopologyGateState:          ReferenceArchitectureValDTopologyGateStateActive,
-		SecurityBoundaryGateState:  ReferenceArchitectureValDSecurityGateStateActive,
-		OperabilityGateState:       ReferenceArchitectureValDOperabilityGateStateActive,
-		CompatibilityGateState:     ReferenceArchitectureValDCompatibilityGateStateActive,
-		ProjectionDisclaimer:       referenceArchitectureValDProjectionDisclaimer(),
-	}
+func referenceArchitectureValDMatchesFamily(value, family string) bool {
+	normalizedValue, okValue := referenceArchitectureValDNormalizedFamilyKey(value)
+	normalizedFamily, okFamily := referenceArchitectureValDNormalizedFamilyKey(family)
+	return okValue && okFamily && normalizedValue == normalizedFamily
 }
 
-func ReferenceArchitectureValDFinalGateCollection() ReferenceArchitectureFinalGateCollection {
+func referenceArchitectureValDOperationalVisibilityStateForFamily(collection ReferenceArchitectureOperationalVisibilityCollection, family string) string {
+	for _, report := range collection.Reports {
+		if referenceArchitectureValDMatchesFamily(report.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDOperationalVisibilityReportState(report)
+		}
+	}
+	return ReferenceArchitectureValDVisibilityStateIncomplete
+}
+
+func referenceArchitectureValDAlignmentStateForFamily(collection ReferenceArchitectureBlueprintAlignmentCollection, family string) string {
+	for _, summary := range collection.Summaries {
+		if referenceArchitectureValDMatchesFamily(summary.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDAlignmentSummaryState(summary)
+		}
+	}
+	return ReferenceArchitectureValDAlignmentStateIncomplete
+}
+
+func referenceArchitectureValDDeviationAlertStateForFamily(collection ReferenceArchitectureDeviationAlertCollection, family string) string {
+	for _, report := range collection.Reports {
+		if referenceArchitectureValDMatchesFamily(report.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDDeviationAlertReportState(report)
+		}
+	}
+	return ReferenceArchitectureValDAlertStateIncomplete
+}
+
+func referenceArchitectureValDSupportBoundaryStateForFamily(collection ReferenceArchitectureSupportBoundaryCollection, family string) string {
+	for _, view := range collection.Views {
+		if referenceArchitectureValDMatchesFamily(view.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDSupportBoundaryViewState(view)
+		}
+	}
+	return ReferenceArchitectureValDSupportBoundaryStateIncomplete
+}
+
+func referenceArchitectureValDMigrationStateForFamily(collection ReferenceArchitectureMigrationUpgradeCollection, family string) string {
+	for _, view := range collection.Views {
+		if referenceArchitectureValDMatchesFamily(view.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDMigrationVisibilityState(view)
+		}
+	}
+	return ReferenceArchitectureValDMigrationStateIncomplete
+}
+
+func referenceArchitectureValDTopologyGateStateForFamily(collection ReferenceArchitectureTopologyGateCollection, family string) string {
+	for _, check := range collection.Checks {
+		if referenceArchitectureValDMatchesFamily(check.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDTopologyGateState(check)
+		}
+	}
+	return ReferenceArchitectureValDTopologyGateStateIncomplete
+}
+
+func referenceArchitectureValDSecurityGateStateForFamily(collection ReferenceArchitectureSecurityBoundaryCollection, family string) string {
+	for _, check := range collection.Checks {
+		if referenceArchitectureValDMatchesFamily(check.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDSecurityBoundaryGateState(check)
+		}
+	}
+	return ReferenceArchitectureValDSecurityGateStateIncomplete
+}
+
+func referenceArchitectureValDOperabilityGateStateForFamily(collection ReferenceArchitectureOperabilityGateCollection, family string) string {
+	for _, check := range collection.Checks {
+		if referenceArchitectureValDMatchesFamily(check.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDOperabilityGateState(check)
+		}
+	}
+	return ReferenceArchitectureValDOperabilityGateStateIncomplete
+}
+
+func referenceArchitectureValDCompatibilityGateStateForFamily(collection ReferenceArchitectureCompatibilityGateCollection, family string) string {
+	for _, check := range collection.Checks {
+		if referenceArchitectureValDMatchesFamily(check.BlueprintFamily, family) {
+			return EvaluateReferenceArchitectureValDCompatibilityGateState(check)
+		}
+	}
+	return ReferenceArchitectureValDCompatibilityGateStateIncomplete
+}
+
+func referenceArchitectureValDFinalGateBlockingReasons(report ReferenceArchitectureFinalGateReport) []string {
+	type componentState struct {
+		name        string
+		state       string
+		activeState string
+	}
+	components := []componentState{
+		{name: "operational visibility", state: report.OperationalVisibilityState, activeState: ReferenceArchitectureValDVisibilityStateActive},
+		{name: "alignment summary", state: report.AlignmentSummaryState, activeState: ReferenceArchitectureValDAlignmentStateActive},
+		{name: "deviation alerts", state: report.DeviationAlertState, activeState: ReferenceArchitectureValDAlertStateActive},
+		{name: "support boundary", state: report.SupportBoundaryState, activeState: ReferenceArchitectureValDSupportBoundaryStateActive},
+		{name: "migration or upgrade visibility", state: report.MigrationUpgradeState, activeState: ReferenceArchitectureValDMigrationStateActive},
+		{name: "topology gate", state: report.TopologyGateState, activeState: ReferenceArchitectureValDTopologyGateStateActive},
+		{name: "security boundary gate", state: report.SecurityBoundaryGateState, activeState: ReferenceArchitectureValDSecurityGateStateActive},
+		{name: "operability gate", state: report.OperabilityGateState, activeState: ReferenceArchitectureValDOperabilityGateStateActive},
+		{name: "compatibility gate", state: report.CompatibilityGateState, activeState: ReferenceArchitectureValDCompatibilityGateStateActive},
+	}
+	blockingReasons := []string{}
+	for _, component := range components {
+		if strings.TrimSpace(component.state) != component.activeState {
+			blockingReasons = append(blockingReasons, component.name+" is not active for this blueprint family")
+		}
+	}
+	return blockingReasons
+}
+
+func referenceArchitectureValDFinalGateReportForFamily(
+	family string,
+	visibility ReferenceArchitectureOperationalVisibilityCollection,
+	alignment ReferenceArchitectureBlueprintAlignmentCollection,
+	alerts ReferenceArchitectureDeviationAlertCollection,
+	support ReferenceArchitectureSupportBoundaryCollection,
+	migration ReferenceArchitectureMigrationUpgradeCollection,
+	topology ReferenceArchitectureTopologyGateCollection,
+	security ReferenceArchitectureSecurityBoundaryCollection,
+	operabilityCollection ReferenceArchitectureOperabilityGateCollection,
+	compatibility ReferenceArchitectureCompatibilityGateCollection,
+) ReferenceArchitectureFinalGateReport {
+	report := ReferenceArchitectureFinalGateReport{
+		CurrentState:               "reference_architecture_vald_final_gate_report_ready",
+		GateID:                     "final-gate/" + strings.TrimSpace(family),
+		BlueprintFamily:            family,
+		OperationalVisibilityState: referenceArchitectureValDOperationalVisibilityStateForFamily(visibility, family),
+		AlignmentSummaryState:      referenceArchitectureValDAlignmentStateForFamily(alignment, family),
+		DeviationAlertState:        referenceArchitectureValDDeviationAlertStateForFamily(alerts, family),
+		SupportBoundaryState:       referenceArchitectureValDSupportBoundaryStateForFamily(support, family),
+		MigrationUpgradeState:      referenceArchitectureValDMigrationStateForFamily(migration, family),
+		TopologyGateState:          referenceArchitectureValDTopologyGateStateForFamily(topology, family),
+		SecurityBoundaryGateState:  referenceArchitectureValDSecurityGateStateForFamily(security, family),
+		OperabilityGateState:       referenceArchitectureValDOperabilityGateStateForFamily(operabilityCollection, family),
+		CompatibilityGateState:     referenceArchitectureValDCompatibilityGateStateForFamily(compatibility, family),
+		ProjectionDisclaimer:       referenceArchitectureValDProjectionDisclaimer(),
+	}
+	report.BlockingReasons = referenceArchitectureValDFinalGateBlockingReasons(report)
+	return report
+}
+
+func ReferenceArchitectureValDFinalGateCollectionFromComponents(
+	visibility ReferenceArchitectureOperationalVisibilityCollection,
+	alignment ReferenceArchitectureBlueprintAlignmentCollection,
+	alerts ReferenceArchitectureDeviationAlertCollection,
+	support ReferenceArchitectureSupportBoundaryCollection,
+	migration ReferenceArchitectureMigrationUpgradeCollection,
+	topology ReferenceArchitectureTopologyGateCollection,
+	security ReferenceArchitectureSecurityBoundaryCollection,
+	operabilityCollection ReferenceArchitectureOperabilityGateCollection,
+	compatibility ReferenceArchitectureCompatibilityGateCollection,
+) ReferenceArchitectureFinalGateCollection {
 	reports := make([]ReferenceArchitectureFinalGateReport, 0, len(referenceArchitectureVal0Families()))
 	for _, family := range referenceArchitectureVal0Families() {
-		reports = append(reports, referenceArchitectureValDFinalGateReportForFamily(family))
+		reports = append(reports, referenceArchitectureValDFinalGateReportForFamily(
+			family,
+			visibility,
+			alignment,
+			alerts,
+			support,
+			migration,
+			topology,
+			security,
+			operabilityCollection,
+			compatibility,
+		))
 	}
 	return ReferenceArchitectureFinalGateCollection{
 		CurrentState:         "reference_architecture_vald_final_gate_collection_ready",
@@ -901,6 +1048,29 @@ func ReferenceArchitectureValDFinalGateCollection() ReferenceArchitectureFinalGa
 		Reports:              reports,
 		ProjectionDisclaimer: referenceArchitectureValDProjectionDisclaimer(),
 	}
+}
+
+func ReferenceArchitectureValDFinalGateCollection() ReferenceArchitectureFinalGateCollection {
+	visibility := ReferenceArchitectureValDOperationalVisibilityCollection()
+	alignment := ReferenceArchitectureValDAlignmentSummaryCollection()
+	alerts := ReferenceArchitectureValDDeviationAlertCollection()
+	support := ReferenceArchitectureValDSupportBoundaryCollection()
+	migration := ReferenceArchitectureValDMigrationUpgradeCollection()
+	topology := ReferenceArchitectureValDTopologyGateCollection()
+	security := ReferenceArchitectureValDSecurityBoundaryCollection()
+	operabilityCollection := ReferenceArchitectureValDOperabilityGateCollection()
+	compatibility := ReferenceArchitectureValDCompatibilityGateCollection()
+	return ReferenceArchitectureValDFinalGateCollectionFromComponents(
+		visibility,
+		alignment,
+		alerts,
+		support,
+		migration,
+		topology,
+		security,
+		operabilityCollection,
+		compatibility,
+	)
 }
 
 func EvaluateReferenceArchitectureValDOperationalVisibilityReportState(report ReferenceArchitectureOperationalVisibilityReport) string {
