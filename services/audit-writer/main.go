@@ -625,6 +625,8 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/reference-architecture/vald/compatibility-gate", srv.referenceArchitectureValDCompatibilityGateHandler)
 	mux.HandleFunc("/v1/reference-architecture/vald/final-gate", srv.referenceArchitectureValDFinalGateHandler)
 	mux.HandleFunc("/v1/reference-architecture/vald/proofs", srv.referenceArchitectureValDProofsHandler)
+	mux.HandleFunc("/v1/reference-architecture/vale/closure", srv.referenceArchitectureValEClosureHandler)
+	mux.HandleFunc("/v1/reference-architecture/vale/proofs", srv.referenceArchitectureValEProofsHandler)
 	mux.HandleFunc("/v1/enterprise/workflow/lifecycle", srv.enterpriseWorkflowLifecycleHandler)
 	mux.HandleFunc("/v1/enterprise/workflow/connectors/reconcile", srv.enterpriseConnectorReconciliationHandler)
 	mux.HandleFunc("/v1/enterprise/partner-trust/intake", srv.enterprisePartnerIntakeHandler)
