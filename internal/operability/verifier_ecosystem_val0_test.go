@@ -425,6 +425,113 @@ func TestVerifierEcosystemVal0TrustRootIssuerDiscipline(t *testing.T) {
 	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got != VerifierEcosystemVal0TrustStatePartial {
 		t.Fatalf("expected healthy rollover metadata to remain non-active but explicit, got %q", got)
 	}
+
+	precedenceCases := []struct {
+		name     string
+		mutate   func(*VerifierEcosystemVal0TrustIssuerDiscipline)
+		expected string
+	}{
+		{
+			name: "revoked trust root with rollover metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootRevoked
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "expired trust root with rollover metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootExpired
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "unsupported trust root with rollover metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootUnsupported
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "unknown trust root with rollover metadata remains unknown",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootUnknown
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateUnknown,
+		},
+		{
+			name: "typo trust root with rollover metadata fails closed",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = "trustd"
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateUnknown,
+		},
+		{
+			name: "revoked issuer with rollover metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.RevocationState = VerifierEcosystemRevocationRevoked
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "expired revocation with rollover metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.RevocationState = VerifierEcosystemRevocationExpired
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "unsupported revocation with rollover metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.RevocationState = VerifierEcosystemRevocationUnsupported
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "healthy rollover with metadata remains partial",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootTrusted
+				model.RevocationState = VerifierEcosystemRevocationNotRevoked
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+			},
+			expected: VerifierEcosystemVal0TrustStatePartial,
+		},
+		{
+			name: "healthy rollover without metadata remains blocked",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootTrusted
+				model.RevocationState = VerifierEcosystemRevocationNotRevoked
+				model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+				model.RolloverMetadataRef = ""
+			},
+			expected: VerifierEcosystemVal0TrustStateBlocked,
+		},
+		{
+			name: "healthy non-rollover remains active",
+			mutate: func(model *VerifierEcosystemVal0TrustIssuerDiscipline) {
+				model.TrustRootState = VerifierEcosystemTrustRootTrusted
+				model.RevocationState = VerifierEcosystemRevocationNotRevoked
+				model.KeyRotationState = VerifierEcosystemKeyRotationCurrent
+			},
+			expected: VerifierEcosystemVal0TrustStateActive,
+		},
+	}
+
+	for _, tc := range precedenceCases {
+		model := VerifierEcosystemVal0TrustIssuerDisciplineModel()
+		tc.mutate(&model)
+		if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got != tc.expected {
+			t.Fatalf("expected %s to return %q, got %q", tc.name, tc.expected, got)
+		}
+	}
 }
 
 func TestVerifierEcosystemVal0DiagnosticsModel(t *testing.T) {

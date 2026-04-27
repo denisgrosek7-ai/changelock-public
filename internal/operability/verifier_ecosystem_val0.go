@@ -919,22 +919,17 @@ func EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model VerifierEcosy
 	default:
 		return VerifierEcosystemVal0TrustStateUnknown
 	}
-	if strings.TrimSpace(model.KeyRotationState) == VerifierEcosystemKeyRotationRollover {
-		if strings.TrimSpace(model.RolloverMetadataRef) == "" {
-			return VerifierEcosystemVal0TrustStateBlocked
-		}
-		return VerifierEcosystemVal0TrustStatePartial
-	}
+	trustRootState := VerifierEcosystemVal0TrustStateUnknown
 	switch strings.TrimSpace(model.TrustRootState) {
 	case VerifierEcosystemTrustRootTrusted:
-		return VerifierEcosystemVal0TrustStateActive
+		trustRootState = VerifierEcosystemVal0TrustStateActive
 	case VerifierEcosystemTrustRootTrustedWithWarnings:
-		return VerifierEcosystemVal0TrustStatePartial
+		trustRootState = VerifierEcosystemVal0TrustStatePartial
 	case VerifierEcosystemTrustRootRotated:
 		if strings.TrimSpace(model.RolloverMetadataRef) == "" {
 			return VerifierEcosystemVal0TrustStateBlocked
 		}
-		return VerifierEcosystemVal0TrustStatePartial
+		trustRootState = VerifierEcosystemVal0TrustStatePartial
 	case VerifierEcosystemTrustRootRevoked, VerifierEcosystemTrustRootExpired, VerifierEcosystemTrustRootUnsupported:
 		return VerifierEcosystemVal0TrustStateBlocked
 	case VerifierEcosystemTrustRootUnknown:
@@ -942,6 +937,16 @@ func EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model VerifierEcosy
 	default:
 		return VerifierEcosystemVal0TrustStateUnknown
 	}
+	if strings.TrimSpace(model.KeyRotationState) == VerifierEcosystemKeyRotationRollover {
+		if strings.TrimSpace(model.RolloverMetadataRef) == "" {
+			return VerifierEcosystemVal0TrustStateBlocked
+		}
+		if trustRootState == VerifierEcosystemVal0TrustStateActive || trustRootState == VerifierEcosystemVal0TrustStatePartial {
+			return VerifierEcosystemVal0TrustStatePartial
+		}
+		return trustRootState
+	}
+	return trustRootState
 }
 
 func EvaluateVerifierEcosystemVal0DiagnosticsState(model VerifierEcosystemVal0DiagnosticsModel) string {
