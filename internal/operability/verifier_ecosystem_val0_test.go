@@ -394,6 +394,37 @@ func TestVerifierEcosystemVal0TrustRootIssuerDiscipline(t *testing.T) {
 			t.Fatalf("expected %s to fail closed, got %q", tc.name, got)
 		}
 	}
+
+	model = VerifierEcosystemVal0TrustIssuerDisciplineModel()
+	model.RevocationState = VerifierEcosystemRevocationRevoked
+	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got == VerifierEcosystemVal0TrustStateActive {
+		t.Fatalf("expected revoked issuer not to be overridden by trusted trust-root state, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0TrustIssuerDisciplineModel()
+	model.RevocationState = VerifierEcosystemRevocationUnknown
+	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got == VerifierEcosystemVal0TrustStateActive {
+		t.Fatalf("expected unknown revocation state to fail closed, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0TrustIssuerDisciplineModel()
+	model.RevocationState = "issuer_not_revked"
+	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got == VerifierEcosystemVal0TrustStateActive {
+		t.Fatalf("expected typo revocation state to fail closed, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0TrustIssuerDisciplineModel()
+	model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+	model.RolloverMetadataRef = ""
+	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got == VerifierEcosystemVal0TrustStateActive {
+		t.Fatalf("expected rollover without metadata to fail closed, got %q", got)
+	}
+
+	model = VerifierEcosystemVal0TrustIssuerDisciplineModel()
+	model.KeyRotationState = VerifierEcosystemKeyRotationRollover
+	if got := EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model); got != VerifierEcosystemVal0TrustStatePartial {
+		t.Fatalf("expected healthy rollover metadata to remain non-active but explicit, got %q", got)
+	}
 }
 
 func TestVerifierEcosystemVal0DiagnosticsModel(t *testing.T) {
@@ -493,10 +524,130 @@ func TestVerifierEcosystemVal0NoOverclaimAndPoint7PassImpossibility(t *testing.T
 		verifierEcosystemVal0SupportedProfiles(),
 		verifierEcosystemVal0SupportedModes(),
 		VerifierEcosystemVal0ProofSurfaceRefs(),
-		[]string{"e1", "e2", "e3", "e4", "e5"},
+		VerifierEcosystemVal0ProofEvidenceRefs(),
 		[]string{"Val 0 cannot return point_7_pass."},
 		verifierEcosystemVal0ProjectionDisclaimer(),
 	); got == VerifierEcosystemVal0StateActive {
 		t.Fatalf("expected point_7_pass to remain impossible in Val 0 proofs, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemVal0ProofEvidenceQualityValidation(t *testing.T) {
+	evidence := VerifierEcosystemVal0VerifierEvidence()
+	if !verifierEcosystemVal0ProofEvidenceQualityValid(evidence, VerifierEcosystemVal0ProofEvidenceRefs()) {
+		t.Fatalf("expected healthy exact proof evidence set to validate")
+	}
+
+	evidence = VerifierEcosystemVal0VerifierEvidence()
+	evidence[0].FreshnessState = IntelligenceCalibrationFreshnessStale
+	if verifierEcosystemVal0ProofEvidenceQualityValid(evidence, VerifierEcosystemVal0ProofEvidenceRefs()) {
+		t.Fatalf("expected stale modeled evidence to fail closed")
+	}
+
+	evidence = VerifierEcosystemVal0VerifierEvidence()
+	evidence[0].EvidenceID = " "
+	if verifierEcosystemVal0ProofEvidenceQualityValid(evidence, VerifierEcosystemVal0ProofEvidenceRefs()) {
+		t.Fatalf("expected malformed modeled evidence ref to fail closed")
+	}
+}
+
+func TestVerifierEcosystemVal0ProofsRequireExactEvidenceRefs(t *testing.T) {
+	validEvidenceRefs := VerifierEcosystemVal0ProofEvidenceRefs()
+	if got := EvaluateVerifierEcosystemVal0ProofsState(
+		VerifierEcosystemVal0StateActive,
+		VerifierEcosystemPoint7StateNotComplete,
+		verifierEcosystemVal0SupportedProfiles(),
+		verifierEcosystemVal0SupportedModes(),
+		VerifierEcosystemVal0ProofSurfaceRefs(),
+		validEvidenceRefs,
+		[]string{"Val 0 cannot return point_7_pass."},
+		verifierEcosystemVal0ProjectionDisclaimer(),
+	); got != VerifierEcosystemVal0StateActive {
+		t.Fatalf("expected exact required Val 0 proof evidence refs to keep proofs active, got %q", got)
+	}
+
+	testCases := []struct {
+		name         string
+		evidenceRefs []string
+	}{
+		{name: "five arbitrary strings do not keep proofs active", evidenceRefs: []string{"e1", "e2", "e3", "e4", "e5"}},
+		{name: "missing verifier contract evidence blocks active", evidenceRefs: []string{
+			"point6_integrated_closure",
+			"verifier_discipline_foundation",
+			"evidence:proof-envelope-001",
+			"evidence:verification-scope-001",
+			"evidence:trust-root-001",
+			"evidence:revocation-001",
+			"evidence:compatibility-001",
+			"evidence:diagnostics-001",
+			"evidence:output-boundary-001",
+			"evidence:point7-governance-001",
+		}},
+		{name: "missing trust root evidence blocks active", evidenceRefs: []string{
+			"point6_integrated_closure",
+			"verifier_discipline_foundation",
+			"evidence:verifier-contract-001",
+			"evidence:proof-envelope-001",
+			"evidence:verification-scope-001",
+			"evidence:revocation-001",
+			"evidence:compatibility-001",
+			"evidence:diagnostics-001",
+			"evidence:output-boundary-001",
+			"evidence:point7-governance-001",
+		}},
+		{name: "duplicate evidence ref does not compensate for missing required evidence", evidenceRefs: []string{
+			"point6_integrated_closure",
+			"verifier_discipline_foundation",
+			"evidence:verifier-contract-001",
+			"evidence:proof-envelope-001",
+			"evidence:verification-scope-001",
+			"evidence:verification-scope-001",
+			"evidence:revocation-001",
+			"evidence:compatibility-001",
+			"evidence:diagnostics-001",
+			"evidence:output-boundary-001",
+			"evidence:point7-governance-001",
+		}},
+		{name: "unknown extra evidence ref does not compensate for missing required evidence", evidenceRefs: []string{
+			"point6_integrated_closure",
+			"verifier_discipline_foundation",
+			"evidence:verifier-contract-001",
+			"evidence:proof-envelope-001",
+			"evidence:verification-scope-001",
+			"evidence:trust-root-001",
+			"evidence:revocation-001",
+			"evidence:compatibility-001",
+			"evidence:diagnostics-001",
+			"evidence:output-boundary-001",
+			"evidence:unknown-extra-001",
+		}},
+		{name: "whitespace evidence ref fails closed", evidenceRefs: []string{
+			"point6_integrated_closure",
+			"verifier_discipline_foundation",
+			"evidence:verifier-contract-001",
+			"evidence:proof-envelope-001",
+			"evidence:verification-scope-001",
+			"evidence:trust-root-001",
+			" ",
+			"evidence:compatibility-001",
+			"evidence:diagnostics-001",
+			"evidence:output-boundary-001",
+			"evidence:point7-governance-001",
+		}},
+	}
+
+	for _, tc := range testCases {
+		if got := EvaluateVerifierEcosystemVal0ProofsState(
+			VerifierEcosystemVal0StateActive,
+			VerifierEcosystemPoint7StateNotComplete,
+			verifierEcosystemVal0SupportedProfiles(),
+			verifierEcosystemVal0SupportedModes(),
+			VerifierEcosystemVal0ProofSurfaceRefs(),
+			tc.evidenceRefs,
+			[]string{"Val 0 cannot return point_7_pass."},
+			verifierEcosystemVal0ProjectionDisclaimer(),
+		); got == VerifierEcosystemVal0StateActive {
+			t.Fatalf("expected %s to fail closed, got %q", tc.name, got)
+		}
 	}
 }

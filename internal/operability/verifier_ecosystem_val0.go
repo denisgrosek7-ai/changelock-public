@@ -88,6 +88,11 @@ const (
 	VerifierEcosystemTrustRootExpired             = "expired"
 	VerifierEcosystemTrustRootUnsupported         = "unsupported"
 	VerifierEcosystemTrustRootUnknown             = "unknown"
+	VerifierEcosystemRevocationNotRevoked         = "not_revoked"
+	VerifierEcosystemRevocationRevoked            = "revoked"
+	VerifierEcosystemRevocationExpired            = "expired"
+	VerifierEcosystemRevocationUnsupported        = "unsupported"
+	VerifierEcosystemRevocationUnknown            = "unknown"
 
 	VerifierEcosystemKeyRotationCurrent  = "current"
 	VerifierEcosystemKeyRotationRollover = "rollover_in_progress"
@@ -341,6 +346,16 @@ func verifierEcosystemVal0TrustRootStates() []string {
 	}
 }
 
+func verifierEcosystemVal0RevocationStates() []string {
+	return []string{
+		VerifierEcosystemRevocationNotRevoked,
+		VerifierEcosystemRevocationRevoked,
+		VerifierEcosystemRevocationExpired,
+		VerifierEcosystemRevocationUnsupported,
+		VerifierEcosystemRevocationUnknown,
+	}
+}
+
 func verifierEcosystemVal0DiagnosticClasses() []string {
 	return []string{
 		VerifierEcosystemDiagnosticVerified,
@@ -437,14 +452,62 @@ func verifierEcosystemVal0EvidenceRefs() []ReferenceArchitectureEvidenceReferenc
 	return []ReferenceArchitectureEvidenceReference{
 		{EvidenceID: "evidence:verifier-contract-001", EvidenceType: "schema_definition", Source: "verifier/contracts", Timestamp: "2026-04-27T07:00:00Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "verifier_contract", Caveats: []string{"bounded to verifier discipline foundation"}},
 		{EvidenceID: "evidence:proof-envelope-001", EvidenceType: "signature_material", Source: "sealed-artifact/reference-pack", Timestamp: "2026-04-27T07:01:00Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "proof_envelope", Caveats: []string{"bounded to declared proof envelope schema line"}},
+		{EvidenceID: "evidence:verification-scope-001", EvidenceType: "scope_catalog", Source: "verifier/scopes", Timestamp: "2026-04-27T07:01:30Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "verification_scope", Caveats: []string{"bounded to declared verification scope classes and redaction discipline"}},
 		{EvidenceID: "evidence:trust-root-001", EvidenceType: "trust_root_metadata", Source: "trust-root/catalog", Timestamp: "2026-04-27T07:02:00Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "trust_material", Caveats: []string{"bounded to versioned trust-root discovery discipline"}},
 		{EvidenceID: "evidence:revocation-001", EvidenceType: "revocation_metadata", Source: "revocation/metadata", Timestamp: "2026-04-27T07:03:00Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "revocation_supersession", Caveats: []string{"bounded to current bounded revocation metadata window"}},
 		{EvidenceID: "evidence:compatibility-001", EvidenceType: "compatibility_metadata", Source: "compatibility/baseline", Timestamp: "2026-04-27T07:04:00Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "schema_compatibility", Caveats: []string{"bounded to supported verifier schema line set"}},
+		{EvidenceID: "evidence:diagnostics-001", EvidenceType: "diagnostics_contract", Source: "verifier/diagnostics", Timestamp: "2026-04-27T07:04:30Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "diagnostics_model", Caveats: []string{"bounded to deterministic diagnostic classes and precedence rules"}},
+		{EvidenceID: "evidence:output-boundary-001", EvidenceType: "output_boundary_policy", Source: "verifier/output-boundaries", Timestamp: "2026-04-27T07:05:00Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "output_boundary_discipline", Caveats: []string{"bounded to public, partner, auditor, internal, and restricted offline output rules"}},
+		{EvidenceID: "evidence:point7-governance-001", EvidenceType: "state_governance", Source: "verifier/point7-governance", Timestamp: "2026-04-27T07:05:30Z", FreshnessState: IntelligenceCalibrationFreshnessFresh, Scope: "point7_governance", Caveats: []string{"bounded to point_7_state not complete and no-pass rule for Val 0"}},
 	}
 }
 
 func VerifierEcosystemVal0VerifierEvidence() []ReferenceArchitectureEvidenceReference {
 	return verifierEcosystemVal0EvidenceRefs()
+}
+
+func verifierEcosystemVal0RequiredVerifierEvidenceIDs() []string {
+	return []string{
+		"evidence:verifier-contract-001",
+		"evidence:proof-envelope-001",
+		"evidence:verification-scope-001",
+		"evidence:trust-root-001",
+		"evidence:revocation-001",
+		"evidence:compatibility-001",
+		"evidence:diagnostics-001",
+		"evidence:output-boundary-001",
+		"evidence:point7-governance-001",
+	}
+}
+
+func verifierEcosystemVal0RequiredVerifierEvidenceScopes() []string {
+	return []string{
+		"verifier_contract",
+		"proof_envelope",
+		"verification_scope",
+		"trust_material",
+		"revocation_supersession",
+		"schema_compatibility",
+		"diagnostics_model",
+		"output_boundary_discipline",
+		"point7_governance",
+	}
+}
+
+func VerifierEcosystemVal0ProofEvidenceRefs() []string {
+	return []string{
+		"point6_integrated_closure",
+		"verifier_discipline_foundation",
+		"evidence:verifier-contract-001",
+		"evidence:proof-envelope-001",
+		"evidence:verification-scope-001",
+		"evidence:trust-root-001",
+		"evidence:revocation-001",
+		"evidence:compatibility-001",
+		"evidence:diagnostics-001",
+		"evidence:output-boundary-001",
+		"evidence:point7-governance-001",
+	}
 }
 
 func verifierEcosystemVal0EvidenceValid(evidenceRefs []ReferenceArchitectureEvidenceReference) (allFresh bool, stale bool, ok bool) {
@@ -474,6 +537,24 @@ func verifierEcosystemVal0EvidenceValid(evidenceRefs []ReferenceArchitectureEvid
 		}
 	}
 	return allFresh, stale, true
+}
+
+func verifierEcosystemVal0ProofEvidenceQualityValid(evidence []ReferenceArchitectureEvidenceReference, evidenceRefs []string) bool {
+	if !containsExactTrimmedStringSet(evidenceRefs, VerifierEcosystemVal0ProofEvidenceRefs()...) {
+		return false
+	}
+	allFresh, stale, ok := verifierEcosystemVal0EvidenceValid(evidence)
+	if !ok || !allFresh || stale {
+		return false
+	}
+	evidenceIDs := make([]string, 0, len(evidence))
+	evidenceScopes := make([]string, 0, len(evidence))
+	for _, evidenceRef := range evidence {
+		evidenceIDs = append(evidenceIDs, evidenceRef.EvidenceID)
+		evidenceScopes = append(evidenceScopes, evidenceRef.Scope)
+	}
+	return containsExactTrimmedStringSet(evidenceIDs, verifierEcosystemVal0RequiredVerifierEvidenceIDs()...) &&
+		containsExactTrimmedStringSet(evidenceScopes, verifierEcosystemVal0RequiredVerifierEvidenceScopes()...)
 }
 
 func VerifierEcosystemVal0VerifierContractModel() VerifierEcosystemVal0VerifierContract {
@@ -564,7 +645,7 @@ func VerifierEcosystemVal0TrustIssuerDisciplineModel() VerifierEcosystemVal0Trus
 		KeyOrMaterialRef:             "key-material:reference-program",
 		KeyRotationState:             VerifierEcosystemKeyRotationCurrent,
 		TrustRootState:               VerifierEcosystemTrustRootTrusted,
-		RevocationState:              "not_revoked",
+		RevocationState:              VerifierEcosystemRevocationNotRevoked,
 		TrustScope:                   VerifierEcosystemScopeAuditorSafe,
 		OfflineDistributionSupported: true,
 		OfflineDistributionScope:     "restricted_offline trust-root bundle for bounded air-gapped verification",
@@ -818,6 +899,7 @@ func EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model VerifierEcosy
 	if !containsTrimmedString(verifierEcosystemVal0SupportedScopeClasses(), model.IssuerScope) ||
 		!containsTrimmedString(verifierEcosystemVal0SupportedScopeClasses(), model.TrustScope) ||
 		!containsTrimmedString(verifierEcosystemVal0TrustRootStates(), model.TrustRootState) ||
+		!containsTrimmedString(verifierEcosystemVal0RevocationStates(), model.RevocationState) ||
 		!containsTrimmedString([]string{VerifierEcosystemKeyRotationCurrent, VerifierEcosystemKeyRotationRollover}, model.KeyRotationState) ||
 		!verifierEcosystemVal0HasProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return VerifierEcosystemVal0TrustStateUnknown
@@ -827,6 +909,21 @@ func EvaluateVerifierEcosystemVal0TrustIssuerDisciplineState(model VerifierEcosy
 	}
 	if model.OfflineDistributionSupported && strings.TrimSpace(model.OfflineDistributionScope) == "" {
 		return VerifierEcosystemVal0TrustStateBlocked
+	}
+	switch strings.TrimSpace(model.RevocationState) {
+	case VerifierEcosystemRevocationNotRevoked:
+	case VerifierEcosystemRevocationRevoked, VerifierEcosystemRevocationExpired, VerifierEcosystemRevocationUnsupported:
+		return VerifierEcosystemVal0TrustStateBlocked
+	case VerifierEcosystemRevocationUnknown:
+		return VerifierEcosystemVal0TrustStateUnknown
+	default:
+		return VerifierEcosystemVal0TrustStateUnknown
+	}
+	if strings.TrimSpace(model.KeyRotationState) == VerifierEcosystemKeyRotationRollover {
+		if strings.TrimSpace(model.RolloverMetadataRef) == "" {
+			return VerifierEcosystemVal0TrustStateBlocked
+		}
+		return VerifierEcosystemVal0TrustStatePartial
 	}
 	switch strings.TrimSpace(model.TrustRootState) {
 	case VerifierEcosystemTrustRootTrusted:
@@ -1068,7 +1165,7 @@ func EvaluateVerifierEcosystemVal0ProofsState(
 	if !containsExactTrimmedStringSet(supportedProfiles, verifierEcosystemVal0SupportedProfiles()...) ||
 		!containsExactTrimmedStringSet(supportedModes, verifierEcosystemVal0SupportedModes()...) ||
 		!containsExactTrimmedStringSet(surfaceRefs, VerifierEcosystemVal0ProofSurfaceRefs()...) ||
-		len(evidenceRefs) < 5 ||
+		!verifierEcosystemVal0ProofEvidenceQualityValid(VerifierEcosystemVal0VerifierEvidence(), evidenceRefs) ||
 		len(limitations) == 0 ||
 		!verifierEcosystemVal0HasProjectionDisclaimer(projectionDisclaimer) {
 		if baseState == VerifierEcosystemVal0StateActive {
