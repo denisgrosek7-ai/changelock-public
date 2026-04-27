@@ -943,6 +943,23 @@ func verifierEcosystemVal0Point6DependencyHealthy(snapshot VerifierEcosystemVal0
 		snapshot.Point6PassAllowed
 }
 
+func verifierEcosystemVal0AggregateStateSeverity(state, active, partial, incomplete, blocked, unknown string) int {
+	switch strings.TrimSpace(state) {
+	case active:
+		return 0
+	case partial:
+		return 1
+	case incomplete:
+		return 2
+	case unknown:
+		return 3
+	case blocked:
+		return 4
+	default:
+		return 3
+	}
+}
+
 func EvaluateVerifierEcosystemVal0State(
 	dependency VerifierEcosystemVal0DependencySnapshot,
 	contractState, envelopeState, scopeState, compatibilityState, trustState, diagnosticsState, outputBoundaryState string,
@@ -950,47 +967,82 @@ func EvaluateVerifierEcosystemVal0State(
 	if !verifierEcosystemVal0Point6DependencyHealthy(dependency) {
 		return VerifierEcosystemVal0StateBlocked
 	}
-	states := []string{contractState, envelopeState, scopeState, compatibilityState, trustState, diagnosticsState, outputBoundaryState}
-	if containsTrimmedString(states, VerifierEcosystemVal0StateUnknown) {
-		return VerifierEcosystemVal0StateUnknown
-	}
-	for _, state := range states {
-		switch strings.TrimSpace(state) {
-		case VerifierEcosystemVal0ContractStateUnknown,
-			VerifierEcosystemVal0EnvelopeStateUnknown,
-			VerifierEcosystemVal0ScopeStateUnknown,
-			VerifierEcosystemVal0CompatibilityStateUnknown,
-			VerifierEcosystemVal0TrustStateUnknown,
-			VerifierEcosystemVal0DiagnosticsStateUnknown,
-			VerifierEcosystemVal0OutputBoundaryStateUnknown:
-			return VerifierEcosystemVal0StateUnknown
-		case VerifierEcosystemVal0ContractStateBlocked,
-			VerifierEcosystemVal0EnvelopeStateBlocked,
-			VerifierEcosystemVal0ScopeStateBlocked,
-			VerifierEcosystemVal0CompatibilityStateBlocked,
-			VerifierEcosystemVal0TrustStateBlocked,
-			VerifierEcosystemVal0DiagnosticsStateBlocked,
-			VerifierEcosystemVal0OutputBoundaryStateBlocked:
-			return VerifierEcosystemVal0StateBlocked
-		case VerifierEcosystemVal0ContractStateIncomplete,
-			VerifierEcosystemVal0EnvelopeStateIncomplete,
-			VerifierEcosystemVal0ScopeStateIncomplete,
-			VerifierEcosystemVal0CompatibilityStateIncomplete,
-			VerifierEcosystemVal0TrustStateIncomplete,
-			VerifierEcosystemVal0DiagnosticsStateIncomplete,
-			VerifierEcosystemVal0OutputBoundaryStateIncomplete:
-			return VerifierEcosystemVal0StateIncomplete
-		case VerifierEcosystemVal0ContractStatePartial,
+	highestSeverity := 0
+	componentSeverities := []int{
+		verifierEcosystemVal0AggregateStateSeverity(
+			contractState,
+			VerifierEcosystemVal0ContractStateActive,
+			VerifierEcosystemVal0ContractStatePartial,
+			VerifierEcosystemVal0ContractStateIncomplete,
+			VerifierEcosystemVal0ContractStateBlocked,
+			VerifierEcosystemVal0ContractStateUnknown,
+		),
+		verifierEcosystemVal0AggregateStateSeverity(
+			envelopeState,
+			VerifierEcosystemVal0EnvelopeStateActive,
 			VerifierEcosystemVal0EnvelopeStatePartial,
+			VerifierEcosystemVal0EnvelopeStateIncomplete,
+			VerifierEcosystemVal0EnvelopeStateBlocked,
+			VerifierEcosystemVal0EnvelopeStateUnknown,
+		),
+		verifierEcosystemVal0AggregateStateSeverity(
+			scopeState,
+			VerifierEcosystemVal0ScopeStateActive,
 			VerifierEcosystemVal0ScopeStatePartial,
+			VerifierEcosystemVal0ScopeStateIncomplete,
+			VerifierEcosystemVal0ScopeStateBlocked,
+			VerifierEcosystemVal0ScopeStateUnknown,
+		),
+		verifierEcosystemVal0AggregateStateSeverity(
+			compatibilityState,
+			VerifierEcosystemVal0CompatibilityStateActive,
 			VerifierEcosystemVal0CompatibilityStatePartial,
+			VerifierEcosystemVal0CompatibilityStateIncomplete,
+			VerifierEcosystemVal0CompatibilityStateBlocked,
+			VerifierEcosystemVal0CompatibilityStateUnknown,
+		),
+		verifierEcosystemVal0AggregateStateSeverity(
+			trustState,
+			VerifierEcosystemVal0TrustStateActive,
 			VerifierEcosystemVal0TrustStatePartial,
+			VerifierEcosystemVal0TrustStateIncomplete,
+			VerifierEcosystemVal0TrustStateBlocked,
+			VerifierEcosystemVal0TrustStateUnknown,
+		),
+		verifierEcosystemVal0AggregateStateSeverity(
+			diagnosticsState,
+			VerifierEcosystemVal0DiagnosticsStateActive,
 			VerifierEcosystemVal0DiagnosticsStatePartial,
-			VerifierEcosystemVal0OutputBoundaryStatePartial:
-			return VerifierEcosystemVal0StatePartial
+			VerifierEcosystemVal0DiagnosticsStateIncomplete,
+			VerifierEcosystemVal0DiagnosticsStateBlocked,
+			VerifierEcosystemVal0DiagnosticsStateUnknown,
+		),
+		verifierEcosystemVal0AggregateStateSeverity(
+			outputBoundaryState,
+			VerifierEcosystemVal0OutputBoundaryStateActive,
+			VerifierEcosystemVal0OutputBoundaryStatePartial,
+			VerifierEcosystemVal0OutputBoundaryStateIncomplete,
+			VerifierEcosystemVal0OutputBoundaryStateBlocked,
+			VerifierEcosystemVal0OutputBoundaryStateUnknown,
+		),
+	}
+	for _, severity := range componentSeverities {
+		if severity > highestSeverity {
+			highestSeverity = severity
 		}
 	}
-	return VerifierEcosystemVal0StateActive
+	switch highestSeverity {
+	case 4:
+		return VerifierEcosystemVal0StateBlocked
+	case 3:
+		return VerifierEcosystemVal0StateUnknown
+	case 2:
+		return VerifierEcosystemVal0StateIncomplete
+	case 1:
+		return VerifierEcosystemVal0StatePartial
+	default:
+		return VerifierEcosystemVal0StateActive
+	}
 }
 
 func VerifierEcosystemVal0ProofSurfaceRefs() []string {

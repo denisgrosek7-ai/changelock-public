@@ -108,6 +108,104 @@ func TestVerifierEcosystemVal0DependencyGates(t *testing.T) {
 	}
 }
 
+func TestVerifierEcosystemVal0AggregateStatePrecedence(t *testing.T) {
+	dependency, _, _, _, _, _, _, _, contractState, envelopeState, scopeState, compatibilityState, trustState, diagnosticsState, outputBoundaryState, _ := activeVerifierEcosystemVal0States()
+
+	testCases := []struct {
+		name        string
+		contract    string
+		envelope    string
+		scope       string
+		compat      string
+		trust       string
+		diagnostics string
+		output      string
+		expected    string
+	}{
+		{
+			name:        "partial before blocked returns blocked",
+			contract:    VerifierEcosystemVal0ContractStatePartial,
+			envelope:    envelopeState,
+			scope:       scopeState,
+			compat:      compatibilityState,
+			trust:       trustState,
+			diagnostics: VerifierEcosystemVal0DiagnosticsStateBlocked,
+			output:      outputBoundaryState,
+			expected:    VerifierEcosystemVal0StateBlocked,
+		},
+		{
+			name:        "blocked before partial returns blocked",
+			contract:    VerifierEcosystemVal0ContractStateBlocked,
+			envelope:    envelopeState,
+			scope:       VerifierEcosystemVal0ScopeStatePartial,
+			compat:      compatibilityState,
+			trust:       trustState,
+			diagnostics: diagnosticsState,
+			output:      outputBoundaryState,
+			expected:    VerifierEcosystemVal0StateBlocked,
+		},
+		{
+			name:        "partial plus unknown returns unknown",
+			contract:    VerifierEcosystemVal0ContractStatePartial,
+			envelope:    envelopeState,
+			scope:       scopeState,
+			compat:      VerifierEcosystemVal0CompatibilityStateUnknown,
+			trust:       trustState,
+			diagnostics: diagnosticsState,
+			output:      outputBoundaryState,
+			expected:    VerifierEcosystemVal0StateUnknown,
+		},
+		{
+			name:        "incomplete plus partial returns incomplete",
+			contract:    contractState,
+			envelope:    VerifierEcosystemVal0EnvelopeStateIncomplete,
+			scope:       VerifierEcosystemVal0ScopeStatePartial,
+			compat:      compatibilityState,
+			trust:       trustState,
+			diagnostics: diagnosticsState,
+			output:      outputBoundaryState,
+			expected:    VerifierEcosystemVal0StateIncomplete,
+		},
+		{
+			name:        "all active returns active",
+			contract:    contractState,
+			envelope:    envelopeState,
+			scope:       scopeState,
+			compat:      compatibilityState,
+			trust:       trustState,
+			diagnostics: diagnosticsState,
+			output:      outputBoundaryState,
+			expected:    VerifierEcosystemVal0StateActive,
+		},
+		{
+			name:        "fake component state fails closed",
+			contract:    "not_a_real_val0_contract_state",
+			envelope:    envelopeState,
+			scope:       scopeState,
+			compat:      compatibilityState,
+			trust:       trustState,
+			diagnostics: diagnosticsState,
+			output:      outputBoundaryState,
+			expected:    VerifierEcosystemVal0StateUnknown,
+		},
+	}
+
+	for _, tc := range testCases {
+		if got := EvaluateVerifierEcosystemVal0State(
+			dependency,
+			tc.contract,
+			tc.envelope,
+			tc.scope,
+			tc.compat,
+			tc.trust,
+			tc.diagnostics,
+			tc.output,
+		); got != tc.expected {
+			t.Fatalf("expected %s to return %q, got %q", tc.name, tc.expected, got)
+		}
+	}
+}
+
 func TestVerifierEcosystemVal0VerifierContractValidation(t *testing.T) {
 	contract := VerifierEcosystemVal0VerifierContractModel()
 	if got := EvaluateVerifierEcosystemVal0VerifierContractState(contract); got != VerifierEcosystemVal0ContractStateActive {

@@ -74,6 +74,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Reference Architecture Hardening Val E Core](../reference-architecture-vale-core.md)
 12. Current verifier ecosystem expansion lineage:
    - [Verifier Ecosystem Val 0 Core](../verifier-ecosystem-val0-core.md)
+   - [Verifier Ecosystem Val A Core](../verifier-ecosystem-vala-core.md)
 
 ## Current documentation shape
 
