@@ -143,6 +143,18 @@ func TestVerifierEcosystemValCAudienceSurfaces(t *testing.T) {
 			model.Surfaces[0], model.Surfaces[1] = model.Surfaces[1], model.Surfaces[0]
 			model.Surfaces[0].AllowedOutputClasses = append([]string{}, model.Surfaces[1].AllowedOutputClasses...)
 		}, expected: VerifierEcosystemValCAudienceSurfaceStatePartial},
+		{name: "partner duplicate classes do not count as extra breadth", mutate: func(model *VerifierEcosystemValCAudienceSurfaceCatalog) {
+			model.Surfaces[1].AllowedOutputClasses = append(append([]string{}, model.Surfaces[0].AllowedOutputClasses...), model.Surfaces[0].AllowedOutputClasses[0], model.Surfaces[0].AllowedOutputClasses[1])
+		}, expected: VerifierEcosystemValCAudienceSurfaceStatePartial},
+		{name: "partner same unique classes plus duplicates fails closed", mutate: func(model *VerifierEcosystemValCAudienceSurfaceCatalog) {
+			model.Surfaces[1].AllowedOutputClasses = append(append([]string{}, model.Surfaces[0].AllowedOutputClasses...), model.Surfaces[0].AllowedOutputClasses[0])
+		}, expected: VerifierEcosystemValCAudienceSurfaceStatePartial},
+		{name: "whitespace output class fails closed", mutate: func(model *VerifierEcosystemValCAudienceSurfaceCatalog) {
+			model.Surfaces[1].AllowedOutputClasses[0] = " "
+		}, expected: VerifierEcosystemValCAudienceSurfaceStateUnknown},
+		{name: "unknown output class fails closed", mutate: func(model *VerifierEcosystemValCAudienceSurfaceCatalog) {
+			model.Surfaces[1].AllowedOutputClasses[0] = "non_verified_unknownish"
+		}, expected: VerifierEcosystemValCAudienceSurfaceStateUnknown},
 		{name: "duplicate audience type fails closed", mutate: func(model *VerifierEcosystemValCAudienceSurfaceCatalog) {
 			model.Surfaces[0].AudienceType = VerifierEcosystemValCAudiencePartner
 		}, expected: VerifierEcosystemValCAudienceSurfaceStatePartial},

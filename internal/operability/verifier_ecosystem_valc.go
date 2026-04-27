@@ -369,6 +369,21 @@ func verifierEcosystemValCRequiredAudienceTypes() []string {
 	}
 }
 
+func verifierEcosystemValCNormalizedUniqueOutputClassCount(outputClasses []string) (int, bool) {
+	unique := make(map[string]struct{}, len(outputClasses))
+	for _, outputClass := range outputClasses {
+		normalized := strings.TrimSpace(outputClass)
+		if normalized == "" || !containsTrimmedString(verifierEcosystemValBOutputClasses(), normalized) {
+			return 0, false
+		}
+		unique[normalized] = struct{}{}
+	}
+	if len(unique) == 0 {
+		return 0, false
+	}
+	return len(unique), true
+}
+
 func verifierEcosystemValCRequiredArtifactRuleIDs() []string {
 	return []string{
 		"artifact-rule:signed-attestation-public",
@@ -854,9 +869,12 @@ func EvaluateVerifierEcosystemValCAudienceSurfaceState(model VerifierEcosystemVa
 		) || len(item.AllowedScopeClasses) == 0 || len(item.AllowedOutputClasses) == 0 || len(item.AllowedDiagnosticClasses) == 0 || len(item.Caveats) == 0 {
 			return VerifierEcosystemValCAudienceSurfaceStateIncomplete
 		}
+		uniqueOutputClassCount, outputClassesValid := verifierEcosystemValCNormalizedUniqueOutputClassCount(item.AllowedOutputClasses)
+		if !outputClassesValid {
+			return VerifierEcosystemValCAudienceSurfaceStateUnknown
+		}
 		if !containsTrimmedString(model.SupportedAudienceTypes, item.AudienceType) ||
 			!containsAllTrimmedStrings(verifierEcosystemVal0SupportedScopeClasses(), item.AllowedScopeClasses...) ||
-			!containsAllTrimmedStrings(verifierEcosystemValBOutputClasses(), item.AllowedOutputClasses...) ||
 			!containsAllTrimmedStrings(verifierEcosystemVal0DiagnosticClasses(), item.AllowedDiagnosticClasses...) ||
 			!containsTrimmedString([]string{"active"}, item.LifecycleState) ||
 			!containsTrimmedString(verifierEcosystemVal0CompatibilityResults(), item.CompatibilityState) ||
@@ -903,7 +921,7 @@ func EvaluateVerifierEcosystemValCAudienceSurfaceState(model VerifierEcosystemVa
 		}
 		surfaceIDs = append(surfaceIDs, verifierEcosystemValCAudienceSurfaceKey(item))
 		surfaceTypes = append(surfaceTypes, audienceType)
-		outputClassCountsByAudienceType[audienceType] = len(item.AllowedOutputClasses)
+		outputClassCountsByAudienceType[audienceType] = uniqueOutputClassCount
 	}
 	if !containsExactTrimmedStringSet(surfaceIDs, verifierEcosystemValCRequiredAudienceSurfaceIDs()...) {
 		return VerifierEcosystemValCAudienceSurfaceStatePartial
