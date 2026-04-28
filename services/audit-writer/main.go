@@ -680,6 +680,8 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/developer-ecosystem/valb/proofs", srv.developerEcosystemValBProofsHandler)
 	mux.HandleFunc("/v1/developer-ecosystem/valc/status", srv.developerEcosystemValCStatusHandler)
 	mux.HandleFunc("/v1/developer-ecosystem/valc/proofs", srv.developerEcosystemValCProofsHandler)
+	mux.HandleFunc("/v1/developer-ecosystem/vald/status", srv.developerEcosystemValDStatusHandler)
+	mux.HandleFunc("/v1/developer-ecosystem/vald/proofs", srv.developerEcosystemValDProofsHandler)
 	mux.HandleFunc("/v1/enterprise/workflow/lifecycle", srv.enterpriseWorkflowLifecycleHandler)
 	mux.HandleFunc("/v1/enterprise/workflow/connectors/reconcile", srv.enterpriseConnectorReconciliationHandler)
 	mux.HandleFunc("/v1/enterprise/partner-trust/intake", srv.enterprisePartnerIntakeHandler)
