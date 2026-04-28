@@ -78,6 +78,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Verifier Ecosystem Val B Core](../verifier-ecosystem-valb-core.md)
    - [Verifier Ecosystem Val C Core](../verifier-ecosystem-valc-core.md)
    - [Verifier Ecosystem Val D Core](../verifier-ecosystem-vald-core.md)
+   - [Verifier Ecosystem Val E Core](../verifier-ecosystem-vale-core.md)
 
 ## Current documentation shape
 
