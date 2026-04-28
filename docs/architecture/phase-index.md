@@ -82,6 +82,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
 13. Current developer ecosystem expansion lineage:
    - [Developer Ecosystem Val 0 Core](../developer-ecosystem-val0-core.md)
    - [Developer Ecosystem Val A Core](../developer-ecosystem-vala-core.md)
+   - [Developer Ecosystem Val B Core](../developer-ecosystem-valb-core.md)
 
 ## Current documentation shape
 
