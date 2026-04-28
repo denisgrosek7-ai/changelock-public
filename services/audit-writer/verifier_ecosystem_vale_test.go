@@ -78,10 +78,24 @@ func TestVerifierEcosystemValEProofsHandler(t *testing.T) {
 		len(response.IntegrationSummary) == 0 {
 		t.Fatalf("expected exact surfaces, evidence refs, invariants, and summary, got %#v", response)
 	}
-	if !strings.Contains(response.Point7PassReason, "point_7_pass through Val E only") {
+	if response.Point7PassReason != operability.VerifierEcosystemValEPoint7PassReasonAllowed {
 		t.Fatalf("expected Val E-only pass reason, got %#v", response)
 	}
 	if !strings.Contains(response.ProjectionDisclaimer, "projection_only") || !strings.Contains(response.ProjectionDisclaimer, "not_canonical_truth") {
 		t.Fatalf("expected projection disclaimer, got %#v", response)
+	}
+}
+
+func TestVerifierEcosystemValEClosureModelRecomputePreservesPartialState(t *testing.T) {
+	model := buildVerifierEcosystemValEClosureModel()
+	model.SourceCurrentStates.Val0CurrentState = operability.VerifierEcosystemVal0StatePartial
+	model.SourceValStates.Val0State = operability.VerifierEcosystemVal0StatePartial
+	model.Point7PassAllowed = false
+	model.Point7PassReason = operability.VerifierEcosystemValEPoint7PassReasonBlocked
+
+	recomputed := operability.ComputeVerifierEcosystemValEClosure(model)
+	if recomputed.PassRuleState != operability.VerifierEcosystemValEPassRuleStatePartial ||
+		recomputed.CurrentState != operability.VerifierEcosystemValEStatePartial {
+		t.Fatalf("expected canonical blocked reason to preserve partial service recompute state, got %#v", recomputed)
 	}
 }

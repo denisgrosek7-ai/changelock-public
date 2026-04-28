@@ -263,7 +263,7 @@ func buildVerifierEcosystemValEClosureModel() operability.VerifierEcosystemInteg
 		Version:          "2026.04",
 		Point:            "point_7",
 		ClosureVal:       "val_e",
-		Point7PassReason: "point_7_pass through Val E only after actual Val 0 through Val D proof states, exact proof surfaces, exact evidence refs, and cross-val closure invariants all remain active and fail-closed.",
+		Point7PassReason: operability.VerifierEcosystemValEPoint7PassReasonAllowed,
 		SourceValStates: operability.VerifierEcosystemValESourceValStates{
 			Val0State: val0Proofs.Val0State,
 			ValAState: valAProofs.ValAState,
@@ -438,9 +438,9 @@ func buildVerifierEcosystemValEClosureModel() operability.VerifierEcosystemInteg
 	}
 	model = operability.ComputeVerifierEcosystemValEClosure(model)
 	if model.Point7PassAllowed {
-		model.Point7PassReason = "point_7_pass through Val E only after actual Val 0 through Val D proof states, exact proof surfaces, exact evidence refs, fresh evidence quality, and fail-closed closure invariants all remain active."
+		model.Point7PassReason = operability.VerifierEcosystemValEPoint7PassReasonAllowed
 	} else {
-		model.Point7PassReason = "point_7_pass remains blocked until actual Val 0 through Val D proof states, exact proof surfaces, exact evidence refs, fresh evidence quality, and fail-closed closure invariants all remain active."
+		model.Point7PassReason = operability.VerifierEcosystemValEPoint7PassReasonBlocked
 	}
 	return operability.ComputeVerifierEcosystemValEClosure(model)
 }

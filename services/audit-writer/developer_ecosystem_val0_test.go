@@ -86,3 +86,26 @@ func TestDeveloperEcosystemVal0ProofsHandler(t *testing.T) {
 		t.Fatalf("expected projection disclaimer, got %#v", response)
 	}
 }
+
+func TestDeveloperEcosystemVal0StatusExposesCanonicalPluginBudgetRef(t *testing.T) {
+	handler := newHandlerWithAuth(audit.NewMemoryStore(), "memory", mustStaticAuthConfig(t))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/developer-ecosystem/val0/status?tenant_id=acme&environment=prod", nil)
+	req.Header.Set("Authorization", "Bearer viewer-demo-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response developerEcosystemVal0StatusResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	if response.Model.PluginSafety.PerformanceBudgetRef != operability.DeveloperEcosystemVal0PerformanceBudgetDisciplineID {
+		t.Fatalf("expected canonical performance budget ref %q, got %#v", operability.DeveloperEcosystemVal0PerformanceBudgetDisciplineID, response)
+	}
+	if response.Model.PluginSafety.PerformanceBudgetRef == "developer-performance-budget" {
+		t.Fatalf("expected old dangling performance budget ref to stay absent, got %#v", response)
+	}
+}

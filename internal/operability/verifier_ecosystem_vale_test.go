@@ -48,7 +48,7 @@ func activeVerifierEcosystemValEModel() VerifierEcosystemIntegratedClosure {
 		Version:          "2026.04",
 		Point:            "point_7",
 		ClosureVal:       "val_e",
-		Point7PassReason: "point_7_pass through Val E only after actual Val 0 through Val D proof states, exact proof surfaces, exact evidence refs, and cross-val closure invariants all remain active and fail-closed.",
+		Point7PassReason: VerifierEcosystemValEPoint7PassReasonAllowed,
 		SourceValStates: VerifierEcosystemValESourceValStates{
 			Val0State: val0State,
 			ValAState: valAState,
@@ -463,6 +463,152 @@ func TestVerifierEcosystemValENoOverclaim(t *testing.T) {
 		if mutated.NoOverclaimState != VerifierEcosystemValENoOverclaimStateBlocked || mutated.Point7State == VerifierEcosystemPoint7StatePass {
 			t.Fatalf("expected claim %q to block no-overclaim state, got %#v", claim, mutated)
 		}
+	}
+}
+
+func TestVerifierEcosystemValECanonicalBlockedReasonPreservesStateFidelity(t *testing.T) {
+	model := activeVerifierEcosystemValEModel()
+	model.SourceCurrentStates.Val0CurrentState = VerifierEcosystemVal0StatePartial
+	model.SourceValStates.Val0State = VerifierEcosystemVal0StatePartial
+	model.Point7PassAllowed = false
+	model.Point7PassReason = VerifierEcosystemValEPoint7PassReasonBlocked
+	if got := EvaluateVerifierEcosystemValENoOverclaimState(model); got != VerifierEcosystemValENoOverclaimStateActive {
+		t.Fatalf("expected canonical blocked reason to remain an allowed diagnostic, got %q", got)
+	}
+	if got := EvaluateVerifierEcosystemValEPassRuleState(model); got != VerifierEcosystemValEPassRuleStatePartial {
+		t.Fatalf("expected partial prerequisite state to remain partial with canonical blocked reason, got %q", got)
+	}
+
+	testCases := []struct {
+		name              string
+		mutate            func(*VerifierEcosystemIntegratedClosure)
+		expectedPassRule  string
+		expectedValeState string
+	}{
+		{name: "partial remains partial", mutate: func(model *VerifierEcosystemIntegratedClosure) {
+			model.SourceCurrentStates.Val0CurrentState = VerifierEcosystemVal0StatePartial
+			model.SourceValStates.Val0State = VerifierEcosystemVal0StatePartial
+		}, expectedPassRule: VerifierEcosystemValEPassRuleStatePartial, expectedValeState: VerifierEcosystemValEStatePartial},
+		{name: "unknown remains unknown", mutate: func(model *VerifierEcosystemIntegratedClosure) {
+			model.SourceCurrentStates.Val0CurrentState = VerifierEcosystemVal0StateUnknown
+			model.SourceValStates.Val0State = VerifierEcosystemVal0StateUnknown
+		}, expectedPassRule: VerifierEcosystemValEPassRuleStateUnknown, expectedValeState: VerifierEcosystemValEStateUnknown},
+		{name: "incomplete remains incomplete", mutate: func(model *VerifierEcosystemIntegratedClosure) {
+			model.ClosureID = ""
+		}, expectedPassRule: VerifierEcosystemValEPassRuleStateIncomplete, expectedValeState: VerifierEcosystemValEStateIncomplete},
+	}
+
+	for _, tc := range testCases {
+		base := activeVerifierEcosystemValEModel()
+		tc.mutate(&base)
+		first := ComputeVerifierEcosystemValEClosure(base)
+		first.Point7PassAllowed = false
+		first.Point7PassReason = VerifierEcosystemValEPoint7PassReasonBlocked
+		recomputed := ComputeVerifierEcosystemValEClosure(first)
+		if recomputed.PassRuleState != tc.expectedPassRule || recomputed.CurrentState != tc.expectedValeState {
+			t.Fatalf("expected %s to preserve %s/%s after recompute, got %#v", tc.name, tc.expectedPassRule, tc.expectedValeState, recomputed)
+		}
+		if recomputed.PassRuleState == VerifierEcosystemValEPassRuleStateBlocked && tc.expectedPassRule != VerifierEcosystemValEPassRuleStateBlocked {
+			t.Fatalf("expected %s to avoid collapsing into blocked due only to canonical blocked reason", tc.name)
+		}
+	}
+}
+
+func TestVerifierEcosystemValEExactCanonicalAllowedReasonIsAllowed(t *testing.T) {
+	model := activeVerifierEcosystemValEModel()
+	model.Point7PassReason = VerifierEcosystemValEPoint7PassReasonAllowed
+	if got := EvaluateVerifierEcosystemValENoOverclaimState(model); got != VerifierEcosystemValENoOverclaimStateActive {
+		t.Fatalf("expected exact canonical allowed reason to remain allowed, got %q", got)
+	}
+	if got := EvaluateVerifierEcosystemValEPassRuleState(model); got != VerifierEcosystemValEPassRuleStateActive {
+		t.Fatalf("expected exact canonical allowed reason to preserve active pass rule, got %q", got)
+	}
+}
+
+func TestVerifierEcosystemValENoOverclaimBlocksPoint7PassReasonOverclaims(t *testing.T) {
+	testCases := []struct {
+		name   string
+		reason string
+	}{
+		{name: "production approved", reason: "point_7_pass production approved"},
+		{name: "deployment approved", reason: "point_7_pass deployment approved"},
+		{name: "certified", reason: "point_7_pass certified"},
+		{name: "guaranteed", reason: "point_7_pass guaranteed"},
+		{name: "extended canonical blocked production approved", reason: VerifierEcosystemValEPoint7PassReasonBlocked + " production approved"},
+		{name: "extended canonical allowed certified", reason: VerifierEcosystemValEPoint7PassReasonAllowed + " certified"},
+	}
+
+	for _, tc := range testCases {
+		mutated := activeVerifierEcosystemValEModel()
+		mutated.Point7PassAllowed = false
+		mutated.Point7PassReason = tc.reason
+		mutated = ComputeVerifierEcosystemValEClosure(mutated)
+		if mutated.NoOverclaimState != VerifierEcosystemValENoOverclaimStateBlocked {
+			t.Fatalf("expected %s to block no-overclaim state, got %#v", tc.name, mutated)
+		}
+		if mutated.PassRuleState != VerifierEcosystemValEPassRuleStateBlocked {
+			t.Fatalf("expected %s to block pass rule state, got %#v", tc.name, mutated)
+		}
+	}
+}
+
+func TestVerifierEcosystemValEPoint7PassReasonOverclaimsStillBlock(t *testing.T) {
+	testCases := []struct {
+		name   string
+		reason string
+	}{
+		{name: "certified", reason: "point_7_pass certified"},
+		{name: "production approved", reason: "point_7_pass production approved"},
+		{name: "deployment approved", reason: "point_7_pass deployment approved"},
+		{name: "guaranteed", reason: "point_7_pass guaranteed"},
+		{name: "near match still blocked", reason: VerifierEcosystemValEPoint7PassReasonBlocked + " production approved"},
+		{name: "extended canonical allowed production approved", reason: VerifierEcosystemValEPoint7PassReasonAllowed + " production approved"},
+		{name: "extended canonical allowed certified", reason: VerifierEcosystemValEPoint7PassReasonAllowed + " certified"},
+		{name: "extended canonical blocked certified", reason: VerifierEcosystemValEPoint7PassReasonBlocked + " certified"},
+		{name: "substring bypass cannot return approved", reason: "cannot return point_7_pass but production approved"},
+		{name: "substring bypass through vale approved", reason: "point_7_pass through Val E only and deployment approved"},
+		{name: "substring bypass only place certified", reason: "only place point_7_pass may be returned and certified"},
+	}
+
+	for _, tc := range testCases {
+		mutated := activeVerifierEcosystemValEModel()
+		mutated.Point7PassAllowed = false
+		mutated.Point7PassReason = tc.reason
+		if got := EvaluateVerifierEcosystemValEPassRuleState(mutated); got != VerifierEcosystemValEPassRuleStateBlocked {
+			t.Fatalf("expected %s to block pass rule, got %q", tc.name, got)
+		}
+	}
+}
+
+func TestVerifierEcosystemValEObservedClaimsPoint7PassBypassAttemptsBlock(t *testing.T) {
+	testCases := []string{
+		"cannot return point_7_pass but production approved",
+		"point_7_pass through Val E only and deployment approved",
+		"only place point_7_pass may be returned and certified",
+	}
+
+	for _, claim := range testCases {
+		mutated := activeVerifierEcosystemValEModel()
+		mutated.ObservedClaims = append(mutated.ObservedClaims, claim)
+		if got := EvaluateVerifierEcosystemValENoOverclaimState(mutated); got != VerifierEcosystemValENoOverclaimStateBlocked {
+			t.Fatalf("expected observed claim %q to block no-overclaim state, got %q", claim, got)
+		}
+	}
+}
+
+func TestVerifierEcosystemValEClosureModelPoint7PassReasonOverclaimIsInternallyConsistent(t *testing.T) {
+	model := activeVerifierEcosystemValEModel()
+	model.Point7PassAllowed = false
+	model.Point7PassReason = "point_7_pass production approved"
+	model = ComputeVerifierEcosystemValEClosure(model)
+	if model.NoOverclaimState == VerifierEcosystemValENoOverclaimStateActive {
+		t.Fatalf("expected point7 pass reason overclaim to prevent active no-overclaim state, got %#v", model)
+	}
+	if model.PassRuleState != VerifierEcosystemValEPassRuleStateBlocked {
+		t.Fatalf("expected point7 pass reason overclaim to block pass rule state, got %#v", model)
+	}
+	if model.Point7State == VerifierEcosystemPoint7StatePass {
+		t.Fatalf("expected point7 pass reason overclaim to keep point 7 non-pass, got %#v", model)
 	}
 }
 

@@ -46,12 +46,26 @@ const (
 	VerifierEcosystemValEStateBlocked    = "verifier_ecosystem_vale_blocked"
 	VerifierEcosystemValEStateUnknown    = "verifier_ecosystem_vale_unknown"
 
+	VerifierEcosystemValEPoint7PassReasonAllowed                  = "point_7_pass through Val E only after actual Val 0 through Val D proof states, exact proof surfaces, exact evidence refs, fresh evidence quality, and fail-closed closure invariants all remain active."
+	VerifierEcosystemValEPoint7PassReasonBlocked                  = "point_7_pass remains blocked until actual Val 0 through Val D proof states, exact proof surfaces, exact evidence refs, fresh evidence quality, and fail-closed closure invariants all remain active."
+	VerifierEcosystemValEPoint7PassSafeDiagnosticVal0CannotReturn = "Val 0 cannot return point_7_pass before integrated closure."
+	VerifierEcosystemValEPoint7PassSafeDiagnosticValACannotReturn = "Val A cannot return point_7_pass before integrated closure."
+	VerifierEcosystemValEPoint7PassSafeDiagnosticValBCannotReturn = "Val B cannot return point_7_pass before integrated closure."
+	VerifierEcosystemValEPoint7PassSafeDiagnosticValCCannotReturn = "Val C cannot return point_7_pass before integrated closure."
+	VerifierEcosystemValEPoint7PassSafeDiagnosticValDCannotReturn = "Val D cannot return point_7_pass before integrated closure."
+
 	VerifierEcosystemValEClosureInvariantVal0Discipline     = "val0_verifier_discipline_invariant"
 	VerifierEcosystemValEClosureInvariantValATooling        = "vala_reference_verifier_tooling_invariant"
 	VerifierEcosystemValEClosureInvariantValBCompatibility  = "valb_compatibility_diagnostics_conformance_invariant"
 	VerifierEcosystemValEClosureInvariantValCEcosystem      = "valc_public_partner_auditor_publisher_invariant"
 	VerifierEcosystemValEClosureInvariantValDFinalGate      = "vald_final_verifier_ecosystem_gate_invariant"
 	VerifierEcosystemValEClosureInvariantAdvisoryProjection = "advisory_projection_invariant"
+)
+
+const (
+	verifierEcosystemValEPoint7PassReasonStateAllowed = "allowed"
+	verifierEcosystemValEPoint7PassReasonStateBlocked = "blocked"
+	verifierEcosystemValEPoint7PassReasonStateUnknown = "unknown"
 )
 
 type VerifierEcosystemValEVal0ProofSnapshot struct {
@@ -362,8 +376,44 @@ func VerifierEcosystemValEProofEvidenceRefs() []string {
 
 func verifierEcosystemValEPassAllowedClaim(values ...string) bool {
 	for _, value := range values {
-		normalized := strings.ToLower(strings.TrimSpace(value))
-		if strings.Contains(normalized, "point_7_pass through val e only") {
+		if verifierEcosystemValEPoint7PassReasonState(value) == verifierEcosystemValEPoint7PassReasonStateAllowed {
+			return true
+		}
+	}
+	return false
+}
+
+func verifierEcosystemValENormalizeText(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), " ")
+}
+
+func verifierEcosystemValEPoint7PassReasonState(value string) string {
+	switch verifierEcosystemValENormalizeText(value) {
+	case verifierEcosystemValENormalizeText(VerifierEcosystemValEPoint7PassReasonAllowed):
+		return verifierEcosystemValEPoint7PassReasonStateAllowed
+	case verifierEcosystemValENormalizeText(VerifierEcosystemValEPoint7PassReasonBlocked):
+		return verifierEcosystemValEPoint7PassReasonStateBlocked
+	default:
+		return verifierEcosystemValEPoint7PassReasonStateUnknown
+	}
+}
+
+func verifierEcosystemValEExactSafePoint7PassDiagnostic(value string) bool {
+	normalized := verifierEcosystemValENormalizeText(value)
+	if normalized == "" {
+		return false
+	}
+	safe := []string{
+		VerifierEcosystemValEPoint7PassReasonAllowed,
+		VerifierEcosystemValEPoint7PassReasonBlocked,
+		VerifierEcosystemValEPoint7PassSafeDiagnosticVal0CannotReturn,
+		VerifierEcosystemValEPoint7PassSafeDiagnosticValACannotReturn,
+		VerifierEcosystemValEPoint7PassSafeDiagnosticValBCannotReturn,
+		VerifierEcosystemValEPoint7PassSafeDiagnosticValCCannotReturn,
+		VerifierEcosystemValEPoint7PassSafeDiagnosticValDCannotReturn,
+	}
+	for _, candidate := range safe {
+		if normalized == verifierEcosystemValENormalizeText(candidate) {
 			return true
 		}
 	}
@@ -391,7 +441,7 @@ func verifierEcosystemValEContainsDisallowedClaim(values ...string) bool {
 		"production approved",
 	}
 	for _, value := range values {
-		normalized := strings.ToLower(strings.TrimSpace(value))
+		normalized := verifierEcosystemValENormalizeText(value)
 		if normalized == "" {
 			continue
 		}
@@ -400,10 +450,7 @@ func verifierEcosystemValEContainsDisallowedClaim(values ...string) bool {
 				return true
 			}
 		}
-		if strings.Contains(normalized, "point_7_pass") &&
-			!strings.Contains(normalized, "cannot return point_7_pass") &&
-			!strings.Contains(normalized, "point_7_pass through val e only") &&
-			!strings.Contains(normalized, "only place point_7_pass may be returned") {
+		if strings.Contains(normalized, "point_7_pass") && !verifierEcosystemValEExactSafePoint7PassDiagnostic(value) {
 			return true
 		}
 	}
@@ -533,7 +580,7 @@ func evaluateVerifierEcosystemValEVal0Invariant(model VerifierEcosystemIntegrate
 		blockingReasons = append(blockingReasons, "Val 0 current and val states must remain active.")
 	}
 	if val0.Point7State != VerifierEcosystemPoint7StateNotComplete {
-		blockingReasons = append(blockingReasons, "Val 0 cannot return point_7_pass before integrated closure.")
+		blockingReasons = append(blockingReasons, VerifierEcosystemValEPoint7PassSafeDiagnosticVal0CannotReturn)
 	}
 	if val0.VerifierContractState != VerifierEcosystemVal0ContractStateActive ||
 		val0.ProofEnvelopeState != VerifierEcosystemVal0EnvelopeStateActive ||
@@ -590,7 +637,7 @@ func evaluateVerifierEcosystemValEValAInvariant(model VerifierEcosystemIntegrate
 		blockingReasons = append(blockingReasons, "Val A current and val states must remain active.")
 	}
 	if valA.Point7State != VerifierEcosystemPoint7StateNotComplete {
-		blockingReasons = append(blockingReasons, "Val A cannot return point_7_pass before integrated closure.")
+		blockingReasons = append(blockingReasons, VerifierEcosystemValEPoint7PassSafeDiagnosticValACannotReturn)
 	}
 	if valA.InputModelState != VerifierEcosystemValAInputStateActive ||
 		valA.VerifierEngineState != VerifierEcosystemValAEngineStateActive ||
@@ -640,7 +687,7 @@ func evaluateVerifierEcosystemValEValBInvariant(model VerifierEcosystemIntegrate
 		blockingReasons = append(blockingReasons, "Val B current and val states must remain active.")
 	}
 	if valB.Point7State != VerifierEcosystemPoint7StateNotComplete {
-		blockingReasons = append(blockingReasons, "Val B cannot return point_7_pass before integrated closure.")
+		blockingReasons = append(blockingReasons, VerifierEcosystemValEPoint7PassSafeDiagnosticValBCannotReturn)
 	}
 	if valB.CompatibilityMatrixState != VerifierEcosystemValBCompatibilityMatrixStateActive ||
 		valB.SchemaProofCompatibilityState != VerifierEcosystemValBSchemaProofCompatibilityStateActive ||
@@ -690,7 +737,7 @@ func evaluateVerifierEcosystemValEValCInvariant(model VerifierEcosystemIntegrate
 		blockingReasons = append(blockingReasons, "Val C current and val states must remain active.")
 	}
 	if valC.Point7State != VerifierEcosystemPoint7StateNotComplete {
-		blockingReasons = append(blockingReasons, "Val C cannot return point_7_pass before integrated closure.")
+		blockingReasons = append(blockingReasons, VerifierEcosystemValEPoint7PassSafeDiagnosticValCCannotReturn)
 	}
 	if valC.AudienceSurfaceState != VerifierEcosystemValCAudienceSurfaceStateActive ||
 		valC.PublicOutputState != VerifierEcosystemValCPublicOutputStateActive ||
@@ -752,7 +799,7 @@ func evaluateVerifierEcosystemValEValDInvariant(model VerifierEcosystemIntegrate
 		blockingReasons = append(blockingReasons, "Val D current and val states must remain active.")
 	}
 	if valD.Point7State != VerifierEcosystemPoint7StateNotComplete {
-		blockingReasons = append(blockingReasons, "Val D cannot return point_7_pass before integrated closure.")
+		blockingReasons = append(blockingReasons, VerifierEcosystemValEPoint7PassSafeDiagnosticValDCannotReturn)
 	}
 	if valD.CorrectnessGateState != VerifierEcosystemValDCorrectnessGateStateActive ||
 		valD.ToolingGateState != VerifierEcosystemValDToolingGateStateActive ||
@@ -806,7 +853,7 @@ func evaluateVerifierEcosystemValEAdvisoryInvariant(model VerifierEcosystemInteg
 	if !model.RedactionKeepsFailuresVisible {
 		blockingReasons = append(blockingReasons, "Redaction and caveats must not convert non-verified outcomes into pass.")
 	}
-	if verifierEcosystemVal0HasOverclaim(model.Point7PassReason, strings.Join(model.Caveats, " "), strings.Join(model.Limitations, " "), model.ProjectionDisclaimer) ||
+	if verifierEcosystemVal0HasOverclaim(strings.Join(model.Caveats, " "), strings.Join(model.Limitations, " "), model.ProjectionDisclaimer) ||
 		verifierEcosystemValEContainsDisallowedClaim(model.ObservedClaims...) {
 		blockingReasons = append(blockingReasons, "Integrated closure outputs must not claim certification, rating, universal authority, or out-of-scope pass semantics.")
 	}
@@ -928,7 +975,10 @@ func EvaluateVerifierEcosystemValENoOverclaimState(model VerifierEcosystemIntegr
 		model.ValD.Point7State == VerifierEcosystemPoint7StatePass {
 		return VerifierEcosystemValENoOverclaimStateBlocked
 	}
-	if verifierEcosystemValEContainsDisallowedClaim(append(model.ObservedClaims, model.Point7PassReason)...) {
+	if verifierEcosystemValEContainsDisallowedClaim(model.ObservedClaims...) {
+		return VerifierEcosystemValENoOverclaimStateBlocked
+	}
+	if verifierEcosystemValEContainsDisallowedClaim(model.Point7PassReason) {
 		return VerifierEcosystemValENoOverclaimStateBlocked
 	}
 	if verifierEcosystemValDStateSeverity(model.ValD.NoOverclaimGateState, VerifierEcosystemValDNoOverclaimGateStateActive, VerifierEcosystemValDNoOverclaimGateStatePartial, VerifierEcosystemValDNoOverclaimGateStateIncomplete, VerifierEcosystemValDNoOverclaimGateStateBlocked, VerifierEcosystemValDNoOverclaimGateStateUnknown) > 0 {
@@ -941,11 +991,13 @@ func EvaluateVerifierEcosystemValEPassRuleState(model VerifierEcosystemIntegrate
 	if strings.TrimSpace(model.Point7PassReason) == "" || strings.TrimSpace(model.ProjectionDisclaimer) == "" {
 		return VerifierEcosystemValEPassRuleStateIncomplete
 	}
-	if verifierEcosystemValEContainsDisallowedClaim(model.Point7PassReason, strings.Join(model.Caveats, " "), strings.Join(model.Limitations, " "), strings.Join(model.BlockingReasons, " ")) {
+	reasonState := verifierEcosystemValEPoint7PassReasonState(model.Point7PassReason)
+	if reasonState == verifierEcosystemValEPoint7PassReasonStateUnknown &&
+		verifierEcosystemValEContainsDisallowedClaim(model.Point7PassReason) {
 		return VerifierEcosystemValEPassRuleStateBlocked
 	}
-	if !verifierEcosystemValEPassAllowedClaim(model.Point7PassReason) {
-		return VerifierEcosystemValEPassRuleStateUnknown
+	if verifierEcosystemValEContainsDisallowedClaim(strings.Join(model.Caveats, " "), strings.Join(model.Limitations, " "), strings.Join(model.BlockingReasons, " ")) {
+		return VerifierEcosystemValEPassRuleStateBlocked
 	}
 	prereqState := EvaluateVerifierEcosystemValEPrerequisiteState(model)
 	invariantState := EvaluateVerifierEcosystemValEInvariantState(model)
@@ -961,7 +1013,13 @@ func EvaluateVerifierEcosystemValEPassRuleState(model VerifierEcosystemIntegrate
 		!model.MutatesCanonicalEvidence &&
 		!model.ApprovesDeployment &&
 		!model.SuppressesFailures {
-		return VerifierEcosystemValEPassRuleStateActive
+		if verifierEcosystemValEPassAllowedClaim(model.Point7PassReason) {
+			return VerifierEcosystemValEPassRuleStateActive
+		}
+		if reasonState == verifierEcosystemValEPoint7PassReasonStateBlocked {
+			return VerifierEcosystemValEPassRuleStatePartial
+		}
+		return VerifierEcosystemValEPassRuleStateUnknown
 	}
 	if prereqState == VerifierEcosystemValEPrerequisiteStateBlocked ||
 		invariantState == VerifierEcosystemValEInvariantStateBlocked ||
@@ -986,6 +1044,9 @@ func EvaluateVerifierEcosystemValEPassRuleState(model VerifierEcosystemIntegrate
 		proofSurfaceState == VerifierEcosystemValEProofSurfaceStateUnknown ||
 		evidenceState == VerifierEcosystemValEEvidenceQualityStateUnknown ||
 		noOverclaimState == VerifierEcosystemValENoOverclaimStateUnknown {
+		return VerifierEcosystemValEPassRuleStateUnknown
+	}
+	if reasonState == verifierEcosystemValEPoint7PassReasonStateUnknown {
 		return VerifierEcosystemValEPassRuleStateUnknown
 	}
 	return VerifierEcosystemValEPassRuleStatePartial

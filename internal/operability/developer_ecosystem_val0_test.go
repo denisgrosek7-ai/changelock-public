@@ -191,3 +191,62 @@ func TestDeveloperEcosystemVal0PerformanceBudgetAndDXMetrics(t *testing.T) {
 		t.Fatalf("expected fast-track approval to block DX metrics discipline, got %#v", model)
 	}
 }
+
+func TestDeveloperEcosystemVal0PluginSafetyPerformanceBudgetReference(t *testing.T) {
+	model := DeveloperEcosystemVal0PluginSafetyDisciplineModel()
+	if model.PerformanceBudgetRef != DeveloperEcosystemVal0PerformanceBudgetDisciplineID {
+		t.Fatalf("expected canonical performance budget ref %q, got %#v", DeveloperEcosystemVal0PerformanceBudgetDisciplineID, model)
+	}
+
+	active := activeDeveloperEcosystemVal0Model()
+	if active.PluginSafety.PerformanceBudgetRef != DeveloperEcosystemVal0PerformanceBudgetDisciplineID ||
+		active.PluginSafetyState != DeveloperEcosystemVal0PluginSafetyStateActive {
+		t.Fatalf("expected active plugin safety with canonical performance budget ref, got %#v", active)
+	}
+
+	testCases := []struct {
+		name     string
+		ref      string
+		expected string
+	}{
+		{name: "old dangling ref blocked", ref: "developer-performance-budget", expected: DeveloperEcosystemVal0PluginSafetyStateBlocked},
+		{name: "empty ref incomplete", ref: "", expected: DeveloperEcosystemVal0PluginSafetyStateIncomplete},
+		{name: "unknown mismatched ref blocked", ref: "developer-ecosystem-performance-budget-v2", expected: DeveloperEcosystemVal0PluginSafetyStateBlocked},
+	}
+
+	for _, tc := range testCases {
+		mutated := activeDeveloperEcosystemVal0Model()
+		mutated.PluginSafety.PerformanceBudgetRef = tc.ref
+		mutated = ComputeDeveloperEcosystemVal0Foundation(mutated)
+		if mutated.PluginSafetyState != tc.expected {
+			t.Fatalf("expected %s to produce %s, got %#v", tc.name, tc.expected, mutated)
+		}
+		if mutated.CurrentState == DeveloperEcosystemVal0StateActive {
+			t.Fatalf("expected %s to prevent active foundation state, got %#v", tc.name, mutated)
+		}
+	}
+
+	blockers := []struct {
+		name   string
+		mutate func(*DeveloperEcosystemVal0Foundation)
+	}{
+		{name: "hidden policy override", mutate: func(model *DeveloperEcosystemVal0Foundation) {
+			model.PluginSafety.HiddenPolicyOverride = true
+		}},
+		{name: "governance bypass", mutate: func(model *DeveloperEcosystemVal0Foundation) {
+			model.PluginSafety.GovernanceBypass = true
+		}},
+		{name: "canonical truth claim", mutate: func(model *DeveloperEcosystemVal0Foundation) {
+			model.PluginSafety.CanonicalTruthClaim = true
+		}},
+	}
+
+	for _, tc := range blockers {
+		mutated := activeDeveloperEcosystemVal0Model()
+		tc.mutate(&mutated)
+		mutated = ComputeDeveloperEcosystemVal0Foundation(mutated)
+		if mutated.PluginSafetyState != DeveloperEcosystemVal0PluginSafetyStateBlocked {
+			t.Fatalf("expected %s to block plugin safety state, got %#v", tc.name, mutated)
+		}
+	}
+}

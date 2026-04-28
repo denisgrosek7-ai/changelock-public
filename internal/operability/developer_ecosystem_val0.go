@@ -3,7 +3,8 @@ package operability
 import "strings"
 
 const (
-	DeveloperEcosystemPoint8StateNotComplete = "developer_ecosystem_point_8_not_complete"
+	DeveloperEcosystemPoint8StateNotComplete            = "developer_ecosystem_point_8_not_complete"
+	DeveloperEcosystemVal0PerformanceBudgetDisciplineID = "developer-ecosystem-performance-budget"
 
 	DeveloperEcosystemVal0DependencyStateActive     = "developer_ecosystem_val0_dependency_active"
 	DeveloperEcosystemVal0DependencyStatePartial    = "developer_ecosystem_val0_dependency_partial"
@@ -521,7 +522,7 @@ func DeveloperEcosystemVal0PluginSafetyDisciplineModel() DeveloperEcosystemVal0P
 		DeclaredCapabilities:     developerEcosystemVal0PluginCapabilities(),
 		BoundedScope:             DeveloperEcosystemPluginScopeAdvisoryOnly,
 		SandboxIsolationExpected: true,
-		PerformanceBudgetRef:     "developer-performance-budget",
+		PerformanceBudgetRef:     DeveloperEcosystemVal0PerformanceBudgetDisciplineID,
 		AuditVisibility:          true,
 		DebugVisibility:          true,
 		FailureStateVisible:      true,
@@ -531,7 +532,7 @@ func DeveloperEcosystemVal0PluginSafetyDisciplineModel() DeveloperEcosystemVal0P
 
 func DeveloperEcosystemVal0PerformanceBudgetDisciplineModel() DeveloperEcosystemVal0PerformanceBudgetDiscipline {
 	return DeveloperEcosystemVal0PerformanceBudgetDiscipline{
-		DisciplineID: "developer-ecosystem-performance-budget",
+		DisciplineID: DeveloperEcosystemVal0PerformanceBudgetDisciplineID,
 		Version:      "2026.04",
 		Budgets: []DeveloperEcosystemVal0PerformanceBudgetClass{
 			{BudgetClass: DeveloperEcosystemBudgetClassIDELatency, BudgetState: DeveloperEcosystemBudgetStateKnown, TargetMillis: 150, DegradedFallbackVisible: true},
@@ -735,6 +736,9 @@ func EvaluateDeveloperEcosystemVal0PluginSafetyState(model DeveloperEcosystemVal
 	}
 	if !containsExactTrimmedStringSet(model.DeclaredCapabilities, developerEcosystemVal0PluginCapabilities()...) {
 		return DeveloperEcosystemVal0PluginSafetyStateUnknown
+	}
+	if strings.TrimSpace(model.PerformanceBudgetRef) != DeveloperEcosystemVal0PerformanceBudgetDisciplineID {
+		return DeveloperEcosystemVal0PluginSafetyStateBlocked
 	}
 	if strings.TrimSpace(model.BoundedScope) != DeveloperEcosystemPluginScopeAdvisoryOnly {
 		return DeveloperEcosystemVal0PluginSafetyStatePartial
