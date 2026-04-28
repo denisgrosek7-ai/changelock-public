@@ -79,6 +79,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Verifier Ecosystem Val C Core](../verifier-ecosystem-valc-core.md)
    - [Verifier Ecosystem Val D Core](../verifier-ecosystem-vald-core.md)
    - [Verifier Ecosystem Val E Core](../verifier-ecosystem-vale-core.md)
+13. Current developer ecosystem expansion lineage:
+   - [Developer Ecosystem Val 0 Core](../developer-ecosystem-val0-core.md)
 
 ## Current documentation shape
 
