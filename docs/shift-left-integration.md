@@ -109,11 +109,15 @@ The repo now includes:
 The default PR path:
 
 - builds `changelock-cli`
-- evaluates changed YAML manifests and policy files
+- evaluates only changed resource manifests through `changelock-cli preflight --file`
 - emits GitHub annotations from `diagnostics[]`
 - writes a concise markdown summary to the job summary
 - writes contextual guidance markdown derived from the same deterministic result JSON
 - keeps findings advisory by default
+
+Trigger-only YAML changes such as `.github/workflows/**`, `.github/actions/**`, policy bundle YAML under `policies/**`, raw Helm chart YAML, and `deploy/kyverno/**` may still start the workflow, but they are not sent to manifest preflight as Kyverno resource inputs.
+
+Manifest preflight only evaluates allowed resource-manifest paths such as `deploy/k8s/**`. When no resource manifests are present in the changed set, the action emits the existing no-manifest summary and exits without failure. When manifest evaluation does run, the workflow provisions a pinned Kyverno CLI instead of silently converting missing Kyverno into PASS.
 
 To make PR checks blocking, set:
 

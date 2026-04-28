@@ -83,6 +83,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Developer Ecosystem Val 0 Core](../developer-ecosystem-val0-core.md)
    - [Developer Ecosystem Val A Core](../developer-ecosystem-vala-core.md)
    - [Developer Ecosystem Val B Core](../developer-ecosystem-valb-core.md)
+   - [Developer Ecosystem Val C Core](../developer-ecosystem-valc-core.md)
 
 ## Current documentation shape
 

@@ -38,6 +38,10 @@ inputs:
     description: Fail the action on CLI FAIL results instead of advisory-only summaries.
     required: false
     default: "false"
+  kyverno-version:
+    description: Pinned Kyverno CLI version used only when manifest evaluation is requested.
+    required: false
+    default: "v1.12.6"
   output-dir:
     description: Directory for generated result and summary artifacts.
     required: false
@@ -76,6 +80,37 @@ runs:
         mkdir -p "${{ inputs.output-dir }}/bin"
         go build -o "${{ inputs.output-dir }}/bin/changelock-cli" ./cmd/changelock-cli
 
+    - name: Install pinned Kyverno CLI for manifest evaluation
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        out_dir="${{ inputs.output-dir }}"
+        manifest_input="$(printf '%s\n' "${{ inputs.manifest-files }}" | sed '/^[[:space:]]*$/d')"
+        if [ -z "${manifest_input}" ]; then
+          exit 0
+        fi
+
+        version="${{ inputs.kyverno-version }}"
+        os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        arch="$(uname -m)"
+        case "${arch}" in
+          x86_64|amd64) arch="x86_64" ;;
+          arm64|aarch64) arch="arm64" ;;
+          *)
+            echo "unsupported kyverno architecture: ${arch}" >&2
+            exit 1
+            ;;
+        esac
+
+        archive="kyverno-cli_${version}_${os}_${arch}.tar.gz"
+        url="https://github.com/kyverno/kyverno/releases/download/${version}/${archive}"
+        mkdir -p "${out_dir}/bin"
+        curl -fsSL "${url}" -o "${out_dir}/kyverno-cli.tar.gz"
+        tar -xzf "${out_dir}/kyverno-cli.tar.gz" -C "${out_dir}/bin" kyverno
+        chmod +x "${out_dir}/bin/kyverno"
+        echo "CHANGELOCK_CLI_KYVERNO_BIN=${out_dir}/bin/kyverno" >> "${GITHUB_ENV}"
+
     - name: Run preflight and publish diagnostics
       id: run
       shell: bash
@@ -93,15 +128,20 @@ runs:
         annotations_path="${out_dir}/annotations.txt"
         stderr_path="${out_dir}/preflight.stderr"
 
-        mapfile -t manifest_files < <(printf '%s\n' "${{ inputs.manifest-files }}" | sed '/^[[:space:]]*$/d')
+        manifest_input="$(printf '%s\n' "${{ inputs.manifest-files }}" | sed '/^[[:space:]]*$/d')"
 
         args=()
-        for file in "${manifest_files[@]}"; do
-          args+=("--file" "$file")
-        done
+        requested_inputs=0
+        if [ -n "${manifest_input}" ]; then
+          while IFS= read -r file; do
+            args+=("--file" "$file")
+            requested_inputs=$((requested_inputs + 1))
+          done <<< "${manifest_input}"
+        fi
 
         if [ -n "${{ inputs.image }}" ]; then
           args+=("--image" "${{ inputs.image }}")
+          requested_inputs=$((requested_inputs + 1))
         fi
         if [ -n "${{ inputs.tenant }}" ]; then
           args+=("--tenant" "${{ inputs.tenant }}")
@@ -119,7 +159,7 @@ runs:
           args+=("--fail-severity" "${{ inputs.fail-severity }}")
         fi
 
-        if [ ${#args[@]} -eq 0 ]; then
+        if [ "${requested_inputs}" -eq 0 ]; then
           printf '## ChangeLock Shift-Left Summary\n\nNo manifest or image inputs were provided.\n' > "${summary_path}"
           cat "${summary_path}" >> "${GITHUB_STEP_SUMMARY}"
           printf '%s\n' \

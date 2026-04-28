@@ -8,6 +8,7 @@ on:
       - "deploy/**/*.yml"
       - "charts/**/*.yaml"
       - "charts/**/*.yml"
+      - ".github/actions/**"
       - ".github/workflows/**/*.yaml"
       - ".github/workflows/**/*.yml"
   workflow_dispatch:
@@ -33,13 +34,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -E '^(policies/|deploy/|charts/|\.github/workflows/).*\.(yaml|yml)$' || true)"
+            files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -E '^(\.github/workflows/|\.github/actions/|policies/|deploy/|charts/).*\.(yaml|yml)$' || true)"
           else
-            files="$(git ls-files | grep -E '^(policies/|deploy/|charts/|\.github/workflows/).*\.(yaml|yml)$' || true)"
+            files="$(git ls-files | grep -E '^(\.github/workflows/|\.github/actions/|policies/|deploy/|charts/).*\.(yaml|yml)$' || true)"
           fi
+          manifest_files="$(printf '%s\n' "${files}" | bash scripts/ci/collect_verify_policy_inputs.sh)"
           {
             echo "manifest_files<<EOF"
-            printf '%s\n' "${files}"
+            printf '%s\n' "${manifest_files}"
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 

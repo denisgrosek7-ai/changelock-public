@@ -37,3 +37,5 @@ Not implied:
 - a hosted GitHub App
 - repo settings governance
 - automatic merge control outside the explicit workflow path
+
+Workflow YAML changes may trigger `verify-policy`, but workflow YAML is not evaluated as a Kyverno manifest. Shift-left manifest preflight is limited to resource-manifest inputs, and Kyverno is only required when that manifest evaluation path actually runs.
