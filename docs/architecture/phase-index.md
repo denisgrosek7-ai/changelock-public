@@ -86,6 +86,8 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Developer Ecosystem Val C Core](../developer-ecosystem-valc-core.md)
    - [Developer Ecosystem Val D Core](../developer-ecosystem-vald-core.md)
    - [Developer Ecosystem Val E Core](../developer-ecosystem-vale-core.md)
+14. Current OSS trust network expansion lineage:
+   - [OSS Trust Network Val 0 Core](../oss-trust-network-val0-core.md)
 
 ## Current documentation shape
 
@@ -98,9 +100,10 @@ Before using any phase document as status proof, read [../documentation-truth-po
   - current formalized-authority core slice
 - Phase `9` is primarily represented by:
   - the main [README](../../README.md)
+  - the public [README](../../public-docs/README.md)
   - thematic docs
+  - current OSS trust network expansion lineage
   - current routes, handlers, tests, and merged review history
-  - current runtime / substrate depth planning docs
 
 ## Notes for reviewers
 

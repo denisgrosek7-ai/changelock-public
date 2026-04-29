@@ -99,17 +99,13 @@ The ChangeLock program has evolved in layers. These phase labels are useful as a
 8. **Phase 8: Advanced Trust Operations**
    - preflight workflows, multi-cluster coordination, evidence signing, runtime self-healing, scorecards, and later operational overlays
 
-9. **Phase 9: Intelligence, Portability, and Autonomous Assurance**
-   - stable readback
-   - trend and delta analytics
-   - recommendation workflows
-   - service-graph blast radius
-   - time-travel forensics
-   - signed and sealed handoff
-   - federation
-   - higher-assurance runtime
-   - controlled validation harness
-   - runtime closed-loop hardening
+9. **Phase 9: Open-Source Trust Network Expansion**
+   - `9 / Val 0` OSS signal contract discipline
+   - bounded trust marking semantics and maintainer identity lifecycle
+   - registry freshness and unsupported-state discipline
+   - shared VEX and triage review discipline
+   - source-weighted propagation discipline and local applicability boundaries
+   - no-overclaim and no-global-truth guardrails for OSS trust signals
 
 ## Public docs
 

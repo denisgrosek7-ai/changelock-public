@@ -147,18 +147,13 @@ ChangeLock has grown in layers. The simplest way to read the program is phase-by
    - bounded AI guidance and shift-left integration
    - later incident intelligence and executive defense reporting layers
 
-9. **Phase 9: Intelligence, Portability, and Autonomous Assurance**
-   - `9a` package intelligence
-   - `9b` stable readback and permalinks
-   - `9c` trend and delta analytics
-   - `9d` recommendation workflow overlay
-   - `9e` service-graph blast radius
-   - `9f` time-travel forensics
-   - `9g` signed / sealed handoff
-   - `9h` federation
-   - `9i` higher-assurance runtime
-   - `9j` controlled validation harness
-   - `9k` runtime closed-loop hardening
+9. **Phase 9: Open-Source Trust Network Expansion**
+   - `9 / Val 0` OSS signal contract discipline
+   - bounded trust marking semantics and maintainer identity lifecycle
+   - registry freshness and unsupported-state discipline
+   - shared VEX and triage review discipline
+   - source-weighted propagation discipline and local applicability boundaries
+   - no-overclaim and no-global-truth guardrails for OSS trust signals
 
 ## Architecture
 
