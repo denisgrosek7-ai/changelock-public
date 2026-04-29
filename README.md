@@ -1,7 +1,7 @@
 # ChangeLock Public Overview
 
 ChangeLock is a Kubernetes delivery-security and runtime-trust control plane.
-It is designed for teams that want policy-driven admission, stronger software-supply-chain trust, runtime visibility, audit-ready evidence, and bounded operational response without turning every release into a manual security project.
+It is designed for teams that want policy-driven admission, stronger software-supply-chain trust, runtime visibility, audit-oriented evidence, and bounded operational response without turning every release into a manual security project.
 
 This public repository is intentionally **docs-only**.
 It exists so buyers, partners, and technical reviewers can understand the product, review its operating model, and evaluate scope without exposing private implementation code.
@@ -79,7 +79,7 @@ The ChangeLock program has evolved in layers. These phase labels are useful as a
    - deterministic policy evaluation for trusted delivery decisions
 
 2. **Phase 2: Artifact Verification**
-   - signature, provenance, and verified-artifact trust inputs
+   - signature, provenance, and artifact-verification trust inputs
 
 3. **Phase 3: Admission Enforcement**
    - Kubernetes admission-time policy and trust gating
@@ -97,7 +97,7 @@ The ChangeLock program has evolved in layers. These phase labels are useful as a
    - identity, approvals, analytics, vulnerability operations, and production packaging
 
 8. **Phase 8: Advanced Trust Operations**
-   - preflight workflows, multi-cluster coordination, evidence signing, runtime self-healing, scorecards, and later operational overlays
+   - preflight workflows, multi-cluster coordination, evidence signing, bounded runtime recovery, operational summaries, and later operational overlays
 
 9. **Phase 9: Open-Source Trust Network Expansion**
    - `9 / Val 0` OSS signal contract discipline
