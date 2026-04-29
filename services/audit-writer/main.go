@@ -686,6 +686,8 @@ func newHandlerWithRuntimesAndSigning(store audit.Store, backend string, authCon
 	mux.HandleFunc("/v1/developer-ecosystem/vale/proofs", srv.developerEcosystemValEProofsHandler)
 	mux.HandleFunc("/v1/oss-trust-network/val0/status", srv.ossTrustNetworkVal0StatusHandler)
 	mux.HandleFunc("/v1/oss-trust-network/val0/proofs", srv.ossTrustNetworkVal0ProofsHandler)
+	mux.HandleFunc("/v1/oss-trust-network/vala/status", srv.ossTrustNetworkValAStatusHandler)
+	mux.HandleFunc("/v1/oss-trust-network/vala/proofs", srv.ossTrustNetworkValAProofsHandler)
 	mux.HandleFunc("/v1/enterprise/workflow/lifecycle", srv.enterpriseWorkflowLifecycleHandler)
 	mux.HandleFunc("/v1/enterprise/workflow/connectors/reconcile", srv.enterpriseConnectorReconciliationHandler)
 	mux.HandleFunc("/v1/enterprise/partner-trust/intake", srv.enterprisePartnerIntakeHandler)

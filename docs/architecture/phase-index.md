@@ -88,6 +88,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [Developer Ecosystem Val E Core](../developer-ecosystem-vale-core.md)
 14. Current OSS trust network expansion lineage:
    - [OSS Trust Network Val 0 Core](../oss-trust-network-val0-core.md)
+   - [OSS Trust Network Val A Core](../oss-trust-network-vala-core.md)
 
 ## Current documentation shape
 
