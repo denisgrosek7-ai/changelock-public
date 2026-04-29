@@ -1,91 +1,79 @@
-# ChangeLock
+# ChangeLock Public Overview
 
-ChangeLock is a control plane for delivery trust, runtime integrity, and evidence-backed operational response in Kubernetes environments.
+ChangeLock is a Kubernetes delivery-security and runtime-trust control plane.
+It is designed for teams that want policy-driven admission, stronger software-supply-chain trust, runtime visibility, audit-ready evidence, and bounded operational response without turning every release into a manual security project.
 
-It is designed for teams that want to connect:
-- artifact trust and provenance,
-- admission-time enforcement,
-- runtime drift and integrity signals,
-- audit-ready evidence,
-- bounded hardening and recovery,
-- and portable handoff across internal and external trust boundaries.
-
-This public repository is intentionally **docs-first**.
-It exists so technical evaluators, partners, architects, and security reviewers can understand the system without exposing private implementation code.
+This public repository is intentionally **docs-only**.
+It exists so buyers, partners, and technical reviewers can understand the product, review its operating model, and evaluate scope without exposing private implementation code.
 
 ## Why ChangeLock exists
 
-Modern software delivery often splits trust across disconnected systems:
+Modern delivery paths usually split trust across disconnected systems:
 
 - CI signs something
 - admission checks something else
 - runtime notices drift later
 - audit and incident teams reconstruct the story manually
 
-ChangeLock is built to connect those layers into one evidence-aware operating model so teams can:
+ChangeLock is built to connect those layers into one operator-visible security model so teams can:
 
 - decide whether a workload should be allowed to run
-- explain why something was allowed, denied, quarantined, replayed, or handed off
-- preserve evidence and lineage for audit, incident response, and partner exchange
+- explain why a workload was allowed, denied, quarantined, or replayed
+- preserve evidence and lineage for audit, incident response, and handoff
 - apply bounded runtime controls without collapsing into opaque automation
 
 ## What ChangeLock covers
 
+At a program level, ChangeLock covers:
+
+- artifact trust, provenance, and admission-time enforcement
+- operator governance, approvals, and exception control
+- runtime drift and integrity-aware monitoring
+- audit evidence, reporting, and portable handoff
+- topology, blast-radius, and forensic reconstruction
+- federated proof reuse across clusters or organizations
+- controlled validation and bounded runtime hardening
+
+## Capability map
+
 ### 1. Trust enforcement
 
-- signature and provenance-aware decisions
+- signature and provenance-aware decisioning
 - explicit policy evaluation
-- Kubernetes admission-time enforcement
-- signer, digest, and workflow-oriented trust checks
+- environment-aware admission controls
+- digest and signer-oriented trust boundaries
 
 ### 2. Governance and operator control
 
-- approvals and exception workflows
-- break-glass boundaries
-- role-aware and scope-aware control
+- exception and break-glass workflows
+- approval paths
+- role and scope boundaries
 - operator-readable audit history
 
 ### 3. Runtime assurance
 
-- runtime drift and integrity signals
-- controlled remediation and hardening paths
-- evidence-linked response decisions
-- forensic-first and rollback-aware operational models in advanced deployments
+- runtime drift visibility
+- integrity-oriented runtime signals
+- bounded containment and recovery paths
+- evidence-linked operational response
 
-### 4. Evidence, reporting, and portability
+### 4. Evidence, reporting, and handoff
 
 - durable auditability
-- reporting and scorecard surfaces
+- trust-sensitive reporting
 - portable evidence bundles
-- sealed handoff and third-party-verifiable trust artifacts
+- third-party-verifiable handoff artifacts
 
 ### 5. Intelligence and advanced operations
 
-- topology and blast-radius analysis
+- topology and blast-radius context
 - replay and time-travel forensics
 - federation and proof reuse
-- validation harnesses and bounded runtime hardening
-- trust-hub governance and B2B trust exchange models
-
-## What is real today
-
-ChangeLock is not positioned here as a conceptual mock-up.
-The private implementation program already covers a broad set of working capabilities, including:
-
-- policy-driven trust decisions
-- artifact verification and admission gating
-- runtime integrity and bounded hardening flows
-- evidence, reporting, and handoff models
-- topology, forensics, federation, and validation layers
-- enterprise integration and trust-hub surfaces
-- public verification and trust-format groundwork
-
-This public repository does **not** expose the implementation source code for those capabilities, but it does expose the product shape, architecture, operating model, and evaluation surface.
+- validation harnesses and closed-loop hardening
 
 ## Program map
 
-The ChangeLock program has grown in layers.
-These phase labels are useful as a public map of scope and maturity.
+The ChangeLock program has evolved in layers. These phase labels are useful as a public map of product breadth.
 
 1. **Phase 1: Policy Decision Foundation**
    - deterministic policy evaluation for trusted delivery decisions
@@ -109,39 +97,17 @@ These phase labels are useful as a public map of scope and maturity.
    - identity, approvals, analytics, vulnerability operations, and production packaging
 
 8. **Phase 8: Advanced Trust Operations**
-   - preflight workflows, multi-cluster coordination, evidence signing, runtime self-healing, scorecards, and operational overlays
+   - preflight workflows, multi-cluster coordination, evidence signing, runtime self-healing, scorecards, and later operational overlays
 
-9. **Phase 9: Intelligence, Portability, and Autonomous Assurance**
-   - stable readback
-   - trend and delta analytics
-   - recommendation workflows
-   - service-graph blast radius
-   - time-travel forensics
-   - signed and sealed handoff
-   - federation
-   - higher-assurance runtime
-   - controlled validation harness
-   - runtime closed-loop hardening
+9. **Phase 9: Open-Source Trust Network Expansion**
+   - `9 / Val 0` OSS signal contract discipline
+   - bounded trust marking semantics and maintainer identity lifecycle
+   - registry freshness and unsupported-state discipline
+   - shared VEX and triage review discipline
+   - source-weighted propagation discipline and local applicability boundaries
+   - no-overclaim and no-global-truth guardrails for OSS trust signals
 
-## Who this public repository is for
-
-This repository is intended for:
-
-- buyers and technical evaluators
-- platform engineering leadership
-- security and compliance reviewers
-- partner and solution-architecture stakeholders
-- teams exploring trust portability and evidence-backed runtime controls
-
-It is not intended to be:
-
-- the full implementation repository
-- a self-hosted release artifact repository
-- a substitute for controlled source-level due diligence
-
-## Public documentation map
-
-Start here:
+## Public docs
 
 - [Product Overview](docs/product-overview.md)
 - [Architecture](docs/architecture.md)
@@ -150,14 +116,20 @@ Start here:
 - [Cross-Cluster Model](docs/cross-cluster-model.md)
 - [Evaluation Guide](docs/evaluation-guide.md)
 
-Recommended reading flow:
+## Who this public repo is for
 
-1. Read the [Product Overview](docs/product-overview.md)
-2. Read the [Architecture](docs/architecture.md)
-3. Review the [Security Model](docs/security-model.md)
-4. Compare deployment options in [Deployment Modes](docs/deployment-modes.md)
-5. Review federation and multi-cluster posture in [Cross-Cluster Model](docs/cross-cluster-model.md)
-6. Use the [Evaluation Guide](docs/evaluation-guide.md) for structured review
+This repository is intended for:
+
+- buyers and technical evaluators
+- platform engineering leadership
+- security and compliance reviewers
+- partner and solution-architecture stakeholders
+
+It is not intended to be:
+
+- the full implementation repository
+- a self-hosted release artifact repository
+- a substitute for controlled source-level due diligence
 
 ## Public / private boundary
 
@@ -169,9 +141,8 @@ It intentionally does **not** include:
 - UI source code
 - private deployment packaging
 - internal scripts and test harnesses
-- private runtime hardening implementation details
+- private runtime hardening details
 - controlled implementation evidence
-- source-level enterprise integration internals
 
 The private implementation repository remains the source of:
 
@@ -180,7 +151,19 @@ The private implementation repository remains the source of:
 - deployment packaging and internal test surfaces
 - deeper source-level and operational review material
 
-## Practical boundaries
+## Evaluation notes
+
+This public repo is useful for:
+
+- product positioning review
+- architecture review
+- operating-model review
+- deployment-shape conversations
+- partner orientation
+
+Detailed implementation review, source-level due diligence, and operational evidence review still require controlled access to the private repository or a structured technical review.
+
+## Practical boundary
 
 ChangeLock is designed to improve delivery and runtime trust posture.
 It is not positioned as:
@@ -190,21 +173,8 @@ It is not positioned as:
 - a managed CA replacement
 - a general-purpose GitOps platform
 - an unconstrained autonomous security engine
-- a substitute for operator judgment or local policy ownership
 
-Its value is in explainable enforcement, operator-visible evidence, bounded control loops, and portable trust artifacts.
-
-## Evaluation notes
-
-This public repository is useful for:
-
-- product and architecture review
-- operating-model review
-- deployment-shape conversations
-- partner orientation
-- public trust and verification model review
-
-Detailed implementation review, source-level due diligence, and deeper operational evidence review still require controlled access to the private implementation repository or a structured technical review process.
+Its value is in explainable enforcement, operator-visible evidence, and bounded control loops.
 
 ## License
 
