@@ -92,6 +92,7 @@ Before using any phase document as status proof, read [../documentation-truth-po
    - [OSS Trust Network Val B Core](../oss-trust-network-valb-core.md)
    - [OSS Trust Network Val C Core](../oss-trust-network-valc-core.md)
    - [OSS Trust Network Val D Core](../oss-trust-network-vald-core.md)
+   - [OSS Trust Network Val E Core](../oss-trust-network-vale-core.md)
 
 ## Current documentation shape
 
