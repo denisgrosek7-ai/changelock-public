@@ -11,6 +11,18 @@ func activeDeploymentMultiTenantVal0Model() DeploymentMultiTenantVal0Foundation 
 	return ComputeDeploymentMultiTenantVal0Foundation(model)
 }
 
+func TestDeploymentMultiTenantVal0AggregateProjectionDisclaimerBlocks(t *testing.T) {
+	model := activeDeploymentMultiTenantVal0Model()
+	model.ProjectionDisclaimer = "canonical_truth"
+	model = ComputeDeploymentMultiTenantVal0Foundation(model)
+	if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected malformed aggregate projection disclaimer to block Val0 state, got %#v", model)
+	}
+	if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
+		t.Fatalf("expected aggregate projection disclaimer blocking reason, got %#v", model.BlockingReasons)
+	}
+}
+
 func TestDeploymentMultiTenantVal0HappyPathAndPoint10NotComplete(t *testing.T) {
 	model := activeDeploymentMultiTenantVal0Model()
 	if model.CurrentState != DeploymentMultiTenantVal0StateActive {

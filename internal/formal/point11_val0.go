@@ -275,6 +275,7 @@ type Point11Val0Foundation struct {
 	CurrentState                  string                              `json:"current_state"`
 	BlockingReasons               []string                            `json:"blocking_reasons,omitempty"`
 	ReviewPrerequisites           []string                            `json:"review_prerequisites,omitempty"`
+	ProjectionDisclaimer          string                              `json:"projection_disclaimer"`
 	DependencyState               string                              `json:"dependency_state"`
 	PolicyContractState           string                              `json:"policy_contract_state"`
 	ClaimGovernanceState          string                              `json:"claim_governance_state"`
@@ -344,6 +345,67 @@ func point11Val0IdentityValueValid(value string) bool {
 		}
 	}
 	return true
+}
+
+func point11Val0CanonicalRefWithPrefixes(value string, prefixes []string) bool {
+	trimmed := strings.TrimSpace(value)
+	if !point11Val0IdentityValueValid(trimmed) {
+		return false
+	}
+	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, " ") {
+		return false
+	}
+	lowerTrimmed := strings.ToLower(trimmed)
+	for _, blocked := range []string{
+		"unknown",
+		"unsupported",
+		"invalid",
+		"revoked",
+		"expired",
+		"superseded",
+		"malformed",
+		"placeholder",
+		"<empty>",
+		"junk",
+		"marker",
+		"global",
+		"unscoped",
+		"all-tenants",
+		"wildcard",
+	} {
+		if strings.Contains(lowerTrimmed, blocked) {
+			return false
+		}
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func point11Val0PolicyLineageRefValid(value string) bool {
+	return point11Val0CanonicalRefWithPrefixes(value, []string{
+		"policy_",
+		"pol_",
+		"point11_policy_",
+	})
+}
+
+func point11Val0EmergencyClaimRefValid(value string) bool {
+	return point11Val0CanonicalRefWithPrefixes(value, []string{
+		"emergency_claim_",
+		"eclaim_",
+		"point11_emergency_claim_",
+	})
+}
+
+func point11Val0ClaimInvalidatedStatus(value string) bool {
+	normalized := point11Val0NormalizeText(value)
+	return strings.Contains(normalized, "revoked") ||
+		strings.Contains(normalized, "superseded") ||
+		strings.Contains(normalized, "expired")
 }
 
 func point11Val0ScopeValid(value string) bool {
@@ -631,8 +693,8 @@ func EvaluatePoint11Val0PolicyContractState(model Point11Val0PolicyContract) str
 			return Point11Val0PolicyContractStateBlocked
 		}
 	}
-	if strings.TrimSpace(model.SupersededBy) != "" {
-		if !point11Val0IdentityValueValid(model.SupersededBy) ||
+	if model.SupersededBy != "" {
+		if !point11Val0PolicyLineageRefValid(model.SupersededBy) ||
 			!point11Val0IdentityValueValid(model.CompatibilityVersion) {
 			return Point11Val0PolicyContractStateBlocked
 		}
@@ -665,6 +727,9 @@ func EvaluatePoint11Val0ClaimGovernanceState(model Point11Val0ClaimGovernance) s
 		strings.TrimSpace(model.LifecycleState) == Point11Val0ClaimLifecycleRevoked ||
 		strings.TrimSpace(model.LifecycleState) == Point11Val0ClaimLifecycleSuperseded ||
 		strings.TrimSpace(model.ClaimCategory) == Point11Val0ClaimCategoryBlocked {
+		return Point11Val0ClaimGovernanceStateBlocked
+	}
+	if point11Val0ClaimInvalidatedStatus(model.RevocationOrSupersessionStatus) {
 		return Point11Val0ClaimGovernanceStateBlocked
 	}
 	expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.Expiry))
@@ -738,7 +803,7 @@ func EvaluatePoint11Val0AuthorityMatrixState(model Point11Val0AuthorityMatrix) s
 func EvaluatePoint11Val0ExceptionGovernanceState(model Point11Val0ExceptionGovernance) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.ExceptionID) ||
-		!point11Val0IdentityValueValid(model.EmergencyClaimID) ||
+		!point11Val0EmergencyClaimRefValid(model.EmergencyClaimID) ||
 		!point11Val0IdentityValueValid(model.Reason) ||
 		!point11Val0IdentityValueValid(model.Issuer) ||
 		!point11Val0IdentityValueValid(model.Approver) ||
@@ -865,6 +930,9 @@ func EvaluatePoint11Val0CrossDomainCompatibilityState(model Point11Val0CrossDoma
 }
 
 func EvaluatePoint11Val0State(model Point11Val0Foundation) string {
+	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
+		return Point11Val0StateBlocked
+	}
 	states := []string{
 		model.PolicyContractState,
 		model.ClaimGovernanceState,
@@ -899,6 +967,9 @@ func EvaluatePoint11Val0State(model Point11Val0Foundation) string {
 
 func point11Val0BlockingReasons(model Point11Val0Foundation) []string {
 	reasons := []string{}
+	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
+		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
+	}
 	if model.DependencyState == Point11Val0DependencyStateBlocked {
 		reasons = append(reasons, "point10_dependency_blocked")
 	}
@@ -934,6 +1005,7 @@ func Point11Val0FoundationModel() Point11Val0Foundation {
 	dependency := point11Val0DependencySnapshotModel()
 	return Point11Val0Foundation{
 		CurrentState:                  Point11Val0StateReviewRequired,
+		ProjectionDisclaimer:          disclaimer,
 		DependencyState:               Point11Val0DependencyStateReviewRequired,
 		PolicyContractState:           Point11Val0PolicyContractStateActive,
 		ClaimGovernanceState:          Point11Val0ClaimGovernanceStateActive,
@@ -998,7 +1070,7 @@ func Point11Val0FoundationModel() Point11Val0Foundation {
 		},
 		ExceptionGovernance: Point11Val0ExceptionGovernance{
 			ExceptionID:               "exception:point11-val0-scope-bounded",
-			EmergencyClaimID:          "claim:point11-val0-bounded-governance",
+			EmergencyClaimID:          "point11_emergency_claim_governance_foundation",
 			Reason:                    "bounded_governance_exception_review",
 			Issuer:                    "governance_authority_team",
 			Approver:                  "governance_final_approver",

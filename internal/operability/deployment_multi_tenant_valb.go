@@ -204,6 +204,7 @@ type DeploymentMultiTenantValBClosureBlockerOverlay struct {
 type DeploymentMultiTenantValBFoundation struct {
 	CurrentState          string                                           `json:"current_state"`
 	Point10State          string                                           `json:"point_10_state"`
+	ProjectionDisclaimer  string                                           `json:"projection_disclaimer"`
 	BlockingReasons       []string                                         `json:"blocking_reasons,omitempty"`
 	DependencyState       string                                           `json:"dependency_state"`
 	TenantIsolationState  string                                           `json:"tenant_isolation_state"`
@@ -280,7 +281,7 @@ func deploymentMultiTenantValBDependencySnapshotModel() DeploymentMultiTenantVal
 		ValANoOverclaimState:             valA.NoOverclaimState,
 		ValAPassBlockerState:             valA.PassBlockerState,
 		Point10State:                     valA.Point10State,
-		ProjectionDisclaimer:             deploymentMultiTenantValAProjectionDisclaimer(),
+		ProjectionDisclaimer:             valA.ProjectionDisclaimer,
 	}
 }
 
@@ -714,7 +715,8 @@ func EvaluateDeploymentMultiTenantValBClosureBlockerState(model DeploymentMultiT
 }
 
 func EvaluateDeploymentMultiTenantValBState(model DeploymentMultiTenantValBFoundation) string {
-	if strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValBDependencyStateActive ||
+	if !deploymentMultiTenantValBHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValBDependencyStateActive ||
 		strings.TrimSpace(model.TenantIsolationState) != DeploymentMultiTenantValBTenantIsolationStateActive ||
 		strings.TrimSpace(model.DataResidencyState) != DeploymentMultiTenantValBDataResidencyStateActive ||
 		strings.TrimSpace(model.TenantLifecycleState) != DeploymentMultiTenantValBTenantLifecycleStateActive ||
@@ -729,6 +731,9 @@ func EvaluateDeploymentMultiTenantValBState(model DeploymentMultiTenantValBFound
 
 func deploymentMultiTenantValBBlockingReasons(model DeploymentMultiTenantValBFoundation) []string {
 	reasons := []string{}
+	if !deploymentMultiTenantValBHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
+	}
 	if model.DependencyState != DeploymentMultiTenantValBDependencyStateActive {
 		reasons = append(reasons, "dependency_state_blocked")
 	}
@@ -761,6 +766,7 @@ func DeploymentMultiTenantValBFoundationModel() DeploymentMultiTenantValBFoundat
 	return DeploymentMultiTenantValBFoundation{
 		CurrentState:         DeploymentMultiTenantValBStateActive,
 		Point10State:         DeploymentMultiTenantPoint10StateNotComplete,
+		ProjectionDisclaimer: disclaimer,
 		DependencyState:      DeploymentMultiTenantValBDependencyStateActive,
 		TenantIsolationState: DeploymentMultiTenantValBTenantIsolationStateActive,
 		DataResidencyState:   DeploymentMultiTenantValBDataResidencyStateActive,

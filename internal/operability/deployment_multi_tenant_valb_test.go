@@ -42,6 +42,18 @@ func TestDeploymentMultiTenantValBHappyPathAndPoint10NotComplete(t *testing.T) {
 	}
 }
 
+func TestDeploymentMultiTenantValBAggregateProjectionDisclaimerBlocks(t *testing.T) {
+	model := activeDeploymentMultiTenantValBModel()
+	model.ProjectionDisclaimer = "canonical_truth"
+	model = ComputeDeploymentMultiTenantValBFoundation(model)
+	if model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+		t.Fatalf("expected malformed aggregate projection disclaimer to block ValB state, got %#v", model)
+	}
+	if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
+		t.Fatalf("expected aggregate projection disclaimer blocking reason, got %#v", model.BlockingReasons)
+	}
+}
+
 func TestDeploymentMultiTenantValBDependencyBlockers(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -89,6 +101,39 @@ func TestDeploymentMultiTenantValBDependencyBlockers(t *testing.T) {
 		if model.DependencyState != DeploymentMultiTenantValBDependencyStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
 			t.Fatalf("%s: expected blocked dependency, got %#v", tc.name, model)
 		}
+	}
+}
+
+func TestDeploymentMultiTenantValBDependencySnapshotCopiesAggregateComputedValAProjectionDisclaimer(t *testing.T) {
+	valA := ComputeDeploymentMultiTenantValAFoundation(DeploymentMultiTenantValAFoundationModel())
+	valA.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_vala aggregate_dependency_snapshot"
+	valA.PassBlockerOverlay.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_vala component_pass_blocker"
+	snapshot := DeploymentMultiTenantValBDependencySnapshot{
+		ValACurrentState:                 valA.CurrentState,
+		ValADependencyState:              valA.DependencyState,
+		ValADeploymentProfileMatrixState: valA.DeploymentProfileMatrixState,
+		ValAPreflightGateState:           valA.PreflightGateState,
+		ValAIdentityBootstrapState:       valA.IdentityBootstrapState,
+		ValAAirGappedEvidenceBundleState: valA.AirGappedEvidenceBundleState,
+		ValANoOverclaimState:             valA.NoOverclaimState,
+		ValAPassBlockerState:             valA.PassBlockerState,
+		Point10State:                     valA.Point10State,
+		ProjectionDisclaimer:             valA.ProjectionDisclaimer,
+	}
+	if snapshot.ProjectionDisclaimer != valA.ProjectionDisclaimer {
+		t.Fatalf("expected aggregate ValA disclaimer to propagate exactly, got snapshot=%q vala=%q", snapshot.ProjectionDisclaimer, valA.ProjectionDisclaimer)
+	}
+	if snapshot.ProjectionDisclaimer == valA.PassBlockerOverlay.ProjectionDisclaimer {
+		t.Fatalf("expected dependency snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", snapshot.ProjectionDisclaimer, valA.PassBlockerOverlay.ProjectionDisclaimer)
+	}
+	if EvaluateDeploymentMultiTenantValBDependencyState(snapshot) != DeploymentMultiTenantValBDependencyStateActive {
+		t.Fatalf("expected copied aggregate disclaimer to keep dependency active, got %#v", snapshot)
+	}
+
+	valA.ProjectionDisclaimer = "canonical_truth"
+	snapshot.ProjectionDisclaimer = valA.ProjectionDisclaimer
+	if EvaluateDeploymentMultiTenantValBDependencyState(snapshot) != DeploymentMultiTenantValBDependencyStateBlocked {
+		t.Fatalf("expected malformed aggregate disclaimer to block dependency without component fallback, got %#v", snapshot)
 	}
 }
 
@@ -832,18 +877,18 @@ func TestDeploymentMultiTenantValBClosureBlockerOverlayRejectsLegacyAndUnknownLe
 		finding DeploymentMultiTenantValBClosureBlockerFinding
 	}{
 		{
-			name: "legacy p0 is rejected",
+			name: "legacy priority zero is rejected",
 			finding: DeploymentMultiTenantValBClosureBlockerFinding{
-				BlockerLevel:      "P0",
+				BlockerLevel:      deploymentMultiTenantLegacyPriority("0"),
 				Surface:           DeploymentMultiTenantValBClosureSurfaceTenantIsolation,
 				Reason:            "legacy severity rejected",
 				BlocksCurrentWave: true,
 			},
 		},
 		{
-			name: "legacy p1 is rejected",
+			name: "legacy priority one is rejected",
 			finding: DeploymentMultiTenantValBClosureBlockerFinding{
-				BlockerLevel:      "P1",
+				BlockerLevel:      deploymentMultiTenantLegacyPriority("1"),
 				Surface:           DeploymentMultiTenantValBClosureSurfaceTenantIsolation,
 				Reason:            "legacy severity rejected",
 				BlocksCurrentWave: true,
@@ -851,9 +896,9 @@ func TestDeploymentMultiTenantValBClosureBlockerOverlayRejectsLegacyAndUnknownLe
 			},
 		},
 		{
-			name: "legacy p2 is rejected",
+			name: "legacy priority two is rejected",
 			finding: DeploymentMultiTenantValBClosureBlockerFinding{
-				BlockerLevel:      "P2",
+				BlockerLevel:      deploymentMultiTenantLegacyPriority("2"),
 				Surface:           DeploymentMultiTenantValBClosureSurfaceTenantIsolation,
 				Reason:            "legacy severity rejected",
 				BlocksCurrentWave: true,

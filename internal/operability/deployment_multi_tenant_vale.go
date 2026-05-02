@@ -630,7 +630,7 @@ func deploymentMultiTenantValEVal0DependencySnapshotFromComputed(val0 Deployment
 		FutureContractState:       val0.FutureContractState,
 		NoOverclaimState:          val0.NoOverclaimState,
 		Point10State:              val0.Point10State,
-		ProjectionDisclaimer:      val0.NoOverclaim.ProjectionDisclaimer,
+		ProjectionDisclaimer:      val0.ProjectionDisclaimer,
 	}
 }
 
@@ -645,7 +645,7 @@ func deploymentMultiTenantValEValADependencySnapshotFromComputed(valA Deployment
 		NoOverclaimState:             valA.NoOverclaimState,
 		PassBlockerState:             valA.PassBlockerState,
 		Point10State:                 valA.Point10State,
-		ProjectionDisclaimer:         valA.PassBlockerOverlay.ProjectionDisclaimer,
+		ProjectionDisclaimer:         valA.ProjectionDisclaimer,
 	}
 }
 
@@ -660,7 +660,7 @@ func deploymentMultiTenantValEValBDependencySnapshotFromComputed(valB Deployment
 		NoOverclaimState:     valB.NoOverclaimState,
 		ClosureBlockerState:  valB.ClosureBlockerState,
 		Point10State:         valB.Point10State,
-		ProjectionDisclaimer: valB.ClosureBlockerOverlay.ProjectionDisclaimer,
+		ProjectionDisclaimer: valB.ProjectionDisclaimer,
 	}
 }
 
@@ -677,7 +677,7 @@ func deploymentMultiTenantValEValCDependencySnapshotFromComputed(valC Deployment
 		NoOverclaimState:       valC.NoOverclaimState,
 		ClosureBlockerState:    valC.ClosureBlockerState,
 		Point10State:           valC.Point10State,
-		ProjectionDisclaimer:   valC.ClosureBlockerOverlay.ProjectionDisclaimer,
+		ProjectionDisclaimer:   valC.ProjectionDisclaimer,
 	}
 }
 
@@ -694,7 +694,7 @@ func deploymentMultiTenantValEValDDependencySnapshotFromComputed(valD Deployment
 		NoOverclaimState:             valD.NoOverclaimState,
 		ClosureBlockerState:          valD.ClosureBlockerState,
 		Point10State:                 valD.Point10State,
-		ProjectionDisclaimer:         valD.ClosureBlockerOverlay.ProjectionDisclaimer,
+		ProjectionDisclaimer:         valD.ProjectionDisclaimer,
 	}
 }
 

@@ -84,7 +84,7 @@ func TestEvaluateArtifactAllowsValidExceptionBypass(t *testing.T) {
 			Exception: &audit.PolicyException{
 				ExceptionID:   "EX-2026-001",
 				ExceptionType: audit.ExceptionTypeBreakGlass,
-				Reason:        "P0 production fix",
+				Reason:        "CL-B0 production fix",
 				TicketID:      "INC-1234",
 				ApprovedBy:    "oncall@example.com",
 				ExpiresAt:     expiresAt,
@@ -106,7 +106,7 @@ func TestEvaluateArtifactAllowsValidExceptionBypass(t *testing.T) {
 		Exception: &policy.ExceptionIntent{
 			BreakGlass:  true,
 			ExceptionID: "EX-2026-001",
-			Reason:      "P0 production fix",
+			Reason:      "CL-B0 production fix",
 			TicketID:    "INC-1234",
 		},
 	})

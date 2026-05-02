@@ -472,7 +472,7 @@ func TestAdmissionReviewAllowsValidBreakGlassException(t *testing.T) {
 			Exception: &audit.PolicyException{
 				ExceptionID:   "EX-2026-001",
 				ExceptionType: audit.ExceptionTypeBreakGlass,
-				Reason:        "P0 production fix",
+				Reason:        "CL-B0 production fix",
 				TicketID:      "INC-1234",
 				ApprovedBy:    "oncall@example.com",
 				ExpiresAt:     expiresAt,
@@ -500,7 +500,7 @@ func TestAdmissionReviewAllowsValidBreakGlassException(t *testing.T) {
 						"changelock.io/repository":   "my-org/acme-app",
 						"changelock.io/break-glass":  "true",
 						"changelock.io/exception-id": "EX-2026-001",
-						"changelock.io/reason":       "P0 production fix",
+						"changelock.io/reason":       "CL-B0 production fix",
 						"changelock.io/ticket-id":    "INC-1234",
 						"changelock.io/environment":  "prod",
 					},

@@ -47,9 +47,9 @@ const (
 	DeploymentMultiTenantValASignatureVerificationFailed   = "failed"
 	DeploymentMultiTenantValASignatureVerificationUnknown  = "unknown"
 
-	deploymentMultiTenantValAPassBlockerSeverityP0 = "P0"
-	deploymentMultiTenantValAPassBlockerSeverityP1 = "P1"
-	deploymentMultiTenantValAPassBlockerSeverityP2 = "P2"
+	deploymentMultiTenantValAPassBlockerSeverityCLB0 = "CL-B0"
+	deploymentMultiTenantValAPassBlockerSeverityCLB1 = "CL-B1"
+	deploymentMultiTenantValAPassBlockerSeverityCLB2 = "CL-B2"
 
 	deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile = "deployment_profile"
 	deploymentMultiTenantValAPassBlockerSurfacePreflight         = "preflight"
@@ -221,6 +221,7 @@ type DeploymentMultiTenantValAPassBlockerOverlay struct {
 type DeploymentMultiTenantValAFoundation struct {
 	CurrentState                 string                                           `json:"current_state"`
 	Point10State                 string                                           `json:"point_10_state"`
+	ProjectionDisclaimer         string                                           `json:"projection_disclaimer"`
 	BlockingReasons              []string                                         `json:"blocking_reasons,omitempty"`
 	DependencyState              string                                           `json:"dependency_state"`
 	DeploymentProfileMatrixState string                                           `json:"deployment_profile_matrix_state"`
@@ -450,7 +451,7 @@ func deploymentMultiTenantValADependencySnapshotModel() DeploymentMultiTenantVal
 		Val0FutureContractState:       val0.FutureContractState,
 		Val0NoOverclaimState:          val0.NoOverclaimState,
 		Point10State:                  val0.Point10State,
-		ProjectionDisclaimer:          deploymentMultiTenantVal0ProjectionDisclaimer(),
+		ProjectionDisclaimer:          val0.ProjectionDisclaimer,
 	}
 }
 
@@ -711,59 +712,59 @@ func deploymentMultiTenantValAPassBlockerFinding(severity, surface, reason strin
 func deploymentMultiTenantValAPassBlockerFindings(model DeploymentMultiTenantValAFoundation) []DeploymentMultiTenantValAPassBlockerFinding {
 	findings := []DeploymentMultiTenantValAPassBlockerFinding{}
 	if model.DeploymentProfileMatrix.InstallSuccessTreatedAsReady {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "install success treated as readiness"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "install success treated as readiness"))
 	}
 	if model.DeploymentProfileMatrix.MarketplaceInstallTreatedAsReady {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "marketplace install treated as readiness"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "marketplace install treated as readiness"))
 	}
 	if model.DeploymentProfileMatrix.MarketplaceInstallTreatedAsProductionReady {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "marketplace install treated as production readiness"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "marketplace install treated as production readiness"))
 	}
 	if model.IdentityBootstrap.SSOConfiguredMeansSecureClaim {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "sso configured treated as secure"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "sso configured treated as secure"))
 	}
 	if model.IdentityBootstrap.IdentityReadinessImpliesDeploymentReadiness {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "sso readiness treated as deployment readiness"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "sso readiness treated as deployment readiness"))
 	}
 	if model.IdentityBootstrap.UnsafeFallbackEnabled {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "unsafe fallback enabled"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "unsafe fallback enabled"))
 	}
 	if deploymentMultiTenantValAContainsForbiddenClaim(model.DeploymentProfileMatrix.ObservedClaims...) {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "marketplace or msp overclaim in deployment profile wording"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "marketplace or msp overclaim in deployment profile wording"))
 	}
 	if !model.DeploymentProfileMatrix.SelfHostedUnsupportedSemanticsExplicit || !model.DeploymentProfileMatrix.SelfHostedDegradedSemanticsExplicit {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "self-hosted profile lacks unsupported or degraded semantics"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "self-hosted profile lacks unsupported or degraded semantics"))
 	}
 	if !model.DeploymentProfileMatrix.AirGappedUnsupportedSemanticsExplicit || !model.DeploymentProfileMatrix.AirGappedDegradedSemanticsExplicit {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "air-gapped profile lacks unsupported or degraded semantics"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "air-gapped profile lacks unsupported or degraded semantics"))
 	}
 	if model.DeploymentProfileMatrix.AirGappedUnsupportedDependenciesHidden || model.DeploymentProfileMatrix.AirGappedUnsupportedDependenciesSilentlyReady {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "unsupported air-gapped dependency hidden or silently treated as ready"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "unsupported air-gapped dependency hidden or silently treated as ready"))
 	}
 	if deploymentMultiTenantValAHasExplicitUnsupportedDependencies(model.DeploymentProfileMatrix.AirGappedUnsupportedOnlineDependencies) &&
 		strings.TrimSpace(model.DeploymentProfileMatrix.AirGappedState) == DeploymentMultiTenantDeploymentStateReady {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "explicit unsupported air-gapped dependency treated as ready"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "explicit unsupported air-gapped dependency treated as ready"))
 	}
 	if !model.DeploymentProfileMatrix.ProfileNamingExact {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "ambiguous deployment profile naming"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "ambiguous deployment profile naming"))
 	}
 	if !model.DeploymentProfileMatrix.SafeReadinessWordingExamplePresent {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "missing safe wording example for deployment readiness"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "missing safe wording example for deployment readiness"))
 	}
 	if !model.DeploymentProfileMatrix.DiagnosticOutputComplete {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "incomplete diagnostic output for readiness blockers"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "incomplete diagnostic output for readiness blockers"))
 	}
 	if !model.PreflightGate.DiagnosticOutputComplete {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP2, deploymentMultiTenantValAPassBlockerSurfacePreflight, "incomplete diagnostic output for preflight blockers"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfacePreflight, "incomplete diagnostic output for preflight blockers"))
 	}
 	if !model.IdentityBootstrap.DiagnosticOutputComplete {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP2, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "incomplete diagnostic output for identity blockers"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap, "incomplete diagnostic output for identity blockers"))
 	}
 	if !model.AirGappedEvidenceBundle.DiagnosticOutputComplete {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP2, deploymentMultiTenantValAPassBlockerSurfaceAirGappedBundle, "incomplete diagnostic output for air-gapped blockers"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfaceAirGappedBundle, "incomplete diagnostic output for air-gapped blockers"))
 	}
 	if model.NoOverclaimState != DeploymentMultiTenantValANoOverclaimStateActive {
-		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSurfaceNoOverclaim, "forbidden deployment or marketplace claim present"))
+		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceNoOverclaim, "forbidden deployment or marketplace claim present"))
 	}
 	return findings
 }
@@ -775,9 +776,9 @@ func EvaluateDeploymentMultiTenantValAPassBlockerState(model DeploymentMultiTena
 	hasCleanup := false
 	for _, finding := range model.Findings {
 		switch strings.TrimSpace(finding.Severity) {
-		case deploymentMultiTenantValAPassBlockerSeverityP0, deploymentMultiTenantValAPassBlockerSeverityP1:
+		case deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSeverityCLB1:
 			return DeploymentMultiTenantValAPassBlockerStateBlocked
-		case deploymentMultiTenantValAPassBlockerSeverityP2:
+		case deploymentMultiTenantValAPassBlockerSeverityCLB2:
 			hasCleanup = true
 		default:
 			return DeploymentMultiTenantValAPassBlockerStateBlocked
@@ -790,7 +791,8 @@ func EvaluateDeploymentMultiTenantValAPassBlockerState(model DeploymentMultiTena
 }
 
 func EvaluateDeploymentMultiTenantValAState(model DeploymentMultiTenantValAFoundation) string {
-	if strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValADependencyStateActive ||
+	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValADependencyStateActive ||
 		strings.TrimSpace(model.DeploymentProfileMatrixState) != DeploymentMultiTenantValADeploymentProfileMatrixStateActive ||
 		strings.TrimSpace(model.PreflightGateState) != DeploymentMultiTenantValAPreflightGateStateActive ||
 		strings.TrimSpace(model.IdentityBootstrapState) != DeploymentMultiTenantValAIdentityBootstrapStateActive ||
@@ -805,6 +807,9 @@ func EvaluateDeploymentMultiTenantValAState(model DeploymentMultiTenantValAFound
 
 func deploymentMultiTenantValABlockingReasons(model DeploymentMultiTenantValAFoundation) []string {
 	reasons := []string{}
+	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
+	}
 	if model.DependencyState != DeploymentMultiTenantValADependencyStateActive {
 		reasons = append(reasons, "dependency")
 	}
@@ -834,6 +839,7 @@ func DeploymentMultiTenantValAFoundationModel() DeploymentMultiTenantValAFoundat
 	return DeploymentMultiTenantValAFoundation{
 		CurrentState:                 DeploymentMultiTenantValAStateActive,
 		Point10State:                 DeploymentMultiTenantPoint10StateNotComplete,
+		ProjectionDisclaimer:         disclaimer,
 		DependencyState:              DeploymentMultiTenantValADependencyStateActive,
 		DeploymentProfileMatrixState: DeploymentMultiTenantValADeploymentProfileMatrixStateActive,
 		PreflightGateState:           DeploymentMultiTenantValAPreflightGateStateActive,

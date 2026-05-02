@@ -195,6 +195,29 @@ func TestHardeningActionRankIncludesRollbackRestrictions(t *testing.T) {
 	}
 }
 
+func TestBuildHardeningAssessmentEscalatesOnUnresolvedHighPriorityIncident(t *testing.T) {
+	assessment := buildHardeningAssessment(
+		runtimeIntegrityFinding{
+			FindingID:   "finding-runtime-hardening-1",
+			FindingType: runtimeFindingOutboundDrift,
+			Severity:    "medium",
+			SubjectRef:  "cluster/ns/workload",
+		},
+		runtimeWorkloadView{
+			State: runtimeIntegrityState{CurrentSandboxClass: runtimeSandboxClassStandard},
+		},
+		[]investigationIncident{{
+			State:    incidentStateOpen,
+			Severity: "medium",
+			Priority: "high",
+		}},
+		nil,
+	)
+	if assessment.Criticality != "critical" {
+		t.Fatalf("expected unresolved high-priority incident to escalate criticality, got %#v", assessment)
+	}
+}
+
 func TestRuntimeHardeningRecoveryRequiresCleanStateAndSupportsTrustedRecovery(t *testing.T) {
 	fixture := forensicsTestFixture(t)
 

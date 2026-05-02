@@ -41,7 +41,8 @@ func TestDeploymentMultiTenantValEHappyPathFinalPass(t *testing.T) {
 
 func TestDeploymentMultiTenantValEDependencySnapshotCopiesComputedUpstreamOutput(t *testing.T) {
 	val0 := ComputeDeploymentMultiTenantVal0Foundation(DeploymentMultiTenantVal0FoundationModel())
-	val0.NoOverclaim.ProjectionDisclaimer = "canonical_truth"
+	val0.ProjectionDisclaimer = "canonical_truth"
+	val0.NoOverclaim.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_val0 component_no_overclaim"
 	val0.CurrentState = "unknown"
 	val0.NoOverclaimState = "blocked"
 	val0.Point10State = "deployment_multi_tenant_point_10_complete"
@@ -49,37 +50,56 @@ func TestDeploymentMultiTenantValEDependencySnapshotCopiesComputedUpstreamOutput
 	if val0Snapshot.ProjectionDisclaimer != "canonical_truth" || val0Snapshot.CurrentState != "unknown" || val0Snapshot.NoOverclaimState != "blocked" || val0Snapshot.Point10State != "deployment_multi_tenant_point_10_complete" {
 		t.Fatalf("expected val0 snapshot to copy computed output, got %#v", val0Snapshot)
 	}
+	if val0Snapshot.ProjectionDisclaimer == val0.NoOverclaim.ProjectionDisclaimer {
+		t.Fatalf("expected val0 snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", val0Snapshot.ProjectionDisclaimer, val0.NoOverclaim.ProjectionDisclaimer)
+	}
 
 	valA := ComputeDeploymentMultiTenantValAFoundation(DeploymentMultiTenantValAFoundationModel())
-	valA.PassBlockerOverlay.ProjectionDisclaimer = ""
+	valA.ProjectionDisclaimer = ""
+	valA.PassBlockerOverlay.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_vala component_pass_blocker"
 	valA.PassBlockerState = "blocked"
 	valASnapshot := deploymentMultiTenantValEValADependencySnapshotFromComputed(valA)
 	if valASnapshot.ProjectionDisclaimer != "" || valASnapshot.PassBlockerState != "blocked" {
 		t.Fatalf("expected vala snapshot to copy computed output, got %#v", valASnapshot)
 	}
+	if valASnapshot.ProjectionDisclaimer == valA.PassBlockerOverlay.ProjectionDisclaimer {
+		t.Fatalf("expected vala snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", valASnapshot.ProjectionDisclaimer, valA.PassBlockerOverlay.ProjectionDisclaimer)
+	}
 
 	valB := ComputeDeploymentMultiTenantValBFoundation(DeploymentMultiTenantValBFoundationModel())
-	valB.ClosureBlockerOverlay.ProjectionDisclaimer = "unsupported"
+	valB.ProjectionDisclaimer = "unsupported"
+	valB.ClosureBlockerOverlay.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_valb component_closure_blocker"
 	valB.ClosureBlockerState = DeploymentMultiTenantValBClosureBlockerStateCleanup
 	valBSnapshot := deploymentMultiTenantValEValBDependencySnapshotFromComputed(valB)
 	if valBSnapshot.ProjectionDisclaimer != "unsupported" || valBSnapshot.ClosureBlockerState != DeploymentMultiTenantValBClosureBlockerStateCleanup {
 		t.Fatalf("expected valb snapshot to copy computed output, got %#v", valBSnapshot)
 	}
+	if valBSnapshot.ProjectionDisclaimer == valB.ClosureBlockerOverlay.ProjectionDisclaimer {
+		t.Fatalf("expected valb snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", valBSnapshot.ProjectionDisclaimer, valB.ClosureBlockerOverlay.ProjectionDisclaimer)
+	}
 
 	valC := ComputeDeploymentMultiTenantValCFoundation(DeploymentMultiTenantValCFoundationModel())
-	valC.ClosureBlockerOverlay.ProjectionDisclaimer = "blocked"
+	valC.ProjectionDisclaimer = "blocked"
+	valC.ClosureBlockerOverlay.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_valc component_closure_blocker"
 	valC.HAReadinessState = "unknown"
 	valCSnapshot := deploymentMultiTenantValEValCDependencySnapshotFromComputed(valC)
 	if valCSnapshot.ProjectionDisclaimer != "blocked" || valCSnapshot.HAReadinessState != "unknown" {
 		t.Fatalf("expected valc snapshot to copy computed output, got %#v", valCSnapshot)
 	}
+	if valCSnapshot.ProjectionDisclaimer == valC.ClosureBlockerOverlay.ProjectionDisclaimer {
+		t.Fatalf("expected valc snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", valCSnapshot.ProjectionDisclaimer, valC.ClosureBlockerOverlay.ProjectionDisclaimer)
+	}
 
 	valD := ComputeDeploymentMultiTenantValDFoundation(DeploymentMultiTenantValDFoundationModel())
-	valD.ClosureBlockerOverlay.ProjectionDisclaimer = "production_approval"
+	valD.ProjectionDisclaimer = "production_approval"
+	valD.ClosureBlockerOverlay.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_vald component_closure_blocker"
 	valD.NoOverclaimState = "blocked"
 	valDSnapshot := deploymentMultiTenantValEValDDependencySnapshotFromComputed(valD)
 	if valDSnapshot.ProjectionDisclaimer != "production_approval" || valDSnapshot.NoOverclaimState != "blocked" {
 		t.Fatalf("expected vald snapshot to copy computed output, got %#v", valDSnapshot)
+	}
+	if valDSnapshot.ProjectionDisclaimer == valD.ClosureBlockerOverlay.ProjectionDisclaimer {
+		t.Fatalf("expected vald snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", valDSnapshot.ProjectionDisclaimer, valD.ClosureBlockerOverlay.ProjectionDisclaimer)
 	}
 }
 
@@ -438,14 +458,14 @@ func TestDeploymentMultiTenantValECLBClosureLedgerBlockers(t *testing.T) {
 		{name: "unknown blocker level blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.CLBClosureLedger.CLB0OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: "CL-B9", Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "unknown", BlocksCurrentWave: true}}
 		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
-		{name: "legacy p0 blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
-			model.CLBClosureLedger.CLB0OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: "P0", Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true}}
+		{name: "legacy priority zero blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB0OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: deploymentMultiTenantLegacyPriority("0"), Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true}}
 		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
-		{name: "legacy p1 blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
-			model.CLBClosureLedger.CLB1OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: "P1", Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true, RequiredFollowup: "remove"}}
+		{name: "legacy priority one blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB1OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: deploymentMultiTenantLegacyPriority("1"), Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true, RequiredFollowup: "remove"}}
 		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
-		{name: "legacy p2 blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
-			model.CLBClosureLedger.CLB2OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: "P2", Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true, RequiredFollowup: "remove"}}
+		{name: "legacy priority two blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB2OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: deploymentMultiTenantLegacyPriority("2"), Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true, RequiredFollowup: "remove"}}
 		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
 		{name: "risk exception missing owner blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Scope: "tenant_scope", Reason: "need review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}

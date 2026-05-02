@@ -194,6 +194,48 @@ func TestPoint11Val0PolicyContractState(t *testing.T) {
 			}
 		})
 	}
+
+	for _, supersededBy := range []string{
+		"revoked/invalid marker",
+		"unknown",
+		"revoked",
+		"invalid",
+		"placeholder",
+		"global",
+		"all-tenants",
+		"   ",
+		"policy_unknown",
+		"policy_revoked",
+		"policy_invalid",
+		"policy_expired",
+		"policy_superseded",
+		"policy_malformed",
+		"point11_policy_unknown",
+		"point11_policy_revoked",
+	} {
+		t.Run("superseded by "+supersededBy+" blocks lineage", func(t *testing.T) {
+			model := activePoint11Val0Foundation()
+			model.PolicyContract.SupersededBy = supersededBy
+			model.PolicyContract.CompatibilityVersion = "point11_val0_compat_v1"
+			model = ComputePoint11Val0Foundation(model)
+			if model.PolicyContractState != Point11Val0PolicyContractStateBlocked {
+				t.Fatalf("expected blocked policy contract for superseded_by=%q, got %#v", supersededBy, model)
+			}
+		})
+	}
+
+	t.Run("canonical superseded by passes with valid compatibility version", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.PolicyContract.SupersededBy = "policy_successor_2026_05_02"
+		model.PolicyContract.CompatibilityVersion = "point11_val0_compat_v1"
+		model = ComputePoint11Val0Foundation(model)
+		if model.PolicyContractState != Point11Val0PolicyContractStateActive {
+			t.Fatalf("expected active policy contract with canonical superseded_by, got %#v", model)
+		}
+		if model.CurrentState != Point11Val0StateActive {
+			t.Fatalf("expected active aggregate state, got %#v", model)
+		}
+	})
 }
 
 func TestPoint11Val0ClaimGovernanceState(t *testing.T) {
@@ -240,6 +282,27 @@ func TestPoint11Val0ClaimGovernanceState(t *testing.T) {
 		{name: "superseded claim lifecycle blocks", mutate: func(model *Point11Val0ClaimGovernance) {
 			model.LifecycleState = Point11Val0ClaimLifecycleSuperseded
 		}},
+		{name: "revoked status blocks", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.RevocationOrSupersessionStatus = "revoked"
+		}},
+		{name: "superseded status blocks", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.RevocationOrSupersessionStatus = "superseded"
+		}},
+		{name: "expired status blocks", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.RevocationOrSupersessionStatus = "expired"
+		}},
+		{name: "docs without clean room review blocks", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.PublicationBoundary = point11Val0PublicationSurfaceDocs
+			model.CleanRoomIPReview = ""
+		}},
+		{name: "portal without clean room review blocks", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.PublicationBoundary = point11Val0PublicationSurfacePortal
+			model.CleanRoomIPReview = ""
+		}},
+		{name: "partner material without clean room review blocks", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.PublicationBoundary = point11Val0PublicationSurfacePartner
+			model.CleanRoomIPReview = ""
+		}},
 		{name: "buyer claim without clean room review blocks", mutate: func(model *Point11Val0ClaimGovernance) {
 			model.PublicationBoundary = point11Val0PublicationSurfaceBuyer
 			model.CleanRoomIPReview = ""
@@ -276,6 +339,36 @@ func TestPoint11Val0ClaimGovernanceState(t *testing.T) {
 			}
 			if model.CurrentState != Point11Val0StateBlocked {
 				t.Fatalf("expected blocked aggregate state, got %#v", model)
+			}
+		})
+	}
+
+	t.Run("valid future expiry and active status passes", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.ClaimGovernance.Expiry = time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+		model.ClaimGovernance.RevocationOrSupersessionStatus = "claim_active"
+		model = ComputePoint11Val0Foundation(model)
+		if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
+			t.Fatalf("expected active claim governance state, got %#v", model)
+		}
+	})
+
+	for _, surface := range []string{
+		point11Val0PublicationSurfaceDocs,
+		point11Val0PublicationSurfacePortal,
+		point11Val0PublicationSurfaceExport,
+		point11Val0PublicationSurfacePartner,
+		point11Val0PublicationSurfaceDemo,
+		point11Val0PublicationSurfaceSales,
+		point11Val0PublicationSurfaceBuyer,
+	} {
+		t.Run("public facing surface "+surface+" passes with clean room review", func(t *testing.T) {
+			model := activePoint11Val0Foundation()
+			model.ClaimGovernance.PublicationBoundary = surface
+			model.ClaimGovernance.CleanRoomIPReview = "clean_room_review_point11_val0"
+			model = ComputePoint11Val0Foundation(model)
+			if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
+				t.Fatalf("expected active claim governance state for surface %q, got %#v", surface, model)
 			}
 		})
 	}
@@ -349,6 +442,43 @@ func TestPoint11Val0ExceptionGovernanceState(t *testing.T) {
 			}
 		})
 	}
+
+	for _, emergencyClaimID := range []string{
+		"",
+		"   ",
+		"unknown",
+		"revoked",
+		"invalid",
+		"placeholder",
+		"revoked/invalid marker",
+		"global",
+		"all-tenants",
+		"emergency_claim_unknown",
+		"emergency_claim_revoked",
+		"emergency_claim_invalid",
+		"emergency_claim_expired",
+		"emergency_claim_superseded",
+		"point11_emergency_claim_unknown",
+		"point11_emergency_claim_revoked",
+	} {
+		t.Run("emergency claim id "+strings.TrimSpace(emergencyClaimID)+" blocks when malformed", func(t *testing.T) {
+			model := activePoint11Val0Foundation()
+			model.ExceptionGovernance.EmergencyClaimID = emergencyClaimID
+			model = ComputePoint11Val0Foundation(model)
+			if model.ExceptionGovernanceState != Point11Val0ExceptionGovernanceStateBlocked {
+				t.Fatalf("expected blocked exception governance state for emergency_claim_id=%q, got %#v", emergencyClaimID, model)
+			}
+		})
+	}
+
+	t.Run("canonical emergency claim id passes", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.ExceptionGovernance.EmergencyClaimID = "point11_emergency_claim_2026_05_02"
+		model = ComputePoint11Val0Foundation(model)
+		if model.ExceptionGovernanceState != Point11Val0ExceptionGovernanceStateActive {
+			t.Fatalf("expected active exception governance state for canonical emergency claim id, got %#v", model)
+		}
+	})
 }
 
 func TestPoint11Val0ABACGovernanceState(t *testing.T) {

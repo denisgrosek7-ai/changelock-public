@@ -52,7 +52,7 @@ func TestScanPolicyExceptionHandlesNullScopeFields(t *testing.T) {
 			nil,
 			nil,
 			nil,
-			"P0 production restore",
+			"CL-B0 production restore",
 			"INC-1234",
 			nil,
 			nil,

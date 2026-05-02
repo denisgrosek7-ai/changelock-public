@@ -1334,7 +1334,7 @@ func TestExceptionsLifecycleEndpoints(t *testing.T) {
 	  "tenant_id":"acme",
 	  "environment":"prod",
 	  "namespace":"acme-prod",
-	  "reason":"P0 production fix",
+	  "reason":"CL-B0 production fix",
 	  "ticket_id":"INC-1234",
 	  "approved_by":"oncall@example.com",
 	  "ttl_hours":2

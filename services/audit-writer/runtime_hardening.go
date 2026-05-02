@@ -554,7 +554,8 @@ func buildHardeningAssessment(finding runtimeIntegrityFinding, workload runtimeW
 		criticality = "elevated"
 	}
 	for _, incident := range incidents {
-		if incident.State != incidentStateResolved && (incident.Severity == "critical" || incident.Priority == "P1") {
+		if incident.State != incidentStateResolved &&
+			(incident.Severity == "critical" || systemicPriorityRank(incident.Priority) >= systemicPriorityRank("high")) {
 			criticality = "critical"
 			break
 		}

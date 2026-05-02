@@ -23,6 +23,10 @@ func deploymentMultiTenantValAHasFinding(findings []DeploymentMultiTenantValAPas
 	return false
 }
 
+func deploymentMultiTenantLegacyPriority(level string) string {
+	return "P" + level
+}
+
 func TestDeploymentMultiTenantValAHappyPathAndPoint10NotComplete(t *testing.T) {
 	model := activeDeploymentMultiTenantValAModel()
 	if model.CurrentState != DeploymentMultiTenantValAStateActive {
@@ -43,6 +47,18 @@ func TestDeploymentMultiTenantValAHappyPathAndPoint10NotComplete(t *testing.T) {
 	}
 	if strings.Contains(string(payload), "point_"+"10_pass") {
 		t.Fatalf("expected Val A to never emit point 10 pass, got %s", string(payload))
+	}
+}
+
+func TestDeploymentMultiTenantValAAggregateProjectionDisclaimerBlocks(t *testing.T) {
+	model := activeDeploymentMultiTenantValAModel()
+	model.ProjectionDisclaimer = "canonical_truth"
+	model = ComputeDeploymentMultiTenantValAFoundation(model)
+	if model.CurrentState != DeploymentMultiTenantValAStateBlocked {
+		t.Fatalf("expected malformed aggregate projection disclaimer to block ValA state, got %#v", model)
+	}
+	if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
+		t.Fatalf("expected aggregate projection disclaimer blocking reason, got %#v", model.BlockingReasons)
 	}
 }
 
@@ -128,6 +144,45 @@ func TestDeploymentMultiTenantValADependencyBlockers(t *testing.T) {
 		if model.DependencyState != DeploymentMultiTenantValADependencyStateBlocked || model.CurrentState != DeploymentMultiTenantValAStateBlocked {
 			t.Fatalf("%s: expected blocked dependency, got %#v", tc.name, model)
 		}
+	}
+}
+
+func TestDeploymentMultiTenantValADependencySnapshotCopiesAggregateComputedVal0ProjectionDisclaimer(t *testing.T) {
+	val0 := ComputeDeploymentMultiTenantVal0Foundation(DeploymentMultiTenantVal0FoundationModel())
+	val0.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_val0 aggregate_dependency_snapshot"
+	val0.NoOverclaim.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_val0 component_no_overclaim"
+	snapshot := DeploymentMultiTenantValADependencySnapshot{
+		Val0CurrentState:              val0.CurrentState,
+		Val0DependencyState:           val0.DependencyState,
+		Val0DeploymentValidationState: val0.DeploymentValidationState,
+		Val0TenantBoundaryState:       val0.TenantBoundaryState,
+		Val0MSPAuthorityState:         val0.MSPAuthorityState,
+		Val0PolicyEnvelopeState:       val0.PolicyEnvelopeState,
+		Val0TenantTrustScopeState:     val0.TenantTrustScopeState,
+		Val0ConnectorContractState:    val0.ConnectorContractState,
+		Val0OperatorActionState:       val0.OperatorActionState,
+		Val0PrivacyGuardState:         val0.PrivacyGuardState,
+		Val0FairShareState:            val0.FairShareState,
+		Val0OperationalPreflightState: val0.OperationalPreflightState,
+		Val0FutureContractState:       val0.FutureContractState,
+		Val0NoOverclaimState:          val0.NoOverclaimState,
+		Point10State:                  val0.Point10State,
+		ProjectionDisclaimer:          val0.ProjectionDisclaimer,
+	}
+	if snapshot.ProjectionDisclaimer != val0.ProjectionDisclaimer {
+		t.Fatalf("expected aggregate Val0 disclaimer to propagate exactly, got snapshot=%q val0=%q", snapshot.ProjectionDisclaimer, val0.ProjectionDisclaimer)
+	}
+	if snapshot.ProjectionDisclaimer == val0.NoOverclaim.ProjectionDisclaimer {
+		t.Fatalf("expected dependency snapshot not to fallback to component disclaimer, got snapshot=%q component=%q", snapshot.ProjectionDisclaimer, val0.NoOverclaim.ProjectionDisclaimer)
+	}
+	if EvaluateDeploymentMultiTenantValADependencyState(snapshot) != DeploymentMultiTenantValADependencyStateActive {
+		t.Fatalf("expected copied aggregate disclaimer to keep dependency active, got %#v", snapshot)
+	}
+
+	val0.ProjectionDisclaimer = "canonical_truth"
+	snapshot.ProjectionDisclaimer = val0.ProjectionDisclaimer
+	if EvaluateDeploymentMultiTenantValADependencyState(snapshot) != DeploymentMultiTenantValADependencyStateBlocked {
+		t.Fatalf("expected malformed aggregate disclaimer to block dependency without component fallback, got %#v", snapshot)
 	}
 }
 
@@ -512,7 +567,7 @@ func TestDeploymentMultiTenantValANoOverclaimBlockers(t *testing.T) {
 	}
 }
 
-func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T) {
+func TestDeploymentMultiTenantValAPassBlockerOverlayCLB0AndCLB1Blockers(t *testing.T) {
 	testCases := []struct {
 		name     string
 		mutate   func(*DeploymentMultiTenantValAFoundation)
@@ -525,7 +580,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.InstallSuccessTreatedAsReady = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "install success treated as readiness",
 		},
@@ -534,7 +589,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.MarketplaceInstallTreatedAsReady = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "marketplace install treated as readiness",
 		},
@@ -543,7 +598,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.MarketplaceInstallTreatedAsProductionReady = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "marketplace install treated as production readiness",
 		},
@@ -552,7 +607,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.IdentityBootstrap.SSOConfiguredMeansSecureClaim = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap,
 			reason:   "sso configured treated as secure",
 		},
@@ -561,7 +616,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.IdentityBootstrap.IdentityReadinessImpliesDeploymentReadiness = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap,
 			reason:   "sso readiness treated as deployment readiness",
 		},
@@ -570,7 +625,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.IdentityBootstrap.UnsafeFallbackEnabled = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceIdentityBootstrap,
 			reason:   "unsafe fallback enabled",
 		},
@@ -579,7 +634,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.ObservedClaims = []string{"bounded marketplace deployment profile marketplace production ready"}
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP0,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB0,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "marketplace or msp overclaim in deployment profile wording",
 		},
@@ -588,7 +643,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.SelfHostedUnsupportedSemanticsExplicit = false
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP1,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB1,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "self-hosted profile lacks unsupported or degraded semantics",
 		},
@@ -597,7 +652,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.AirGappedDegradedSemanticsExplicit = false
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP1,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB1,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "air-gapped profile lacks unsupported or degraded semantics",
 		},
@@ -606,7 +661,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.DeploymentProfileMatrix.AirGappedUnsupportedDependenciesHidden = true
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP1,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB1,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "unsupported air-gapped dependency hidden or silently treated as ready",
 		},
@@ -616,7 +671,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 				model.DeploymentProfileMatrix.AirGappedUnsupportedOnlineDependencies = []string{"dependency_rekor_online_lookup"}
 				model.DeploymentProfileMatrix.AirGappedState = DeploymentMultiTenantDeploymentStateReady
 			},
-			severity: deploymentMultiTenantValAPassBlockerSeverityP1,
+			severity: deploymentMultiTenantValAPassBlockerSeverityCLB1,
 			surface:  deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile,
 			reason:   "explicit unsupported air-gapped dependency treated as ready",
 		},
@@ -635,7 +690,7 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP0AndP1Blockers(t *testing.T
 	}
 }
 
-func TestDeploymentMultiTenantValAPassBlockerOverlayP2Cleanup(t *testing.T) {
+func TestDeploymentMultiTenantValAPassBlockerOverlayCLB2Cleanup(t *testing.T) {
 	testCases := []struct {
 		name    string
 		mutate  func(*DeploymentMultiTenantValAFoundation)
@@ -699,8 +754,29 @@ func TestDeploymentMultiTenantValAPassBlockerOverlayP2Cleanup(t *testing.T) {
 		if model.PassBlockerState != DeploymentMultiTenantValAPassBlockerStateCleanup || model.CurrentState != DeploymentMultiTenantValAStateBlocked {
 			t.Fatalf("%s: expected cleanup pass blocker overlay and blocked Val A state, got %#v", tc.name, model)
 		}
-		if !deploymentMultiTenantValAHasFinding(model.PassBlockerOverlay.Findings, deploymentMultiTenantValAPassBlockerSeverityP2, tc.surface, tc.reason) {
+		if !deploymentMultiTenantValAHasFinding(model.PassBlockerOverlay.Findings, deploymentMultiTenantValAPassBlockerSeverityCLB2, tc.surface, tc.reason) {
 			t.Fatalf("%s: expected cleanup finding %s/%s, got %#v", tc.name, tc.surface, tc.reason, model.PassBlockerOverlay.Findings)
+		}
+	}
+}
+
+func TestDeploymentMultiTenantValAPassBlockerOverlayUsesCanonicalCLBTaxonomy(t *testing.T) {
+	model := activeDeploymentMultiTenantValAModel()
+	model.DeploymentProfileMatrix.InstallSuccessTreatedAsReady = true
+	model.DeploymentProfileMatrix.ProfileNamingExact = false
+	model = ComputeDeploymentMultiTenantValAFoundation(model)
+	if model.PassBlockerState != DeploymentMultiTenantValAPassBlockerStateBlocked {
+		t.Fatalf("expected blocked pass blocker overlay, got %#v", model)
+	}
+	if !deploymentMultiTenantValAHasFinding(model.PassBlockerOverlay.Findings, deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "install success treated as readiness") {
+		t.Fatalf("expected CL-B0 critical closure blocker finding, got %#v", model.PassBlockerOverlay.Findings)
+	}
+	if !deploymentMultiTenantValAHasFinding(model.PassBlockerOverlay.Findings, deploymentMultiTenantValAPassBlockerSeverityCLB2, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "ambiguous deployment profile naming") {
+		t.Fatalf("expected CL-B2 cleanup finding, got %#v", model.PassBlockerOverlay.Findings)
+	}
+	for _, finding := range model.PassBlockerOverlay.Findings {
+		if strings.HasPrefix(strings.TrimSpace(finding.Severity), "P") {
+			t.Fatalf("expected canonical CL-B severity taxonomy only, got %#v", model.PassBlockerOverlay.Findings)
 		}
 	}
 }

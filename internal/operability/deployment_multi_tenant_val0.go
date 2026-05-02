@@ -446,6 +446,7 @@ type DeploymentMultiTenantVal0DependencySnapshot struct {
 type DeploymentMultiTenantVal0Foundation struct {
 	CurrentState              string                                                  `json:"current_state"`
 	Point10State              string                                                  `json:"point_10_state"`
+	ProjectionDisclaimer      string                                                  `json:"projection_disclaimer"`
 	BlockingReasons           []string                                                `json:"blocking_reasons,omitempty"`
 	DependencyState           string                                                  `json:"dependency_state"`
 	DeploymentValidationState string                                                  `json:"deployment_validation_state"`
@@ -1147,7 +1148,8 @@ func EvaluateDeploymentMultiTenantPoint10State(currentState string) string {
 }
 
 func EvaluateDeploymentMultiTenantVal0State(model DeploymentMultiTenantVal0Foundation) string {
-	if strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantVal0DependencyStateActive ||
+	if !deploymentMultiTenantVal0HasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantVal0DependencyStateActive ||
 		strings.TrimSpace(model.DeploymentValidationState) != DeploymentMultiTenantVal0DeploymentValidationStateActive ||
 		strings.TrimSpace(model.TenantBoundaryState) != DeploymentMultiTenantVal0TenantBoundaryStateActive ||
 		strings.TrimSpace(model.MSPAuthorityState) != DeploymentMultiTenantVal0MSPAuthorityStateActive ||
@@ -1168,6 +1170,9 @@ func EvaluateDeploymentMultiTenantVal0State(model DeploymentMultiTenantVal0Found
 
 func deploymentMultiTenantVal0BlockingReasons(model DeploymentMultiTenantVal0Foundation) []string {
 	reasons := []string{}
+	if !deploymentMultiTenantVal0HasProjectionDisclaimer(model.ProjectionDisclaimer) {
+		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
+	}
 	if model.DependencyState != DeploymentMultiTenantVal0DependencyStateActive {
 		reasons = append(reasons, "dependency")
 	}
@@ -1231,6 +1236,7 @@ func DeploymentMultiTenantVal0FoundationModel() DeploymentMultiTenantVal0Foundat
 	return DeploymentMultiTenantVal0Foundation{
 		CurrentState:              DeploymentMultiTenantVal0StateActive,
 		Point10State:              DeploymentMultiTenantPoint10StateNotComplete,
+		ProjectionDisclaimer:      disclaimer,
 		DependencyState:           DeploymentMultiTenantVal0DependencyStateActive,
 		DeploymentValidationState: DeploymentMultiTenantVal0DeploymentValidationStateActive,
 		TenantBoundaryState:       DeploymentMultiTenantVal0TenantBoundaryStateActive,
