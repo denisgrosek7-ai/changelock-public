@@ -42,6 +42,42 @@ func TestPoint12Val0DependencyState(t *testing.T) {
 		}
 	})
 
+	t.Run("valid computed snapshot preserves computed provenance", func(t *testing.T) {
+		valD := activePoint11ValDFoundation()
+		snapshot := SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, Point12Val0Point11ReviewContext{
+			SnapshotFromComputedOutput: true,
+		})
+		if !snapshot.SnapshotFromComputedOutput {
+			t.Fatalf("expected helper to preserve computed provenance, got %#v", snapshot)
+		}
+		if got := EvaluatePoint12Val0DependencyState(snapshot); got != Point12Val0DependencyStateActive {
+			t.Fatalf("expected active dependency state for computed snapshot, got %#v", snapshot)
+		}
+	})
+
+	t.Run("non computed review provenance through helper blocks", func(t *testing.T) {
+		valD := activePoint11ValDFoundation()
+		snapshot := SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, Point12Val0Point11ReviewContext{
+			SnapshotFromComputedOutput: false,
+		})
+		if snapshot.SnapshotFromComputedOutput {
+			t.Fatalf("expected helper to preserve non-computed provenance, got %#v", snapshot)
+		}
+		if got := EvaluatePoint12Val0DependencyState(snapshot); got == Point12Val0DependencyStateActive {
+			t.Fatalf("expected non-computed snapshot to block, got %#v", snapshot)
+		}
+	})
+
+	t.Run("zero review context does not become active accidentally", func(t *testing.T) {
+		valD := activePoint11ValDFoundation()
+		snapshot := SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, Point12Val0Point11ReviewContext{})
+		if snapshot.SnapshotFromComputedOutput {
+			t.Fatalf("expected zero review context to remain non-computed, got %#v", snapshot)
+		}
+		if got := EvaluatePoint12Val0DependencyState(snapshot); got == Point12Val0DependencyStateActive {
+			t.Fatalf("expected zero review context snapshot to not become active, got %#v", snapshot)
+		}
+	})
 	t.Run("copied point11 vald projection disclaimer propagates exactly", func(t *testing.T) {
 		valD := ComputePoint11ValDFoundation(Point11ValDFoundationModel())
 		valD.ProjectionDisclaimer = "projection_only not_canonical_truth point11_vald_final_projection_disclaimer"
@@ -78,6 +114,17 @@ func TestPoint12Val0DependencyState(t *testing.T) {
 		}
 	})
 
+	t.Run("foundation blocks when helper snapshot provenance is non computed", func(t *testing.T) {
+		model := Point12Val0FoundationModel()
+		valD := activePoint11ValDFoundation()
+		model.Dependency = SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, Point12Val0Point11ReviewContext{
+			SnapshotFromComputedOutput: false,
+		})
+		model = ComputePoint12Val0Foundation(model)
+		if model.DependencyState == Point12Val0DependencyStateActive || model.CurrentState == Point12Val0StateActive {
+			t.Fatalf("expected full val0 foundation to block on non-computed dependency snapshot, got %#v", model)
+		}
+	})
 	testCases := []struct {
 		name   string
 		mutate func(*Point12Val0DependencySnapshot)

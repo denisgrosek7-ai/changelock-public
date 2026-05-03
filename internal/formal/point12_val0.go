@@ -770,7 +770,7 @@ func SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD Point11ValDFounda
 		GovernanceAuthorityContextRef:               point12Val0FirstValue(valD.QualityMap.GovernanceEventRefs),
 		ProjectionDisclaimer:                        valD.ProjectionDisclaimer,
 		UpstreamPoint11PassObservedOutsideFinalPath: valD.FinalPassGate.Point11PassObservedOutsideFinalClosure,
-		SnapshotFromComputedOutput:                  true,
+		SnapshotFromComputedOutput:                  review.SnapshotFromComputedOutput,
 		ReviewPrerequisites:                         reviewPrerequisites,
 	}
 }
