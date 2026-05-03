@@ -163,6 +163,7 @@ type Point12Val0SignedProofPackManifest struct {
 	EngineVersion                 string   `json:"engine_version"`
 	EngineHash                    string   `json:"engine_hash"`
 	SchemaVersion                 string   `json:"schema_version"`
+	SchemaHash                    string   `json:"schema_hash"`
 	ClaimRefs                     []string `json:"claim_refs,omitempty"`
 	GovernanceEventRefs           []string `json:"governance_event_refs,omitempty"`
 	UpstreamClosureManifestRef    string   `json:"upstream_closure_manifest_ref"`
@@ -897,6 +898,7 @@ func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) 
 		!point12Val0VersionIdentityValid(model.EngineVersion) ||
 		!point12Val0HashValid(model.EngineHash) ||
 		!point12Val0VersionIdentityValid(model.SchemaVersion) ||
+		!point12Val0HashValid(model.SchemaHash) ||
 		!point12Val0StringListValid(model.ClaimRefs, point12Val0ClaimRefValid) ||
 		!point12Val0StringListValid(model.GovernanceEventRefs, point12Val0GovernanceEventRefValid) ||
 		!point12Val0ClosureManifestRefValid(model.UpstreamClosureManifestRef) ||
@@ -1320,6 +1322,7 @@ func Point12Val0FoundationModel() Point12Val0Foundation {
 			EngineVersion:                 "engine_version_point12_val0_v1",
 			EngineHash:                    "sha256:3333333333333333333333333333333333333333333333333333333333333333",
 			SchemaVersion:                 "schema_version_point12_val0_v1",
+			SchemaHash:                    "sha256:7777777777777777777777777777777777777777777777777777777777777777",
 			ClaimRefs:                     []string{dependency.ClaimAuthorityContextRef},
 			GovernanceEventRefs:           []string{dependency.GovernanceAuthorityContextRef},
 			UpstreamClosureManifestRef:    dependency.UpstreamClosureManifestRef,

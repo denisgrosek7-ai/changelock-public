@@ -26,6 +26,7 @@ func syncPoint12ValAManifestToDependency(model *Point12ValAFoundation) {
 	model.Manifest.EngineVersion = model.Dependency.Val0Manifest.EngineVersion
 	model.Manifest.EngineHash = model.Dependency.Val0Manifest.EngineHash
 	model.Manifest.SchemaVersion = model.Dependency.Val0Manifest.SchemaVersion
+	model.Manifest.SchemaHash = model.Dependency.Val0Manifest.SchemaHash
 	model.Manifest.ClaimRefs = append([]string{}, model.Dependency.Val0Manifest.ClaimRefs...)
 	model.Manifest.GovernanceEventRefs = append([]string{}, model.Dependency.Val0Manifest.GovernanceEventRefs...)
 	model.Manifest.CompatibilityProfileRef = model.Dependency.Val0Manifest.CompatibilityProfileRef
@@ -250,7 +251,17 @@ func TestPoint12ValAManifestIntegrityState(t *testing.T) {
 			t.Fatalf("expected active manifest integrity for supported algorithms, got %#v", model)
 		}
 	})
-
+	t.Run("schema version match alone is insufficient when schema hash drifts", func(t *testing.T) {
+		model := activePoint12ValAFoundation()
+		model.Manifest.SchemaVersion = model.Dependency.Val0Manifest.SchemaVersion
+		model.Manifest.SchemaHash = "sha256:abababababababababababababababababababababababababababababababab"
+		model.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Manifest)
+		model.Manifest.SignatureBoundManifestPayloadHash = model.Manifest.ManifestPayloadHash
+		model = ComputePoint12ValAFoundation(model)
+		if model.ManifestIntegrityState == Point12ValAManifestIntegrityStateActive {
+			t.Fatalf("expected schema hash drift to block active manifest integrity, got %#v", model)
+		}
+	})
 	t.Run("unsupported hash algorithm yields unsupported", func(t *testing.T) {
 		model := Point12ValAFoundationModel()
 		model.Manifest.HashAlgorithmRef = "hash_algorithm_blake3"

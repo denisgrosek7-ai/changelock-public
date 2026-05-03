@@ -413,7 +413,8 @@ func point12ValAManifestIntegrityStateAndReasons(
 		strings.TrimSpace(model.EngineHash) != strings.TrimSpace(dependency.Val0Manifest.EngineHash) {
 		tamperedReasons = append(tamperedReasons, "manifest_engine_binding_mismatch")
 	}
-	if strings.TrimSpace(model.SchemaVersion) != strings.TrimSpace(dependency.Val0Manifest.SchemaVersion) {
+	if strings.TrimSpace(model.SchemaVersion) != strings.TrimSpace(dependency.Val0Manifest.SchemaVersion) ||
+		strings.TrimSpace(model.SchemaHash) != strings.TrimSpace(dependency.Val0Manifest.SchemaHash) {
 		tamperedReasons = append(tamperedReasons, "manifest_schema_binding_mismatch")
 	}
 	if !point12Val0ExactStringSetMatch(model.ClaimRefs, dependency.Val0Manifest.ClaimRefs) {
@@ -534,7 +535,7 @@ func Point12ValAFoundationModel() Point12ValAFoundation {
 		EngineVersion:            dependency.Val0Manifest.EngineVersion,
 		EngineHash:               dependency.Val0Manifest.EngineHash,
 		SchemaVersion:            dependency.Val0Manifest.SchemaVersion,
-		SchemaHash:               "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+		SchemaHash:               dependency.Val0Manifest.SchemaHash,
 		ClaimRefs:                append([]string{}, dependency.Val0Manifest.ClaimRefs...),
 		GovernanceEventRefs:      append([]string{}, dependency.Val0Manifest.GovernanceEventRefs...),
 		CompatibilityProfileRef:  dependency.Val0Manifest.CompatibilityProfileRef,
