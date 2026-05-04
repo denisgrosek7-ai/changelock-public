@@ -642,6 +642,64 @@ func TestPoint12Val0ProvenanceState(t *testing.T) {
 		}
 	})
 
+	t.Run("allowed ai evidence candidate types remain advisory lineage only", func(t *testing.T) {
+		for _, agentType := range point12Val0AllowedAIEvidenceCandidateTypes() {
+			if !point12Val0AIEvidenceCandidateTypeValid(agentType) {
+				t.Fatalf("expected allowed AI candidate type %q to pass taxonomy validation", agentType)
+			}
+			model := activePoint12Val0Foundation()
+			model.ProvenanceProfile.AgentLineages[0].AgentType = agentType
+			model = ComputePoint12Val0Foundation(model)
+			if model.ProvenanceState != Point12Val0ProvenanceStateActive || model.CurrentState != Point12Val0StateActive {
+				t.Fatalf("expected allowed AI candidate type %q to remain active advisory lineage, got %#v", agentType, model)
+			}
+		}
+	})
+
+	t.Run("blocked ai evidence candidate types are rejected", func(t *testing.T) {
+		for _, agentType := range point12Val0BlockedAIEvidenceCandidateTypes() {
+			model := activePoint12Val0Foundation()
+			model.ProvenanceProfile.AgentLineages[0].AgentType = agentType
+			model = ComputePoint12Val0Foundation(model)
+			if model.ProvenanceState != Point12Val0ProvenanceStateBlocked {
+				t.Fatalf("expected blocked AI candidate type %q to block, got %#v", agentType, model)
+			}
+		}
+	})
+
+	t.Run("agent lineage binding matrix covers exact required fields", func(t *testing.T) {
+		record := activePoint12Val0Foundation().ProvenanceProfile.AgentLineages[0]
+		fields := point12Val0AgentLineageBindingFields(record)
+		required := map[string]bool{
+			"agent_id":                     false,
+			"agent_type":                   false,
+			"model_or_rule_version_ref":    false,
+			"permission_manifest_hash":     false,
+			"input_evidence_refs":          false,
+			"audit_id":                     false,
+			"recommendation_id":            false,
+			"lineage_input_only":           false,
+			"claims_certification_false":   false,
+			"claims_source_of_truth_false": false,
+			"emits_premature_pass_false":   false,
+		}
+		for _, field := range fields {
+			if field.BindingClass == point12ValDBindingClassExactRequired {
+				if _, ok := required[field.FieldName]; ok {
+					required[field.FieldName] = true
+				}
+			}
+		}
+		for fieldName, seen := range required {
+			if !seen {
+				t.Fatalf("expected exact required AI provenance field %s in %#v", fieldName, fields)
+			}
+		}
+		if !point12Val0AgentLineageBindingMatrixValid(record) {
+			t.Fatalf("expected valid AI provenance binding matrix for %#v", record)
+		}
+	})
+
 	t.Run("agent finding cannot certify or emit pass", func(t *testing.T) {
 		model := activePoint12Val0Foundation()
 		model.ProvenanceProfile.AgentLineages[0].ClaimsCertification = true
@@ -670,6 +728,38 @@ func TestPoint12Val0ProvenanceState(t *testing.T) {
 		}
 	})
 
+	mutationTests := []struct {
+		name   string
+		mutate func(*Point12Val0AgentLineageRecord)
+	}{
+		{name: "agent id mutation blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.AgentID = "agent_lineage_point12_val0_999" }},
+		{name: "model or rule version mutation blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.ModelOrRuleVersionRef = "model_version_invalid" }},
+		{name: "permission manifest hash mutation blocks", mutate: func(record *Point12Val0AgentLineageRecord) {
+			record.PermissionManifestHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		}},
+		{name: "input evidence refs mutation blocks", mutate: func(record *Point12Val0AgentLineageRecord) {
+			record.InputEvidenceRefs = []string{"evidence:point12-proof-pack-evidence-999"}
+		}},
+		{name: "audit id mutation blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.AuditID = "audit_point12_val0_agent_999" }},
+		{name: "recommendation id mutation blocks", mutate: func(record *Point12Val0AgentLineageRecord) {
+			record.RecommendationID = "recommendation_point12_val0_999"
+		}},
+		{name: "lineage input only false blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.LineageInputOnly = false }},
+		{name: "claims certification true blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.ClaimsCertification = true }},
+		{name: "claims source of truth true blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.ClaimsSourceOfTruth = true }},
+		{name: "emits premature pass true blocks", mutate: func(record *Point12Val0AgentLineageRecord) { record.EmitsPrematurePass = true }},
+	}
+	for _, tc := range mutationTests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := activePoint12Val0Foundation()
+			tc.mutate(&model.ProvenanceProfile.AgentLineages[0])
+			model = ComputePoint12Val0Foundation(model)
+			if model.ProvenanceState != Point12Val0ProvenanceStateBlocked || model.CurrentState == Point12Val0StateActive {
+				t.Fatalf("expected exact-required AI provenance mutation to fail closed, got %#v", model)
+			}
+		})
+	}
+
 	t.Run("no external call path introduced", func(t *testing.T) {
 		model := activePoint12Val0Foundation()
 		model.ProvenanceProfile.IntroducesNetworkCallPath = true
@@ -687,6 +777,15 @@ func TestPoint12Val0NoOverclaimState(t *testing.T) {
 		model = ComputePoint12Val0Foundation(model)
 		if model.NoOverclaimState != Point12Val0NoOverclaimStateBlocked {
 			t.Fatalf("expected forbidden claim to block, got %#v", model)
+		}
+	})
+
+	t.Run("ai authority wording blocked in customer export facing output", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.NoOverclaimReview.ObservedCustomerFacingTexts = []string{"AI-approved evidence pack"}
+		model = ComputePoint12Val0Foundation(model)
+		if model.NoOverclaimState != Point12Val0NoOverclaimStateBlocked {
+			t.Fatalf("expected AI authority wording to block, got %#v", model)
 		}
 	})
 

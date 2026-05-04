@@ -260,6 +260,14 @@ type Point12Val0AgentLineageRecord struct {
 	EmitsPrematurePass     bool     `json:"emits_premature_pass"`
 }
 
+type point12Val0AIEvidenceCandidateBindingField struct {
+	FieldName            string
+	BindingClass         string
+	Reason               string
+	ValidationRequired   bool
+	MutationTestRequired bool
+}
+
 type Point12Val0ToolchainAgentProvenanceProfile struct {
 	DecisiveToolchainProvenanceRequired bool                            `json:"decisive_toolchain_provenance_required"`
 	CIJobIDRef                          string                          `json:"ci_job_id_ref"`
@@ -531,6 +539,143 @@ func point12Val0AgentLineageRefValid(value string) bool {
 	return point11Val0CanonicalRefWithPrefixes(value, []string{"agent_lineage_", "agent_"})
 }
 
+func point12Val0AllowedAIEvidenceCandidateTypes() []string {
+	return []string{
+		"AI_FINDING",
+		"AI_RECOMMENDATION",
+		"AI_PATCH_PROPOSAL",
+		"AI_SANDBOX_RESULT",
+		"AI_APPROVAL_REQUEST",
+		"AI_POST_ACTION_REPORT",
+		"AI_MODEL_CANDIDATE",
+		"AI_EVIDENCE_SUMMARY",
+	}
+}
+
+func point12Val0BlockedAIEvidenceCandidateTypes() []string {
+	return []string{
+		"AI_PASS",
+		"AI_CERTIFIED",
+		"AI_PRODUCTION_APPROVED",
+		"AI_COMPLIANCE_APPROVED",
+		"AI_DEPLOYED",
+		"AI_AUTOPATCHED",
+		"AI_LEGAL_PROOF",
+		"AI_PUBLIC_BADGE",
+	}
+}
+
+func point12Val0AIEvidenceCandidateTypeValid(value string) bool {
+	return point11Val0ContainsTrimmed(point12Val0AllowedAIEvidenceCandidateTypes(), value)
+}
+
+func point12Val0DefaultAgentLineageRecord() Point12Val0AgentLineageRecord {
+	return Point12Val0AgentLineageRecord{
+		AgentID:                "agent_lineage_point12_val0_001",
+		AgentType:              "AI_RECOMMENDATION",
+		ModelOrRuleVersionRef:  "model_version_point12_val0_001",
+		PermissionManifestHash: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+		InputEvidenceRefs:      []string{"evidence:point12-proof-pack-evidence-001"},
+		AuditID:                "audit_point12_val0_agent_001",
+		RecommendationID:       "recommendation_point12_val0_001",
+		HumanFeedbackRefs:      []string{"human_feedback_point12_val0_001"},
+		LineageInputOnly:       true,
+	}
+}
+
+func point12Val0AgentLineageBindingFields(record Point12Val0AgentLineageRecord) []point12Val0AIEvidenceCandidateBindingField {
+	return []point12Val0AIEvidenceCandidateBindingField{
+		{FieldName: "agent_id", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "agent_type", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "model_or_rule_version_ref", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "permission_manifest_hash", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "input_evidence_refs", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "input_evidence_hash_refs", BindingClass: point12ValDBindingClassCompatibilityAllowed, Reason: "agent lineage record carries canonical input evidence refs while exact evidence hash refs remain bound by replay, export, and proof-chain context"},
+		{FieldName: "tenant_scope", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "tenant scope is bound by canonical proof pack, replay, redaction, export, and proof-chain context rather than duplicated per lineage record"},
+		{FieldName: "policy_version", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "policy version remains bound by canonical replay and export context rather than duplicated per lineage record"},
+		{FieldName: "engine_version", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "engine version remains bound by canonical replay and export context rather than duplicated per lineage record"},
+		{FieldName: "schema_version", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "schema version remains bound by canonical replay and export context rather than duplicated per lineage record"},
+		{FieldName: "audit_id", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "recommendation_id", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "human_feedback_refs", BindingClass: point12ValDBindingClassCompatibilityAllowed, Reason: "human feedback refs are optional corroboration and may expand with reviewed evidence without changing canonical identity"},
+		{FieldName: "lineage_input_only", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "claims_certification_false", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "claims_source_of_truth_false", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "emits_premature_pass_false", BindingClass: point12ValDBindingClassExactRequired, ValidationRequired: true, MutationTestRequired: true},
+		{FieldName: "advisory_only", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "lineage_input_only plus blocked certification/source-of-truth/pass flags are the Val 0 no-authority equivalent for advisory AI evidence candidates"},
+		{FieldName: "external_api_allowed", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "network call authority is governed at the toolchain provenance profile level through introduces_network_call_path rather than per lineage record"},
+		{FieldName: "production_mutation_allowed", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "production mutation authority is not modeled on lineage records and remains blocked by higher-layer governance gates"},
+		{FieldName: "canonical_mutation_allowed", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "canonical mutation authority is not modeled on lineage records and remains blocked by higher-layer governance gates"},
+		{FieldName: "pass_allowed", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "lineage records cannot create point pass authority and premature pass emission is blocked explicitly"},
+		{FieldName: "approval_required", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "human approval for production-impacting actions is governed by bounded deployment and runtime models, not by Val 0 advisory lineage records"},
+		{FieldName: "generated_diff_hash", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "generated patch diff hashing belongs to a future bounded patch-proposal model and is not carried by the current lineage record"},
+		{FieldName: "sandbox_result_refs", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "sandbox result refs are not represented on the current lineage record and would require a broader bounded execution model"},
+		{FieldName: "approval_request_ref", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "approval request refs are not represented on the current lineage record and belong to approval workflow models"},
+		{FieldName: "approval_event_ref", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "approval event refs are not represented on the current lineage record and belong to approval workflow models"},
+		{FieldName: "reviewer_ref", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "reviewer refs are not represented on the current lineage record and belong to explicit review workflow models"},
+	}
+}
+
+func point12Val0AgentLineageBindingMatrixValid(record Point12Val0AgentLineageRecord) bool {
+	requiredExact := map[string]bool{
+		"agent_id":                     false,
+		"agent_type":                   false,
+		"model_or_rule_version_ref":    false,
+		"permission_manifest_hash":     false,
+		"input_evidence_refs":          false,
+		"audit_id":                     false,
+		"recommendation_id":            false,
+		"lineage_input_only":           false,
+		"claims_certification_false":   false,
+		"claims_source_of_truth_false": false,
+		"emits_premature_pass_false":   false,
+	}
+	for _, field := range point12Val0AgentLineageBindingFields(record) {
+		switch strings.TrimSpace(field.BindingClass) {
+		case point12ValDBindingClassExactRequired:
+			if !field.ValidationRequired || !field.MutationTestRequired {
+				return false
+			}
+			if _, ok := requiredExact[field.FieldName]; ok {
+				requiredExact[field.FieldName] = true
+			}
+		case point12ValDBindingClassCompatibilityAllowed, point12ValDBindingClassAdvisoryOnly, point12ValDBindingClassIntentionallyNotBound:
+			if strings.TrimSpace(field.Reason) == "" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	for _, seen := range requiredExact {
+		if !seen {
+			return false
+		}
+	}
+	return true
+}
+
+func point12Val0PrimaryExpectedAgentLineageRecord() Point12Val0AgentLineageRecord {
+	return point12Val0DefaultAgentLineageRecord()
+}
+
+func point12Val0AgentLineageExactBindingValid(record Point12Val0AgentLineageRecord) bool {
+	expected := point12Val0PrimaryExpectedAgentLineageRecord()
+	if strings.TrimSpace(expected.AgentID) == "" {
+		return false
+	}
+	return strings.TrimSpace(record.AgentID) == strings.TrimSpace(expected.AgentID) &&
+		strings.TrimSpace(record.ModelOrRuleVersionRef) == strings.TrimSpace(expected.ModelOrRuleVersionRef) &&
+		strings.TrimSpace(record.PermissionManifestHash) == strings.TrimSpace(expected.PermissionManifestHash) &&
+		point12Val0ExactStringSetMatch(record.InputEvidenceRefs, expected.InputEvidenceRefs) &&
+		strings.TrimSpace(record.AuditID) == strings.TrimSpace(expected.AuditID) &&
+		strings.TrimSpace(record.RecommendationID) == strings.TrimSpace(expected.RecommendationID) &&
+		record.LineageInputOnly == expected.LineageInputOnly &&
+		record.ClaimsCertification == expected.ClaimsCertification &&
+		record.ClaimsSourceOfTruth == expected.ClaimsSourceOfTruth &&
+		record.EmitsPrematurePass == expected.EmitsPrematurePass
+}
+
 func point12Val0EvidenceRefValid(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	if !point11Val0IdentityValueValid(trimmed) {
@@ -707,6 +852,12 @@ func point12Val0ForbiddenClaims() []string {
 		"proves insurance eligibility",
 		"cyber insurance premium",
 		"lower insurance premium",
+		"ai approved",
+		"ai-approved",
+		"ai decision",
+		"ai legal proof",
+		"autonomous remediation",
+		"continuous compliance attestation",
 		"source of truth",
 		"canonical truth",
 	}
@@ -1149,8 +1300,10 @@ func EvaluatePoint12Val0FinancialEvidenceSupportState(model Point12Val0Financial
 }
 
 func point12Val0AgentLineageState(record Point12Val0AgentLineageRecord) string {
-	if !point12Val0AgentLineageRefValid(record.AgentID) ||
-		!point11Val0IdentityValueValid(record.AgentType) ||
+	if !point12Val0AgentLineageBindingMatrixValid(record) ||
+		!point12Val0AgentLineageExactBindingValid(record) ||
+		!point12Val0AgentLineageRefValid(record.AgentID) ||
+		!point12Val0AIEvidenceCandidateTypeValid(record.AgentType) ||
 		!point12Val0VersionRefValid(record.ModelOrRuleVersionRef) ||
 		!point12Val0PermissionManifestHashValid(record.PermissionManifestHash) ||
 		!point12Val0EvidenceRefsValid(record.InputEvidenceRefs) ||
@@ -1398,17 +1551,7 @@ func Point12Val0FoundationModel() Point12Val0Foundation {
 			PolicyEngineBuildHash:               "sha256:5555555555555555555555555555555555555555555555555555555555555555",
 			ExecutionEnvironmentClassRef:        "execution_environment_point12_val0_ci",
 			AgentLineages: []Point12Val0AgentLineageRecord{
-				{
-					AgentID:                "agent_lineage_point12_val0_001",
-					AgentType:              "analysis_recommendation",
-					ModelOrRuleVersionRef:  "model_version_point12_val0_001",
-					PermissionManifestHash: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
-					InputEvidenceRefs:      []string{"evidence:point12-proof-pack-evidence-001"},
-					AuditID:                "audit_point12_val0_agent_001",
-					RecommendationID:       "recommendation_point12_val0_001",
-					HumanFeedbackRefs:      []string{"human_feedback_point12_val0_001"},
-					LineageInputOnly:       true,
-				},
+				point12Val0DefaultAgentLineageRecord(),
 			},
 		},
 		NoOverclaimReview: Point12Val0NoOverclaimReview{

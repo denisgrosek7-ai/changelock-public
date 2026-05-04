@@ -496,6 +496,36 @@ func point12ValDBindingClassValid(value string) bool {
 	}, value)
 }
 
+func point12ValDPrimaryAgentLineageRecord() Point12Val0AgentLineageRecord {
+	return point12Val0DefaultAgentLineageRecord()
+}
+
+func point12ValDStringSetSubset(values []string, allowed []string) bool {
+	allowedSet := map[string]struct{}{}
+	for _, value := range allowed {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			allowedSet[trimmed] = struct{}{}
+		}
+	}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return false
+		}
+		if _, ok := allowedSet[trimmed]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func point12ValDBoolString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
+}
 func point12ValDLineageEdgeTypeValid(value string) bool {
 	return point11Val0ContainsTrimmed([]string{
 		point12ValDLineageEdgeTypeSourceToEvidence,
@@ -1069,8 +1099,9 @@ func point12ValDLineageEdgeStateAndReasons(model Point12ValDLineageEdge, project
 		reviewReasons = append(reviewReasons, "lineage_edge_inferred_non_decisive_must_be_advisory_only")
 	}
 	if strings.TrimSpace(model.EdgeType) == point12ValDLineageEdgeTypeAgentFindingAdvisory {
+		expectedLineage := point12ValDPrimaryAgentLineageRecord()
 		if !point12Val0AgentLineageRefValid(model.AgentID) ||
-			!point11Val0IdentityValueValid(model.AgentType) ||
+			!point12Val0AIEvidenceCandidateTypeValid(model.AgentType) ||
 			!point12Val0HashValid(model.PermissionManifestHash) ||
 			!point12Val0EvidenceRefsValid(model.InputEvidenceRefs) ||
 			!point11Val0IdentityValueValid(model.AuditID) ||
@@ -1079,6 +1110,22 @@ func point12ValDLineageEdgeStateAndReasons(model Point12ValDLineageEdge, project
 		}
 		if !model.AdvisoryOnly || !model.LineageInputOnly || model.Decisive || model.ClaimsCertification || model.ClaimsSourceOfTruth || model.EmitsPrematurePass {
 			blockedReasons = append(blockedReasons, "lineage_edge_agent_advisory_authority_violation")
+		}
+		if strings.TrimSpace(expectedLineage.AgentID) != "" {
+			if strings.TrimSpace(model.AgentID) != strings.TrimSpace(expectedLineage.AgentID) ||
+				strings.TrimSpace(model.PermissionManifestHash) != strings.TrimSpace(expectedLineage.PermissionManifestHash) ||
+				!point12Val0ExactStringSetMatch(model.InputEvidenceRefs, expectedLineage.InputEvidenceRefs) ||
+				strings.TrimSpace(model.AuditID) != strings.TrimSpace(expectedLineage.AuditID) ||
+				strings.TrimSpace(model.RecommendationID) != strings.TrimSpace(expectedLineage.RecommendationID) ||
+				model.LineageInputOnly != expectedLineage.LineageInputOnly {
+				blockedReasons = append(blockedReasons, "lineage_edge_agent_advisory_binding_mismatch")
+			}
+		}
+		if !point12ValDStringSetSubset(model.InputEvidenceRefs, projection.EvidenceRefs) ||
+			!point11Val0ContainsTrimmed(model.InputEvidenceRefs, model.EvidenceSpineRef) ||
+			strings.TrimSpace(model.ToRef) != strings.TrimSpace(projection.ArtifactRef) ||
+			strings.TrimSpace(model.ToHash) != strings.TrimSpace(projection.ArtifactHash) {
+			blockedReasons = append(blockedReasons, "lineage_edge_agent_advisory_projection_binding_mismatch")
 		}
 		if point12Val0ContainsPrematurePassToken(model.AgentID, model.AuditID, model.RecommendationID, model.Explanation) {
 			blockedReasons = append(blockedReasons, "lineage_edge_agent_advisory_premature_point12_pass")
@@ -1558,7 +1605,7 @@ func point12ValDBindingMatrixStateAndReasons(model Point12ValDBindingMatrix) (st
 				strings.TrimSpace(entry.UpstreamVersion) == "" {
 				blockedReasons = append(blockedReasons, "binding_matrix_exact_required_upstream_identity_missing")
 			}
-		case point12ValDBindingClassAdvisoryOnly, point12ValDBindingClassIntentionallyNotBound:
+		case point12ValDBindingClassCompatibilityAllowed, point12ValDBindingClassAdvisoryOnly, point12ValDBindingClassIntentionallyNotBound:
 			if strings.TrimSpace(entry.Reason) == "" {
 				reviewReasons = append(reviewReasons, "binding_matrix_non_exact_reason_missing")
 			}
@@ -1639,6 +1686,7 @@ func Point12ValDFoundationModel() Point12ValDFoundation {
 	dependency.ValCCurrentState = Point12ValCStateActive
 	dependency.ValCDependencyState = Point12ValCDependencyStateActive
 	dependency.ReviewPrerequisites = nil
+	agentLineage := point12ValDPrimaryAgentLineageRecord()
 	proofChain := Point12ValDProofChainProjection{
 		ProofChainID:             "proof_chain_point12_vald_001",
 		ProofPackID:              dependency.ValCAuditExportBundle.ProofPackID,
@@ -1848,7 +1896,41 @@ func Point12ValDFoundationModel() Point12ValDFoundation {
 			Explanation:      "governance event remains decisive in decision context",
 		})
 	}
+	if strings.TrimSpace(agentLineage.AgentID) != "" && len(agentLineage.InputEvidenceRefs) > 0 {
+		proofChain.LineageEdges = append(proofChain.LineageEdges, Point12ValDLineageEdge{
+			EdgeID:                 "lineage_edge_point12_vald_agent_001",
+			EdgeType:               point12ValDLineageEdgeTypeAgentFindingAdvisory,
+			FromRef:                agentLineage.AgentID,
+			ToRef:                  proofChain.ArtifactRef,
+			FromHash:               agentLineage.PermissionManifestHash,
+			ToHash:                 proofChain.ArtifactHash,
+			TenantScope:            proofChain.TenantScope,
+			EvidenceSpineRef:       agentLineage.InputEvidenceRefs[0],
+			SourceTimestamp:        "2026-05-04T08:00:22Z",
+			TargetTimestamp:        "2026-05-04T08:00:23Z",
+			AdvisoryOnly:           true,
+			EdgeState:              Point12ValDLineageEdgeStateActive,
+			Explanation:            "AI evidence candidate lineage remains advisory only and cannot satisfy canonical evidence requirements by itself",
+			AgentID:                agentLineage.AgentID,
+			AgentType:              agentLineage.AgentType,
+			PermissionManifestHash: agentLineage.PermissionManifestHash,
+			InputEvidenceRefs:      append([]string{}, agentLineage.InputEvidenceRefs...),
+			AuditID:                agentLineage.AuditID,
+			RecommendationID:       agentLineage.RecommendationID,
+			LineageInputOnly:       agentLineage.LineageInputOnly,
+			ClaimsCertification:    agentLineage.ClaimsCertification,
+			ClaimsSourceOfTruth:    agentLineage.ClaimsSourceOfTruth,
+			EmitsPrematurePass:     agentLineage.EmitsPrematurePass,
+		})
+	}
 	proofChain.ProjectionHash = point12ValDComputedProjectionHash(proofChain)
+	agentLineageEdge := Point12ValDLineageEdge{}
+	for _, edge := range proofChain.LineageEdges {
+		if strings.TrimSpace(edge.EdgeType) == point12ValDLineageEdgeTypeAgentFindingAdvisory {
+			agentLineageEdge = edge
+			break
+		}
+	}
 
 	query := Point12ValDProofChainQuery{
 		QueryID:                         "proof_chain_query_point12_vald_001",
@@ -1965,6 +2047,25 @@ func Point12ValDFoundationModel() Point12ValDFoundation {
 			{FieldName: "export_id", DownstreamModel: "Point12ValDPortalCompatibilityContract", UpstreamSource: "vald.proof_chain.export_id", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: portalCompatibility.ExportID, UpstreamValueRef: proofChain.ExportID, ValidationRequired: true, MutationTestRequired: true},
 			{FieldName: "lineage_edge_hashes", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "canonical_evidence_spine", BindingClass: point12ValDBindingClassExactRequired, DownstreamHash: proofChain.LineageEdges[0].FromHash, UpstreamHash: dependency.ValCAuditExportBundle.EvidenceHashRefs[0], ValidationRequired: true, MutationTestRequired: true},
 			{FieldName: "source_to_evidence_from_ref", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "source_system_origin_unmodeled", BindingClass: point12ValDBindingClassIntentionallyNotBound, DownstreamValueRef: proofChain.LineageEdges[0].FromRef, Reason: "source_to_evidence FromRef origin is not modeled upstream; the edge stays advisory-only and exact binding applies to evidence refs, hashes, spine refs, and tenant scope"},
+			{FieldName: "ai_agent_id", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].agent_id", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: agentLineageEdge.AgentID, UpstreamValueRef: agentLineage.AgentID, ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_agent_type", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].agent_type", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: agentLineageEdge.AgentType, UpstreamValueRef: agentLineage.AgentType, ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_model_or_rule_version_ref", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].model_or_rule_version_ref", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "Val D advisory lineage edge does not carry model or rule version and exact validation remains anchored in Val 0 provenance"},
+			{FieldName: "ai_permission_manifest_hash", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].permission_manifest_hash", BindingClass: point12ValDBindingClassExactRequired, DownstreamHash: agentLineageEdge.PermissionManifestHash, UpstreamHash: agentLineage.PermissionManifestHash, ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_input_evidence_refs", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].input_evidence_refs", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: strings.Join(agentLineageEdge.InputEvidenceRefs, ","), UpstreamValueRef: strings.Join(agentLineage.InputEvidenceRefs, ","), ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_input_evidence_hash_refs", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "proof_chain.evidence_hash_refs", BindingClass: point12ValDBindingClassCompatibilityAllowed, Reason: "agent lineage edge carries input evidence refs only while exact hash binding remains enforced on the canonical proof-chain projection"},
+			{FieldName: "ai_tenant_scope", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "valc.export_bundle.tenant_scope", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: agentLineageEdge.TenantScope, UpstreamValueRef: proofChain.TenantScope, ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_policy_version", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "proof_chain.policy_version", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "policy version remains exact-bound on the proof-chain projection and is not duplicated on the advisory AI lineage edge"},
+			{FieldName: "ai_engine_version", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "proof_chain.engine_version", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "engine version remains exact-bound on the proof-chain projection and is not duplicated on the advisory AI lineage edge"},
+			{FieldName: "ai_schema_version", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "proof_chain.schema_version", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "schema version remains exact-bound on the proof-chain projection and is not duplicated on the advisory AI lineage edge"},
+			{FieldName: "ai_audit_id", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].audit_id", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: agentLineageEdge.AuditID, UpstreamValueRef: agentLineage.AuditID, ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_recommendation_id", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].recommendation_id", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: agentLineageEdge.RecommendationID, UpstreamValueRef: agentLineage.RecommendationID, ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_lineage_input_only", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].lineage_input_only", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: point12ValDBoolString(agentLineageEdge.LineageInputOnly), UpstreamValueRef: point12ValDBoolString(agentLineage.LineageInputOnly), ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_advisory_only", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "bounded_ai_lineage_contract", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: point12ValDBoolString(agentLineageEdge.AdvisoryOnly), UpstreamValueRef: "true", ValidationRequired: true, MutationTestRequired: true},
+			{FieldName: "ai_human_feedback_refs", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "val0.provenance_profile.agent_lineages[0].human_feedback_refs", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "human feedback refs are not projected onto the Val D advisory lineage edge and remain upstream provenance detail"},
+			{FieldName: "ai_external_api_allowed", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "bounded_query_and_portal_contracts", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "external API authority is not represented on the advisory lineage edge and remains fail-closed in query, portal, and higher-layer gates"},
+			{FieldName: "ai_production_mutation_allowed", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "bounded_query_and_portal_contracts", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "production mutation authority is not represented on the advisory lineage edge and remains blocked by higher-layer governance gates"},
+			{FieldName: "ai_canonical_mutation_allowed", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "bounded_query_and_portal_contracts", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "canonical mutation authority is not represented on the advisory lineage edge and remains blocked by higher-layer governance gates"},
+			{FieldName: "ai_pass_allowed", DownstreamModel: "Point12ValDLineageEdge", UpstreamSource: "bounded_final_pass_gate", BindingClass: point12ValDBindingClassIntentionallyNotBound, Reason: "advisory lineage edges cannot create pass authority and premature pass emission remains explicitly blocked"},
 			{FieldName: "projection_disclaimer", DownstreamModel: "Point12ValDPortalCompatibilityContract", UpstreamSource: "vald.proof_chain.projection_disclaimer", BindingClass: point12ValDBindingClassExactRequired, DownstreamValueRef: portalCompatibility.RequiredProjectionDisclaimer, UpstreamValueRef: proofChain.ProjectionDisclaimer, ValidationRequired: true, MutationTestRequired: true},
 			{FieldName: "limitations", DownstreamModel: "Point12ValDExplanationResult", UpstreamSource: "advisory_context", BindingClass: point12ValDBindingClassAdvisoryOnly, Reason: "limitations inform bounded interpretation but do not become source-of-truth identity"},
 		},

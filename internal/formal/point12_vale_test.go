@@ -1,9 +1,50 @@
 package formal
 
-import "testing"
+import (
+	"encoding/json"
+	"sync"
+	"testing"
+)
+
+var (
+	point12ValEActiveFoundationBaselineJSON []byte
+	point12ValEActiveFoundationBaselineOnce sync.Once
+	point12ValERawFoundationModelJSON       []byte
+	point12ValERawFoundationModelOnce       sync.Once
+)
+
+func mustMarshalPoint12ValEFoundation(model Point12ValEFoundation) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint12ValEFoundation(payload []byte) Point12ValEFoundation {
+	var clone Point12ValEFoundation
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
+
+func uncachedActivePoint12ValEFoundation() Point12ValEFoundation {
+	return ComputePoint12ValEFoundation(Point12ValEFoundationModel())
+}
+
+func rawPoint12ValEFoundationModel() Point12ValEFoundation {
+	point12ValERawFoundationModelOnce.Do(func() {
+		point12ValERawFoundationModelJSON = mustMarshalPoint12ValEFoundation(Point12ValEFoundationModel())
+	})
+	return clonePoint12ValEFoundation(point12ValERawFoundationModelJSON)
+}
 
 func activePoint12ValEFoundation() Point12ValEFoundation {
-	return ComputePoint12ValEFoundation(Point12ValEFoundationModel())
+	point12ValEActiveFoundationBaselineOnce.Do(func() {
+		point12ValEActiveFoundationBaselineJSON = mustMarshalPoint12ValEFoundation(uncachedActivePoint12ValEFoundation())
+	})
+	return clonePoint12ValEFoundation(point12ValEActiveFoundationBaselineJSON)
 }
 
 func assertPoint12ValENoPass(t *testing.T, model Point12ValEFoundation) {
@@ -17,6 +58,46 @@ func assertPoint12ValENoPass(t *testing.T, model Point12ValEFoundation) {
 	if model.CurrentState == Point12ValEStatePassConfirmed {
 		t.Fatalf("expected state other than pass_confirmed, got %#v", model)
 	}
+}
+
+func TestPoint12ValEFoundationFixtureIsolation(t *testing.T) {
+	t.Run("raw production path still computes", func(t *testing.T) {
+		model := uncachedActivePoint12ValEFoundation()
+		if model.CurrentState != Point12ValEStatePassConfirmed {
+			t.Fatalf("expected raw production path to compute pass-confirmed baseline, got %#v", model)
+		}
+		if !model.Point12PassAllowed || model.Point12PassToken != point12ValEPoint12PassToken {
+			t.Fatalf("expected raw production path to emit point_12_pass on final happy path, got %#v", model)
+		}
+	})
+
+	t.Run("cached active baseline remains pass confirmed", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		if model.CurrentState != Point12ValEStatePassConfirmed {
+			t.Fatalf("expected cached baseline to stay pass confirmed, got %#v", model)
+		}
+		if !model.Point12PassAllowed || model.Point12PassToken != point12ValEPoint12PassToken {
+			t.Fatalf("expected cached baseline to keep final point_12_pass token, got %#v", model)
+		}
+	})
+
+	t.Run("cached fixture mutation does not contaminate next clone", func(t *testing.T) {
+		mutated := activePoint12ValEFoundation()
+		mutated.Dependency.ValB.ReplayResult.UnsupportedVersion = true
+		mutated.PassClosureManifest.ClosureManifestID = ""
+		mutated.EvidenceQualityMap.MissingRefs = []string{"evidence:point12-vale-mutation-001"}
+
+		fresh := activePoint12ValEFoundation()
+		if fresh.Dependency.ValB.ReplayResult.UnsupportedVersion {
+			t.Fatalf("expected cached baseline clone to keep unsupported version false, got %#v", fresh.Dependency.ValB.ReplayResult)
+		}
+		if fresh.PassClosureManifest.ClosureManifestID == "" {
+			t.Fatalf("expected cached baseline clone to keep closure manifest id, got %#v", fresh.PassClosureManifest)
+		}
+		if len(fresh.EvidenceQualityMap.MissingRefs) != 0 {
+			t.Fatalf("expected cached baseline clone to keep missing refs empty, got %#v", fresh.EvidenceQualityMap)
+		}
+	})
 }
 
 func TestPoint12ValEDependencyState(t *testing.T) {
@@ -532,7 +613,7 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 	})
 
 	t.Run("active subgates are not final pass without pass confirmed manifest", func(t *testing.T) {
-		model := Point12ValEFoundationModel()
+		model := rawPoint12ValEFoundationModel()
 		model.PassClosureManifest.ReviewerResult = point12ValEReviewerResultPass
 		model.PassClosureManifest.Point12PassAllowed = false
 		model.PassClosureManifest.Point12PassToken = ""
@@ -606,7 +687,7 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			model := Point12ValEFoundationModel()
+			model := rawPoint12ValEFoundationModel()
 			tc.mutate(&model)
 			computed := ComputePoint12ValEFoundation(model)
 			assertPoint12ValENoPass(t, computed)

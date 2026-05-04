@@ -1,6 +1,9 @@
 package formal
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func activePoint12ValDFoundation() Point12ValDFoundation {
 	return ComputePoint12ValDFoundation(Point12ValDFoundationModel())
@@ -224,6 +227,59 @@ func TestPoint12ValDBindingMatrixState(t *testing.T) {
 			t.Fatalf("expected blocked binding matrix without upstream source, got %#v", model.BindingMatrix)
 		}
 	})
+
+	t.Run("ai lineage binding entries are classified and covered", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		requiredExact := map[string]bool{
+			"ai_agent_id":                 false,
+			"ai_agent_type":               false,
+			"ai_permission_manifest_hash": false,
+			"ai_input_evidence_refs":      false,
+			"ai_tenant_scope":             false,
+			"ai_audit_id":                 false,
+			"ai_recommendation_id":        false,
+			"ai_lineage_input_only":       false,
+			"ai_advisory_only":            false,
+		}
+		requiredIntentional := map[string]bool{
+			"ai_model_or_rule_version_ref":   false,
+			"ai_external_api_allowed":        false,
+			"ai_production_mutation_allowed": false,
+			"ai_canonical_mutation_allowed":  false,
+			"ai_pass_allowed":                false,
+		}
+		for _, entry := range model.BindingMatrix.BoundFields {
+			if _, ok := requiredExact[entry.FieldName]; ok && entry.BindingClass == point12ValDBindingClassExactRequired {
+				requiredExact[entry.FieldName] = true
+			}
+			if _, ok := requiredIntentional[entry.FieldName]; ok && entry.BindingClass == point12ValDBindingClassIntentionallyNotBound && strings.TrimSpace(entry.Reason) != "" {
+				requiredIntentional[entry.FieldName] = true
+			}
+		}
+		for fieldName, seen := range requiredExact {
+			if !seen {
+				t.Fatalf("expected exact-required AI lineage binding %s in %#v", fieldName, model.BindingMatrix)
+			}
+		}
+		for fieldName, seen := range requiredIntentional {
+			if !seen {
+				t.Fatalf("expected intentionally-not-bound AI lineage binding %s in %#v", fieldName, model.BindingMatrix)
+			}
+		}
+	})
+
+	t.Run("compatibility allowed binding requires reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		for i := range model.BindingMatrix.BoundFields {
+			if model.BindingMatrix.BoundFields[i].BindingClass == point12ValDBindingClassCompatibilityAllowed {
+				model.BindingMatrix.BoundFields[i].Reason = ""
+				break
+			}
+		}
+		if got := EvaluatePoint12ValDBindingMatrixState(model.BindingMatrix); got != Point12ValDBindingMatrixStateReviewRequired {
+			t.Fatalf("expected review required when compatibility-allowed reason missing, got %#v", model.BindingMatrix)
+		}
+	})
 }
 
 func TestPoint12ValDLineageEdgeState(t *testing.T) {
@@ -288,7 +344,7 @@ func TestPoint12ValDLineageEdgeState(t *testing.T) {
 			AdvisoryOnly:           true,
 			EdgeState:              Point12ValDLineageEdgeStateActive,
 			AgentID:                "agent_lineage_point12_val0_001",
-			AgentType:              "analysis_recommendation",
+			AgentType:              "AI_RECOMMENDATION",
 			PermissionManifestHash: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
 			InputEvidenceRefs:      []string{base.ProofChain.EvidenceRefs[0]},
 			AuditID:                "audit_point12_vald_agent_001",
@@ -299,6 +355,63 @@ func TestPoint12ValDLineageEdgeState(t *testing.T) {
 		}
 		if got := EvaluatePoint12ValDLineageEdgeState(edge, base.ProofChain); got != Point12ValDLineageEdgeStateBlocked {
 			t.Fatalf("expected blocked agent advisory edge with certification/pass claims, got %#v", edge)
+		}
+	})
+
+	t.Run("allowed ai advisory edge types remain advisory only", func(t *testing.T) {
+		expectedLineage := point12Val0DefaultAgentLineageRecord()
+		for _, agentType := range point12Val0AllowedAIEvidenceCandidateTypes() {
+			edge := Point12ValDLineageEdge{
+				EdgeID:                 "lineage_edge_point12_vald_agent_002",
+				EdgeType:               point12ValDLineageEdgeTypeAgentFindingAdvisory,
+				FromRef:                "agent_lineage_point12_vald_002",
+				ToRef:                  base.ProofChain.ArtifactRef,
+				FromHash:               base.ProofChain.ArtifactHash,
+				ToHash:                 base.ProofChain.ArtifactHash,
+				TenantScope:            base.ProofChain.TenantScope,
+				EvidenceSpineRef:       base.ProofChain.EvidenceRefs[0],
+				SourceTimestamp:        "2026-05-04T08:20:02Z",
+				TargetTimestamp:        "2026-05-04T08:20:03Z",
+				AdvisoryOnly:           true,
+				EdgeState:              Point12ValDLineageEdgeStateActive,
+				AgentID:                expectedLineage.AgentID,
+				AgentType:              agentType,
+				PermissionManifestHash: expectedLineage.PermissionManifestHash,
+				InputEvidenceRefs:      append([]string{}, expectedLineage.InputEvidenceRefs...),
+				AuditID:                expectedLineage.AuditID,
+				RecommendationID:       expectedLineage.RecommendationID,
+				LineageInputOnly:       true,
+			}
+			if got := EvaluatePoint12ValDLineageEdgeState(edge, base.ProofChain); got != Point12ValDLineageEdgeStateActive {
+				t.Fatalf("expected active advisory-only AI edge for type %q, got %#v", agentType, edge)
+			}
+		}
+	})
+
+	t.Run("blocked ai pass agent type is rejected", func(t *testing.T) {
+		edge := Point12ValDLineageEdge{
+			EdgeID:                 "lineage_edge_point12_vald_agent_003",
+			EdgeType:               point12ValDLineageEdgeTypeAgentFindingAdvisory,
+			FromRef:                "agent_lineage_point12_vald_003",
+			ToRef:                  base.ProofChain.ArtifactRef,
+			FromHash:               base.ProofChain.ArtifactHash,
+			ToHash:                 base.ProofChain.ArtifactHash,
+			TenantScope:            base.ProofChain.TenantScope,
+			EvidenceSpineRef:       base.ProofChain.EvidenceRefs[0],
+			SourceTimestamp:        "2026-05-04T08:20:04Z",
+			TargetTimestamp:        "2026-05-04T08:20:05Z",
+			AdvisoryOnly:           true,
+			EdgeState:              Point12ValDLineageEdgeStateActive,
+			AgentID:                "agent_lineage_point12_val0_001",
+			AgentType:              "AI_PASS",
+			PermissionManifestHash: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+			InputEvidenceRefs:      []string{base.ProofChain.EvidenceRefs[0]},
+			AuditID:                "audit_point12_vald_agent_003",
+			RecommendationID:       "recommendation_point12_vald_003",
+			LineageInputOnly:       true,
+		}
+		if got := EvaluatePoint12ValDLineageEdgeState(edge, base.ProofChain); got != Point12ValDLineageEdgeStateBlocked {
+			t.Fatalf("expected blocked AI_PASS advisory edge, got %#v", edge)
 		}
 	})
 }
@@ -386,7 +499,7 @@ func TestPoint12ValDProofChainProjection(t *testing.T) {
 		{name: "agent advisory edge cannot satisfy source to evidence", mutate: func(model *Point12ValDFoundation) {
 			model.ProofChain.LineageEdges[0].EdgeType = point12ValDLineageEdgeTypeAgentFindingAdvisory
 			model.ProofChain.LineageEdges[0].AgentID = "agent_lineage_point12_val0_001"
-			model.ProofChain.LineageEdges[0].AgentType = "analysis_recommendation"
+			model.ProofChain.LineageEdges[0].AgentType = "AI_RECOMMENDATION"
 			model.ProofChain.LineageEdges[0].PermissionManifestHash = "sha256:6666666666666666666666666666666666666666666666666666666666666666"
 			model.ProofChain.LineageEdges[0].InputEvidenceRefs = []string{model.ProofChain.EvidenceRefs[0]}
 			model.ProofChain.LineageEdges[0].AuditID = "audit_point12_vald_agent_001"
@@ -845,6 +958,45 @@ func TestPoint12ValDMutationClosure(t *testing.T) {
 			t.Fatalf("expected portal contract drift to fail closed, got %#v", model)
 		}
 	})
+
+	agentMutations := []struct {
+		name   string
+		mutate func(*Point12ValDLineageEdge)
+	}{
+		{name: "agent lineage ai pass mutation blocks", mutate: func(edge *Point12ValDLineageEdge) { edge.AgentType = "AI_PASS" }},
+		{name: "agent lineage ai certified mutation blocks", mutate: func(edge *Point12ValDLineageEdge) { edge.AgentType = "AI_CERTIFIED" }},
+		{name: "agent lineage permission manifest mutation blocks", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.PermissionManifestHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		}},
+		{name: "agent lineage input evidence refs mutation blocks", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.InputEvidenceRefs = []string{"evidence:point12-proof-pack-evidence-999"}
+		}},
+		{name: "agent lineage audit id mutation blocks", mutate: func(edge *Point12ValDLineageEdge) { edge.AuditID = "audit_point12_vald_agent_999" }},
+		{name: "agent lineage recommendation id mutation blocks", mutate: func(edge *Point12ValDLineageEdge) { edge.RecommendationID = "recommendation_point12_vald_999" }},
+		{name: "agent lineage lineage input only false blocks", mutate: func(edge *Point12ValDLineageEdge) { edge.LineageInputOnly = false }},
+		{name: "agent lineage advisory only false blocks", mutate: func(edge *Point12ValDLineageEdge) { edge.AdvisoryOnly = false }},
+	}
+	for _, tc := range agentMutations {
+		t.Run(tc.name, func(t *testing.T) {
+			model := Point12ValDFoundationModel()
+			found := false
+			for i := range model.ProofChain.LineageEdges {
+				if model.ProofChain.LineageEdges[i].EdgeType == point12ValDLineageEdgeTypeAgentFindingAdvisory {
+					tc.mutate(&model.ProofChain.LineageEdges[i])
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatal("expected default AI advisory lineage edge in foundation model")
+			}
+			recomputePoint12ValDLocalHashes(&model)
+			model = ComputePoint12ValDFoundation(model)
+			if model.ProofChainState == Point12ValDProofChainStateActive || model.CurrentState == Point12ValDStateActive {
+				t.Fatalf("expected AI lineage mutation to fail closed even after local hash recomputation, got %#v", model)
+			}
+		})
+	}
 }
 
 func TestPoint12ValDRegressionGuards(t *testing.T) {
