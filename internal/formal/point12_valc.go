@@ -588,7 +588,7 @@ func EvaluatePoint12ValCDependencyState(model Point12ValCDependencySnapshot) str
 	return Point12ValCDependencyStateActive
 }
 
-func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot) (string, []string) {
+func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot, export Point12ValCAuditExportBundle) (string, []string) {
 	blockedReasons := []string{}
 	reviewReasons := []string{}
 	if !point12Val0RedactionManifestRefValid(model.RedactionManifestID) ||
@@ -613,6 +613,8 @@ func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManif
 		blockedReasons = append(blockedReasons, "redaction_manifest_identity_or_metadata_invalid")
 	}
 	if strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(dependency.ValAManifest.ProofPackID) ||
+		strings.TrimSpace(model.RedactionManifestID) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
+		strings.TrimSpace(model.ExportID) != strings.TrimSpace(export.ExportID) ||
 		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) {
 		blockedReasons = append(blockedReasons, "redaction_manifest_dependency_binding_mismatch")
 	}
@@ -678,12 +680,12 @@ func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManif
 	return Point12ValCRedactionManifestStateActive, nil
 }
 
-func EvaluatePoint12ValCRedactionManifestState(model Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot) string {
-	state, _ := point12ValCRedactionManifestStateAndReasons(model, dependency)
+func EvaluatePoint12ValCRedactionManifestState(model Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot, export Point12ValCAuditExportBundle) string {
+	state, _ := point12ValCRedactionManifestStateAndReasons(model, dependency, export)
 	return state
 }
 
-func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactVerdict, manifest Point12ValCRedactionManifest) (string, []string) {
+func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactVerdict, manifest Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot) (string, []string) {
 	reasons := []string{}
 	if !point12ValCRedactionImpactRefValid(model.RedactionImpactID) ||
 		!point12Val0RedactionManifestRefValid(model.RedactionManifestID) ||
@@ -702,6 +704,7 @@ func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactV
 		reasons = append(reasons, "redaction_impact_premature_point12_pass")
 	}
 	if strings.TrimSpace(model.RedactionManifestID) != strings.TrimSpace(manifest.RedactionManifestID) ||
+		strings.TrimSpace(model.RedactionManifestID) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
 		strings.TrimSpace(model.PostRedactionResult) != strings.TrimSpace(manifest.PostRedactionResult) ||
 		strings.TrimSpace(model.MinimumSafeClaimAfterRedaction) != strings.TrimSpace(manifest.MinimumSafeClaimAfterRedaction) {
 		reasons = append(reasons, "redaction_impact_manifest_binding_mismatch")
@@ -734,8 +737,8 @@ func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactV
 	return strings.TrimSpace(model.RedactionImpactState), nil
 }
 
-func EvaluatePoint12ValCRedactionImpactState(model Point12ValCRedactionImpactVerdict, manifest Point12ValCRedactionManifest) string {
-	state, _ := point12ValCRedactionImpactStateAndReasons(model, manifest)
+func EvaluatePoint12ValCRedactionImpactState(model Point12ValCRedactionImpactVerdict, manifest Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot) string {
+	state, _ := point12ValCRedactionImpactStateAndReasons(model, manifest, dependency)
 	return state
 }
 
@@ -815,6 +818,7 @@ func point12ValCOfflineBundleStateAndReasons(model Point12ValCOfflineVerificatio
 		strings.TrimSpace(model.SchemaVersion) != strings.TrimSpace(dependency.ValBReplayRequest.SchemaVersion) ||
 		strings.TrimSpace(model.SchemaHash) != strings.TrimSpace(dependency.ValBReplayRequest.SchemaHash) ||
 		strings.TrimSpace(model.ManifestPayloadHash) != strings.TrimSpace(dependency.ValBReplayRequest.ManifestPayloadHash) ||
+		strings.TrimSpace(model.RedactionManifestRef) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
 		strings.TrimSpace(model.SignatureMetadataRef) != strings.TrimSpace(dependency.ValAManifest.SignatureMetadataRef) ||
 		strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.ValBReplayRequest.CompatibilityProfileRef) {
 		blockedReasons = append(blockedReasons, "offline_bundle_dependency_binding_mismatch")
@@ -856,7 +860,7 @@ func EvaluatePoint12ValCOfflineBundleState(model Point12ValCOfflineVerificationB
 	return state
 }
 
-func point12ValCPublicPrivateBoundaryStateAndReasons(model Point12ValCPublicPrivateBoundary, dependency Point12ValCDependencySnapshot, export Point12ValCAuditExportBundle, redaction Point12ValCRedactionManifest) (string, []string) {
+func point12ValCPublicPrivateBoundaryStateAndReasons(model Point12ValCPublicPrivateBoundary, dependency Point12ValCDependencySnapshot, export Point12ValCAuditExportBundle, offline Point12ValCOfflineVerificationBundle, redaction Point12ValCRedactionManifest) (string, []string) {
 	reasons := []string{}
 	if !point12ValCBoundaryRefValid(model.BoundaryID) ||
 		!point11Val0ScopeValid(model.TenantScope) ||
@@ -880,7 +884,8 @@ func point12ValCPublicPrivateBoundaryStateAndReasons(model Point12ValCPublicPriv
 		reasons = append(reasons, "public_private_boundary_identity_or_metadata_invalid")
 	}
 	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) ||
-		strings.TrimSpace(model.ExportID) != strings.TrimSpace(export.ExportID) {
+		strings.TrimSpace(model.ExportID) != strings.TrimSpace(export.ExportID) ||
+		strings.TrimSpace(model.OfflineBundleID) != strings.TrimSpace(offline.OfflineBundleID) {
 		reasons = append(reasons, "public_private_boundary_binding_mismatch")
 	}
 	if len(model.ExportedFields) == 0 || !point12ValCAllExportedFieldsClassified(model) {
@@ -911,8 +916,8 @@ func point12ValCPublicPrivateBoundaryStateAndReasons(model Point12ValCPublicPriv
 	return Point12ValCPublicPrivateBoundaryStateActive, nil
 }
 
-func EvaluatePoint12ValCPublicPrivateBoundaryState(model Point12ValCPublicPrivateBoundary, dependency Point12ValCDependencySnapshot, export Point12ValCAuditExportBundle, redaction Point12ValCRedactionManifest) string {
-	state, _ := point12ValCPublicPrivateBoundaryStateAndReasons(model, dependency, export, redaction)
+func EvaluatePoint12ValCPublicPrivateBoundaryState(model Point12ValCPublicPrivateBoundary, dependency Point12ValCDependencySnapshot, export Point12ValCAuditExportBundle, offline Point12ValCOfflineVerificationBundle, redaction Point12ValCRedactionManifest) string {
+	state, _ := point12ValCPublicPrivateBoundaryStateAndReasons(model, dependency, export, offline, redaction)
 	return state
 }
 
@@ -1008,6 +1013,7 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 		!point12Val0ExactStringSetMatch(model.ClaimRefs, dependency.ValBReplayRequest.ClaimRefs) ||
 		!point12Val0ExactStringSetMatch(model.GovernanceEventRefs, dependency.ValBReplayRequest.GovernanceEventRefs) ||
 		strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.ValBReplayRequest.CompatibilityProfileRef) ||
+		strings.TrimSpace(model.RedactionManifestRef) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
 		strings.TrimSpace(model.ManifestPayloadHash) != strings.TrimSpace(dependency.ValBReplayRequest.ManifestPayloadHash) ||
 		strings.TrimSpace(model.SignatureMetadataRef) != strings.TrimSpace(dependency.ValAManifest.SignatureMetadataRef) {
 		blockedReasons = append(blockedReasons, "audit_export_dependency_binding_mismatch")
@@ -1301,15 +1307,15 @@ func Point12ValCFoundationModel() Point12ValCFoundation {
 
 func ComputePoint12ValCFoundation(model Point12ValCFoundation) Point12ValCFoundation {
 	model.DependencyState = EvaluatePoint12ValCDependencyState(model.Dependency)
-	redactionManifestState, redactionReasons := point12ValCRedactionManifestStateAndReasons(model.RedactionManifest, model.Dependency)
+	redactionManifestState, redactionReasons := point12ValCRedactionManifestStateAndReasons(model.RedactionManifest, model.Dependency, model.ExportBundle)
 	model.RedactionManifestState = redactionManifestState
-	redactionImpactState, redactionImpactReasons := point12ValCRedactionImpactStateAndReasons(model.RedactionImpactVerdict, model.RedactionManifest)
+	redactionImpactState, redactionImpactReasons := point12ValCRedactionImpactStateAndReasons(model.RedactionImpactVerdict, model.RedactionManifest, model.Dependency)
 	model.RedactionImpactState = redactionImpactState
 	model.RedactionImpactVerdict.RedactionImpactState = redactionImpactState
 	offlineState, offlineReasons := point12ValCOfflineBundleStateAndReasons(model.OfflineBundle, model.Dependency, model.RedactionImpactState)
 	model.OfflineBundleState = offlineState
 	model.OfflineBundle.OfflineState = offlineState
-	boundaryState, boundaryReasons := point12ValCPublicPrivateBoundaryStateAndReasons(model.PublicPrivateBoundary, model.Dependency, model.ExportBundle, model.RedactionManifest)
+	boundaryState, boundaryReasons := point12ValCPublicPrivateBoundaryStateAndReasons(model.PublicPrivateBoundary, model.Dependency, model.ExportBundle, model.OfflineBundle, model.RedactionManifest)
 	model.PublicPrivateBoundaryState = boundaryState
 	model.PublicPrivateBoundary.BoundaryState = boundaryState
 	exportState, exportReasons := point12ValCAuditExportStateAndReasons(model.ExportBundle, model.Dependency, model.RedactionManifestState, model.RedactionImpactState, model.OfflineBundleState, model.PublicPrivateBoundaryState)

@@ -7,6 +7,88 @@ import (
 	"testing"
 )
 
+type point12ValCBindingMatrixEntry struct {
+	DownstreamModel string
+	Field           string
+	BindingClass    string
+	Reason          string
+}
+
+var point12ValCBindingMatrixEntries = []point12ValCBindingMatrixEntry{
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "tenant_scope", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "proof_pack_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "manifest_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "replay_result_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "decision_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "artifact_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "artifact_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "evidence_refs", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "evidence_hash_refs", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "policy_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "policy_version", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "policy_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "engine_version", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "engine_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "schema_version", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "schema_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "manifest_payload_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "signature_metadata_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "redaction_manifest_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "offline_bundle_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "public_private_classification", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "retention_class_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "retention_owner_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "disposal_path_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "projection_disclaimer", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "tenant_scope", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "proof_pack_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "manifest_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "replay_request_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "replay_result_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "artifact_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "artifact_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "evidence_refs", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "evidence_hash_refs", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "policy_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "policy_version", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "policy_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "engine_version", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "engine_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "schema_version", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "schema_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "manifest_payload_hash", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "signature_metadata_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "compatibility_profile_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "redaction_manifest_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "verification_policy_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "no_external_api_required", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "external_api_used", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "public_private_classification", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "retention_class_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "redaction_manifest_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "proof_pack_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "export_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "tenant_scope", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "redaction_reasons", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "redaction_approval_event_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "post_redaction_result", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "retention_class_ref", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCRedactionImpactVerdict", Field: "redaction_manifest_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "tenant_scope", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "export_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "offline_bundle_id", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "classification", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "allowed_audience", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "customer_visible_fields", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "auditor_visible_fields", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCPublicPrivateBoundary", Field: "internal_only_fields", BindingClass: "exact_required"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "limitations", BindingClass: "advisory_only", Reason: "bounded projection text does not replace canonical upstream identity"},
+	{DownstreamModel: "Point12ValCRedactionManifest", Field: "redaction_summary", BindingClass: "advisory_only", Reason: "internal diagnostic context may explain removed claims but is not surviving/export output"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "offline_output_claims", BindingClass: "advisory_only", Reason: "output claims are bounded surfaces and cannot change upstream proof identity"},
+	{DownstreamModel: "Point12ValCAuditExportBundle", Field: "generated_at", BindingClass: "intentionally_not_bound", Reason: "local bundle generation timestamp is packaging metadata, not upstream identity"},
+	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "supported_verifier_versions", BindingClass: "intentionally_not_bound", Reason: "local verifier capability list constrains use but does not redefine upstream proof context"},
+}
+
 func activePoint12ValCDependencySnapshot() Point12ValCDependencySnapshot {
 	valB := activePoint12ValBFoundation()
 	return SnapshotPoint12ValCDependencyFromComputedValB(valB, point12ValCDependencyReviewContextModel())
@@ -38,10 +120,12 @@ func syncPoint12ValCFoundationToDependency(model *Point12ValCFoundation) {
 	model.ExportBundle.RetentionClassRef = model.Dependency.ValAManifest.RetentionClassRef
 
 	model.RedactionManifest.ProofPackID = model.Dependency.ValAManifest.ProofPackID
+	model.RedactionManifest.ExportID = model.ExportBundle.ExportID
 	model.RedactionManifest.TenantScope = model.Dependency.ValBReplayRequest.TenantScope
 	model.RedactionManifest.RedactionManifestID = model.Dependency.ValBReplayRequest.RedactionManifestRef
 	model.RedactionManifest.RedactionPolicyRef = model.Dependency.ValBReplayRequest.PolicyRef
 	model.RedactionManifest.RedactionPolicyVersion = model.Dependency.ValBReplayRequest.PolicyVersion
+	model.RedactionImpactVerdict.RedactionManifestID = model.RedactionManifest.RedactionManifestID
 
 	model.OfflineBundle.ProofPackID = model.Dependency.ValAManifest.ProofPackID
 	model.OfflineBundle.ManifestID = model.Dependency.ValAManifest.ManifestID
@@ -95,6 +179,40 @@ func readPoint12ValCSource(t *testing.T) string {
 	}
 	t.Fatal("failed to read point12_valc.go source")
 	return ""
+}
+
+func TestPoint12ValCBindingMatrixCoverage(t *testing.T) {
+	if len(point12ValCBindingMatrixEntries) == 0 {
+		t.Fatal("expected valc binding matrix entries")
+	}
+
+	requiredModels := map[string]bool{
+		"Point12ValCAuditExportBundle":         false,
+		"Point12ValCOfflineVerificationBundle": false,
+		"Point12ValCRedactionManifest":         false,
+		"Point12ValCRedactionImpactVerdict":    false,
+		"Point12ValCPublicPrivateBoundary":     false,
+	}
+	for _, entry := range point12ValCBindingMatrixEntries {
+		if entry.DownstreamModel == "" || entry.Field == "" || entry.BindingClass == "" {
+			t.Fatalf("expected binding matrix entry identity to be populated, got %#v", entry)
+		}
+		switch entry.BindingClass {
+		case "exact_required":
+			requiredModels[entry.DownstreamModel] = true
+		case "advisory_only", "intentionally_not_bound":
+			if strings.TrimSpace(entry.Reason) == "" {
+				t.Fatalf("expected non-exact binding to explain reason, got %#v", entry)
+			}
+		default:
+			t.Fatalf("unexpected binding class %#v", entry)
+		}
+	}
+	for model, seen := range requiredModels {
+		if !seen {
+			t.Fatalf("expected exact_required binding matrix coverage for %s", model)
+		}
+	}
 }
 
 func TestPoint12ValCDependencyState(t *testing.T) {
@@ -264,6 +382,10 @@ func TestPoint12ValCRedactionManifestAndImpact(t *testing.T) {
 		if model.RedactionImpactState != Point12ValCRedactionImpactNoDecisionImpact {
 			t.Fatalf("expected no_decision_impact, got %#v", model)
 		}
+		if model.RedactionManifest.RedactionManifestID != model.Dependency.ValBReplayRequest.RedactionManifestRef ||
+			model.RedactionImpactVerdict.RedactionManifestID != model.RedactionManifest.RedactionManifestID {
+			t.Fatalf("expected redaction chain to remain bound to upstream replay request, got %#v", model)
+		}
 	})
 
 	t.Run("missing redaction reason blocks when redacted fields exist", func(t *testing.T) {
@@ -289,6 +411,42 @@ func TestPoint12ValCRedactionManifestAndImpact(t *testing.T) {
 		model = ComputePoint12ValCFoundation(model)
 		if model.RedactionManifestState != Point12ValCRedactionManifestStateBlocked {
 			t.Fatalf("expected blocked redaction manifest, got %#v", model)
+		}
+	})
+
+	t.Run("missing redaction manifest export id blocks", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.ExportID = ""
+		model = ComputePoint12ValCFoundation(model)
+		if model.RedactionManifestState != Point12ValCRedactionManifestStateBlocked {
+			t.Fatalf("expected missing redaction export id to block, got %#v", model)
+		}
+	})
+
+	t.Run("malformed redaction manifest export id blocks", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.ExportID = "redaction_export_bad"
+		model = ComputePoint12ValCFoundation(model)
+		if model.RedactionManifestState != Point12ValCRedactionManifestStateBlocked {
+			t.Fatalf("expected malformed redaction export id to block, got %#v", model)
+		}
+	})
+
+	t.Run("redaction manifest export id drift blocks", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.ExportID = "export_point12_valc_999"
+		model = ComputePoint12ValCFoundation(model)
+		if model.RedactionManifestState != Point12ValCRedactionManifestStateBlocked {
+			t.Fatalf("expected redaction export id drift to block, got %#v", model)
+		}
+	})
+
+	t.Run("redaction manifest id drift blocks", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.RedactionManifestID = "redaction_manifest_point12_valc_999"
+		model = ComputePoint12ValCFoundation(model)
+		if model.RedactionManifestState == Point12ValCRedactionManifestStateActive && model.CurrentState == Point12ValCStateActive {
+			t.Fatalf("expected redaction manifest id drift to avoid active/full-ready state, got %#v", model)
 		}
 	})
 
@@ -377,6 +535,33 @@ func TestPoint12ValCRedactionManifestAndImpact(t *testing.T) {
 		model = ComputePoint12ValCFoundation(model)
 		if model.RedactionImpactState != Point12ValCRedactionImpactReviewRequired {
 			t.Fatalf("expected review required redaction impact verdict, got %#v", model)
+		}
+	})
+
+	t.Run("redaction impact manifest id drift blocks", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionImpactVerdict.RedactionManifestID = "redaction_manifest_point12_valc_999"
+		model = ComputePoint12ValCFoundation(model)
+		if model.RedactionImpactState == Point12ValCRedactionImpactNoDecisionImpact && model.CurrentState == Point12ValCStateActive {
+			t.Fatalf("expected redaction impact id drift to avoid active/full-ready state, got %#v", model)
+		}
+	})
+
+	t.Run("coordinated local redaction manifest substitution still blocks", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.RedactionManifestID = "redaction_manifest_point12_valc_999"
+		model.RedactionImpactVerdict.RedactionManifestID = "redaction_manifest_point12_valc_999"
+		model.ExportBundle.RedactionManifestRef = "redaction_manifest_point12_valc_999"
+		model.OfflineBundle.RedactionManifestRef = "redaction_manifest_point12_valc_999"
+		model.ExportBundle.ExportState = Point12ValCExportStateReady
+		model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		model = ComputePoint12ValCFoundation(model)
+		if model.RedactionManifestState == Point12ValCRedactionManifestStateActive &&
+			model.RedactionImpactState == Point12ValCRedactionImpactNoDecisionImpact &&
+			model.ExportState == Point12ValCExportStateReady &&
+			model.OfflineBundleState == Point12ValCOfflineBundleStateActive &&
+			model.CurrentState == Point12ValCStateActive {
+			t.Fatalf("expected coordinated local redaction substitution to fail closed, got %#v", model)
 		}
 	})
 
@@ -476,6 +661,33 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 		}
 	})
 
+	t.Run("missing offline bundle id blocks boundary", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.PublicPrivateBoundary.OfflineBundleID = ""
+		model = ComputePoint12ValCFoundation(model)
+		if model.PublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateBlocked {
+			t.Fatalf("expected missing offline bundle id to block boundary, got %#v", model)
+		}
+	})
+
+	t.Run("malformed offline bundle id blocks boundary", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.PublicPrivateBoundary.OfflineBundleID = "offline_boundary_bad"
+		model = ComputePoint12ValCFoundation(model)
+		if model.PublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateBlocked {
+			t.Fatalf("expected malformed offline bundle id to block boundary, got %#v", model)
+		}
+	})
+
+	t.Run("offline bundle id drift blocks boundary", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.PublicPrivateBoundary.OfflineBundleID = "offline_bundle_point12_valc_999"
+		model = ComputePoint12ValCFoundation(model)
+		if model.PublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateBlocked {
+			t.Fatalf("expected offline bundle id drift to block boundary, got %#v", model)
+		}
+	})
+
 	t.Run("missing field classification blocks", func(t *testing.T) {
 		model := activePoint12ValCFoundation()
 		model.PublicPrivateBoundary.PrivateFields = []string{"artifact_hash"}
@@ -512,6 +724,164 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 		model = ComputePoint12ValCFoundation(model)
 		if model.PublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateBlocked {
 			t.Fatalf("expected private field leak through redaction summary to block, got %#v", model)
+		}
+	})
+}
+
+func TestPoint12ValCExactBindingMutationClosure(t *testing.T) {
+	exportMutations := []struct {
+		name      string
+		mutate    func(*Point12ValCFoundation)
+		wantState string
+	}{
+		{name: "artifact_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.ArtifactHash = "sha256:1010101010101010101010101010101010101010101010101010101010101010"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "evidence_hash_refs exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.EvidenceHashRefs = []string{"sha256:2222222222222222222222222222222222222222222222222222222222222222"}
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "policy_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.PolicyHash = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "engine_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.EngineHash = "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "schema_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.SchemaHash = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "manifest_payload_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.ManifestPayloadHash = "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "redaction_manifest_ref exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.RedactionManifestRef = "redaction_manifest_point12_valc_999"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "replay_result_id exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.ReplayResultID = "replay_result_point12_valb_999"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "tenant_scope exact_required mutation blocks full export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.TenantScope = "tenant_scope_point12_cross_001"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateTenantMismatch},
+		{name: "manifest_id exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.ManifestID = "manifest_point12_vala_999"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+		{name: "proof_pack_id exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.ProofPackID = "proof_pack_point12_val0_999"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked},
+	}
+	for _, testCase := range exportMutations {
+		t.Run(testCase.name, func(t *testing.T) {
+			model := activePoint12ValCFoundation()
+			testCase.mutate(&model)
+			model = ComputePoint12ValCFoundation(model)
+			if model.ExportState != testCase.wantState {
+				t.Fatalf("expected export state %q, got %#v", testCase.wantState, model)
+			}
+			if model.ExportState == Point12ValCExportStateReady || model.ExportState == Point12ValCExportStateProjectionOnly || model.CurrentState == Point12ValCStateActive {
+				t.Fatalf("expected mutated exact_required export field to avoid full-ready state, got %#v", model)
+			}
+		})
+	}
+
+	offlineMutations := []struct {
+		name      string
+		mutate    func(*Point12ValCFoundation)
+		wantState string
+	}{
+		{name: "artifact_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ArtifactHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "evidence_hash_refs exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.EvidenceHashRefs = []string{"sha256:8888888888888888888888888888888888888888888888888888888888888888"}
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "policy_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.PolicyHash = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "engine_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.EngineHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "schema_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.SchemaHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "manifest_payload_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ManifestPayloadHash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "redaction_manifest_ref exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.RedactionManifestRef = "redaction_manifest_point12_valc_999"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "replay_result_id exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ReplayResultID = "replay_result_point12_valb_999"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "tenant_scope exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.TenantScope = "tenant_scope_point12_cross_001"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "manifest_id exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ManifestID = "manifest_point12_vala_999"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "proof_pack_id exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ProofPackID = "proof_pack_point12_val0_999"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "no_external_api_required false blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.NoExternalAPIRequired = false
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		{name: "external_api_used true blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ExternalAPIUsed = true
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked},
+	}
+	for _, testCase := range offlineMutations {
+		t.Run(testCase.name, func(t *testing.T) {
+			model := activePoint12ValCFoundation()
+			testCase.mutate(&model)
+			model = ComputePoint12ValCFoundation(model)
+			if model.OfflineBundleState != testCase.wantState {
+				t.Fatalf("expected offline state %q, got %#v", testCase.wantState, model)
+			}
+			if model.OfflineBundleState == Point12ValCOfflineBundleStateActive || model.CurrentState == Point12ValCStateActive {
+				t.Fatalf("expected mutated exact_required offline field to avoid full-ready state, got %#v", model)
+			}
+		})
+	}
+
+	t.Run("export self-consistency bypass cannot hide upstream drift", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.ExportBundle.PolicyHash = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+		model.ExportBundle.ExportState = Point12ValCExportStateReady
+		model = ComputePoint12ValCFoundation(model)
+		if model.ExportState == Point12ValCExportStateReady || model.ExportState == Point12ValCExportStateProjectionOnly || model.CurrentState == Point12ValCStateActive {
+			t.Fatalf("expected export self-consistency bypass to fail closed, got %#v", model)
+		}
+	})
+
+	t.Run("offline self-consistency bypass cannot hide upstream drift", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.OfflineBundle.EvidenceHashRefs = []string{"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
+		model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		model = ComputePoint12ValCFoundation(model)
+		if model.OfflineBundleState == Point12ValCOfflineBundleStateActive || model.CurrentState == Point12ValCStateActive {
+			t.Fatalf("expected offline self-consistency bypass to fail closed, got %#v", model)
 		}
 	})
 }
@@ -593,6 +963,22 @@ func TestPoint12ValCRegressionGuards(t *testing.T) {
 		model := activePoint12ValCFoundationFromValB(valB)
 		if model.DependencyState != Point12ValCDependencyStateBlocked {
 			t.Fatalf("expected tampered vala manifest to block valc dependency, got %#v", model)
+		}
+	})
+
+	t.Run("vala schema hash drift with recomputed payload and signature remains blocked", func(t *testing.T) {
+		valA := activePoint12ValAFoundation()
+		valA.Manifest.SchemaHash = "sha256:abababababababababababababababababababababababababababababababab"
+		valA.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(valA.Manifest)
+		valA.Manifest.SignatureBoundManifestPayloadHash = valA.Manifest.ManifestPayloadHash
+		valA = ComputePoint12ValAFoundation(valA)
+		if valA.ManifestIntegrityState == Point12ValAManifestIntegrityStateActive {
+			t.Fatalf("expected schema hash drift to stay non-active in vala, got %#v", valA)
+		}
+		valB := activePoint12ValBFoundationFromValA(valA)
+		model := activePoint12ValCFoundationFromValB(valB)
+		if model.DependencyState != Point12ValCDependencyStateBlocked {
+			t.Fatalf("expected schema hash drifted vala manifest to block valc dependency, got %#v", model)
 		}
 	})
 
