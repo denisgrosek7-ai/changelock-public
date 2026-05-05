@@ -219,6 +219,10 @@ func TestPoint13ValDCustomerAuditorOperationalTimelineState(t *testing.T) {
 			model.CustomerAuditorOperationalTimeline.TimelineEntries[4].CanonicalOccurredAt = "2026-05-05T05:59:00Z"
 			point13ValDRecomputeTimelineHash(model)
 		}, expectedState: Point13ValDStateReviewRequired},
+		{name: "backdated acceptance with timezone offset requires review", mutate: func(model *Point13ValDFoundation) {
+			model.CustomerAuditorOperationalTimeline.TimelineEntries[4].CanonicalOccurredAt = "2026-05-05T08:00:00+02:00"
+			point13ValDRecomputeTimelineHash(model)
+		}, expectedState: Point13ValDStateReviewRequired},
 		{name: "redacted limitations remain visible", mutate: func(model *Point13ValDFoundation) {
 			model.CustomerAuditorOperationalTimeline.RedactionLimitationsVisible = false
 			point13ValDRecomputeTimelineHash(model)
