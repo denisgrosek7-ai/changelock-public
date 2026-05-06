@@ -1,0 +1,262 @@
+package formal
+
+import (
+	"strings"
+	"testing"
+)
+
+func point15ValAFoundationWithTrigger(trigger string, decisive bool, lineage string) Point15ValADowngradeTriggerFoundation {
+	model := Point15ValAFoundationModel()
+	if strings.TrimSpace(trigger) == "" {
+		return model
+	}
+	lineageValid := point15Val0LineageRefValid(lineage)
+	targetState := point15ValATriggerExpectedState(trigger, decisive, lineageValid)
+	targetOutcome := point15ValATriggerExpectedOutcome(trigger, decisive, lineageValid)
+	observedFreshness := point15ValATriggerObservedFreshnessStatus(trigger)
+
+	model.TriggerTable.CurrentTriggerDetected = true
+	model.TriggerTable.CurrentTriggerRef = model.Trigger.TriggerID
+	model.TriggerTable.CurrentReasonRef = model.Reason.ReasonID
+	model.TriggerTable.CurrentDecisionRef = model.Decision.DecisionID
+	model.TriggerTable.CurrentTriggerType = trigger
+	model.TriggerTable.CurrentTargetState = targetState
+	model.TriggerTable.CurrentDowngradeOutcome = targetOutcome
+
+	model.Trigger.TriggerDetected = true
+	model.Trigger.TriggerType = trigger
+	model.Trigger.ObservedFreshnessStatus = observedFreshness
+	model.Trigger.TriggerIsDecisive = decisive
+	model.Trigger.SupersessionLineageRef = lineage
+	model.Trigger.TargetState = targetState
+	model.Trigger.TargetDowngradeOutcome = targetOutcome
+	model.Trigger.RetainsActiveClosure = false
+
+	model.Reason.TriggerType = trigger
+	model.Reason.ReasonCode = point15ValAExpectedReasonCode(trigger, lineageValid)
+	model.Reason.ObservedFreshnessStatus = observedFreshness
+	model.Reason.Decisive = decisive
+	model.Reason.SupersessionLineageRef = lineage
+	model.Reason.TargetState = targetState
+	model.Reason.TargetDowngradeOutcome = targetOutcome
+
+	model.Decision.TriggerDetected = true
+	model.Decision.TriggerRef = model.Trigger.TriggerID
+	model.Decision.ReasonRef = model.Reason.ReasonID
+	model.Decision.TriggerType = trigger
+	model.Decision.TargetState = targetState
+	model.Decision.TargetDowngradeOutcome = targetOutcome
+	model.Decision.RetainsActiveClosure = false
+
+	return model
+}
+
+func TestPoint15ValADependencyState(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Point15ValADependencySnapshot)
+		want   string
+	}{
+		{"active when point15 val0 foundation is clean", func(model *Point15ValADependencySnapshot) {}, Point15ValAStateActive},
+		{"blocks when point15 val0 missing", func(model *Point15ValADependencySnapshot) { model.Point15Val0CurrentState = "" }, Point15ValAStateBlocked},
+		{"blocks when point15 val0 blocked", func(model *Point15ValADependencySnapshot) { model.Point15Val0CurrentState = Point15Val0StateBlocked }, Point15ValAStateBlocked},
+		{"blocks when point15 val0 review required", func(model *Point15ValADependencySnapshot) {
+			model.Point15Val0CurrentState = Point15Val0StateReviewRequired
+		}, Point15ValAStateBlocked},
+		{"blocks when point15 val0 incomplete", func(model *Point15ValADependencySnapshot) { model.Point15Val0CurrentState = Point15Val0StateIncomplete }, Point15ValAStateBlocked},
+		{"blocks when point15 val0 not merged", func(model *Point15ValADependencySnapshot) { model.Point15Val0Merged = false }, Point15ValAStateBlocked},
+		{"blocks when point15 val0 ci not green", func(model *Point15ValADependencySnapshot) { model.Point15Val0CIGreen = false }, Point15ValAStateBlocked},
+		{"blocks when point15 val0 not reviewed on main", func(model *Point15ValADependencySnapshot) { model.Point15Val0ReviewedOnMain = false }, Point15ValAStateBlocked},
+		{"blocks when embedded point15 val0 snapshot is not computed from upstream", func(model *Point15ValADependencySnapshot) {
+			model.Point15Val0ComputedFromUpstream = true
+			model.Point15Val0.Dependency.SnapshotFromComputedOutput = false
+		}, Point15ValAStateBlocked},
+		{"blocks when point15 pass already appears", func(model *Point15ValADependencySnapshot) { model.Point15PassSeen = true }, Point15ValAStateBlocked},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := point15ValADependencySnapshotModel()
+			tc.mutate(&model)
+			if got := EvaluatePoint15ValADependencyState(model); got != tc.want {
+				t.Fatalf("expected %s, got %s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestPoint15ValADowngradeTriggerFoundationState(t *testing.T) {
+	tests := []struct {
+		name  string
+		model func() Point15ValADowngradeTriggerFoundation
+		want  string
+	}{
+		{"happy path active with complete trigger table and no trigger", func() Point15ValADowngradeTriggerFoundation {
+			return Point15ValAFoundationModel()
+		}, Point15ValAStateActive},
+		{"expired evidence trigger blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerExpired, false, "")
+		}, Point15ValAStateBlocked},
+		{"revoked signal trigger blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerRevoked, false, "")
+		}, Point15ValAStateBlocked},
+		{"stale evidence trigger requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerStale, false, "")
+		}, Point15ValAStateReviewRequired},
+		{"superseded evidence with lineage requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerSuperseded, false, "supersession_lineage_point15_vala_001")
+		}, Point15ValAStateReviewRequired},
+		{"superseded evidence without lineage blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerSuperseded, false, "")
+		}, Point15ValAStateBlocked},
+		{"policy drift non decisive requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerPolicyDrift, false, "")
+		}, Point15ValAStateReviewRequired},
+		{"policy drift decisive blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerPolicyDrift, true, "")
+		}, Point15ValAStateBlocked},
+		{"artifact drift non decisive requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerArtifact, false, "")
+		}, Point15ValAStateReviewRequired},
+		{"artifact drift decisive blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerArtifact, true, "")
+		}, Point15ValAStateBlocked},
+		{"verifier drift non decisive requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerVerifier, false, "")
+		}, Point15ValAStateReviewRequired},
+		{"verifier drift decisive blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerVerifier, true, "")
+		}, Point15ValAStateBlocked},
+		{"connector failure requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerConnFail, false, "")
+		}, Point15ValAStateReviewRequired},
+		{"connector timeout requires review", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerConnTimeout, false, "")
+		}, Point15ValAStateReviewRequired},
+		{"connector unauthorized blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerConnAuth, false, "")
+		}, Point15ValAStateBlocked},
+		{"connector tenant mismatch blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerConnTenant, false, "")
+		}, Point15ValAStateBlocked},
+		{"tampered freshness proof blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerTampered, false, "")
+		}, Point15ValAStateBlocked},
+		{"unsupported freshness status blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerUnsupported, false, "")
+		}, Point15ValAStateBlocked},
+		{"missing freshness proof non decisive is incomplete", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerMissing, false, "")
+		}, Point15ValAStateIncomplete},
+		{"missing freshness proof decisive blocks", func() Point15ValADowngradeTriggerFoundation {
+			return point15ValAFoundationWithTrigger(point15ValATriggerMissing, true, "")
+		}, Point15ValAStateBlocked},
+		{"pass preservation forbidden for any downgrade trigger", func() Point15ValADowngradeTriggerFoundation {
+			model := point15ValAFoundationWithTrigger(point15ValATriggerExpired, false, "")
+			model.Trigger.RetainsPass = true
+			return model
+		}, Point15ValAStateBlocked},
+		{"active closure retention forbidden when trigger exists", func() Point15ValADowngradeTriggerFoundation {
+			model := point15ValAFoundationWithTrigger(point15ValATriggerStale, false, "")
+			model.Trigger.RetainsActiveClosure = true
+			return model
+		}, Point15ValAStateBlocked},
+		{"foundation blocks on trigger table reason state mismatch", func() Point15ValADowngradeTriggerFoundation {
+			model := point15ValAFoundationWithTrigger(point15ValATriggerStale, false, "")
+			model.Reason.TargetState = Point15Val0StateBlocked
+			model.Reason.TargetDowngradeOutcome = point15Val0DowngradeBlocked
+			return model
+		}, Point15ValAStateBlocked},
+		{"foundation blocks when expired trigger targets review required", func() Point15ValADowngradeTriggerFoundation {
+			model := point15ValAFoundationWithTrigger(point15ValATriggerExpired, false, "")
+			model.Trigger.TargetState = Point15Val0StateReviewRequired
+			model.Trigger.TargetDowngradeOutcome = point15Val0DowngradeReview
+			return model
+		}, Point15ValAStateBlocked},
+		{"foundation blocks when stale trigger targets active", func() Point15ValADowngradeTriggerFoundation {
+			model := point15ValAFoundationWithTrigger(point15ValATriggerStale, false, "")
+			model.Trigger.TargetState = Point15Val0StateActive
+			model.Trigger.TargetDowngradeOutcome = point15Val0DowngradeRetainActive
+			model.Trigger.RetainsActiveClosure = true
+			return model
+		}, Point15ValAStateBlocked},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := tc.model()
+			computed := ComputePoint15ValADowngradeTriggerFoundation(model)
+			if computed.CurrentState != tc.want {
+				t.Fatalf("expected %s, got %s", tc.want, computed.CurrentState)
+			}
+		})
+	}
+}
+
+func TestPoint15ValAAuthorityBoundaryState(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Point15ValAAuthorityBoundary)
+	}{
+		{"scheduler cannot map trigger to blocked", func(model *Point15ValAAuthorityBoundary) { model.SchedulerMapsTriggerToDowngrade = true }},
+		{"dashboard cannot map trigger to blocked", func(model *Point15ValAAuthorityBoundary) { model.DashboardMapsTriggerToDowngrade = true }},
+		{"connector cannot map trigger to blocked", func(model *Point15ValAAuthorityBoundary) { model.ConnectorMapsTriggerToDowngrade = true }},
+		{"agent cannot map trigger to blocked", func(model *Point15ValAAuthorityBoundary) { model.AgentMapsTriggerToDowngrade = true }},
+		{"customer projection cannot mutate downgrade", func(model *Point15ValAAuthorityBoundary) { model.CustomerProjectionMutatesDowngrade = true }},
+		{"auditor projection cannot mutate downgrade", func(model *Point15ValAAuthorityBoundary) { model.AuditorProjectionMutatesDowngrade = true }},
+		{"portal projection cannot mutate downgrade", func(model *Point15ValAAuthorityBoundary) { model.PortalProjectionMutatesDowngrade = true }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := point15ValAAuthorityBoundaryModel(point15ValADependencySnapshotModel())
+			tc.mutate(&model)
+			if got := EvaluatePoint15ValAAuthorityBoundaryState(model); got != Point15ValAStateBlocked {
+				t.Fatalf("expected %s, got %s", Point15ValAStateBlocked, got)
+			}
+		})
+	}
+}
+
+func TestPoint15ValANoOverclaimGuardState(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Point15ValANoOverclaimGuard)
+		want   string
+	}{
+		{"safe bounded wording passes", func(model *Point15ValANoOverclaimGuard) {}, Point15ValAStateActive},
+		{"forbidden public wording blocks", func(model *Point15ValANoOverclaimGuard) {
+			model.ObservedTexts = []string{"continuous assurance guaranteed"}
+		}, Point15ValAStateBlocked},
+		{"unclassified internal diagnostic with forbidden wording blocks", func(model *Point15ValANoOverclaimGuard) {
+			model.InternalDiagnosticTexts = []string{"autonomous assurance pass"}
+		}, Point15ValAStateBlocked},
+		{"classified blocked diagnostic remains internal only", func(model *Point15ValANoOverclaimGuard) {
+			model.InternalDiagnosticTexts = []string{"autonomous assurance pass"}
+			model.InternalDiagnosticsClassifiedBlocked = true
+		}, Point15ValAStateActive},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := point15ValANoOverclaimGuardModel()
+			tc.mutate(&model)
+			if got := EvaluatePoint15ValANoOverclaimGuardState(model); got != tc.want {
+				t.Fatalf("expected %s, got %s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestPoint10ThroughPoint15ValACurrentSweep(t *testing.T) {
+	computed := ComputePoint15ValADowngradeTriggerFoundation(Point15ValAFoundationModel())
+	if computed.DependencyState != Point15ValAStateActive {
+		t.Fatalf("expected dependency active, got %s", computed.DependencyState)
+	}
+	if computed.CurrentState != Point15ValAStateActive {
+		t.Fatalf("expected current state active, got %s", computed.CurrentState)
+	}
+	if computed.Dependency.Point15PassSeen {
+		t.Fatal("expected no point_15_pass in point15 val a sweep")
+	}
+}

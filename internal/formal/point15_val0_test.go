@@ -116,6 +116,9 @@ func TestPoint15Val0DowngradeTaxonomyState(t *testing.T) {
 		mutate func(*Point15Val0DowngradeTaxonomy)
 		want   string
 	}{
+		{"fresh without proof incomplete", func(model *Point15Val0DowngradeTaxonomy) {
+			model.FreshnessProofPresent = false
+		}, Point15Val0StateIncomplete},
 		{"stale downgrades and cannot retain pass", func(model *Point15Val0DowngradeTaxonomy) {
 			model.FreshnessStatus = point15Val0FreshnessStale
 			model.DowngradeOutcome = point15Val0DowngradeReview
@@ -124,9 +127,19 @@ func TestPoint15Val0DowngradeTaxonomyState(t *testing.T) {
 			model.FreshnessStatus = point15Val0FreshnessExpired
 			model.DowngradeOutcome = point15Val0DowngradeBlocked
 		}, Point15Val0StateBlocked},
+		{"expired without proof still blocks", func(model *Point15Val0DowngradeTaxonomy) {
+			model.FreshnessStatus = point15Val0FreshnessExpired
+			model.DowngradeOutcome = point15Val0DowngradeBlocked
+			model.FreshnessProofPresent = false
+		}, Point15Val0StateBlocked},
 		{"revoked blocks", func(model *Point15Val0DowngradeTaxonomy) {
 			model.FreshnessStatus = point15Val0FreshnessRevoked
 			model.DowngradeOutcome = point15Val0DowngradeBlocked
+		}, Point15Val0StateBlocked},
+		{"revoked without proof still blocks", func(model *Point15Val0DowngradeTaxonomy) {
+			model.FreshnessStatus = point15Val0FreshnessRevoked
+			model.DowngradeOutcome = point15Val0DowngradeBlocked
+			model.FreshnessProofPresent = false
 		}, Point15Val0StateBlocked},
 		{"superseded without lineage blocks", func(model *Point15Val0DowngradeTaxonomy) {
 			model.FreshnessStatus = point15Val0FreshnessSuperseded
@@ -162,9 +175,19 @@ func TestPoint15Val0DowngradeTaxonomyState(t *testing.T) {
 			model.FreshnessStatus = point15Val0FreshnessUnsupported
 			model.DowngradeOutcome = point15Val0DowngradeBlocked
 		}, Point15Val0StateBlocked},
+		{"unsupported without proof still blocks", func(model *Point15Val0DowngradeTaxonomy) {
+			model.FreshnessStatus = point15Val0FreshnessUnsupported
+			model.DowngradeOutcome = point15Val0DowngradeBlocked
+			model.FreshnessProofPresent = false
+		}, Point15Val0StateBlocked},
 		{"tampered blocks", func(model *Point15Val0DowngradeTaxonomy) {
 			model.FreshnessStatus = point15Val0FreshnessTampered
 			model.DowngradeOutcome = point15Val0DowngradeBlocked
+		}, Point15Val0StateBlocked},
+		{"tampered without proof still blocks", func(model *Point15Val0DowngradeTaxonomy) {
+			model.FreshnessStatus = point15Val0FreshnessTampered
+			model.DowngradeOutcome = point15Val0DowngradeBlocked
+			model.FreshnessProofPresent = false
 		}, Point15Val0StateBlocked},
 		{"stale cannot retain pass", func(model *Point15Val0DowngradeTaxonomy) {
 			model.FreshnessStatus = point15Val0FreshnessStale

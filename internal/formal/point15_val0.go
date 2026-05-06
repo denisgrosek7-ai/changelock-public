@@ -587,25 +587,26 @@ func EvaluatePoint15Val0DowngradeTaxonomyState(model Point15Val0DowngradeTaxonom
 		!point15Val0DowngradeOutcomeValid(model.DowngradeOutcome) {
 		return Point15Val0StateBlocked
 	}
+	status := strings.TrimSpace(model.FreshnessStatus)
 	expectedOutcome := point15Val0ExpectedDowngradeOutcome(model)
 	if expectedOutcome == "" {
 		return Point15Val0StateBlocked
 	}
-	if strings.TrimSpace(model.FreshnessStatus) == point15Val0FreshnessMissing {
+	if status == point15Val0FreshnessMissing {
 		if model.FreshnessProofPresent {
 			return Point15Val0StateBlocked
 		}
-	} else if !model.FreshnessProofPresent {
+	} else if !model.FreshnessProofPresent && expectedOutcome == point15Val0DowngradeRetainActive {
 		return Point15Val0StateIncomplete
 	}
-	if strings.TrimSpace(model.FreshnessStatus) == point15Val0FreshnessSuperseded && !point15Val0LineageRefValid(model.SupersessionLineageRef) {
+	if status == point15Val0FreshnessSuperseded && !point15Val0LineageRefValid(model.SupersessionLineageRef) {
 		if strings.TrimSpace(model.DowngradeOutcome) != point15Val0DowngradeBlocked {
 			return Point15Val0StateBlocked
 		}
 		return Point15Val0StateBlocked
 	}
 	if model.RetainsPass || model.RetainsActiveClosure {
-		if strings.TrimSpace(model.FreshnessStatus) != point15Val0FreshnessFresh {
+		if status != point15Val0FreshnessFresh {
 			return Point15Val0StateBlocked
 		}
 		if strings.TrimSpace(model.DowngradeOutcome) != point15Val0DowngradeRetainActive {
