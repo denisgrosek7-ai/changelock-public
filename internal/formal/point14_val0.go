@@ -757,10 +757,57 @@ func point14Val0DependencySnapshotFromUpstream(
 	}
 }
 
+func point14Val0ActivePoint11Val0Foundation() Point11Val0Foundation {
+	model := Point11Val0FoundationModel()
+	valE := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
+	model.Dependency = SnapshotPoint11Val0DependencyFromComputedPoint10ValE(valE, Point11Val0Point10RepoReview{
+		LatestValEClosurePatchPresent: true,
+		Point10PassOutsideValE:        false,
+		CIGreenVisible:                true,
+		CIGreen:                       true,
+		MergeStatusVisible:            true,
+		MergeAccepted:                 true,
+	})
+	return ComputePoint11Val0Foundation(model)
+}
+
+func point14Val0ActivePoint11ValAFoundation() Point11ValAFoundation {
+	model := Point11ValAFoundationModel()
+	model.Dependency = SnapshotPoint11ValADependencyFromComputedVal0(point14Val0ActivePoint11Val0Foundation(), Point11ValAVal0ReviewContext{
+		LocalReviewAllowsDependencyReviewRequired: true,
+	})
+	return ComputePoint11ValAFoundation(model)
+}
+
+func point14Val0ActivePoint11ValBFoundation() Point11ValBFoundation {
+	model := Point11ValBFoundationModel()
+	model.Dependency = SnapshotPoint11ValBDependencyFromComputedValA(point14Val0ActivePoint11ValAFoundation(), Point11ValBValAReviewContext{
+		LocalReviewAllowsDependencyReviewRequired: true,
+	})
+	return ComputePoint11ValBFoundation(model)
+}
+
+func point14Val0ActivePoint11ValCFoundation() Point11ValCFoundation {
+	model := Point11ValCFoundationModel()
+	model.Dependency = SnapshotPoint11ValCDependencyFromComputedValB(point14Val0ActivePoint11ValBFoundation(), Point11ValCValBReviewContext{
+		LocalReviewAllowsDependencyReviewRequired: true,
+	})
+	return ComputePoint11ValCFoundation(model)
+}
+
+func point14Val0ActivePoint11ValDFoundation() Point11ValDFoundation {
+	model := Point11ValDFoundationModel()
+	model.Val0Dependency = SnapshotPoint11ValDVal0DependencyFromComputed(point14Val0ActivePoint11Val0Foundation(), Point11ValDVal0ReviewContext{})
+	model.ValADependency = SnapshotPoint11ValDValADependencyFromComputed(point14Val0ActivePoint11ValAFoundation(), Point11ValDValAReviewContext{})
+	model.ValBDependency = SnapshotPoint11ValDValBDependencyFromComputed(point14Val0ActivePoint11ValBFoundation(), Point11ValDValBReviewContext{})
+	model.ValCDependency = SnapshotPoint11ValDValCDependencyFromComputed(point14Val0ActivePoint11ValCFoundation(), Point11ValDValCReviewContext{})
+	return ComputePoint11ValDFoundation(model)
+}
+
 func point14Val0DependencySnapshotModel() Point14Val0DependencySnapshot {
 	valE := ComputePoint13ValEFoundation(Point13ValEFoundationModel())
 	point12 := ComputePoint12ValEFoundation(Point12ValEFoundationModel())
-	point11 := ComputePoint11ValDFoundation(Point11ValDFoundationModel())
+	point11 := point14Val0ActivePoint11ValDFoundation()
 	point10 := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
 	return point14Val0DependencySnapshotFromUpstream(valE, point12, point11, point10)
 }
@@ -1484,7 +1531,7 @@ func point14Val0FoundationModelFromUpstream(
 func Point14Val0FoundationModel() Point14Val0Foundation {
 	valE := ComputePoint13ValEFoundation(Point13ValEFoundationModel())
 	point12 := ComputePoint12ValEFoundation(Point12ValEFoundationModel())
-	point11 := ComputePoint11ValDFoundation(Point11ValDFoundationModel())
+	point11 := point14Val0ActivePoint11ValDFoundation()
 	point10 := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
 	return point14Val0FoundationModelFromUpstream(valE, point12, point11, point10)
 }

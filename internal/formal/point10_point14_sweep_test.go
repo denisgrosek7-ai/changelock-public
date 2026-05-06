@@ -66,4 +66,11 @@ func TestPoint10ThroughPoint14CurrentSweep(t *testing.T) {
 		point14ValC.Dependency.Point14PassSeen {
 		t.Fatalf("expected point14 valc active with no point14 pass token path, got %#v", point14ValC)
 	}
+
+	point14ValD := ComputePoint14ValDFoundation(Point14ValDFoundationModel())
+	if point14ValD.CurrentState != Point14ValDStateActive ||
+		point14ValD.Dependency.Point14ValCCurrentState != point14ValC.CurrentState ||
+		point14ValD.Dependency.Point14PassSeen {
+		t.Fatalf("expected point14 vald active with no point14 pass token path, got %#v", point14ValD)
+	}
 }
