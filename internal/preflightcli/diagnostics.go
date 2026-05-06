@@ -123,7 +123,7 @@ func buildDiagnostics(result Result) ([]Diagnostic, DiagnosticSummary) {
 
 func diagnosticForCheck(command string, check CheckResult) Diagnostic {
 	reasonCode, category, source, docsRef, fixHint := diagnosticDescriptor(check)
-	targetFile := diagnosticTargetFile(check.Target)
+	targetFile := diagnosticTargetFile(check)
 	diagnostic := Diagnostic{
 		CheckID:          check.Name,
 		RuleID:           diagnosticRuleID(command, check.Name),
@@ -141,7 +141,9 @@ func diagnosticForCheck(command string, check CheckResult) Diagnostic {
 		Blocking:         check.Status == StatusFail || check.Status == StatusError,
 		EvaluationState:  evaluationState(check.Status),
 	}
-	if targetFile != "" {
+	if reviewRange := diagnosticRange(check); reviewRange != nil {
+		diagnostic.Range = reviewRange
+	} else if targetFile != "" {
 		diagnostic.Range = &DiagnosticRange{
 			StartLine:   1,
 			StartColumn: 1,
@@ -337,6 +339,61 @@ func diagnosticDescriptor(check CheckResult) (reasonCode, category, source, docs
 		default:
 			return "upgrade_api_context_failed", "upgrade", "evidence", "docs/production-phase5-valc.md", "Fix API health or auth scope before trusting upgrade diagnostics."
 		}
+	case "review-scope":
+		return "code_review_scope_ready", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+	case "review-diff":
+		switch check.Status {
+		case StatusPass:
+			return "code_review_diff_clean", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+		case StatusFail:
+			return "code_review_diff_integrity_failed", "review", "developer_review", "docs/shift-left-integration.md", "Fix whitespace, conflict markers, or malformed patch fragments before pushing."
+		default:
+			return "code_review_diff_integrity_error", "review", "developer_review", "docs/shift-left-integration.md", "Verify local git tooling and rerun the review gate."
+		}
+	case "review-format":
+		switch check.Status {
+		case StatusPass:
+			return "code_review_format_clean", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+		case StatusFail:
+			return "code_review_format_required", "review", "developer_review", "docs/shift-left-integration.md", "Run gofmt on the changed Go files before pushing."
+		default:
+			return "code_review_format_skipped", "review", "developer_review", "docs/shift-left-integration.md", "Formatting review only applies when changed Go files are present."
+		}
+	case "review-test-skip":
+		switch check.Status {
+		case StatusPass:
+			return "code_review_skip_marker_clear", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+		default:
+			return "code_review_skip_marker_blocked", "review", "developer_review", "docs/shift-left-integration.md", "Remove added test skip markers or justify them in a tighter, explicit review path."
+		}
+	case "review-deferred-marker":
+		switch check.Status {
+		case StatusPass:
+			return "code_review_deferred_marker_clear", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+		default:
+			return "code_review_deferred_marker_present", "review", "developer_review", "docs/shift-left-integration.md", "Review added TODO/FIXME markers and decide whether they belong in the current change."
+		}
+	case "review-formal-test-coverage":
+		switch check.Status {
+		case StatusPass:
+			return "code_review_formal_test_delta_present", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+		default:
+			return "code_review_formal_test_delta_missing", "review", "developer_review", "docs/shift-left-integration.md", "Add or update the matching formal point tests before push."
+		}
+	case "review-provider":
+		switch check.Status {
+		case StatusPass:
+			return "code_review_provider_clear", "review", "developer_review", "docs/shift-left-integration.md", "No action required."
+		case StatusSkip:
+			return "code_review_provider_not_configured", "review", "developer_review", "docs/shift-left-integration.md", "Configure CHANGELOCK_CLI_REVIEW_PROVIDER_BIN if you want semantic agent review before push."
+		default:
+			return "code_review_provider_failed", "review", "developer_review", "docs/shift-left-integration.md", "Fix the external review provider or disable it explicitly before relying on local review gating."
+		}
+	case "review-finding":
+		if metadataString(check.Metadata, "finding_severity") == "P3" {
+			return "code_review_provider_advisory_finding", "review", "developer_review", "docs/shift-left-integration.md", "Review the advisory provider finding before pushing."
+		}
+		return "code_review_provider_blocking_finding", "review", "developer_review", "docs/shift-left-integration.md", "Address the provider finding or lower the configured block severity explicitly before pushing."
 	default:
 		return "check_unknown", "general", "evidence", "docs/developer-preflight-cli.md", "Review the CLI output for details and rerun with `--output json` if automation needs to inspect the result."
 	}
@@ -393,15 +450,35 @@ func diagnosticMessage(check CheckResult) string {
 	return fmt.Sprintf("%s (%s)", check.Summary, details)
 }
 
-func diagnosticTargetFile(target string) string {
-	target = strings.TrimSpace(target)
+func diagnosticTargetFile(check CheckResult) string {
+	if targetFile := metadataString(check.Metadata, "target_file"); targetFile != "" {
+		return targetFile
+	}
+	target := strings.TrimSpace(check.Target)
 	if target == "" {
 		return ""
 	}
-	if isYAML(target) {
+	if isYAML(target) || filepath.Ext(target) != "" {
 		return target
 	}
 	return ""
+}
+
+func diagnosticRange(check CheckResult) *DiagnosticRange {
+	startLine := metadataInt(check.Metadata, "start_line")
+	if startLine <= 0 {
+		return nil
+	}
+	endLine := metadataInt(check.Metadata, "end_line")
+	if endLine <= 0 {
+		endLine = startLine
+	}
+	return &DiagnosticRange{
+		StartLine:   startLine,
+		StartColumn: 1,
+		EndLine:     endLine,
+		EndColumn:   1,
+	}
 }
 
 func diagnosticResourceIdentity(target, targetFile string) string {

@@ -5,6 +5,7 @@ Phase 8j moves ChangeLock checks earlier in the developer workflow without creat
 The same `changelock-cli` result model now feeds:
 
 - local terminal preflight
+- local code review gate
 - VS Code diagnostics
 - GitHub PR annotations and summaries
 - pre-commit / pre-push hooks
@@ -17,6 +18,7 @@ Primary execution core:
 - `changelock-cli image`
 - `changelock-cli scan`
 - `changelock-cli preflight`
+- `changelock-cli review`
 
 Shared machine-readable surface:
 
@@ -138,10 +140,39 @@ Repo-provided examples:
 Default local posture:
 
 - `pre-commit`
+  - read-only code review over staged git diff
   - fast manifest-only checks on staged YAML files
 - `pre-push`
+  - read-only code review over `@{upstream}...HEAD`
   - reuses manifest checks
   - only runs image-aware preflight when `CHANGELOCK_PREPUSH_IMAGE` is explicitly configured
+
+Code review integration details:
+
+- built-in deterministic checks:
+  - `git diff --check`
+  - `gofmt -l` on changed Go files
+  - added `t.Skip(` markers
+  - added `TODO` / `FIXME` markers
+  - missing matching `_test.go` delta for changed `internal/formal/point*.go` files
+- optional external provider:
+  - configure `CHANGELOCK_CLI_REVIEW_PROVIDER_BIN`
+  - ChangeLock writes a bounded JSON request with changed files and unified diff
+  - for code waves such as `Point14 Val C`, the request includes the full current changed-file scope, so the provider can review the whole wave rather than isolated diff fragments
+  - provider returns structured `P0..P3` findings
+  - findings at or above `CHANGELOCK_CLI_REVIEW_BLOCK_SEVERITY` block the hook
+- disable path:
+  - set `CHANGELOCK_CLI_REVIEW_DISABLE=true` to skip the local review gate explicitly
+
+Minimal local `.env` setup at repo root:
+
+```env
+CHANGELOCK_REVIEW_OPENAI_API_KEY=...
+CHANGELOCK_REVIEW_OPENAI_MODEL=gpt-5.4-mini
+CHANGELOCK_CLI_REVIEW_BLOCK_SEVERITY=P1
+```
+
+If `scripts/review/changelock-openai-review.mjs` exists and is executable, the repo-provided hooks use it automatically after sourcing the repo-root `.env`.
 
 ## Scope and limitations
 

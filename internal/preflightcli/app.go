@@ -28,6 +28,8 @@ type Config struct {
 	Token                string
 	Timeout              time.Duration
 	Offline              bool
+	ReviewProviderBin    string
+	ReviewBlockSeverity  string
 	ProductionConfigPath string
 	PolicyDir            string
 	KyvernoPolicyDir     string
@@ -109,6 +111,8 @@ func loadConfig(getenv func(string) string) (Config, error) {
 		Token:                strings.TrimSpace(getenv("CHANGELOCK_CLI_TOKEN")),
 		Timeout:              timeout,
 		Offline:              offline,
+		ReviewProviderBin:    strings.TrimSpace(getenv("CHANGELOCK_CLI_REVIEW_PROVIDER_BIN")),
+		ReviewBlockSeverity:  firstNonEmpty(getenv("CHANGELOCK_CLI_REVIEW_BLOCK_SEVERITY"), "P2"),
 		ProductionConfigPath: strings.TrimSpace(getenv("CHANGELOCK_CLI_CONFIG")),
 		PolicyDir:            firstNonEmpty(getenv("CHANGELOCK_CLI_POLICY_DIR"), "policies"),
 		KyvernoPolicyDir:     firstNonEmpty(getenv("CHANGELOCK_CLI_KYVERNO_POLICY_DIR"), "deploy/kyverno"),
@@ -143,6 +147,9 @@ func (a *App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return a.finish(result, err, stdout, stderr)
 	case "scan":
 		result, err := a.runScan(ctx, args[1:])
+		return a.finish(result, err, stdout, stderr)
+	case "review":
+		result, err := a.runReview(ctx, args[1:])
 		return a.finish(result, err, stdout, stderr)
 	case "preflight":
 		result, err := a.runPreflight(ctx, args[1:])
@@ -1278,6 +1285,7 @@ Usage:
   changelock-cli manifest [--file path | --dir path]
   changelock-cli image --image <ref>
   changelock-cli scan --image <ref>
+  changelock-cli review [--staged | --upstream-ref ref]
   changelock-cli diagnostics --input result.json --format markdown
   changelock-cli guidance --input result.json --format markdown
   changelock-cli version
