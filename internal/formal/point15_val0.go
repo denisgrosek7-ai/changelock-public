@@ -947,6 +947,7 @@ func ComputePoint15Val0FreshnessDisciplineFoundation(model Point15Val0FreshnessD
 	model.TimestampDisciplineState = EvaluatePoint15Val0TimestampDisciplineState(model.TimestampDiscipline)
 	model.AuthorityBoundaryState = EvaluatePoint15Val0AuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15Val0NoOverclaimGuardState(model.NoOverclaimGuard)
+	expectedTenantScope := strings.TrimSpace(model.Dependency.InheritedTenantScope)
 	if strings.TrimSpace(model.EvidenceContext.FreshnessStatus) != strings.TrimSpace(model.FreshnessTaxonomy.FreshnessStatus) {
 		model.EvidenceContextState = Point15Val0StateBlocked
 	}
@@ -958,6 +959,18 @@ func ComputePoint15Val0FreshnessDisciplineFoundation(model Point15Val0FreshnessD
 	}
 	if strings.TrimSpace(model.EvidenceContext.DowngradeOutcome) != strings.TrimSpace(model.DowngradeTaxonomy.DowngradeOutcome) {
 		model.EvidenceContextState = Point15Val0StateBlocked
+	}
+	if expectedTenantScope == "" ||
+		strings.TrimSpace(model.EvidenceContext.TenantScope) != expectedTenantScope ||
+		(strings.TrimSpace(model.EvidenceContext.ReferencedTenantScope) != "" && strings.TrimSpace(model.EvidenceContext.ReferencedTenantScope) != expectedTenantScope) {
+		model.EvidenceContextState = Point15Val0StateBlocked
+		model.TenantBoundaryState = Point15Val0StateBlocked
+	}
+	if expectedTenantScope == "" || strings.TrimSpace(model.TimestampDiscipline.TenantScope) != expectedTenantScope {
+		model.TimestampDisciplineState = Point15Val0StateBlocked
+	}
+	if expectedTenantScope == "" || strings.TrimSpace(model.AuthorityBoundary.TenantScope) != expectedTenantScope {
+		model.AuthorityBoundaryState = Point15Val0StateBlocked
 	}
 	model.CurrentState = point15Val0Aggregate(
 		model.DependencyState,

@@ -407,6 +407,73 @@ func TestPoint15Val0FreshnessDisciplineFoundationDowngradeMismatchBlocks(t *test
 	}
 }
 
+func TestPoint15Val0FreshnessDisciplineFoundationTenantScopeMismatchBlocks(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Point15Val0FreshnessDisciplineFoundation)
+		assert func(*testing.T, Point15Val0FreshnessDisciplineFoundation)
+	}{
+		{
+			name: "evidence context tenant scope mismatch blocks",
+			mutate: func(model *Point15Val0FreshnessDisciplineFoundation) {
+				model.EvidenceContext.TenantScope = "tenant_point15_val0_other"
+				model.EvidenceContext.ReferencedTenantScope = "tenant_point15_val0_other"
+			},
+			assert: func(t *testing.T, got Point15Val0FreshnessDisciplineFoundation) {
+				if got.CurrentState != Point15Val0StateBlocked ||
+					got.EvidenceContextState != Point15Val0StateBlocked ||
+					got.TenantBoundaryState != Point15Val0StateBlocked {
+					t.Fatalf("expected evidence-context tenant mismatch to block foundation, got %#v", got)
+				}
+			},
+		},
+		{
+			name: "evidence context referenced tenant scope mismatch blocks",
+			mutate: func(model *Point15Val0FreshnessDisciplineFoundation) {
+				model.EvidenceContext.ReferencedTenantScope = "tenant_point15_val0_other"
+			},
+			assert: func(t *testing.T, got Point15Val0FreshnessDisciplineFoundation) {
+				if got.CurrentState != Point15Val0StateBlocked ||
+					got.EvidenceContextState != Point15Val0StateBlocked ||
+					got.TenantBoundaryState != Point15Val0StateBlocked {
+					t.Fatalf("expected referenced tenant mismatch to block foundation, got %#v", got)
+				}
+			},
+		},
+		{
+			name: "timestamp discipline tenant scope mismatch blocks",
+			mutate: func(model *Point15Val0FreshnessDisciplineFoundation) {
+				model.TimestampDiscipline.TenantScope = "tenant_point15_val0_other"
+			},
+			assert: func(t *testing.T, got Point15Val0FreshnessDisciplineFoundation) {
+				if got.CurrentState != Point15Val0StateBlocked || got.TimestampDisciplineState != Point15Val0StateBlocked {
+					t.Fatalf("expected timestamp tenant mismatch to block foundation, got %#v", got)
+				}
+			},
+		},
+		{
+			name: "authority boundary tenant scope mismatch blocks",
+			mutate: func(model *Point15Val0FreshnessDisciplineFoundation) {
+				model.AuthorityBoundary.TenantScope = "tenant_point15_val0_other"
+			},
+			assert: func(t *testing.T, got Point15Val0FreshnessDisciplineFoundation) {
+				if got.CurrentState != Point15Val0StateBlocked || got.AuthorityBoundaryState != Point15Val0StateBlocked {
+					t.Fatalf("expected authority tenant mismatch to block foundation, got %#v", got)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := Point15Val0FoundationModel()
+			tc.mutate(&model)
+			got := ComputePoint15Val0FreshnessDisciplineFoundation(model)
+			tc.assert(t, got)
+		})
+	}
+}
+
 func TestPoint10ThroughPoint15Val0CurrentSweep(t *testing.T) {
 	point14ValE := ComputePoint14ValEFoundation(Point14ValEFoundationModel())
 	if point14ValE.CurrentState != Point14ValEStatePassConfirmed ||
