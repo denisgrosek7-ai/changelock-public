@@ -290,21 +290,30 @@ func buildExecutionProofsResponse(traces []audit.ExecutionTraceRecord, tasks []a
 	if len(benchmarkArtifacts) > 5 {
 		benchmarkArtifacts = benchmarkArtifacts[:5]
 	}
+	traceState := "trace_records_empty"
+	if len(traces) > 0 {
+		traceState = "trace_records_present"
+	}
+	asyncEvidencePresent, asyncEvidenceFailed := phase1CriticalPathMigrationEvidence(tasks)
+	asyncState := "critical_path_migration_evidence_absent"
+	if asyncEvidencePresent {
+		asyncState = "critical_path_migration_evidence_present"
+	}
 	currentState := "phase1_closure_incomplete"
-	if len(traces) > 0 && taskCounts[audit.ExecutionTaskStateCompleted] > 0 && len(drills) > 0 && hasPassingBenchmark {
+	if traceState == "trace_records_present" && asyncEvidencePresent && !asyncEvidenceFailed && len(drills) > 0 && hasPassingBenchmark {
 		currentState = "phase1_operational_proof_active"
 	}
 	return phase1ExecutionProofsResponse{
 		SchemaVersion: phase1ExecutionProofsSchema,
 		CurrentState:  currentState,
 		TraceSummary: phase1ProofTraceSummary{
-			CurrentState:          "trace_records_present",
+			CurrentState:          traceState,
 			TraceCount:            len(traces),
 			OperationCounts:       traceOps,
 			FailedOperationCounts: traceFailed,
 		},
 		AsyncSummary: phase1ProofAsyncSummary{
-			CurrentState:          "critical_path_migration_evidence_present",
+			CurrentState:          asyncState,
 			TaskCountsByState:     taskCounts,
 			MigratedCriticalPaths: []string{"sync_runtime_forward_event"},
 			FailureClasses:        failureClasses,
@@ -318,6 +327,24 @@ func buildExecutionProofsResponse(traces []audit.ExecutionTraceRecord, tasks []a
 			"Operational proofs expose bounded evidence artifacts for tracing, async migration, benchmark regression, and signer rotation drill outputs.",
 		},
 	}
+}
+
+func phase1CriticalPathMigrationEvidence(tasks []audit.ExecutionTaskRecord) (present, failed bool) {
+	for _, task := range tasks {
+		if strings.TrimSpace(task.TaskType) != phase1ExecutionTaskSyncForwardEvent {
+			continue
+		}
+		switch strings.TrimSpace(task.CurrentState) {
+		case audit.ExecutionTaskStateQueued, audit.ExecutionTaskStateRunning, audit.ExecutionTaskStateCompleted:
+			present = true
+		case audit.ExecutionTaskStateFailedRetryable, audit.ExecutionTaskStateFailedTerminal, audit.ExecutionTaskStateDeadLettered:
+			failed = true
+		}
+		if strings.TrimSpace(task.FailureClass) != "" || strings.TrimSpace(task.FailureReason) != "" {
+			failed = true
+		}
+	}
+	return present, failed
 }
 
 func (s server) dispatchExecutionTask(task audit.ExecutionTaskRecord, actor string) {

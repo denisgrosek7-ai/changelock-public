@@ -461,6 +461,7 @@ func TestExecutionFoundationIngestMigratesSyncForwardToAsyncTask(t *testing.T) {
 		defer mu.Unlock()
 		return len(received) == 1
 	})
+	waitForPhase1SyncForwardCompletion(t, store)
 
 	tasks, err := store.ListEvents(context.Background(), audit.EventFilter{
 		Component: "audit-writer",
@@ -670,6 +671,98 @@ func TestExecutionFoundationProofsHandler(t *testing.T) {
 	}
 }
 
+func TestBuildExecutionProofsResponseUsesCriticalPathEvidence(t *testing.T) {
+	trace := audit.NormalizeExecutionTraceRecord(audit.ExecutionTraceRecord{
+		TraceID:       "trace-1",
+		Component:     "audit-writer",
+		Operation:     "audit_ingest",
+		TenantID:      "acme",
+		Environment:   "prod",
+		DecisionID:    "decision-1",
+		CorrelationID: "corr-1",
+		Status:        "completed",
+		Attributes: map[string]string{
+			"async_sync_forward": "queued",
+		},
+	}, time.Now)
+	benchmark := audit.ExecutionBenchmarkEvaluationRecord{
+		SchemaVersion: audit.ExecutionBenchmarkGateSchemaVersion,
+		EvaluationID:  "bench-1",
+		ProfileID:     "production_like",
+		CurrentState:  "passed",
+		ObservedAt:    time.Now().UTC(),
+	}
+	drill := audit.ExecutionRotationDrillRecord{
+		SchemaVersion: audit.ExecutionRotationDrillSchemaVersion,
+		DrillID:       "drill-1",
+		Purpose:       "sync-snapshots",
+		TenantID:      "acme",
+		Environment:   "prod",
+		CurrentState:  "passed",
+		ObservedAt:    time.Now().UTC(),
+	}
+
+	t.Run("running sync-forward evidence activates proof surface", func(t *testing.T) {
+		task := audit.NormalizeExecutionTaskRecord(audit.ExecutionTaskRecord{
+			TaskType:         phase1ExecutionTaskSyncForwardEvent,
+			CurrentState:     audit.ExecutionTaskStateRunning,
+			SourceComponent:  "audit-writer",
+			SourceEventID:    "event-1",
+			TenantID:         "acme",
+			Environment:      "prod",
+			QueueClass:       "connector",
+			BackpressureTier: "bounded",
+			TraceID:          "trace-1",
+			CorrelationID:    "corr-1",
+			DecisionID:       "decision-1",
+			PayloadHash:      "sha256:payload",
+			TrustContextRef:  "sync_runtime:spoke",
+		}, time.Now)
+
+		response := buildExecutionProofsResponse(
+			[]audit.ExecutionTraceRecord{trace},
+			[]audit.ExecutionTaskRecord{task},
+			[]audit.ExecutionBenchmarkEvaluationRecord{benchmark},
+			[]audit.ExecutionRotationDrillRecord{drill},
+		)
+		if response.CurrentState != "phase1_operational_proof_active" {
+			t.Fatalf("expected active proof surface with running critical-path evidence, got %#v", response)
+		}
+		if response.AsyncSummary.CurrentState != "critical_path_migration_evidence_present" {
+			t.Fatalf("expected async migration evidence present, got %#v", response.AsyncSummary)
+		}
+	})
+
+	t.Run("unrelated completed task does not activate proof surface", func(t *testing.T) {
+		task := audit.NormalizeExecutionTaskRecord(audit.ExecutionTaskRecord{
+			TaskType:         "connector_dispatch",
+			CurrentState:     audit.ExecutionTaskStateCompleted,
+			SourceComponent:  "audit-writer",
+			TenantID:         "acme",
+			Environment:      "prod",
+			QueueClass:       "connector",
+			BackpressureTier: "bounded",
+			TraceID:          "trace-1",
+			CorrelationID:    "corr-1",
+			DecisionID:       "decision-1",
+			PayloadHash:      "sha256:payload",
+		}, time.Now)
+
+		response := buildExecutionProofsResponse(
+			[]audit.ExecutionTraceRecord{trace},
+			[]audit.ExecutionTaskRecord{task},
+			[]audit.ExecutionBenchmarkEvaluationRecord{benchmark},
+			[]audit.ExecutionRotationDrillRecord{drill},
+		)
+		if response.CurrentState != "phase1_closure_incomplete" {
+			t.Fatalf("expected incomplete proof surface without critical-path evidence, got %#v", response)
+		}
+		if response.AsyncSummary.CurrentState != "critical_path_migration_evidence_absent" {
+			t.Fatalf("expected async migration evidence absent, got %#v", response.AsyncSummary)
+		}
+	})
+}
+
 func TestExecutionFoundationProofsRequireBenchmarkEvidence(t *testing.T) {
 	store := audit.NewMemoryStore()
 	var (
@@ -795,4 +888,52 @@ func waitForPhase1Condition(t *testing.T, condition func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("timed out waiting for phase1 async condition")
+}
+
+func waitForPhase1SyncForwardCompletion(t *testing.T, store audit.Store) {
+	t.Helper()
+	waitForPhase1Condition(t, func() bool {
+		tasks, err := store.ListEvents(context.Background(), audit.EventFilter{
+			Component: "audit-writer",
+			EventType: audit.EventTypeExecutionTaskRecorded,
+			TenantID:  "acme",
+			Limit:     20,
+		})
+		if err != nil {
+			return false
+		}
+		taskComplete := false
+		for _, item := range tasks {
+			task, err := audit.UnmarshalExecutionTaskRecord(item.Event)
+			if err != nil {
+				continue
+			}
+			if task.TaskType == phase1ExecutionTaskSyncForwardEvent && task.CurrentState == audit.ExecutionTaskStateCompleted {
+				taskComplete = true
+				break
+			}
+		}
+		if !taskComplete {
+			return false
+		}
+		traces, err := store.ListEvents(context.Background(), audit.EventFilter{
+			Component: "audit-writer",
+			EventType: audit.EventTypeExecutionTraceRecorded,
+			TenantID:  "acme",
+			Limit:     20,
+		})
+		if err != nil {
+			return false
+		}
+		for _, item := range traces {
+			trace, err := audit.UnmarshalExecutionTraceRecord(item.Event)
+			if err != nil {
+				continue
+			}
+			if trace.Operation == phase1ExecutionTaskSyncForwardEvent && trace.Status == "completed" {
+				return true
+			}
+		}
+		return false
+	})
 }

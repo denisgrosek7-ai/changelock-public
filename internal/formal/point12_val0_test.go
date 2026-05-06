@@ -5,18 +5,47 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
+
+var (
+	point12Val0ActiveFoundationBaselineJSON []byte
+	point12Val0ActiveFoundationBaselineOnce sync.Once
+)
+
+func mustMarshalPoint12Val0Foundation(model Point12Val0Foundation) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint12Val0Foundation(payload []byte) Point12Val0Foundation {
+	var clone Point12Val0Foundation
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
 
 func point12Val0ActiveDependencySnapshot() Point12Val0DependencySnapshot {
 	valD := activePoint11ValDFoundation()
 	return SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, point12Val0DependencyReviewContextModel())
 }
 
-func activePoint12Val0Foundation() Point12Val0Foundation {
+func uncachedActivePoint12Val0Foundation() Point12Val0Foundation {
 	model := Point12Val0FoundationModel()
 	model.Dependency = point12Val0ActiveDependencySnapshot()
 	return ComputePoint12Val0Foundation(model)
+}
+
+func activePoint12Val0Foundation() Point12Val0Foundation {
+	point12Val0ActiveFoundationBaselineOnce.Do(func() {
+		point12Val0ActiveFoundationBaselineJSON = mustMarshalPoint12Val0Foundation(uncachedActivePoint12Val0Foundation())
+	})
+	return clonePoint12Val0Foundation(point12Val0ActiveFoundationBaselineJSON)
 }
 
 func readPoint12Val0Source(t *testing.T) string {

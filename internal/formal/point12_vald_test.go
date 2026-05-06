@@ -1,15 +1,47 @@
 package formal
 
 import (
+	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 )
 
-func activePoint12ValDFoundation() Point12ValDFoundation {
+var (
+	point12ValDActiveFoundationBaselineJSON           []byte
+	point12ValDActiveFoundationBaselineOnce           sync.Once
+	point12ValDActiveComparisonFoundationBaselineJSON []byte
+	point12ValDActiveComparisonFoundationBaselineOnce sync.Once
+)
+
+func mustMarshalPoint12ValDFoundation(model Point12ValDFoundation) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint12ValDFoundation(payload []byte) Point12ValDFoundation {
+	var clone Point12ValDFoundation
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
+
+func uncachedActivePoint12ValDFoundation() Point12ValDFoundation {
 	return ComputePoint12ValDFoundation(Point12ValDFoundationModel())
 }
 
-func activePoint12ValDComparisonFoundation() Point12ValDFoundation {
+func activePoint12ValDFoundation() Point12ValDFoundation {
+	point12ValDActiveFoundationBaselineOnce.Do(func() {
+		point12ValDActiveFoundationBaselineJSON = mustMarshalPoint12ValDFoundation(uncachedActivePoint12ValDFoundation())
+	})
+	return clonePoint12ValDFoundation(point12ValDActiveFoundationBaselineJSON)
+}
+
+func uncachedActivePoint12ValDComparisonFoundation() Point12ValDFoundation {
 	model := Point12ValDFoundationModel()
 	model.Dependency.ValBReplayRequest.ReplayMode = point12Val0ReplayModeComparisonMode
 	model.Dependency.ValBReplayRequest.CurrentPolicyRef = "policy_ref_point12_vald_current"
@@ -32,6 +64,13 @@ func activePoint12ValDComparisonFoundation() Point12ValDFoundation {
 	model.Explanation.DriftReasons = []string{point12ValBDriftDueToPolicy}
 	model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
 	return ComputePoint12ValDFoundation(model)
+}
+
+func activePoint12ValDComparisonFoundation() Point12ValDFoundation {
+	point12ValDActiveComparisonFoundationBaselineOnce.Do(func() {
+		point12ValDActiveComparisonFoundationBaselineJSON = mustMarshalPoint12ValDFoundation(uncachedActivePoint12ValDComparisonFoundation())
+	})
+	return clonePoint12ValDFoundation(point12ValDActiveComparisonFoundationBaselineJSON)
 }
 
 func recomputePoint12ValDLocalHashes(model *Point12ValDFoundation) {

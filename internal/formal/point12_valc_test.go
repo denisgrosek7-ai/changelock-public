@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -89,6 +90,27 @@ var point12ValCBindingMatrixEntries = []point12ValCBindingMatrixEntry{
 	{DownstreamModel: "Point12ValCOfflineVerificationBundle", Field: "supported_verifier_versions", BindingClass: "intentionally_not_bound", Reason: "local verifier capability list constrains use but does not redefine upstream proof context"},
 }
 
+var (
+	point12ValCActiveFoundationBaselineJSON []byte
+	point12ValCActiveFoundationBaselineOnce sync.Once
+)
+
+func mustMarshalPoint12ValCFoundation(model Point12ValCFoundation) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint12ValCFoundation(payload []byte) Point12ValCFoundation {
+	var clone Point12ValCFoundation
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
+
 func activePoint12ValCDependencySnapshot() Point12ValCDependencySnapshot {
 	valB := activePoint12ValBFoundation()
 	return SnapshotPoint12ValCDependencyFromComputedValB(valB, point12ValCDependencyReviewContextModel())
@@ -155,11 +177,18 @@ func syncPoint12ValCFoundationToDependency(model *Point12ValCFoundation) {
 	model.PublicPrivateBoundary.OfflineBundleID = model.OfflineBundle.OfflineBundleID
 }
 
-func activePoint12ValCFoundation() Point12ValCFoundation {
+func uncachedActivePoint12ValCFoundation() Point12ValCFoundation {
 	model := Point12ValCFoundationModel()
 	model.Dependency = activePoint12ValCDependencySnapshot()
 	syncPoint12ValCFoundationToDependency(&model)
 	return ComputePoint12ValCFoundation(model)
+}
+
+func activePoint12ValCFoundation() Point12ValCFoundation {
+	point12ValCActiveFoundationBaselineOnce.Do(func() {
+		point12ValCActiveFoundationBaselineJSON = mustMarshalPoint12ValCFoundation(uncachedActivePoint12ValCFoundation())
+	})
+	return clonePoint12ValCFoundation(point12ValCActiveFoundationBaselineJSON)
 }
 
 func activePoint12ValCFoundationFromValB(valB Point12ValBFoundation) Point12ValCFoundation {

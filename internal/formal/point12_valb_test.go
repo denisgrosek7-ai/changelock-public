@@ -4,8 +4,30 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
+
+var (
+	point12ValBActiveFoundationBaselineJSON []byte
+	point12ValBActiveFoundationBaselineOnce sync.Once
+)
+
+func mustMarshalPoint12ValBFoundation(model Point12ValBFoundation) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint12ValBFoundation(payload []byte) Point12ValBFoundation {
+	var clone Point12ValBFoundation
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
 
 func activePoint12ValBDependencySnapshot() Point12ValBDependencySnapshot {
 	valA := activePoint12ValAFoundation()
@@ -54,11 +76,18 @@ func syncPoint12ValBFoundationToDependency(model *Point12ValBFoundation) {
 	model.ReplayResult.EvaluatedSchemaVersion = model.ReplayRequest.SchemaVersion
 }
 
-func activePoint12ValBFoundation() Point12ValBFoundation {
+func uncachedActivePoint12ValBFoundation() Point12ValBFoundation {
 	model := Point12ValBFoundationModel()
 	model.Dependency = activePoint12ValBDependencySnapshot()
 	syncPoint12ValBFoundationToDependency(&model)
 	return ComputePoint12ValBFoundation(model)
+}
+
+func activePoint12ValBFoundation() Point12ValBFoundation {
+	point12ValBActiveFoundationBaselineOnce.Do(func() {
+		point12ValBActiveFoundationBaselineJSON = mustMarshalPoint12ValBFoundation(uncachedActivePoint12ValBFoundation())
+	})
+	return clonePoint12ValBFoundation(point12ValBActiveFoundationBaselineJSON)
 }
 
 func activePoint12ValBFoundationFromValA(valA Point12ValAFoundation) Point12ValBFoundation {

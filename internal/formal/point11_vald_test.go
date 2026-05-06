@@ -3,7 +3,47 @@ package formal
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
+)
+
+func mustMarshalPoint11ValDDependencyBundle(model Point11ValDDependencyBundle) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint11ValDDependencyBundle(payload []byte) Point11ValDDependencyBundle {
+	var clone Point11ValDDependencyBundle
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
+
+func mustMarshalPoint11ValDFoundation(model Point11ValDFoundation) []byte {
+	payload, err := json.Marshal(model)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func clonePoint11ValDFoundation(payload []byte) Point11ValDFoundation {
+	var clone Point11ValDFoundation
+	if err := json.Unmarshal(payload, &clone); err != nil {
+		panic(err)
+	}
+	return clone
+}
+
+var (
+	point11ValDActiveDependencyBundleBaselineJSON []byte
+	point11ValDActiveDependencyBundleBaselineOnce sync.Once
+	point11ValDActiveFoundationBaselineJSON       []byte
+	point11ValDActiveFoundationBaselineOnce       sync.Once
 )
 
 func point11ValDActiveVal0DependencySnapshot() Point11ValDVal0DependencySnapshot {
@@ -26,7 +66,7 @@ func point11ValDActiveValCDependencySnapshot() Point11ValDValCDependencySnapshot
 	return SnapshotPoint11ValDValCDependencyFromComputed(valC, Point11ValDValCReviewContext{})
 }
 
-func point11ValDActiveDependencyBundle() Point11ValDDependencyBundle {
+func uncachedPoint11ValDActiveDependencyBundle() Point11ValDDependencyBundle {
 	return Point11ValDDependencyBundle{
 		Val0: point11ValDActiveVal0DependencySnapshot(),
 		ValA: point11ValDActiveValADependencySnapshot(),
@@ -35,13 +75,27 @@ func point11ValDActiveDependencyBundle() Point11ValDDependencyBundle {
 	}
 }
 
-func activePoint11ValDFoundation() Point11ValDFoundation {
+func point11ValDActiveDependencyBundle() Point11ValDDependencyBundle {
+	point11ValDActiveDependencyBundleBaselineOnce.Do(func() {
+		point11ValDActiveDependencyBundleBaselineJSON = mustMarshalPoint11ValDDependencyBundle(uncachedPoint11ValDActiveDependencyBundle())
+	})
+	return clonePoint11ValDDependencyBundle(point11ValDActiveDependencyBundleBaselineJSON)
+}
+
+func uncachedActivePoint11ValDFoundation() Point11ValDFoundation {
 	model := Point11ValDFoundationModel()
 	model.Val0Dependency = point11ValDActiveVal0DependencySnapshot()
 	model.ValADependency = point11ValDActiveValADependencySnapshot()
 	model.ValBDependency = point11ValDActiveValBDependencySnapshot()
 	model.ValCDependency = point11ValDActiveValCDependencySnapshot()
 	return ComputePoint11ValDFoundation(model)
+}
+
+func activePoint11ValDFoundation() Point11ValDFoundation {
+	point11ValDActiveFoundationBaselineOnce.Do(func() {
+		point11ValDActiveFoundationBaselineJSON = mustMarshalPoint11ValDFoundation(uncachedActivePoint11ValDFoundation())
+	})
+	return clonePoint11ValDFoundation(point11ValDActiveFoundationBaselineJSON)
 }
 
 func TestPoint11ValDDependencyState(t *testing.T) {
