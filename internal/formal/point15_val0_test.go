@@ -1,6 +1,60 @@
 package formal
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
+
+var (
+	point15Val0FoundationOnce sync.Once
+	point15Val0FoundationBase Point15Val0FreshnessDisciplineFoundation
+)
+
+func point15Val0CloneStrings(values []string) []string {
+	return append([]string(nil), values...)
+}
+
+func clonePoint14ValEFoundation(model Point14ValEFoundation) Point14ValEFoundation {
+	model.BlockingReasons = point15Val0CloneStrings(model.BlockingReasons)
+	model.ReviewPrerequisites = point15Val0CloneStrings(model.ReviewPrerequisites)
+	model.Dependency.ReviewPrerequisites = point15Val0CloneStrings(model.Dependency.ReviewPrerequisites)
+	model.ClosureEvaluator.CommandsRun = point15Val0CloneStrings(model.ClosureEvaluator.CommandsRun)
+	model.ClosureEvaluator.TestsRun = point15Val0CloneStrings(model.ClosureEvaluator.TestsRun)
+	model.ClosureEvaluator.GrepsRun = point15Val0CloneStrings(model.ClosureEvaluator.GrepsRun)
+	model.ClosureEvaluator.NegativeFixturesRun = point15Val0CloneStrings(model.ClosureEvaluator.NegativeFixturesRun)
+	model.PassClosureManifest.ExplicitNonGoals = point15Val0CloneStrings(model.PassClosureManifest.ExplicitNonGoals)
+	model.PassClosureManifest.CommandsRun = point15Val0CloneStrings(model.PassClosureManifest.CommandsRun)
+	model.PassClosureManifest.TestsRun = point15Val0CloneStrings(model.PassClosureManifest.TestsRun)
+	model.PassClosureManifest.GrepsRun = point15Val0CloneStrings(model.PassClosureManifest.GrepsRun)
+	model.PassClosureManifest.NegativeFixturesRun = point15Val0CloneStrings(model.PassClosureManifest.NegativeFixturesRun)
+	model.NoOverclaimFinalCheck.ObservedTexts = point15Val0CloneStrings(model.NoOverclaimFinalCheck.ObservedTexts)
+	model.NoOverclaimFinalCheck.InternalDiagnosticTexts = point15Val0CloneStrings(model.NoOverclaimFinalCheck.InternalDiagnosticTexts)
+	model.NoOverclaimFinalCheck.AllowedSafeWording = point15Val0CloneStrings(model.NoOverclaimFinalCheck.AllowedSafeWording)
+	model.NoOverclaimFinalCheck.BlockedWording = point15Val0CloneStrings(model.NoOverclaimFinalCheck.BlockedWording)
+	model.CLBFinalCheck.CLB3Advisories = point15Val0CloneStrings(model.CLBFinalCheck.CLB3Advisories)
+	return model
+}
+
+func clonePoint15Val0Foundation(model Point15Val0FreshnessDisciplineFoundation) Point15Val0FreshnessDisciplineFoundation {
+	model.BlockingReasons = point15Val0CloneStrings(model.BlockingReasons)
+	model.ReviewPrerequisites = point15Val0CloneStrings(model.ReviewPrerequisites)
+	model.Dependency.ReviewPrerequisites = point15Val0CloneStrings(model.Dependency.ReviewPrerequisites)
+	model.Dependency.Point14ValE = clonePoint14ValEFoundation(model.Dependency.Point14ValE)
+	model.FreshnessTaxonomy.AllowedFreshnessStates = point15Val0CloneStrings(model.FreshnessTaxonomy.AllowedFreshnessStates)
+	model.FreshnessTaxonomy.AllowedDowngradeOutcomes = point15Val0CloneStrings(model.FreshnessTaxonomy.AllowedDowngradeOutcomes)
+	model.NoOverclaimGuard.ObservedTexts = point15Val0CloneStrings(model.NoOverclaimGuard.ObservedTexts)
+	model.NoOverclaimGuard.InternalDiagnosticTexts = point15Val0CloneStrings(model.NoOverclaimGuard.InternalDiagnosticTexts)
+	model.NoOverclaimGuard.AllowedSafeWording = point15Val0CloneStrings(model.NoOverclaimGuard.AllowedSafeWording)
+	model.NoOverclaimGuard.BlockedWording = point15Val0CloneStrings(model.NoOverclaimGuard.BlockedWording)
+	return model
+}
+
+func point15Val0ValidFoundationModel() Point15Val0FreshnessDisciplineFoundation {
+	point15Val0FoundationOnce.Do(func() {
+		point15Val0FoundationBase = Point15Val0FoundationModel()
+	})
+	return clonePoint15Val0Foundation(point15Val0FoundationBase)
+}
 
 func point15Val0ValidFreshnessTaxonomyModel() Point15Val0EvidenceFreshnessTaxonomy {
 	return point15Val0FreshnessTaxonomyModel()
@@ -11,15 +65,15 @@ func point15Val0ValidDowngradeTaxonomyModel() Point15Val0DowngradeTaxonomy {
 }
 
 func point15Val0ValidFreshnessEvidenceContextModel() Point15Val0FreshnessEvidenceContext {
-	return point15Val0FreshnessEvidenceContextModel(point15Val0DependencySnapshotModel())
+	return point15Val0ValidFoundationModel().EvidenceContext
 }
 
 func point15Val0ValidTimestampDisciplineModel() Point15Val0TimestampDiscipline {
-	return point15Val0TimestampDisciplineModel(point15Val0DependencySnapshotModel())
+	return point15Val0ValidFoundationModel().TimestampDiscipline
 }
 
 func point15Val0ValidAuthorityBoundaryModel() Point15Val0AuthorityBoundary {
-	return point15Val0AuthorityBoundaryModel(point15Val0DependencySnapshotModel())
+	return point15Val0ValidFoundationModel().AuthorityBoundary
 }
 
 func point15Val0ValidNoOverclaimGuardModel() Point15Val0NoOverclaimGuard {
@@ -54,7 +108,7 @@ func TestPoint15Val0DependencyState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point15Val0DependencySnapshotModel()
+			model := point15Val0ValidFoundationModel().Dependency
 			tc.mutate(&model)
 			if got := EvaluatePoint15Val0DependencyState(model); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
@@ -361,7 +415,7 @@ func TestPoint15Val0NoOverclaimGuardState(t *testing.T) {
 }
 
 func TestPoint15Val0FreshnessDisciplineFoundationHappyPath(t *testing.T) {
-	model := Point15Val0FoundationModel()
+	model := point15Val0ValidFoundationModel()
 	got := ComputePoint15Val0FreshnessDisciplineFoundation(model)
 	if got.CurrentState != Point15Val0StateActive ||
 		got.DependencyState != Point15Val0StateActive ||
@@ -377,7 +431,7 @@ func TestPoint15Val0FreshnessDisciplineFoundationHappyPath(t *testing.T) {
 }
 
 func TestPoint15Val0FreshnessDisciplineFoundationStatusMismatchBlocks(t *testing.T) {
-	model := Point15Val0FoundationModel()
+	model := point15Val0ValidFoundationModel()
 	model.EvidenceContext.FreshnessStatus = point15Val0FreshnessExpired
 	model.EvidenceContext.DowngradeOutcome = point15Val0DowngradeBlocked
 
@@ -388,7 +442,7 @@ func TestPoint15Val0FreshnessDisciplineFoundationStatusMismatchBlocks(t *testing
 }
 
 func TestPoint15Val0FreshnessDisciplineFoundationTimestampMismatchBlocks(t *testing.T) {
-	model := Point15Val0FoundationModel()
+	model := point15Val0ValidFoundationModel()
 	model.TimestampDiscipline.FreshnessStatus = point15Val0FreshnessStale
 
 	got := ComputePoint15Val0FreshnessDisciplineFoundation(model)
@@ -398,7 +452,7 @@ func TestPoint15Val0FreshnessDisciplineFoundationTimestampMismatchBlocks(t *test
 }
 
 func TestPoint15Val0FreshnessDisciplineFoundationDowngradeMismatchBlocks(t *testing.T) {
-	model := Point15Val0FoundationModel()
+	model := point15Val0ValidFoundationModel()
 	model.DowngradeTaxonomy.DowngradeOutcome = point15Val0DowngradeBlocked
 
 	got := ComputePoint15Val0FreshnessDisciplineFoundation(model)
@@ -466,7 +520,7 @@ func TestPoint15Val0FreshnessDisciplineFoundationTenantScopeMismatchBlocks(t *te
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := Point15Val0FoundationModel()
+			model := point15Val0ValidFoundationModel()
 			tc.mutate(&model)
 			got := ComputePoint15Val0FreshnessDisciplineFoundation(model)
 			tc.assert(t, got)
@@ -482,11 +536,33 @@ func TestPoint10ThroughPoint15Val0CurrentSweep(t *testing.T) {
 		t.Fatalf("expected point14 vale pass confirmed before point15, got %#v", point14ValE)
 	}
 
-	point15Val0 := ComputePoint15Val0FreshnessDisciplineFoundation(Point15Val0FoundationModel())
+	point15Val0 := ComputePoint15Val0FreshnessDisciplineFoundation(point15Val0ValidFoundationModel())
 	if point15Val0.CurrentState != Point15Val0StateActive ||
 		point15Val0.DependencyState != Point15Val0StateActive ||
 		point15Val0.Dependency.Point14ValECurrentState != point14ValE.CurrentState ||
 		point15Val0.Dependency.Point14PassToken != point14ValE.Point14PassToken {
 		t.Fatalf("expected point15 val0 active and exact-bound to point14 vale closure, got %#v", point15Val0)
+	}
+}
+
+func TestPoint15Val0CachedHelperIsolation(t *testing.T) {
+	model := point15Val0ValidFoundationModel()
+	originalAllowed := model.NoOverclaimGuard.AllowedSafeWording[0]
+	model.NoOverclaimGuard.AllowedSafeWording[0] = "mutated"
+
+	fresh := point15Val0ValidFoundationModel()
+	if fresh.NoOverclaimGuard.AllowedSafeWording[0] != originalAllowed {
+		t.Fatalf("expected cached point15 val0 helper to return isolated copy, got %#v", fresh.NoOverclaimGuard.AllowedSafeWording)
+	}
+}
+
+func TestPoint15Val0CachedHelperNestedDependencyIsolation(t *testing.T) {
+	model := point15Val0ValidFoundationModel()
+	originalAllowed := model.Dependency.Point14ValE.NoOverclaimFinalCheck.AllowedSafeWording[0]
+	model.Dependency.Point14ValE.NoOverclaimFinalCheck.AllowedSafeWording[0] = "mutated"
+
+	fresh := point15Val0ValidFoundationModel()
+	if fresh.Dependency.Point14ValE.NoOverclaimFinalCheck.AllowedSafeWording[0] != originalAllowed {
+		t.Fatalf("expected cached point15 val0 nested dependency helper to return isolated copy, got %#v", fresh.Dependency.Point14ValE.NoOverclaimFinalCheck.AllowedSafeWording)
 	}
 }

@@ -2,11 +2,41 @@ package formal
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
+var (
+	point15ValAFoundationOnce sync.Once
+	point15ValAFoundationBase Point15ValADowngradeTriggerFoundation
+)
+
+func point15ValACloneStrings(values []string) []string {
+	return append([]string(nil), values...)
+}
+
+func clonePoint15ValAFoundation(model Point15ValADowngradeTriggerFoundation) Point15ValADowngradeTriggerFoundation {
+	model.BlockingReasons = point15ValACloneStrings(model.BlockingReasons)
+	model.ReviewPrerequisites = point15ValACloneStrings(model.ReviewPrerequisites)
+	model.Dependency.ReviewPrerequisites = point15ValACloneStrings(model.Dependency.ReviewPrerequisites)
+	model.Dependency.Point15Val0 = clonePoint15Val0Foundation(model.Dependency.Point15Val0)
+	model.TriggerTable.AllowedTriggers = point15ValACloneStrings(model.TriggerTable.AllowedTriggers)
+	model.NoOverclaimGuard.ObservedTexts = point15ValACloneStrings(model.NoOverclaimGuard.ObservedTexts)
+	model.NoOverclaimGuard.InternalDiagnosticTexts = point15ValACloneStrings(model.NoOverclaimGuard.InternalDiagnosticTexts)
+	model.NoOverclaimGuard.AllowedSafeWording = point15ValACloneStrings(model.NoOverclaimGuard.AllowedSafeWording)
+	model.NoOverclaimGuard.BlockedWording = point15ValACloneStrings(model.NoOverclaimGuard.BlockedWording)
+	return model
+}
+
+func point15ValAValidFoundationModel() Point15ValADowngradeTriggerFoundation {
+	point15ValAFoundationOnce.Do(func() {
+		point15ValAFoundationBase = Point15ValAFoundationModel()
+	})
+	return clonePoint15ValAFoundation(point15ValAFoundationBase)
+}
+
 func point15ValAFoundationWithTrigger(trigger string, decisive bool, lineage string) Point15ValADowngradeTriggerFoundation {
-	model := Point15ValAFoundationModel()
+	model := point15ValAValidFoundationModel()
 	if strings.TrimSpace(trigger) == "" {
 		return model
 	}
@@ -76,7 +106,7 @@ func TestPoint15ValADependencyState(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point15ValADependencySnapshotModel()
+			model := point15ValAValidFoundationModel().Dependency
 			tc.mutate(&model)
 			if got := EvaluatePoint15ValADependencyState(model); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
@@ -92,7 +122,7 @@ func TestPoint15ValADowngradeTriggerFoundationState(t *testing.T) {
 		want  string
 	}{
 		{"happy path active with complete trigger table and no trigger", func() Point15ValADowngradeTriggerFoundation {
-			return Point15ValAFoundationModel()
+			return point15ValAValidFoundationModel()
 		}, Point15ValAStateActive},
 		{"expired evidence trigger blocks", func() Point15ValADowngradeTriggerFoundation {
 			return point15ValAFoundationWithTrigger(point15ValATriggerExpired, false, "")
@@ -249,7 +279,7 @@ func TestPoint15ValANoOverclaimGuardState(t *testing.T) {
 }
 
 func TestPoint10ThroughPoint15ValACurrentSweep(t *testing.T) {
-	computed := ComputePoint15ValADowngradeTriggerFoundation(Point15ValAFoundationModel())
+	computed := ComputePoint15ValADowngradeTriggerFoundation(point15ValAValidFoundationModel())
 	if computed.DependencyState != Point15ValAStateActive {
 		t.Fatalf("expected dependency active, got %s", computed.DependencyState)
 	}
@@ -258,5 +288,27 @@ func TestPoint10ThroughPoint15ValACurrentSweep(t *testing.T) {
 	}
 	if computed.Dependency.Point15PassSeen {
 		t.Fatal("expected no point_15_pass in point15 val a sweep")
+	}
+}
+
+func TestPoint15ValACachedHelperIsolation(t *testing.T) {
+	model := point15ValAValidFoundationModel()
+	originalAllowed := model.NoOverclaimGuard.AllowedSafeWording[0]
+	model.NoOverclaimGuard.AllowedSafeWording[0] = "mutated"
+
+	fresh := point15ValAValidFoundationModel()
+	if fresh.NoOverclaimGuard.AllowedSafeWording[0] != originalAllowed {
+		t.Fatalf("expected cached point15 vala helper to return isolated copy, got %#v", fresh.NoOverclaimGuard.AllowedSafeWording)
+	}
+}
+
+func TestPoint15ValACachedHelperNestedDependencyIsolation(t *testing.T) {
+	model := point15ValAValidFoundationModel()
+	originalAllowed := model.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording[0]
+	model.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording[0] = "mutated"
+
+	fresh := point15ValAValidFoundationModel()
+	if fresh.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording[0] != originalAllowed {
+		t.Fatalf("expected cached point15 vala nested dependency helper to return isolated copy, got %#v", fresh.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording)
 	}
 }

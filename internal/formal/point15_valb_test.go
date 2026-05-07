@@ -1,9 +1,36 @@
 package formal
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
+
+var (
+	point15ValBFoundationOnce sync.Once
+	point15ValBFoundationBase Point15ValBScheduledRevalidationFoundation
+)
+
+func point15ValBCloneStrings(values []string) []string {
+	return append([]string(nil), values...)
+}
+
+func clonePoint15ValBFoundation(model Point15ValBScheduledRevalidationFoundation) Point15ValBScheduledRevalidationFoundation {
+	model.BlockingReasons = point15ValBCloneStrings(model.BlockingReasons)
+	model.ReviewPrerequisites = point15ValBCloneStrings(model.ReviewPrerequisites)
+	model.Dependency.ReviewPrerequisites = point15ValBCloneStrings(model.Dependency.ReviewPrerequisites)
+	model.Dependency.Point15ValA = clonePoint15ValAFoundation(model.Dependency.Point15ValA)
+	model.NoOverclaimGuard.ObservedTexts = point15ValBCloneStrings(model.NoOverclaimGuard.ObservedTexts)
+	model.NoOverclaimGuard.InternalDiagnosticTexts = point15ValBCloneStrings(model.NoOverclaimGuard.InternalDiagnosticTexts)
+	model.NoOverclaimGuard.AllowedSafeWording = point15ValBCloneStrings(model.NoOverclaimGuard.AllowedSafeWording)
+	model.NoOverclaimGuard.BlockedWording = point15ValBCloneStrings(model.NoOverclaimGuard.BlockedWording)
+	return model
+}
 
 func point15ValBValidFoundationModel() Point15ValBScheduledRevalidationFoundation {
-	return Point15ValBFoundationModel()
+	point15ValBFoundationOnce.Do(func() {
+		point15ValBFoundationBase = Point15ValBFoundationModel()
+	})
+	return clonePoint15ValBFoundation(point15ValBFoundationBase)
 }
 
 func point15ValBValidDependencyModel() Point15ValBDependencySnapshot {
@@ -654,7 +681,7 @@ func TestPoint15ValBScheduledRevalidationFoundationState(t *testing.T) {
 }
 
 func TestPoint10ThroughPoint15ValBCurrentSweep(t *testing.T) {
-	computed := ComputePoint15ValBScheduledRevalidationFoundation(Point15ValBFoundationModel())
+	computed := ComputePoint15ValBScheduledRevalidationFoundation(point15ValBValidFoundationModel())
 	if computed.DependencyState != Point15ValBStateActive {
 		t.Fatalf("expected dependency active, got %s", computed.DependencyState)
 	}
@@ -663,5 +690,27 @@ func TestPoint10ThroughPoint15ValBCurrentSweep(t *testing.T) {
 	}
 	if computed.Dependency.Point15PassSeen {
 		t.Fatal("expected no point_15_pass in point15 val b sweep")
+	}
+}
+
+func TestPoint15ValBCachedHelperIsolation(t *testing.T) {
+	model := point15ValBValidFoundationModel()
+	originalAllowed := model.NoOverclaimGuard.AllowedSafeWording[0]
+	model.NoOverclaimGuard.AllowedSafeWording[0] = "mutated"
+
+	fresh := point15ValBValidFoundationModel()
+	if fresh.NoOverclaimGuard.AllowedSafeWording[0] != originalAllowed {
+		t.Fatalf("expected cached point15 valb helper to return isolated copy, got %#v", fresh.NoOverclaimGuard.AllowedSafeWording)
+	}
+}
+
+func TestPoint15ValBCachedHelperNestedDependencyIsolation(t *testing.T) {
+	model := point15ValBValidFoundationModel()
+	originalAllowed := model.Dependency.Point15ValA.NoOverclaimGuard.AllowedSafeWording[0]
+	model.Dependency.Point15ValA.NoOverclaimGuard.AllowedSafeWording[0] = "mutated"
+
+	fresh := point15ValBValidFoundationModel()
+	if fresh.Dependency.Point15ValA.NoOverclaimGuard.AllowedSafeWording[0] != originalAllowed {
+		t.Fatalf("expected cached point15 valb nested dependency helper to return isolated copy, got %#v", fresh.Dependency.Point15ValA.NoOverclaimGuard.AllowedSafeWording)
 	}
 }
