@@ -79,7 +79,7 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 		}
 	})
 
-	t.Run("upstream point15 whitespace normalized manifest canonicalizes at point16 boundary", func(t *testing.T) {
+	t.Run("upstream point15 whitespace retagged manifest provenance blocks at point16 boundary", func(t *testing.T) {
 		valE := ComputePoint15ValEFoundation(Point15ValEFoundationModel())
 		valE.Dependency.InheritedTenantScope = " " + valE.Dependency.InheritedTenantScope + " "
 		valE.PassClosureManifest.EvidenceIdentity = " " + valE.PassClosureManifest.EvidenceIdentity + " "
@@ -87,11 +87,13 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 		valE.PassClosureManifest.PolicyVersion = " " + valE.PassClosureManifest.PolicyVersion + " "
 		valE.PassClosureManifest.EngineVersion = " " + valE.PassClosureManifest.EngineVersion + " "
 		valE.PassClosureManifest.SchemaVersion = " " + valE.PassClosureManifest.SchemaVersion + " "
+		valE.PassClosureManifest.GeneratedAt = " " + valE.PassClosureManifest.GeneratedAt + " "
 		valE.PassClosureManifest.TenantScope = " " + valE.PassClosureManifest.TenantScope + " "
+		valE.PassClosureManifest.Scope = " " + valE.PassClosureManifest.Scope + " "
 
 		model := point16Val0DependencySnapshotFromUpstream(valE)
-		if got := EvaluatePoint16Val0DependencyState(model); got != Point16Val0StateActive {
-			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
+		if got := EvaluatePoint16Val0DependencyState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
 		}
 	})
 
@@ -116,6 +118,9 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 		}},
 		{name: "whitespace point15 manifest closure token retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
 			model.Point15PassManifestClosureToken = " " + model.Point15PassManifestClosureToken + " "
+		}},
+		{name: "whitespace point15 manifest scope retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestScope = " " + model.Point15PassManifestScope + " "
 		}},
 		{name: "nested pass manifest evidence identity drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
 			model.Point15ValE.PassClosureManifest.EvidenceIdentity = "evidence_id=evidence_point16_val0_alt evidence_hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa policy=policy.alt.v1 engine=engine.alt.v1 schema=schema.alt.v1 tenant=tenant_alt"
@@ -148,6 +153,28 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 			model.Point15PassManifestSchemaVersion += " "
 			model.Point15ValE.PassClosureManifest.SchemaVersion += " "
 		}},
+		{name: "nested pass manifest generated at drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.GeneratedAt = "2026-05-08T10:00:00Z"
+		}},
+		{name: "joint upstream generated at whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestGeneratedAt += " "
+			model.Point15ValE.PassClosureManifest.GeneratedAt += " "
+		}},
+		{name: "joint upstream generated at retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestGeneratedAt = "2026-05-08T10:00:00Z"
+			model.Point15ValE.PassClosureManifest.GeneratedAt = model.Point15PassManifestGeneratedAt
+		}},
+		{name: "nested pass manifest scope drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.Scope = "retagged_final_continuous_verification_closure_gate"
+		}},
+		{name: "joint upstream pass manifest scope whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestScope += " "
+			model.Point15ValE.PassClosureManifest.Scope += " "
+		}},
+		{name: "joint upstream pass manifest scope retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestScope = "retagged_final_continuous_verification_closure_gate"
+			model.Point15ValE.PassClosureManifest.Scope = model.Point15PassManifestScope
+		}},
 		{name: "nested pass manifest tenant scope drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
 			model.Point15ValE.PassClosureManifest.TenantScope = "tenant_alt"
 		}},
@@ -164,11 +191,13 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 			model.Point15PassManifestEvidenceHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 			model.Point15PassManifestPolicyVersion = "policy.alt.v1"
 			model.Point15PassManifestEngineVersion = "engine.alt.v1"
+			model.Point15PassManifestScope = "retagged_final_continuous_verification_closure_gate"
 			model.InheritedTenantScope = "tenant_alt"
 			model.Point15ValE.PassClosureManifest.EvidenceIdentity = model.Point15PassManifestEvidenceID
 			model.Point15ValE.PassClosureManifest.EvidenceHash = model.Point15PassManifestEvidenceHash
 			model.Point15ValE.PassClosureManifest.PolicyVersion = model.Point15PassManifestPolicyVersion
 			model.Point15ValE.PassClosureManifest.EngineVersion = model.Point15PassManifestEngineVersion
+			model.Point15ValE.PassClosureManifest.Scope = model.Point15PassManifestScope
 			model.Point15ValE.Dependency.InheritedTenantScope = model.InheritedTenantScope
 		}},
 	}
@@ -309,6 +338,18 @@ func TestPoint16Val0OriginalDecisionBindingState(t *testing.T) {
 		{name: "current governance scope whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
 			model.CurrentGovernanceScope = " " + model.OriginalGovernanceScope + " "
 		}},
+		{name: "original evaluated at drift blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalEvaluatedAt = "2026-05-08T09:06:00Z"
+		}},
+		{name: "original evaluated at whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalEvaluatedAt = " " + model.OriginalEvaluatedAt + " "
+		}},
+		{name: "original evaluated at substituted from replay time blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalEvaluatedAt = point16Val0ReplayAt
+		}},
+		{name: "current context comparison disabled blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentContextComparisonOnly = false
+		}},
 		{name: "lineage ref exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
 			model.LineageRef = "lineage_point16_val0_replay_other"
 		}},
@@ -322,6 +363,14 @@ func TestPoint16Val0OriginalDecisionBindingState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("missing original evaluated at is incomplete", func(t *testing.T) {
+		model := point16Val0ValidOriginalDecisionBindingModel()
+		model.OriginalEvaluatedAt = ""
+		if got := EvaluatePoint16Val0OriginalDecisionBindingState(model); got != Point16Val0StateIncomplete {
+			t.Fatalf("expected %s, got %s", Point16Val0StateIncomplete, got)
+		}
+	})
 }
 
 func TestPoint16Val0ReplayTaxonomyState(t *testing.T) {
@@ -485,6 +534,18 @@ func TestPoint16Val0ReplayReadinessEvaluationState(t *testing.T) {
 		{name: "whitespace retagged component state blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
 			model.ReplayTaxonomyState = " " + Point16Val0StateActive + " "
 		}},
+		{name: "original context exact bound false blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
+			model.OriginalContextExactBound = false
+		}},
+		{name: "timestamp unsafe blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
+			model.TimestampSafe = false
+		}},
+		{name: "replay unsupported blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
+			model.ReplaySupported = false
+		}},
+		{name: "premature final token detection blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
+			model.NoPrematureFinalTokenDetected = false
+		}},
 		{name: "no mutation publication revocation external api default connector path introduced blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
 			model.NoMutationPathsDetected = false
 		}},
@@ -573,9 +634,17 @@ func TestPoint16Val0NoOverclaimBaselineState(t *testing.T) {
 	obfuscatedForbiddenTexts := []string{
 		"certified-secure",
 		"certified secure",
+		" deployment approved ",
+		"deployment approved",
+		"deployment-approved",
+		"ᴅeployment approved",
+		"production-ᴀpproved",
+		"production approᴠed",
 		"certified\nsecure",
 		"certiﬁed secure",
+		"ᴄertified secure",
 		"cértified secure",
+		"cɛrtified secure",
 		"certifıed secure",
 		"certιfied secure",
 		"certiſied secure",
@@ -583,14 +652,19 @@ func TestPoint16Val0NoOverclaimBaselineState(t *testing.T) {
 		"certifiеd secure",
 		"certifieɗ secure",
 		"certiƒied secure",
+		"certiꜰied secure",
+		"certifiᴇd secure",
 		"public\nbadge",
 		"public-badge",
 		"publicbadge",
+		"public ʙadge",
 		"public bɑdge",
 		"pubɩic badge",
 		"gυaranteed secure",
+		"guaʀanteed secure",
 		"guaɹanteed secure",
 		"gᴜaranteed secure",
+		"guaranteed ꜱecure",
 		"regulator-approved",
 		"ƈompliance guaranteed",
 		"ȼompliance guaranteed",
@@ -598,16 +672,25 @@ func TestPoint16Val0NoOverclaimBaselineState(t *testing.T) {
 		"regulatоr-approved",
 		"compliance\nguaranteed",
 		"production-approved",
+		"prɔduction-approved",
+		"prɔduction approved",
 		"pr0duction appr0ved",
+		"deᴘloyment approved",
 		"legal/proof",
+		"ʟegal proof",
 		"le9al proof",
 		"financial_guarantee",
+		"fiɴancial guarantee",
 		"public b8dge",
 		"gl0bal truth",
 		"9lobal truth",
+		"global ᴛruth",
 		"ɢlobal truth",
 		"0fficial authority",
+		"official autʜority",
+		"ᴏfficial authority",
 		"օfficial authority",
+		"cᴇrtified secure",
 		"CeRtIfIeD---SeCuRe",
 	}
 	for _, observed := range obfuscatedForbiddenTexts {
@@ -650,6 +733,72 @@ func TestPoint16Val0NoOverclaimBaselineState(t *testing.T) {
 		model := point16Val0ValidNoOverclaimBaselineModel()
 		model.InternalDiagnosticTexts = []string{"legal proof"}
 		model.InternalDiagnosticsClassifiedBlocked = true
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateActive {
+			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
+		}
+	})
+
+	t.Run("split forbidden wording across observed and internal diagnostics blocks", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			observed    []string
+			diagnostics []string
+		}{
+			{
+				name:        "deployment approved across buckets",
+				observed:    []string{"deployment"},
+				diagnostics: []string{"approved"},
+			},
+			{
+				name:        "production approved across buckets",
+				observed:    []string{"production"},
+				diagnostics: []string{"approved"},
+			},
+			{
+				name:        "public badge across buckets",
+				observed:    []string{"public"},
+				diagnostics: []string{"badge"},
+			},
+			{
+				name:        "legal proof across buckets",
+				observed:    []string{"legal"},
+				diagnostics: []string{"proof"},
+			},
+			{
+				name:        "guaranteed secure across buckets",
+				observed:    []string{"guaranteed"},
+				diagnostics: []string{"secure"},
+			},
+		}
+		for _, tc := range tests {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				model := point16Val0ValidNoOverclaimBaselineModel()
+				model.ObservedTexts = tc.observed
+				model.InternalDiagnosticTexts = tc.diagnostics
+				model.InternalDiagnosticsClassifiedBlocked = false
+				if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+					t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+				}
+			})
+		}
+	})
+
+	t.Run("cross bucket forbidden wording still blocks when diagnostics already contain classified forbidden phrase", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.ObservedTexts = []string{"guaranteed"}
+		model.InternalDiagnosticTexts = []string{"secure", "legal proof"}
+		model.InternalDiagnosticsClassifiedBlocked = true
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	t.Run("benign split text across buckets remains active", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.ObservedTexts = []string{"historical replay"}
+		model.InternalDiagnosticTexts = []string{"remains bounded"}
+		model.InternalDiagnosticsClassifiedBlocked = false
 		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateActive {
 			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
 		}
@@ -732,12 +881,14 @@ func TestPoint16Val0Foundation(t *testing.T) {
 			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
 			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
 			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
 			model.ReplayReadinessState != Point16Val0StateBlocked {
-			t.Fatalf("expected blocked customer-authored timestamp provenance, got current=%s context=%s binding=%s taxonomy=%s readiness=%s",
+			t.Fatalf("expected blocked customer-authored timestamp provenance, got current=%s context=%s binding=%s taxonomy=%s guard=%s readiness=%s",
 				model.CurrentState,
 				model.HistoricalReplayContextState,
 				model.OriginalDecisionBindingState,
 				model.ReplayTaxonomyState,
+				model.CurrentSubstitutionGuardState,
 				model.ReplayReadinessState,
 			)
 		}
@@ -749,12 +900,16 @@ func TestPoint16Val0Foundation(t *testing.T) {
 		model = ComputePoint16Val0Foundation(model)
 		if model.CurrentState != Point16Val0StateBlocked ||
 			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
 			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
 			model.ReplayReadinessState != Point16Val0StateBlocked {
-			t.Fatalf("expected blocked whitespace decision-time provenance drift, got current=%s context=%s taxonomy=%s readiness=%s",
+			t.Fatalf("expected blocked whitespace decision-time provenance drift, got current=%s context=%s binding=%s taxonomy=%s guard=%s readiness=%s",
 				model.CurrentState,
 				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
 				model.ReplayTaxonomyState,
+				model.CurrentSubstitutionGuardState,
 				model.ReplayReadinessState,
 			)
 		}
@@ -766,12 +921,16 @@ func TestPoint16Val0Foundation(t *testing.T) {
 		model = ComputePoint16Val0Foundation(model)
 		if model.CurrentState != Point16Val0StateBlocked ||
 			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
 			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
 			model.ReplayReadinessState != Point16Val0StateBlocked {
-			t.Fatalf("expected blocked evaluated-time provenance drift, got current=%s context=%s taxonomy=%s readiness=%s",
+			t.Fatalf("expected blocked evaluated-time provenance drift, got current=%s context=%s binding=%s taxonomy=%s guard=%s readiness=%s",
 				model.CurrentState,
 				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
 				model.ReplayTaxonomyState,
+				model.CurrentSubstitutionGuardState,
 				model.ReplayReadinessState,
 			)
 		}
@@ -783,12 +942,16 @@ func TestPoint16Val0Foundation(t *testing.T) {
 		model = ComputePoint16Val0Foundation(model)
 		if model.CurrentState != Point16Val0StateBlocked ||
 			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
 			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
 			model.ReplayReadinessState != Point16Val0StateBlocked {
-			t.Fatalf("expected blocked whitespace evaluated-time provenance drift, got current=%s context=%s taxonomy=%s readiness=%s",
+			t.Fatalf("expected blocked whitespace evaluated-time provenance drift, got current=%s context=%s binding=%s taxonomy=%s guard=%s readiness=%s",
 				model.CurrentState,
 				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
 				model.ReplayTaxonomyState,
+				model.CurrentSubstitutionGuardState,
 				model.ReplayReadinessState,
 			)
 		}

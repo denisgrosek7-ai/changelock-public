@@ -86,11 +86,13 @@ type Point16Val0DependencySnapshot struct {
 	Point15PassManifestPointID       string                                             `json:"point15_pass_manifest_point_id"`
 	Point15PassManifestWaveID        string                                             `json:"point15_pass_manifest_wave_id"`
 	Point15PassManifestClosureToken  string                                             `json:"point15_pass_manifest_closure_token"`
+	Point15PassManifestScope         string                                             `json:"point15_pass_manifest_scope"`
 	Point15PassManifestEvidenceID    string                                             `json:"point15_pass_manifest_evidence_identity"`
 	Point15PassManifestEvidenceHash  string                                             `json:"point15_pass_manifest_evidence_hash"`
 	Point15PassManifestPolicyVersion string                                             `json:"point15_pass_manifest_policy_version"`
 	Point15PassManifestEngineVersion string                                             `json:"point15_pass_manifest_engine_version"`
 	Point15PassManifestSchemaVersion string                                             `json:"point15_pass_manifest_schema_version"`
+	Point15PassManifestGeneratedAt   string                                             `json:"point15_pass_manifest_generated_at"`
 	Point15PassManifestTenantScope   string                                             `json:"point15_pass_manifest_tenant_scope"`
 	InheritedTenantScope             string                                             `json:"inherited_tenant_scope"`
 	SnapshotFromComputedOutput       bool                                               `json:"snapshot_from_computed_output"`
@@ -354,16 +356,12 @@ func point16Val0ObservedTextContainsForbiddenWording(text string) bool {
 	if normalized == "" {
 		return false
 	}
-	compact := strings.ReplaceAll(normalized, " ", "")
 	for _, phrase := range point16Val0ForbiddenWording() {
 		normalizedPhrase := point16Val0NormalizeObservedText(phrase)
 		if normalizedPhrase == "" {
 			continue
 		}
-		if strings.Contains(normalized, normalizedPhrase) {
-			return true
-		}
-		if compactPhrase := strings.ReplaceAll(normalizedPhrase, " ", ""); compactPhrase != "" && strings.Contains(compact, compactPhrase) {
+		if point16Val0NormalizedTextContainsNormalizedPhrase(normalized, normalizedPhrase) {
 			return true
 		}
 	}
@@ -380,6 +378,47 @@ func point16Val0ObservedListContainsForbiddenWording(values []string) bool {
 		return true
 	}
 	return false
+}
+
+func point16Val0CrossObservedDiagnosticForbiddenWording(observed, diagnostics []string) bool {
+	if len(observed) == 0 || len(diagnostics) == 0 {
+		return false
+	}
+	observedCorpus := point16Val0NormalizeObservedText(strings.Join(observed, " "))
+	diagnosticsCorpus := point16Val0NormalizeObservedText(strings.Join(diagnostics, " "))
+	combinedCorpus := point16Val0NormalizeObservedText(strings.Join(append(append([]string{}, observed...), diagnostics...), " "))
+	if observedCorpus == "" || diagnosticsCorpus == "" || combinedCorpus == "" {
+		return false
+	}
+	for _, phrase := range point16Val0ForbiddenWording() {
+		normalizedPhrase := point16Val0NormalizeObservedText(phrase)
+		if normalizedPhrase == "" {
+			continue
+		}
+		if !point16Val0NormalizedTextContainsNormalizedPhrase(combinedCorpus, normalizedPhrase) {
+			continue
+		}
+		if point16Val0NormalizedTextContainsNormalizedPhrase(observedCorpus, normalizedPhrase) {
+			continue
+		}
+		if point16Val0NormalizedTextContainsNormalizedPhrase(diagnosticsCorpus, normalizedPhrase) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func point16Val0NormalizedTextContainsNormalizedPhrase(normalizedText, normalizedPhrase string) bool {
+	if normalizedText == "" || normalizedPhrase == "" {
+		return false
+	}
+	if strings.Contains(normalizedText, normalizedPhrase) {
+		return true
+	}
+	compactText := strings.ReplaceAll(normalizedText, " ", "")
+	compactPhrase := strings.ReplaceAll(normalizedPhrase, " ", "")
+	return compactPhrase != "" && strings.Contains(compactText, compactPhrase)
 }
 
 func point16Val0NormalizeObservedText(text string) string {
@@ -422,26 +461,48 @@ func point16Val0FoldConfusableRune(r rune) rune {
 		return 'a'
 	case 'ɑ', 'ɐ', 'ɒ', '⍺':
 		return 'a'
+	case 'ᴀ':
+		return 'a'
 	case 'е', 'Е', 'ε', 'Ε':
+		return 'e'
+	case 'ᴇ':
+		return 'e'
+	case 'ɛ', 'Ɛ':
 		return 'e'
 	case 'і', 'І', 'ı', 'ι', 'Ι':
 		return 'i'
-	case 'о', 'О', 'ο', 'Ο', 'օ', 'Օ':
+	case 'о', 'О', 'ο', 'Ο', 'օ', 'Օ', 'ɔ':
+		return 'o'
+	case 'ᴏ':
 		return 'o'
 	case 'р', 'Р', 'ρ', 'Ρ':
 		return 'p'
+	case 'ᴘ':
+		return 'p'
 	case 'ɹ':
+		return 'r'
+	case 'ʀ':
 		return 'r'
 	case 'с', 'С':
 		return 'c'
+	case 'ᴄ':
+		return 'c'
 	case 'ƈ', 'ȼ':
 		return 'c'
+	case 'ʙ':
+		return 'b'
 	case 'ƒ':
 		return 'f'
+	case 'ꜰ':
+		return 'f'
+	case 'ᴅ':
+		return 'd'
 	case 'υ', 'Υ', 'ύ', 'ϋ':
 		return 'u'
 	case 'ᴜ':
 		return 'u'
+	case 'ᴠ':
+		return 'v'
 	case 'у', 'У':
 		return 'y'
 	case 'х', 'Х', 'χ', 'Χ':
@@ -458,6 +519,8 @@ func point16Val0FoldConfusableRune(r rune) rune {
 		return 'b'
 	case 'н', 'Н':
 		return 'h'
+	case 'ɴ':
+		return 'n'
 	case 'ј', 'Ј':
 		return 'j'
 	case 'ԁ', 'Ԁ', 'δ', 'Δ':
@@ -468,12 +531,20 @@ func point16Val0FoldConfusableRune(r rune) rune {
 		return 'g'
 	case 'һ', 'Η', 'հ':
 		return 'h'
+	case 'ʜ':
+		return 'h'
 	case 'ⅼ', 'ӏ', 'Ӏ', 'ǀ':
 		return 'l'
 	case 'ɩ', 'ɪ', 'ɭ', 'ɫ', 'ł', 'ƚ', 'ḷ':
 		return 'l'
+	case 'ʟ':
+		return 'l'
 	case 'ѕ', 'Ѕ':
 		return 's'
+	case 'ꜱ':
+		return 's'
+	case 'ᴛ':
+		return 't'
 	case 'Ь', 'ь', 'β', 'Β':
 		return 'b'
 	case 'ɗ', 'ḍ', 'đ', 'ð':
@@ -616,29 +687,9 @@ func point16Val0DependencyRefValid(value string) bool {
 	return point14Val0RefValid(value, "point16_val0_", "historical_replay_", "original_decision_", "replay_", "substitution_", "readiness_")
 }
 
-func point16Val0CanonicalizePoint15ValEFoundation(valE Point15ValEContinuousVerificationClosureFoundation) Point15ValEContinuousVerificationClosureFoundation {
-	valE.CurrentState = strings.TrimSpace(valE.CurrentState)
-	valE.DependencyState = strings.TrimSpace(valE.DependencyState)
-	valE.ClosureEvaluatorState = strings.TrimSpace(valE.ClosureEvaluatorState)
-	valE.PassClosureManifestState = strings.TrimSpace(valE.PassClosureManifestState)
-	valE.Dependency.InheritedTenantScope = strings.TrimSpace(valE.Dependency.InheritedTenantScope)
-	valE.PassClosureManifest.CurrentState = strings.TrimSpace(valE.PassClosureManifest.CurrentState)
-	valE.PassClosureManifest.PointID = strings.TrimSpace(valE.PassClosureManifest.PointID)
-	valE.PassClosureManifest.WaveID = strings.TrimSpace(valE.PassClosureManifest.WaveID)
-	valE.PassClosureManifest.ClosureToken = strings.TrimSpace(valE.PassClosureManifest.ClosureToken)
-	valE.PassClosureManifest.EvidenceIdentity = strings.TrimSpace(valE.PassClosureManifest.EvidenceIdentity)
-	valE.PassClosureManifest.EvidenceHash = strings.TrimSpace(valE.PassClosureManifest.EvidenceHash)
-	valE.PassClosureManifest.PolicyVersion = strings.TrimSpace(valE.PassClosureManifest.PolicyVersion)
-	valE.PassClosureManifest.EngineVersion = strings.TrimSpace(valE.PassClosureManifest.EngineVersion)
-	valE.PassClosureManifest.SchemaVersion = strings.TrimSpace(valE.PassClosureManifest.SchemaVersion)
-	valE.PassClosureManifest.TenantScope = strings.TrimSpace(valE.PassClosureManifest.TenantScope)
-	valE.PassClosureManifest.Point15PassToken = strings.TrimSpace(valE.PassClosureManifest.Point15PassToken)
-	return valE
-}
-
 func point16Val0CanonicalDependencySnapshot() Point16Val0DependencySnapshot {
 	point16Val0CanonicalPoint15ValEOnce.Do(func() {
-		point16Val0CanonicalPoint15ValE = point16Val0CanonicalizePoint15ValEFoundation(ComputePoint15ValEFoundation(Point15ValEFoundationModel()))
+		point16Val0CanonicalPoint15ValE = ComputePoint15ValEFoundation(Point15ValEFoundationModel())
 		point16Val0CanonicalDependency = point16Val0DependencySnapshotFromUpstream(point16Val0CanonicalPoint15ValE)
 	})
 	return point16Val0CanonicalDependency
@@ -888,7 +939,6 @@ func point16Val0ExpectedReplayStatus(model Point16Val0ReplayTaxonomy) string {
 }
 
 func point16Val0DependencySnapshotFromUpstream(valE Point15ValEContinuousVerificationClosureFoundation) Point16Val0DependencySnapshot {
-	valE = point16Val0CanonicalizePoint15ValEFoundation(valE)
 	return Point16Val0DependencySnapshot{
 		Point15ValECurrentState:          valE.CurrentState,
 		Point15ValEDependencyState:       valE.DependencyState,
@@ -903,11 +953,13 @@ func point16Val0DependencySnapshotFromUpstream(valE Point15ValEContinuousVerific
 		Point15PassManifestPointID:       valE.PassClosureManifest.PointID,
 		Point15PassManifestWaveID:        valE.PassClosureManifest.WaveID,
 		Point15PassManifestClosureToken:  valE.PassClosureManifest.ClosureToken,
+		Point15PassManifestScope:         valE.PassClosureManifest.Scope,
 		Point15PassManifestEvidenceID:    valE.PassClosureManifest.EvidenceIdentity,
 		Point15PassManifestEvidenceHash:  valE.PassClosureManifest.EvidenceHash,
 		Point15PassManifestPolicyVersion: valE.PassClosureManifest.PolicyVersion,
 		Point15PassManifestEngineVersion: valE.PassClosureManifest.EngineVersion,
 		Point15PassManifestSchemaVersion: valE.PassClosureManifest.SchemaVersion,
+		Point15PassManifestGeneratedAt:   valE.PassClosureManifest.GeneratedAt,
 		Point15PassManifestTenantScope:   valE.PassClosureManifest.TenantScope,
 		InheritedTenantScope:             valE.Dependency.InheritedTenantScope,
 		SnapshotFromComputedOutput:       true,
@@ -932,11 +984,14 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 		!point15ValEStateValid(model.Point15ValEDependencyState) ||
 		!point15ValEStateValid(model.Point15ValEClosureEvaluatorState) ||
 		!point15ValEStateValid(model.Point15ValEPassClosureState) ||
+		!point14Val0ParsedTimeOk(model.Point15PassManifestGeneratedAt) ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) ||
 		strings.TrimSpace(model.Point15ValECurrentState) != model.Point15ValECurrentState ||
 		strings.TrimSpace(model.Point15ValEDependencyState) != model.Point15ValEDependencyState ||
 		strings.TrimSpace(model.Point15ValEClosureEvaluatorState) != model.Point15ValEClosureEvaluatorState ||
-		strings.TrimSpace(model.Point15ValEPassClosureState) != model.Point15ValEPassClosureState {
+		strings.TrimSpace(model.Point15ValEPassClosureState) != model.Point15ValEPassClosureState ||
+		strings.TrimSpace(model.Point15PassManifestScope) != model.Point15PassManifestScope ||
+		strings.TrimSpace(model.Point15PassManifestGeneratedAt) != model.Point15PassManifestGeneratedAt {
 		return Point16Val0StateBlocked
 	}
 	if !point16Val0ExactMatch(model.Point15ValECurrentState, model.Point15ValE.CurrentState) ||
@@ -949,11 +1004,13 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 		!point16Val0ExactMatch(model.Point15PassManifestPointID, model.Point15ValE.PassClosureManifest.PointID) ||
 		!point16Val0ExactMatch(model.Point15PassManifestWaveID, model.Point15ValE.PassClosureManifest.WaveID) ||
 		!point16Val0ExactMatch(model.Point15PassManifestClosureToken, model.Point15ValE.PassClosureManifest.ClosureToken) ||
+		!point16Val0ExactMatch(model.Point15PassManifestScope, model.Point15ValE.PassClosureManifest.Scope) ||
 		!point16Val0ExactValidatedBindingValid(model.Point15PassManifestEvidenceID, model.Point15ValE.PassClosureManifest.EvidenceIdentity, point16Val0EvidenceIdentityValid) ||
 		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.Point15PassManifestEvidenceHash, model.Point15ValE.PassClosureManifest.EvidenceHash) ||
 		!point16Val0ExactVersionBindingValid(model.Point15PassManifestPolicyVersion, model.Point15ValE.PassClosureManifest.PolicyVersion) ||
 		!point16Val0ExactVersionBindingValid(model.Point15PassManifestEngineVersion, model.Point15ValE.PassClosureManifest.EngineVersion) ||
 		!point16Val0ExactVersionBindingValid(model.Point15PassManifestSchemaVersion, model.Point15ValE.PassClosureManifest.SchemaVersion) ||
+		!point16Val0ExactMatch(model.Point15PassManifestGeneratedAt, model.Point15ValE.PassClosureManifest.GeneratedAt) ||
 		!point16Val0ExactTenantScopeBindingValid(model.Point15PassManifestTenantScope, model.Point15ValE.PassClosureManifest.TenantScope) ||
 		!point16Val0ExactTenantScopeBindingValid(model.InheritedTenantScope, model.Point15ValE.Dependency.InheritedTenantScope) {
 		return Point16Val0StateBlocked
@@ -967,6 +1024,8 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 		!point16Val0ExactMatch(model.Point15PassManifestPointID, expected.Point15PassManifestPointID) ||
 		!point16Val0ExactMatch(model.Point15PassManifestWaveID, expected.Point15PassManifestWaveID) ||
 		!point16Val0ExactMatch(model.Point15PassManifestClosureToken, expected.Point15PassManifestClosureToken) ||
+		!point16Val0ExactMatch(model.Point15PassManifestScope, expected.Point15PassManifestScope) ||
+		!point16Val0ExactMatch(model.Point15ValE.PassClosureManifest.Scope, expected.Point15ValE.PassClosureManifest.Scope) ||
 		!point16Val0ExactValidatedBindingValid(model.Point15PassManifestEvidenceID, expected.Point15PassManifestEvidenceID, point16Val0EvidenceIdentityValid) ||
 		!point16Val0ExactValidatedBindingValid(model.Point15ValE.PassClosureManifest.EvidenceIdentity, expected.Point15ValE.PassClosureManifest.EvidenceIdentity, point16Val0EvidenceIdentityValid) ||
 		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.Point15PassManifestEvidenceHash, expected.Point15PassManifestEvidenceHash) ||
@@ -977,6 +1036,8 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 		!point16Val0ExactVersionBindingValid(model.Point15ValE.PassClosureManifest.EngineVersion, expected.Point15ValE.PassClosureManifest.EngineVersion) ||
 		!point16Val0ExactVersionBindingValid(model.Point15PassManifestSchemaVersion, expected.Point15PassManifestSchemaVersion) ||
 		!point16Val0ExactVersionBindingValid(model.Point15ValE.PassClosureManifest.SchemaVersion, expected.Point15ValE.PassClosureManifest.SchemaVersion) ||
+		!point16Val0ExactMatch(model.Point15PassManifestGeneratedAt, expected.Point15PassManifestGeneratedAt) ||
+		!point16Val0ExactMatch(model.Point15ValE.PassClosureManifest.GeneratedAt, expected.Point15ValE.PassClosureManifest.GeneratedAt) ||
 		!point16Val0ExactTenantScopeBindingValid(model.Point15PassManifestTenantScope, expected.Point15PassManifestTenantScope) ||
 		!point16Val0ExactTenantScopeBindingValid(model.Point15ValE.PassClosureManifest.TenantScope, expected.Point15ValE.PassClosureManifest.TenantScope) ||
 		!point16Val0ExactTenantScopeBindingValid(model.InheritedTenantScope, expected.InheritedTenantScope) ||
@@ -992,11 +1053,13 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 		model.Point15PassManifestPointID != point15Val0PointID ||
 		model.Point15PassManifestWaveID != point15ValEWaveID ||
 		model.Point15PassManifestClosureToken != point15Val0BlockedPassToken ||
+		model.Point15PassManifestScope != point15ValEScope ||
 		!point16Val0EvidenceIdentityValid(model.Point15PassManifestEvidenceID) ||
 		!point16Val0HistoricalEvidenceHashValid(model.Point15PassManifestEvidenceHash) ||
 		!point12Val0VersionIdentityValid(model.Point15PassManifestPolicyVersion) ||
 		!point12Val0VersionIdentityValid(model.Point15PassManifestEngineVersion) ||
 		!point12Val0VersionIdentityValid(model.Point15PassManifestSchemaVersion) ||
+		!point14Val0ParsedTimeOk(model.Point15PassManifestGeneratedAt) ||
 		!point11Val0ScopeValid(model.Point15PassManifestTenantScope) ||
 		strings.TrimSpace(model.InheritedTenantScope) != model.InheritedTenantScope {
 		return Point16Val0StateBlocked
@@ -1426,6 +1489,9 @@ func EvaluatePoint16Val0NoOverclaimBaselineState(model Point16Val0NoOverclaimBas
 	if model.ReplayDisclaimer != point16Val0ReplayDisclaimer ||
 		!point16Val0ExactRawStringSetMatch(model.AllowedSafeWording, point16Val0SafeWording()) ||
 		!point16Val0ExactRawStringSetMatch(model.BlockedWording, point16Val0ForbiddenWording()) {
+		return Point16Val0StateBlocked
+	}
+	if point16Val0CrossObservedDiagnosticForbiddenWording(model.ObservedTexts, model.InternalDiagnosticTexts) {
 		return Point16Val0StateBlocked
 	}
 	if point16Val0ObservedListContainsForbiddenWording(model.ObservedTexts) {
