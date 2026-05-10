@@ -79,6 +79,22 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 		}
 	})
 
+	t.Run("upstream point15 whitespace normalized manifest canonicalizes at point16 boundary", func(t *testing.T) {
+		valE := ComputePoint15ValEFoundation(Point15ValEFoundationModel())
+		valE.Dependency.InheritedTenantScope = " " + valE.Dependency.InheritedTenantScope + " "
+		valE.PassClosureManifest.EvidenceIdentity = " " + valE.PassClosureManifest.EvidenceIdentity + " "
+		valE.PassClosureManifest.EvidenceHash = " " + valE.PassClosureManifest.EvidenceHash + " "
+		valE.PassClosureManifest.PolicyVersion = " " + valE.PassClosureManifest.PolicyVersion + " "
+		valE.PassClosureManifest.EngineVersion = " " + valE.PassClosureManifest.EngineVersion + " "
+		valE.PassClosureManifest.SchemaVersion = " " + valE.PassClosureManifest.SchemaVersion + " "
+		valE.PassClosureManifest.TenantScope = " " + valE.PassClosureManifest.TenantScope + " "
+
+		model := point16Val0DependencySnapshotFromUpstream(valE)
+		if got := EvaluatePoint16Val0DependencyState(model); got != Point16Val0StateActive {
+			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
+		}
+	})
+
 	tests := []struct {
 		name   string
 		mutate func(*Point16Val0DependencySnapshot)
@@ -89,6 +105,72 @@ func TestPoint16Val0DependencyState(t *testing.T) {
 		}},
 		{name: "missing point15 pass allowance blocks", mutate: func(model *Point16Val0DependencySnapshot) { model.Point15PassAllowed = false }},
 		{name: "wrong point15 closure token blocks", mutate: func(model *Point16Val0DependencySnapshot) { model.Point15PassToken = "" }},
+		{name: "whitespace point15 pass token retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassToken = " " + model.Point15PassToken + " "
+		}},
+		{name: "whitespace point15 manifest point id retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestPointID = " " + model.Point15PassManifestPointID + " "
+		}},
+		{name: "whitespace point15 manifest wave id retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestWaveID = " " + model.Point15PassManifestWaveID + " "
+		}},
+		{name: "whitespace point15 manifest closure token retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestClosureToken = " " + model.Point15PassManifestClosureToken + " "
+		}},
+		{name: "nested pass manifest evidence identity drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.EvidenceIdentity = "evidence_id=evidence_point16_val0_alt evidence_hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa policy=policy.alt.v1 engine=engine.alt.v1 schema=schema.alt.v1 tenant=tenant_alt"
+		}},
+		{name: "nested pass manifest evidence hash drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.EvidenceHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		}},
+		{name: "joint upstream evidence hash whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestEvidenceHash += " "
+			model.Point15ValE.PassClosureManifest.EvidenceHash += " "
+		}},
+		{name: "nested pass manifest policy version drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.PolicyVersion = "policy.alt.v1"
+		}},
+		{name: "joint upstream policy version whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestPolicyVersion += " "
+			model.Point15ValE.PassClosureManifest.PolicyVersion += " "
+		}},
+		{name: "nested pass manifest engine version drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.EngineVersion = "engine.alt.v1"
+		}},
+		{name: "joint upstream engine version whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestEngineVersion += " "
+			model.Point15ValE.PassClosureManifest.EngineVersion += " "
+		}},
+		{name: "nested pass manifest schema version drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.SchemaVersion = "schema.alt.v1"
+		}},
+		{name: "joint upstream schema version whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestSchemaVersion += " "
+			model.Point15ValE.PassClosureManifest.SchemaVersion += " "
+		}},
+		{name: "nested pass manifest tenant scope drift blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15ValE.PassClosureManifest.TenantScope = "tenant_alt"
+		}},
+		{name: "joint upstream pass manifest tenant scope whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestTenantScope += " "
+			model.Point15ValE.PassClosureManifest.TenantScope += " "
+		}},
+		{name: "joint upstream tenant scope whitespace retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.InheritedTenantScope += " "
+			model.Point15ValE.Dependency.InheritedTenantScope += " "
+		}},
+		{name: "joint upstream manifest provenance retag blocks", mutate: func(model *Point16Val0DependencySnapshot) {
+			model.Point15PassManifestEvidenceID = "evidence_id=evidence_point16_val0_alt evidence_hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa policy=policy.alt.v1 engine=engine.alt.v1 schema=schema.alt.v1 tenant=tenant_alt"
+			model.Point15PassManifestEvidenceHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+			model.Point15PassManifestPolicyVersion = "policy.alt.v1"
+			model.Point15PassManifestEngineVersion = "engine.alt.v1"
+			model.InheritedTenantScope = "tenant_alt"
+			model.Point15ValE.PassClosureManifest.EvidenceIdentity = model.Point15PassManifestEvidenceID
+			model.Point15ValE.PassClosureManifest.EvidenceHash = model.Point15PassManifestEvidenceHash
+			model.Point15ValE.PassClosureManifest.PolicyVersion = model.Point15PassManifestPolicyVersion
+			model.Point15ValE.PassClosureManifest.EngineVersion = model.Point15PassManifestEngineVersion
+			model.Point15ValE.Dependency.InheritedTenantScope = model.InheritedTenantScope
+		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -118,6 +200,9 @@ func TestPoint16Val0HistoricalReplayContextState(t *testing.T) {
 			model.OriginalEvidenceID = ""
 			model.OriginalEvidenceHash = ""
 		}, expected: Point16Val0StateIncomplete},
+		{name: "bare evidence ref without structured identity blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.OriginalEvidenceID = "evidence_point16_val0_original"
+		}, expected: Point16Val0StateBlocked},
 		{name: "missing original policy identity version hash fails closed", mutate: func(model *Point16Val0HistoricalReplayContext) {
 			model.OriginalPolicyID = ""
 			model.OriginalPolicyVersion = ""
@@ -131,8 +216,26 @@ func TestPoint16Val0HistoricalReplayContextState(t *testing.T) {
 		{name: "timestamp unsafe blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
 			model.ReplayTimeSource = "client_local_time"
 		}, expected: Point16Val0StateBlocked},
+		{name: "replay time source whitespace retag blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.ReplayTimeSource = " " + model.ReplayTimeSource + " "
+		}, expected: Point16Val0StateBlocked},
+		{name: "approved customer original decision time source blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.OriginalDecisionTimeSource = point14Val0TimeSourceApprovedCustomerTime
+		}, expected: Point16Val0StateBlocked},
+		{name: "original decision time source whitespace retag blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.OriginalDecisionTimeSource = " " + model.OriginalDecisionTimeSource + " "
+		}, expected: Point16Val0StateBlocked},
+		{name: "approved customer original evaluated time source blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.OriginalEvaluatedTimeSource = point14Val0TimeSourceApprovedCustomerTime
+		}, expected: Point16Val0StateBlocked},
+		{name: "original evaluated time source whitespace retag blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.OriginalEvaluatedTimeSource = " " + model.OriginalEvaluatedTimeSource + " "
+		}, expected: Point16Val0StateBlocked},
 		{name: "timestamp backdating blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
 			model.ReplayAt = "2026-05-08T08:59:00Z"
+		}, expected: Point16Val0StateBlocked},
+		{name: "context id exact mismatch blocks", mutate: func(model *Point16Val0HistoricalReplayContext) {
+			model.ContextID = point16Val0ContextID + " "
 		}, expected: Point16Val0StateBlocked},
 	}
 	for _, tc := range tests {
@@ -141,6 +244,81 @@ func TestPoint16Val0HistoricalReplayContextState(t *testing.T) {
 			tc.mutate(&model)
 			if got := EvaluatePoint16Val0HistoricalReplayContextState(model); got != tc.expected {
 				t.Fatalf("expected %s, got %s", tc.expected, got)
+			}
+		})
+	}
+}
+
+func TestPoint16Val0OriginalDecisionBindingState(t *testing.T) {
+	t.Run("clean original decision binding is active", func(t *testing.T) {
+		model := point16Val0ValidOriginalDecisionBindingModel()
+		if got := EvaluatePoint16Val0OriginalDecisionBindingState(model); got != Point16Val0StateActive {
+			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
+		}
+	})
+
+	tests := []struct {
+		name   string
+		mutate func(*Point16Val0OriginalDecisionBinding)
+	}{
+		{name: "binding id exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.BindingID = point16Val0BindingID + " "
+		}},
+		{name: "historical replay context ref exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.HistoricalReplayContextRef = point16Val0ContextID + " "
+		}},
+		{name: "original decision id exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalDecisionID = "decision_point16_val0_original_other"
+		}},
+		{name: "original decision hash exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalDecisionHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		}},
+		{name: "bare evidence ref without structured identity blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalEvidenceID = "evidence_point16_val0_original"
+		}},
+		{name: "whitespace structured evidence identity blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalEvidenceID = " " + model.OriginalEvidenceID + " "
+		}},
+		{name: "fabricated composite evidence identity blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.OriginalEvidenceID = "junk evidence_id=x evidence_hash=y policy=z engine=w tenant=t junk"
+		}},
+		{name: "current evidence hash whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentEvidenceHash = " " + model.OriginalEvidenceHash + " "
+		}},
+		{name: "current policy version exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentPolicyVersion = model.OriginalPolicyVersion + ".other"
+		}},
+		{name: "current policy version whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentPolicyVersion = " " + model.OriginalPolicyVersion + " "
+		}},
+		{name: "current engine version exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentEngineVersion = model.OriginalEngineVersion + ".other"
+		}},
+		{name: "current engine version whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentEngineVersion = " " + model.OriginalEngineVersion + " "
+		}},
+		{name: "current tenant scope whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentTenantScope = " " + model.OriginalTenantScope + " "
+		}},
+		{name: "current artifact scope whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentArtifactScope = " " + model.OriginalArtifactScope + " "
+		}},
+		{name: "current claim scope whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentClaimScope = " " + model.OriginalClaimScope + " "
+		}},
+		{name: "current governance scope whitespace retag blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.CurrentGovernanceScope = " " + model.OriginalGovernanceScope + " "
+		}},
+		{name: "lineage ref exact mismatch blocks", mutate: func(model *Point16Val0OriginalDecisionBinding) {
+			model.LineageRef = "lineage_point16_val0_replay_other"
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			model := point16Val0ValidOriginalDecisionBindingModel()
+			tc.mutate(&model)
+			if got := EvaluatePoint16Val0OriginalDecisionBindingState(model); got != Point16Val0StateBlocked {
+				t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
 			}
 		})
 	}
@@ -215,6 +393,15 @@ func TestPoint16Val0ReplayTaxonomyState(t *testing.T) {
 			model.CurrentTimeSubstitutionAttempted = true
 			model.ReplayStatus = point16Val0CurrentTimeSubstitution
 		}, expected: Point16Val0StateBlocked},
+		{name: "replay status whitespace retag blocks", mutate: func(model *Point16Val0ReplayTaxonomy) {
+			model.ReplayStatus = " " + model.ReplayStatus + " "
+		}, expected: Point16Val0StateBlocked},
+		{name: "allowed statuses whitespace retag blocks", mutate: func(model *Point16Val0ReplayTaxonomy) {
+			model.AllowedStatuses[0] = " " + model.AllowedStatuses[0] + " "
+		}, expected: Point16Val0StateBlocked},
+		{name: "taxonomy id exact mismatch blocks", mutate: func(model *Point16Val0ReplayTaxonomy) {
+			model.TaxonomyID = point16Val0TaxonomyID + " "
+		}, expected: Point16Val0StateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -239,11 +426,33 @@ func TestPoint16Val0CurrentSubstitutionGuardState(t *testing.T) {
 		name   string
 		mutate func(*Point16Val0CurrentSubstitutionGuard)
 	}{
+		{name: "guard id exact mismatch fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.GuardID = point16Val0GuardID + " " }},
+		{name: "current policy version substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.CurrentPolicyVersion = model.OriginalPolicyVersion + ".other"
+		}},
+		{name: "current policy version whitespace retag fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.CurrentPolicyVersion = " " + model.OriginalPolicyVersion + " "
+		}},
 		{name: "current policy substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentPolicyAuthoritative = true }},
+		{name: "current engine version substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.CurrentEngineVersion = model.OriginalEngineVersion + ".other"
+		}},
+		{name: "current engine version whitespace retag fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.CurrentEngineVersion = " " + model.OriginalEngineVersion + " "
+		}},
 		{name: "current engine substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentEngineAuthoritative = true }},
 		{name: "current evidence substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentEvidenceAuthoritative = true }},
+		{name: "current evidence hash whitespace retag fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.CurrentEvidenceHash = " " + model.OriginalEvidenceHash + " "
+		}},
 		{name: "current timestamp substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentTimestampAuthoritative = true }},
+		{name: "whitespace original decision timestamp fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.OriginalDecisionAt = " " + model.OriginalDecisionAt + " "
+		}},
 		{name: "current tenant substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentTenantAuthoritative = true }},
+		{name: "current tenant scope whitespace retag fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) {
+			model.CurrentTenantScope = " " + model.OriginalTenantScope + " "
+		}},
 		{name: "current claim substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentClaimAuthoritative = true }},
 		{name: "current governance substitution attempt fails closed", mutate: func(model *Point16Val0CurrentSubstitutionGuard) { model.CurrentGovernanceAuthoritative = true }},
 	}
@@ -270,6 +479,12 @@ func TestPoint16Val0ReplayReadinessEvaluationState(t *testing.T) {
 		name   string
 		mutate func(*Point16Val0ReplayReadinessEvaluation)
 	}{
+		{name: "evaluation id exact mismatch blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
+			model.EvaluationID = point16Val0EvaluationID + " "
+		}},
+		{name: "whitespace retagged component state blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
+			model.ReplayTaxonomyState = " " + Point16Val0StateActive + " "
+		}},
 		{name: "no mutation publication revocation external api default connector path introduced blocks", mutate: func(model *Point16Val0ReplayReadinessEvaluation) {
 			model.NoMutationPathsDetected = false
 		}},
@@ -328,6 +543,115 @@ func TestPoint16Val0NoOverclaimBaselineState(t *testing.T) {
 		model.ObservedTexts = []string{"certified replay correctness"}
 		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
 			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	t.Run("replay disclaimer whitespace retag blocks", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.ReplayDisclaimer = " " + model.ReplayDisclaimer + " "
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	t.Run("allowed safe wording whitespace retag blocks", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.AllowedSafeWording[0] = " " + model.AllowedSafeWording[0] + " "
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	t.Run("blocked wording whitespace retag blocks", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.BlockedWording[0] = " " + model.BlockedWording[0] + " "
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	obfuscatedForbiddenTexts := []string{
+		"certified-secure",
+		"certified secure",
+		"certified\nsecure",
+		"certiﬁed secure",
+		"cértified secure",
+		"certifıed secure",
+		"certιfied secure",
+		"certiſied secure",
+		"certifieԁ secure",
+		"certifiеd secure",
+		"certifieɗ secure",
+		"certiƒied secure",
+		"public\nbadge",
+		"public-badge",
+		"publicbadge",
+		"public bɑdge",
+		"pubɩic badge",
+		"gυaranteed secure",
+		"guaɹanteed secure",
+		"gᴜaranteed secure",
+		"regulator-approved",
+		"ƈompliance guaranteed",
+		"ȼompliance guaranteed",
+		"regulátor-approved",
+		"regulatоr-approved",
+		"compliance\nguaranteed",
+		"production-approved",
+		"pr0duction appr0ved",
+		"legal/proof",
+		"le9al proof",
+		"financial_guarantee",
+		"public b8dge",
+		"gl0bal truth",
+		"9lobal truth",
+		"ɢlobal truth",
+		"0fficial authority",
+		"օfficial authority",
+		"CeRtIfIeD---SeCuRe",
+	}
+	for _, observed := range obfuscatedForbiddenTexts {
+		observed := observed
+		t.Run("obfuscated forbidden wording blocks "+strings.ReplaceAll(observed, "\n", "\\n"), func(t *testing.T) {
+			model := point16Val0ValidNoOverclaimBaselineModel()
+			model.ObservedTexts = []string{observed}
+			if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+				t.Fatalf("expected %s for observed text %q, got %s", Point16Val0StateBlocked, observed, got)
+			}
+		})
+	}
+
+	t.Run("benign text remains active", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.ObservedTexts = []string{"historical replay comparison remains bounded to the original decision context and fails closed when unsupported"}
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateActive {
+			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
+		}
+	})
+
+	t.Run("split forbidden wording across observed texts blocks", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.ObservedTexts = []string{"certified", "secure"}
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	t.Run("unclassified forbidden internal diagnostics block", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.InternalDiagnosticTexts = []string{"legal proof"}
+		model.InternalDiagnosticsClassifiedBlocked = false
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateBlocked {
+			t.Fatalf("expected %s, got %s", Point16Val0StateBlocked, got)
+		}
+	})
+
+	t.Run("classified forbidden internal diagnostics remain bounded", func(t *testing.T) {
+		model := point16Val0ValidNoOverclaimBaselineModel()
+		model.InternalDiagnosticTexts = []string{"legal proof"}
+		model.InternalDiagnosticsClassifiedBlocked = true
+		if got := EvaluatePoint16Val0NoOverclaimBaselineState(model); got != Point16Val0StateActive {
+			t.Fatalf("expected %s, got %s", Point16Val0StateActive, got)
 		}
 	})
 
@@ -396,6 +720,593 @@ func TestPoint16Val0Foundation(t *testing.T) {
 				model.CurrentSubstitutionGuardState,
 				model.ReplayReadinessState,
 				model.ReplayTaxonomyState,
+			)
+		}
+	})
+
+	t.Run("approved customer timestamp provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.OriginalDecisionTimeSource = point14Val0TimeSourceApprovedCustomerTime
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked customer-authored timestamp provenance, got current=%s context=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace original decision time source provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.OriginalDecisionTimeSource = " " + model.HistoricalReplayContext.OriginalDecisionTimeSource + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace decision-time provenance drift, got current=%s context=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("approved customer evaluated timestamp provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.OriginalEvaluatedTimeSource = point14Val0TimeSourceApprovedCustomerTime
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked evaluated-time provenance drift, got current=%s context=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace original evaluated time source provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.OriginalEvaluatedTimeSource = " " + model.HistoricalReplayContext.OriginalEvaluatedTimeSource + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace evaluated-time provenance drift, got current=%s context=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("nested dependency manifest evidence provenance drift cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.Dependency.Point15ValE.PassClosureManifest.EvidenceIdentity = "evidence_id=evidence_point16_val0_alt evidence_hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa policy=policy.alt.v1 engine=engine.alt.v1 schema=schema.alt.v1 tenant=tenant_alt"
+		model.Dependency.Point15ValE.PassClosureManifest.EvidenceHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model.Dependency.Point15ValE.PassClosureManifest.PolicyVersion = "policy.alt.v1"
+		model.Dependency.Point15ValE.PassClosureManifest.EngineVersion = "engine.alt.v1"
+		model.Dependency.Point15ValE.PassClosureManifest.SchemaVersion = "schema.alt.v1"
+		model.Dependency.Point15ValE.PassClosureManifest.TenantScope = "tenant_alt"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked || model.DependencyState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked dependency provenance drift, got current=%s dependency=%s", model.CurrentState, model.DependencyState)
+		}
+	})
+
+	t.Run("joint upstream manifest provenance retag cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.Dependency.Point15PassManifestEvidenceID = "evidence_id=evidence_point16_val0_alt evidence_hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa policy=policy.alt.v1 engine=engine.alt.v1 schema=schema.alt.v1 tenant=tenant_alt"
+		model.Dependency.Point15PassManifestEvidenceHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model.Dependency.Point15PassManifestPolicyVersion = "policy.alt.v1"
+		model.Dependency.Point15PassManifestEngineVersion = "engine.alt.v1"
+		model.Dependency.Point15PassManifestSchemaVersion = "schema.alt.v1"
+		model.Dependency.Point15PassManifestTenantScope = "tenant_alt"
+		model.Dependency.InheritedTenantScope = "tenant_alt"
+		model.Dependency.Point15ValE.PassClosureManifest.EvidenceIdentity = model.Dependency.Point15PassManifestEvidenceID
+		model.Dependency.Point15ValE.PassClosureManifest.EvidenceHash = model.Dependency.Point15PassManifestEvidenceHash
+		model.Dependency.Point15ValE.PassClosureManifest.PolicyVersion = model.Dependency.Point15PassManifestPolicyVersion
+		model.Dependency.Point15ValE.PassClosureManifest.EngineVersion = model.Dependency.Point15PassManifestEngineVersion
+		model.Dependency.Point15ValE.PassClosureManifest.SchemaVersion = model.Dependency.Point15PassManifestSchemaVersion
+		model.Dependency.Point15ValE.PassClosureManifest.TenantScope = model.Dependency.Point15PassManifestTenantScope
+		model.Dependency.Point15ValE.Dependency.InheritedTenantScope = model.Dependency.InheritedTenantScope
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.DependencyState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked jointly retagged upstream manifest provenance, got current=%s dependency=%s ctx=%s binding=%s guard=%s readiness=%s",
+				model.CurrentState,
+				model.DependencyState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("joint upstream evidence hash whitespace retag cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.Dependency.Point15PassManifestEvidenceHash += " "
+		model.Dependency.Point15ValE.PassClosureManifest.EvidenceHash += " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.DependencyState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged upstream evidence hash, got current=%s dependency=%s ctx=%s binding=%s guard=%s readiness=%s",
+				model.CurrentState,
+				model.DependencyState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("joint upstream tenant scope whitespace retag cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.Dependency.InheritedTenantScope += " "
+		model.Dependency.Point15ValE.Dependency.InheritedTenantScope += " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.DependencyState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged upstream tenant scope, got current=%s dependency=%s ctx=%s binding=%s guard=%s readiness=%s",
+				model.CurrentState,
+				model.DependencyState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("replay status whitespace retag cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.ReplayTaxonomy.ReplayStatus = " " + model.ReplayTaxonomy.ReplayStatus + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged replay status, got current=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("replay disclaimer whitespace retag cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.NoOverclaimBaseline.ReplayDisclaimer = " " + model.NoOverclaimBaseline.ReplayDisclaimer + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.NoOverclaimState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged replay disclaimer, got current=%s nooverclaim=%s readiness=%s",
+				model.CurrentState,
+				model.NoOverclaimState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("current policy version substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentPolicyVersion = model.OriginalDecisionBinding.OriginalPolicyVersion + ".other"
+		model.CurrentSubstitutionGuard.CurrentPolicyVersion = model.CurrentSubstitutionGuard.OriginalPolicyVersion + ".other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked version-bound current policy substitution, got current=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace current evidence hash substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentEvidenceHash = " " + model.OriginalDecisionBinding.OriginalEvidenceHash + " "
+		model.CurrentSubstitutionGuard.CurrentEvidenceHash = " " + model.CurrentSubstitutionGuard.OriginalEvidenceHash + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace evidence-hash substitution, got current=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace current policy version substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentPolicyVersion = " " + model.OriginalDecisionBinding.OriginalPolicyVersion + " "
+		model.CurrentSubstitutionGuard.CurrentPolicyVersion = " " + model.CurrentSubstitutionGuard.OriginalPolicyVersion + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace version-bound current policy substitution, got current=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("current engine version substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentEngineVersion = model.OriginalDecisionBinding.OriginalEngineVersion + ".other"
+		model.CurrentSubstitutionGuard.CurrentEngineVersion = model.CurrentSubstitutionGuard.OriginalEngineVersion + ".other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked version-bound current engine substitution, got current=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace current engine version substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentEngineVersion = " " + model.OriginalDecisionBinding.OriginalEngineVersion + " "
+		model.CurrentSubstitutionGuard.CurrentEngineVersion = " " + model.CurrentSubstitutionGuard.OriginalEngineVersion + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace version-bound current engine substitution, got current=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace current tenant scope substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentTenantScope = " " + model.OriginalDecisionBinding.OriginalTenantScope + " "
+		model.CurrentSubstitutionGuard.CurrentTenantScope = " " + model.CurrentSubstitutionGuard.OriginalTenantScope + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace tenant-scope substitution, got current=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace current artifact scope substitution attempt fails closed in full foundation", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.CurrentArtifactScope = " " + model.OriginalDecisionBinding.OriginalArtifactScope + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace artifact-scope substitution, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace tampered substitution guard original decision timestamp fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.CurrentSubstitutionGuard.OriginalDecisionAt = " " + model.CurrentSubstitutionGuard.OriginalDecisionAt + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked || model.CurrentSubstitutionGuardState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace timestamp-bound substitution guard, got current=%s guard=%s readiness=%s taxonomy=%s",
+				model.CurrentState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayReadinessState,
+				model.ReplayTaxonomyState,
+			)
+		}
+	})
+
+	t.Run("jointly retagged timestamp provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.OriginalDecisionAt = "2026-05-08T10:00:00Z"
+		model.HistoricalReplayContext.OriginalEvaluatedAt = "2026-05-08T10:05:00Z"
+		model.HistoricalReplayContext.ReplayAt = "2026-05-08T10:10:00Z"
+		model.OriginalDecisionBinding.OriginalDecisionAt = "2026-05-08T10:00:00Z"
+		model.OriginalDecisionBinding.OriginalEvaluatedAt = "2026-05-08T10:05:00Z"
+		model.CurrentSubstitutionGuard.OriginalDecisionAt = "2026-05-08T10:00:00Z"
+		model.CurrentSubstitutionGuard.ReplayAt = "2026-05-08T10:10:00Z"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked jointly retagged timestamp provenance, got current=%s context=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("mismatched HistoricalReplayContextRef fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.HistoricalReplayContextRef = "historical_replay_context_point16_val0_other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked provenance retagging, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace mutated HistoricalReplayContextRef fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.HistoricalReplayContextRef = model.OriginalDecisionBinding.HistoricalReplayContextRef + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace provenance retagging, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("mismatched OriginalDecisionID fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.OriginalDecisionID = "decision_point16_val0_original_other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked provenance retagging, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("whitespace mutated OriginalDecisionID fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.OriginalDecisionID = model.OriginalDecisionBinding.OriginalDecisionID + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace decision retagging, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("mismatched OriginalDecisionHash fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.OriginalDecisionHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked provenance retagging, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("mismatched LineageRef fails closed", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.LineageRef = "lineage_point16_val0_replay_other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked provenance retagging, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("retagging payload to another decision lineage cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.OriginalDecisionBinding.OriginalDecisionID = "decision_point16_val0_original_other"
+		model.OriginalDecisionBinding.OriginalDecisionHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.OriginalDecisionBinding.LineageRef = "lineage_point16_val0_replay_other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked retagged payload, got current=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("jointly retagged provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.ContextID = "historical_replay_context_point16_val0_other"
+		model.HistoricalReplayContext.OriginalDecisionID = "decision_point16_val0_original_other"
+		model.HistoricalReplayContext.OriginalDecisionHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.HistoricalReplayContext.LineageRef = "lineage_point16_val0_replay_other"
+		model.OriginalDecisionBinding.HistoricalReplayContextRef = "historical_replay_context_point16_val0_other"
+		model.OriginalDecisionBinding.OriginalDecisionID = "decision_point16_val0_original_other"
+		model.OriginalDecisionBinding.OriginalDecisionHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.OriginalDecisionBinding.LineageRef = "lineage_point16_val0_replay_other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked jointly retagged provenance, got current=%s context=%s binding=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("jointly retagged policy engine and scope provenance cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.OriginalPolicyID = "policy_historical_replay_other"
+		model.HistoricalReplayContext.OriginalPolicyHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model.HistoricalReplayContext.OriginalEngineID = "engine_historical_replay_other"
+		model.HistoricalReplayContext.OriginalEngineHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.HistoricalReplayContext.OriginalArtifactScope = "artifact_scope_historical_replay_other"
+		model.HistoricalReplayContext.OriginalClaimScope = "claim_scope_historical_replay_other"
+		model.HistoricalReplayContext.OriginalGovernanceScope = "governance_scope_historical_replay_other"
+		model.OriginalDecisionBinding.OriginalPolicyID = "policy_historical_replay_other"
+		model.OriginalDecisionBinding.OriginalPolicyHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model.OriginalDecisionBinding.OriginalEngineID = "engine_historical_replay_other"
+		model.OriginalDecisionBinding.OriginalEngineHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.OriginalDecisionBinding.OriginalArtifactScope = "artifact_scope_historical_replay_other"
+		model.OriginalDecisionBinding.CurrentArtifactScope = "artifact_scope_historical_replay_other"
+		model.OriginalDecisionBinding.OriginalClaimScope = "claim_scope_historical_replay_other"
+		model.OriginalDecisionBinding.CurrentClaimScope = "claim_scope_historical_replay_other"
+		model.OriginalDecisionBinding.OriginalGovernanceScope = "governance_scope_historical_replay_other"
+		model.OriginalDecisionBinding.CurrentGovernanceScope = "governance_scope_historical_replay_other"
+		model.CurrentSubstitutionGuard.OriginalPolicyHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model.CurrentSubstitutionGuard.CurrentPolicyHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		model.CurrentSubstitutionGuard.OriginalEngineHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.CurrentSubstitutionGuard.CurrentEngineHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		model.CurrentSubstitutionGuard.OriginalClaimScope = "claim_scope_historical_replay_other"
+		model.CurrentSubstitutionGuard.CurrentClaimScope = "claim_scope_historical_replay_other"
+		model.CurrentSubstitutionGuard.OriginalGovernanceScope = "governance_scope_historical_replay_other"
+		model.CurrentSubstitutionGuard.CurrentGovernanceScope = "governance_scope_historical_replay_other"
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked jointly retagged policy/engine/scope provenance, got current=%s context=%s binding=%s guard=%s taxonomy=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayTaxonomyState,
+				model.ReplayReadinessState,
+			)
+		}
+	})
+
+	t.Run("mutated internal ids cannot compute active", func(t *testing.T) {
+		model := point16Val0ValidFoundationModel()
+		model.HistoricalReplayContext.ContextID = point16Val0ContextID + " "
+		model.OriginalDecisionBinding.BindingID = point16Val0BindingID + " "
+		model.ReplayTaxonomy.TaxonomyID = point16Val0TaxonomyID + " "
+		model.CurrentSubstitutionGuard.GuardID = point16Val0GuardID + " "
+		model.ReplayReadinessEvaluation.EvaluationID = point16Val0EvaluationID + " "
+		model = ComputePoint16Val0Foundation(model)
+		if model.CurrentState != Point16Val0StateBlocked ||
+			model.HistoricalReplayContextState != Point16Val0StateBlocked ||
+			model.OriginalDecisionBindingState != Point16Val0StateBlocked ||
+			model.ReplayTaxonomyState != Point16Val0StateBlocked ||
+			model.CurrentSubstitutionGuardState != Point16Val0StateBlocked ||
+			model.ReplayReadinessState != Point16Val0StateBlocked {
+			t.Fatalf("expected blocked mutated internal ids, got current=%s context=%s binding=%s taxonomy=%s guard=%s readiness=%s",
+				model.CurrentState,
+				model.HistoricalReplayContextState,
+				model.OriginalDecisionBindingState,
+				model.ReplayTaxonomyState,
+				model.CurrentSubstitutionGuardState,
+				model.ReplayReadinessState,
 			)
 		}
 	})

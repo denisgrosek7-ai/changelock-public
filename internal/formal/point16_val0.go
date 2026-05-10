@@ -3,6 +3,10 @@ package formal
 import (
 	"sort"
 	"strings"
+	"sync"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -13,10 +17,28 @@ const (
 )
 
 const (
-	point16Val0PointID          = "point_16"
-	point16Val0WaveID           = "val_0"
-	point16Val0Scope            = "continuous_trust_evolution_and_historical_replay_governance_foundation"
-	point16Val0ReplayDisclaimer = "historical_replay_governance_foundation no_final_point16_closure point16_val0"
+	point16Val0PointID                 = "point_16"
+	point16Val0WaveID                  = "val_0"
+	point16Val0Scope                   = "continuous_trust_evolution_and_historical_replay_governance_foundation"
+	point16Val0ReplayDisclaimer        = "historical_replay_governance_foundation no_final_point16_closure point16_val0"
+	point16Val0ContextID               = "historical_replay_context_point16_val0_001"
+	point16Val0BindingID               = "original_decision_binding_point16_val0_001"
+	point16Val0TaxonomyID              = "replay_taxonomy_point16_val0_001"
+	point16Val0GuardID                 = "substitution_guard_point16_val0_001"
+	point16Val0EvaluationID            = "readiness_evaluation_point16_val0_001"
+	point16Val0OriginalDecisionID      = "decision_point16_val0_original_001"
+	point16Val0OriginalDecisionHash    = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	point16Val0LineageRef              = "lineage_point16_val0_replay_001"
+	point16Val0OriginalDecisionAt      = "2026-05-08T09:00:00Z"
+	point16Val0OriginalEvaluatedAt     = "2026-05-08T09:05:00Z"
+	point16Val0ReplayAt                = "2026-05-08T09:10:00Z"
+	point16Val0OriginalPolicyID        = "policy_historical_replay_001"
+	point16Val0OriginalPolicyHash      = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	point16Val0OriginalEngineID        = "engine_historical_replay_001"
+	point16Val0OriginalEngineHash      = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	point16Val0OriginalArtifactScope   = "artifact_scope_historical_replay_001"
+	point16Val0OriginalClaimScope      = "claim_scope_historical_replay_001"
+	point16Val0OriginalGovernanceScope = "governance_scope_historical_replay_001"
 
 	point16Val0ReplayBound                  = "replay_bound"
 	point16Val0HistoricalContextComplete    = "historical_context_complete"
@@ -44,6 +66,12 @@ const (
 	point16Val0ReplayTaxonomyIncomplete     = "incomplete"
 )
 
+var (
+	point16Val0CanonicalPoint15ValEOnce sync.Once
+	point16Val0CanonicalPoint15ValE     Point15ValEContinuousVerificationClosureFoundation
+	point16Val0CanonicalDependency      Point16Val0DependencySnapshot
+)
+
 type Point16Val0DependencySnapshot struct {
 	Point15ValECurrentState          string                                             `json:"point15_vale_current_state"`
 	Point15ValEDependencyState       string                                             `json:"point15_vale_dependency_state"`
@@ -58,6 +86,12 @@ type Point16Val0DependencySnapshot struct {
 	Point15PassManifestPointID       string                                             `json:"point15_pass_manifest_point_id"`
 	Point15PassManifestWaveID        string                                             `json:"point15_pass_manifest_wave_id"`
 	Point15PassManifestClosureToken  string                                             `json:"point15_pass_manifest_closure_token"`
+	Point15PassManifestEvidenceID    string                                             `json:"point15_pass_manifest_evidence_identity"`
+	Point15PassManifestEvidenceHash  string                                             `json:"point15_pass_manifest_evidence_hash"`
+	Point15PassManifestPolicyVersion string                                             `json:"point15_pass_manifest_policy_version"`
+	Point15PassManifestEngineVersion string                                             `json:"point15_pass_manifest_engine_version"`
+	Point15PassManifestSchemaVersion string                                             `json:"point15_pass_manifest_schema_version"`
+	Point15PassManifestTenantScope   string                                             `json:"point15_pass_manifest_tenant_scope"`
 	InheritedTenantScope             string                                             `json:"inherited_tenant_scope"`
 	SnapshotFromComputedOutput       bool                                               `json:"snapshot_from_computed_output"`
 	ReviewPrerequisites              []string                                           `json:"review_prerequisites,omitempty"`
@@ -78,6 +112,8 @@ type Point16Val0HistoricalReplayContext struct {
 	OriginalArtifactScope       string `json:"original_artifact_scope"`
 	OriginalClaimScope          string `json:"original_claim_scope"`
 	OriginalGovernanceScope     string `json:"original_governance_scope"`
+	OriginalDecisionID          string `json:"original_decision_id"`
+	OriginalDecisionHash        string `json:"original_decision_hash"`
 	OriginalDecisionAt          string `json:"original_decision_at"`
 	OriginalDecisionTimeSource  string `json:"original_decision_time_source"`
 	OriginalEvaluatedAt         string `json:"original_evaluated_at"`
@@ -147,8 +183,12 @@ type Point16Val0ReplayTaxonomy struct {
 
 type Point16Val0CurrentSubstitutionGuard struct {
 	GuardID                        string `json:"guard_id"`
+	OriginalPolicyVersion          string `json:"original_policy_version"`
+	CurrentPolicyVersion           string `json:"current_policy_version"`
 	OriginalPolicyHash             string `json:"original_policy_hash"`
 	CurrentPolicyHash              string `json:"current_policy_hash"`
+	OriginalEngineVersion          string `json:"original_engine_version"`
+	CurrentEngineVersion           string `json:"current_engine_version"`
 	OriginalEngineHash             string `json:"original_engine_hash"`
 	CurrentEngineHash              string `json:"current_engine_hash"`
 	OriginalEvidenceHash           string `json:"original_evidence_hash"`
@@ -238,8 +278,17 @@ func point16Val0States() []string {
 	}
 }
 
+func point16Val0ExactAllowedValueValid(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func point16Val0StateValid(value string) bool {
-	return point14Val0ExactValueValid(value, point16Val0States())
+	return point16Val0ExactAllowedValueValid(value, point16Val0States())
 }
 
 func point16Val0ReplayStatuses() []string {
@@ -272,7 +321,7 @@ func point16Val0ReplayStatuses() []string {
 }
 
 func point16Val0ReplayStatusValid(value string) bool {
-	return point14Val0ExactValueValid(value, point16Val0ReplayStatuses())
+	return point16Val0ExactAllowedValueValid(value, point16Val0ReplayStatuses())
 }
 
 func point16Val0ForbiddenWording() []string {
@@ -301,12 +350,20 @@ func point16Val0SafeWording() []string {
 }
 
 func point16Val0ObservedTextContainsForbiddenWording(text string) bool {
-	trimmed := strings.TrimSpace(strings.ToLower(text))
-	if trimmed == "" {
+	normalized := point16Val0NormalizeObservedText(text)
+	if normalized == "" {
 		return false
 	}
+	compact := strings.ReplaceAll(normalized, " ", "")
 	for _, phrase := range point16Val0ForbiddenWording() {
-		if strings.Contains(trimmed, strings.ToLower(phrase)) {
+		normalizedPhrase := point16Val0NormalizeObservedText(phrase)
+		if normalizedPhrase == "" {
+			continue
+		}
+		if strings.Contains(normalized, normalizedPhrase) {
+			return true
+		}
+		if compactPhrase := strings.ReplaceAll(normalizedPhrase, " ", ""); compactPhrase != "" && strings.Contains(compact, compactPhrase) {
 			return true
 		}
 	}
@@ -319,26 +376,366 @@ func point16Val0ObservedListContainsForbiddenWording(values []string) bool {
 			return true
 		}
 	}
+	if len(values) > 1 && point16Val0ObservedTextContainsForbiddenWording(strings.Join(values, " ")) {
+		return true
+	}
 	return false
+}
+
+func point16Val0NormalizeObservedText(text string) string {
+	trimmed := strings.TrimSpace(strings.Map(func(r rune) rune {
+		switch r {
+		case 'ſ':
+			return 'f'
+		default:
+			return r
+		}
+	}, text))
+	trimmed = norm.NFKC.String(trimmed)
+	if trimmed == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	lastWasSpace := true
+	for _, r := range norm.NFD.String(trimmed) {
+		if unicode.Is(unicode.Mn, r) {
+			continue
+		}
+		r = unicode.ToLower(point16Val0FoldConfusableRune(r))
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(r)
+			lastWasSpace = false
+			continue
+		}
+		if !lastWasSpace {
+			builder.WriteByte(' ')
+			lastWasSpace = true
+		}
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+func point16Val0FoldConfusableRune(r rune) rune {
+	switch r {
+	case 'а', 'А', 'α', 'Α':
+		return 'a'
+	case 'ɑ', 'ɐ', 'ɒ', '⍺':
+		return 'a'
+	case 'е', 'Е', 'ε', 'Ε':
+		return 'e'
+	case 'і', 'І', 'ı', 'ι', 'Ι':
+		return 'i'
+	case 'о', 'О', 'ο', 'Ο', 'օ', 'Օ':
+		return 'o'
+	case 'р', 'Р', 'ρ', 'Ρ':
+		return 'p'
+	case 'ɹ':
+		return 'r'
+	case 'с', 'С':
+		return 'c'
+	case 'ƈ', 'ȼ':
+		return 'c'
+	case 'ƒ':
+		return 'f'
+	case 'υ', 'Υ', 'ύ', 'ϋ':
+		return 'u'
+	case 'ᴜ':
+		return 'u'
+	case 'у', 'У':
+		return 'y'
+	case 'х', 'Х', 'χ', 'Χ':
+		return 'x'
+	case 'к', 'К', 'κ', 'Κ':
+		return 'k'
+	case 'м', 'М':
+		return 'm'
+	case 'ſ':
+		return 'f'
+	case 'т', 'Т', 'τ', 'Τ':
+		return 't'
+	case 'в', 'В':
+		return 'b'
+	case 'н', 'Н':
+		return 'h'
+	case 'ј', 'Ј':
+		return 'j'
+	case 'ԁ', 'Ԁ', 'δ', 'Δ':
+		return 'd'
+	case 'ɡ', 'ԍ', 'ց', 'ǥ':
+		return 'g'
+	case 'ɢ':
+		return 'g'
+	case 'һ', 'Η', 'հ':
+		return 'h'
+	case 'ⅼ', 'ӏ', 'Ӏ', 'ǀ':
+		return 'l'
+	case 'ɩ', 'ɪ', 'ɭ', 'ɫ', 'ł', 'ƚ', 'ḷ':
+		return 'l'
+	case 'ѕ', 'Ѕ':
+		return 's'
+	case 'Ь', 'ь', 'β', 'Β':
+		return 'b'
+	case 'ɗ', 'ḍ', 'đ', 'ð':
+		return 'd'
+	case '0':
+		return 'o'
+	case '1':
+		return 'i'
+	case '3':
+		return 'e'
+	case '4':
+		return 'a'
+	case '5':
+		return 's'
+	case '7':
+		return 't'
+	case '8':
+		return 'a'
+	case '9':
+		return 'g'
+	default:
+		return r
+	}
+}
+
+func point16Val0ExactMatch(left, right string) bool {
+	return left != "" && right != "" && left == right
+}
+
+func point16Val0ExactRawStringSetMatch(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, value := range left {
+		seen[value]++
+	}
+	for _, value := range right {
+		if seen[value] == 0 {
+			return false
+		}
+		seen[value]--
+	}
+	for _, count := range seen {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func point16Val0ExactVersionBindingValid(left, right string) bool {
+	return left != "" &&
+		right != "" &&
+		strings.TrimSpace(left) == left &&
+		strings.TrimSpace(right) == right &&
+		point12Val0VersionIdentityValid(left) &&
+		point12Val0VersionIdentityValid(right) &&
+		left == right
+}
+
+func point16Val0CanonicalizedValidatedBindingValid(left, right string, validator func(string) bool) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	return left != "" &&
+		right != "" &&
+		validator(left) &&
+		validator(right) &&
+		left == right
+}
+
+func point16Val0ExactValidatedBindingValid(left, right string, validator func(string) bool) bool {
+	return left != "" &&
+		right != "" &&
+		strings.TrimSpace(left) == left &&
+		strings.TrimSpace(right) == right &&
+		validator(left) &&
+		validator(right) &&
+		left == right
+}
+
+func point16Val0CanonicalizedHistoricalEvidenceHashBindingValid(left, right string) bool {
+	return point16Val0CanonicalizedValidatedBindingValid(left, right, point16Val0HistoricalEvidenceHashValid)
+}
+
+func point16Val0ExactHistoricalEvidenceHashBindingValid(left, right string) bool {
+	return point16Val0ExactValidatedBindingValid(left, right, point16Val0HistoricalEvidenceHashValid)
+}
+
+func point16Val0ExactHashBindingValid(left, right string) bool {
+	return point16Val0ExactValidatedBindingValid(left, right, point12Val0HashValid)
+}
+
+func point16Val0ExactTenantScopeBindingValid(left, right string) bool {
+	return point16Val0ExactValidatedBindingValid(left, right, point11Val0ScopeValid)
+}
+
+func point16Val0CanonicalizedTenantScopeBindingValid(left, right string) bool {
+	return point16Val0CanonicalizedValidatedBindingValid(left, right, point11Val0ScopeValid)
+}
+
+func point16Val0CanonicalizedVersionBindingValid(left, right string) bool {
+	return point16Val0CanonicalizedValidatedBindingValid(left, right, point12Val0VersionIdentityValid)
+}
+
+func point16Val0ExactArtifactScopeBindingValid(left, right string) bool {
+	return point16Val0ExactValidatedBindingValid(left, right, point16Val0ArtifactScopeValid)
+}
+
+func point16Val0ExactClaimScopeBindingValid(left, right string) bool {
+	return point16Val0ExactValidatedBindingValid(left, right, point16Val0ClaimScopeValid)
+}
+
+func point16Val0ExactGovernanceScopeBindingValid(left, right string) bool {
+	return point16Val0ExactValidatedBindingValid(left, right, point16Val0GovernanceScopeValid)
+}
+
+func point16Val0ExactTimestampBindingValid(left, right string) bool {
+	return left != "" &&
+		right != "" &&
+		strings.TrimSpace(left) == left &&
+		strings.TrimSpace(right) == right &&
+		point14Val0ParsedTimeOk(left) &&
+		point14Val0ParsedTimeOk(right) &&
+		left == right
+}
+
+func point16Val0ExactHistoricalTimeSourceValid(value string) bool {
+	return value == point14Val0TimeSourceServerUTC
+}
+
+func point16Val0ReplayProvenanceExactBound(context Point16Val0HistoricalReplayContext, binding Point16Val0OriginalDecisionBinding) bool {
+	return point16Val0ExactMatch(context.ContextID, binding.HistoricalReplayContextRef) &&
+		point16Val0ExactMatch(context.OriginalDecisionID, binding.OriginalDecisionID) &&
+		point16Val0ExactMatch(context.OriginalDecisionHash, binding.OriginalDecisionHash) &&
+		point16Val0ExactMatch(context.LineageRef, binding.LineageRef)
 }
 
 func point16Val0DependencyRefValid(value string) bool {
 	return point14Val0RefValid(value, "point16_val0_", "historical_replay_", "original_decision_", "replay_", "substitution_", "readiness_")
 }
 
+func point16Val0CanonicalizePoint15ValEFoundation(valE Point15ValEContinuousVerificationClosureFoundation) Point15ValEContinuousVerificationClosureFoundation {
+	valE.CurrentState = strings.TrimSpace(valE.CurrentState)
+	valE.DependencyState = strings.TrimSpace(valE.DependencyState)
+	valE.ClosureEvaluatorState = strings.TrimSpace(valE.ClosureEvaluatorState)
+	valE.PassClosureManifestState = strings.TrimSpace(valE.PassClosureManifestState)
+	valE.Dependency.InheritedTenantScope = strings.TrimSpace(valE.Dependency.InheritedTenantScope)
+	valE.PassClosureManifest.CurrentState = strings.TrimSpace(valE.PassClosureManifest.CurrentState)
+	valE.PassClosureManifest.PointID = strings.TrimSpace(valE.PassClosureManifest.PointID)
+	valE.PassClosureManifest.WaveID = strings.TrimSpace(valE.PassClosureManifest.WaveID)
+	valE.PassClosureManifest.ClosureToken = strings.TrimSpace(valE.PassClosureManifest.ClosureToken)
+	valE.PassClosureManifest.EvidenceIdentity = strings.TrimSpace(valE.PassClosureManifest.EvidenceIdentity)
+	valE.PassClosureManifest.EvidenceHash = strings.TrimSpace(valE.PassClosureManifest.EvidenceHash)
+	valE.PassClosureManifest.PolicyVersion = strings.TrimSpace(valE.PassClosureManifest.PolicyVersion)
+	valE.PassClosureManifest.EngineVersion = strings.TrimSpace(valE.PassClosureManifest.EngineVersion)
+	valE.PassClosureManifest.SchemaVersion = strings.TrimSpace(valE.PassClosureManifest.SchemaVersion)
+	valE.PassClosureManifest.TenantScope = strings.TrimSpace(valE.PassClosureManifest.TenantScope)
+	valE.PassClosureManifest.Point15PassToken = strings.TrimSpace(valE.PassClosureManifest.Point15PassToken)
+	return valE
+}
+
+func point16Val0CanonicalDependencySnapshot() Point16Val0DependencySnapshot {
+	point16Val0CanonicalPoint15ValEOnce.Do(func() {
+		point16Val0CanonicalPoint15ValE = point16Val0CanonicalizePoint15ValEFoundation(ComputePoint15ValEFoundation(Point15ValEFoundationModel()))
+		point16Val0CanonicalDependency = point16Val0DependencySnapshotFromUpstream(point16Val0CanonicalPoint15ValE)
+	})
+	return point16Val0CanonicalDependency
+}
+
+func point16Val0ExactInternalIDValid(value, expected string) bool {
+	return value == expected
+}
+
+func point16Val0ExactOriginalDecisionIDValid(value string) bool {
+	return value == point16Val0OriginalDecisionID
+}
+
+func point16Val0ExactOriginalDecisionHashValid(value string) bool {
+	return value == point16Val0OriginalDecisionHash
+}
+
+func point16Val0ExactLineageRefValid(value string) bool {
+	return value == point16Val0LineageRef
+}
+
+func point16Val0ExactOriginalPolicyIDValid(value string) bool {
+	return value == point16Val0OriginalPolicyID
+}
+
+func point16Val0ExactOriginalPolicyHashValid(value string) bool {
+	return value == point16Val0OriginalPolicyHash
+}
+
+func point16Val0ExactOriginalEngineIDValid(value string) bool {
+	return value == point16Val0OriginalEngineID
+}
+
+func point16Val0ExactOriginalEngineHashValid(value string) bool {
+	return value == point16Val0OriginalEngineHash
+}
+
+func point16Val0ExactOriginalArtifactScopeValid(value string) bool {
+	return value == point16Val0OriginalArtifactScope
+}
+
+func point16Val0ExactOriginalClaimScopeValid(value string) bool {
+	return value == point16Val0OriginalClaimScope
+}
+
+func point16Val0ExactOriginalGovernanceScopeValid(value string) bool {
+	return value == point16Val0OriginalGovernanceScope
+}
+
+func point16Val0ExactOriginalDecisionAtValid(value string) bool {
+	return value == point16Val0OriginalDecisionAt
+}
+
+func point16Val0ExactOriginalEvaluatedAtValid(value string) bool {
+	return value == point16Val0OriginalEvaluatedAt
+}
+
+func point16Val0ExactReplayAtValid(value string) bool {
+	return value == point16Val0ReplayAt
+}
+
 func point16Val0EvidenceIdentityValid(value string) bool {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if trimmed == "" || trimmed != value {
 		return false
 	}
-	if point15Val0EvidenceIDValid(trimmed) {
-		return true
+
+	fields := strings.Fields(trimmed)
+	if len(fields) != 6 {
+		return false
 	}
-	return strings.Contains(trimmed, "evidence_id=") &&
-		strings.Contains(trimmed, "evidence_hash=") &&
-		strings.Contains(trimmed, "policy=") &&
-		strings.Contains(trimmed, "engine=") &&
-		strings.Contains(trimmed, "tenant=")
+	if strings.Join(fields, " ") != value {
+		return false
+	}
+
+	validators := []struct {
+		prefix    string
+		validator func(string) bool
+	}{
+		{prefix: "evidence_id=", validator: point15Val0EvidenceIDValid},
+		{prefix: "evidence_hash=", validator: point16Val0HistoricalEvidenceHashValid},
+		{prefix: "policy=", validator: point12Val0VersionIdentityValid},
+		{prefix: "engine=", validator: point12Val0VersionIdentityValid},
+		{prefix: "schema=", validator: point12Val0VersionIdentityValid},
+		{prefix: "tenant=", validator: point11Val0ScopeValid},
+	}
+	for idx, validator := range validators {
+		field := fields[idx]
+		if !strings.HasPrefix(field, validator.prefix) {
+			return false
+		}
+		valuePart := strings.TrimSpace(strings.TrimPrefix(field, validator.prefix))
+		if valuePart == "" || !validator.validator(valuePart) {
+			return false
+		}
+	}
+	return true
 }
 
 func point16Val0HistoricalEvidenceHashValid(value string) bool {
@@ -378,7 +775,7 @@ func point16Val0LineageRefValid(value string) bool {
 }
 
 func point16Val0ReplayStatusState(status string) string {
-	switch strings.TrimSpace(status) {
+	switch status {
 	case point16Val0ReplayBound, point16Val0HistoricalContextComplete:
 		return Point16Val0StateActive
 	case point16Val0PolicyHashMismatch,
@@ -398,6 +795,32 @@ func point16Val0ReplayStatusState(status string) string {
 	default:
 		return Point16Val0StateBlocked
 	}
+}
+
+func point16Val0AggregateFoundationStates(states ...string) string {
+	hasIncomplete := false
+	hasReview := false
+	for _, state := range states {
+		switch state {
+		case Point16Val0StateBlocked:
+			return Point16Val0StateBlocked
+		case Point16Val0StateReviewRequired:
+			hasReview = true
+		case Point16Val0StateIncomplete:
+			hasIncomplete = true
+		case Point16Val0StateActive:
+			continue
+		default:
+			return Point16Val0StateBlocked
+		}
+	}
+	if hasReview {
+		return Point16Val0StateReviewRequired
+	}
+	if hasIncomplete {
+		return Point16Val0StateIncomplete
+	}
+	return Point16Val0StateActive
 }
 
 func point16Val0ExpectedReplayStatus(model Point16Val0ReplayTaxonomy) string {
@@ -465,6 +888,7 @@ func point16Val0ExpectedReplayStatus(model Point16Val0ReplayTaxonomy) string {
 }
 
 func point16Val0DependencySnapshotFromUpstream(valE Point15ValEContinuousVerificationClosureFoundation) Point16Val0DependencySnapshot {
+	valE = point16Val0CanonicalizePoint15ValEFoundation(valE)
 	return Point16Val0DependencySnapshot{
 		Point15ValECurrentState:          valE.CurrentState,
 		Point15ValEDependencyState:       valE.DependencyState,
@@ -479,6 +903,12 @@ func point16Val0DependencySnapshotFromUpstream(valE Point15ValEContinuousVerific
 		Point15PassManifestPointID:       valE.PassClosureManifest.PointID,
 		Point15PassManifestWaveID:        valE.PassClosureManifest.WaveID,
 		Point15PassManifestClosureToken:  valE.PassClosureManifest.ClosureToken,
+		Point15PassManifestEvidenceID:    valE.PassClosureManifest.EvidenceIdentity,
+		Point15PassManifestEvidenceHash:  valE.PassClosureManifest.EvidenceHash,
+		Point15PassManifestPolicyVersion: valE.PassClosureManifest.PolicyVersion,
+		Point15PassManifestEngineVersion: valE.PassClosureManifest.EngineVersion,
+		Point15PassManifestSchemaVersion: valE.PassClosureManifest.SchemaVersion,
+		Point15PassManifestTenantScope:   valE.PassClosureManifest.TenantScope,
 		InheritedTenantScope:             valE.Dependency.InheritedTenantScope,
 		SnapshotFromComputedOutput:       true,
 		ReviewPrerequisites:              append([]string{}, valE.ReviewPrerequisites...),
@@ -492,6 +922,7 @@ func point16Val0DependencySnapshotModel() Point16Val0DependencySnapshot {
 }
 
 func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) string {
+	expected := point16Val0CanonicalDependencySnapshot()
 	if !model.SnapshotFromComputedOutput ||
 		!model.Point15ValEComputedFromUpstream ||
 		!model.Point15ValEMerged ||
@@ -501,31 +932,73 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 		!point15ValEStateValid(model.Point15ValEDependencyState) ||
 		!point15ValEStateValid(model.Point15ValEClosureEvaluatorState) ||
 		!point15ValEStateValid(model.Point15ValEPassClosureState) ||
-		!point11Val0ScopeValid(model.InheritedTenantScope) {
+		!point11Val0ScopeValid(model.InheritedTenantScope) ||
+		strings.TrimSpace(model.Point15ValECurrentState) != model.Point15ValECurrentState ||
+		strings.TrimSpace(model.Point15ValEDependencyState) != model.Point15ValEDependencyState ||
+		strings.TrimSpace(model.Point15ValEClosureEvaluatorState) != model.Point15ValEClosureEvaluatorState ||
+		strings.TrimSpace(model.Point15ValEPassClosureState) != model.Point15ValEPassClosureState {
 		return Point16Val0StateBlocked
 	}
-	if strings.TrimSpace(model.Point15ValECurrentState) != strings.TrimSpace(model.Point15ValE.CurrentState) ||
-		strings.TrimSpace(model.Point15ValEDependencyState) != strings.TrimSpace(model.Point15ValE.DependencyState) ||
-		strings.TrimSpace(model.Point15ValEClosureEvaluatorState) != strings.TrimSpace(model.Point15ValE.ClosureEvaluatorState) ||
-		strings.TrimSpace(model.Point15ValEPassClosureState) != strings.TrimSpace(model.Point15ValE.PassClosureManifestState) ||
+	if !point16Val0ExactMatch(model.Point15ValECurrentState, model.Point15ValE.CurrentState) ||
+		!point16Val0ExactMatch(model.Point15ValEDependencyState, model.Point15ValE.DependencyState) ||
+		!point16Val0ExactMatch(model.Point15ValEClosureEvaluatorState, model.Point15ValE.ClosureEvaluatorState) ||
+		!point16Val0ExactMatch(model.Point15ValEPassClosureState, model.Point15ValE.PassClosureManifestState) ||
 		model.Point15ValEComputedFromUpstream != model.Point15ValE.Dependency.SnapshotFromComputedOutput ||
 		model.Point15PassAllowed != model.Point15ValE.PassClosureManifest.Point15PassAllowed ||
-		strings.TrimSpace(model.Point15PassToken) != strings.TrimSpace(model.Point15ValE.PassClosureManifest.Point15PassToken) ||
-		strings.TrimSpace(model.Point15PassManifestPointID) != strings.TrimSpace(model.Point15ValE.PassClosureManifest.PointID) ||
-		strings.TrimSpace(model.Point15PassManifestWaveID) != strings.TrimSpace(model.Point15ValE.PassClosureManifest.WaveID) ||
-		strings.TrimSpace(model.Point15PassManifestClosureToken) != strings.TrimSpace(model.Point15ValE.PassClosureManifest.ClosureToken) ||
-		strings.TrimSpace(model.InheritedTenantScope) != strings.TrimSpace(model.Point15ValE.Dependency.InheritedTenantScope) {
+		!point16Val0ExactMatch(model.Point15PassToken, model.Point15ValE.PassClosureManifest.Point15PassToken) ||
+		!point16Val0ExactMatch(model.Point15PassManifestPointID, model.Point15ValE.PassClosureManifest.PointID) ||
+		!point16Val0ExactMatch(model.Point15PassManifestWaveID, model.Point15ValE.PassClosureManifest.WaveID) ||
+		!point16Val0ExactMatch(model.Point15PassManifestClosureToken, model.Point15ValE.PassClosureManifest.ClosureToken) ||
+		!point16Val0ExactValidatedBindingValid(model.Point15PassManifestEvidenceID, model.Point15ValE.PassClosureManifest.EvidenceIdentity, point16Val0EvidenceIdentityValid) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.Point15PassManifestEvidenceHash, model.Point15ValE.PassClosureManifest.EvidenceHash) ||
+		!point16Val0ExactVersionBindingValid(model.Point15PassManifestPolicyVersion, model.Point15ValE.PassClosureManifest.PolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15PassManifestEngineVersion, model.Point15ValE.PassClosureManifest.EngineVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15PassManifestSchemaVersion, model.Point15ValE.PassClosureManifest.SchemaVersion) ||
+		!point16Val0ExactTenantScopeBindingValid(model.Point15PassManifestTenantScope, model.Point15ValE.PassClosureManifest.TenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.InheritedTenantScope, model.Point15ValE.Dependency.InheritedTenantScope) {
 		return Point16Val0StateBlocked
 	}
-	if strings.TrimSpace(model.Point15ValECurrentState) != Point15ValEStatePassConfirmed ||
-		strings.TrimSpace(model.Point15ValEDependencyState) != Point15ValEStatePassConfirmed ||
-		strings.TrimSpace(model.Point15ValEClosureEvaluatorState) != Point15ValEStatePassConfirmed ||
-		strings.TrimSpace(model.Point15ValEPassClosureState) != Point15ValEStatePassConfirmed ||
+	if !point16Val0ExactMatch(model.Point15ValECurrentState, expected.Point15ValECurrentState) ||
+		!point16Val0ExactMatch(model.Point15ValEDependencyState, expected.Point15ValEDependencyState) ||
+		!point16Val0ExactMatch(model.Point15ValEClosureEvaluatorState, expected.Point15ValEClosureEvaluatorState) ||
+		!point16Val0ExactMatch(model.Point15ValEPassClosureState, expected.Point15ValEPassClosureState) ||
+		model.Point15PassAllowed != expected.Point15PassAllowed ||
+		!point16Val0ExactMatch(model.Point15PassToken, expected.Point15PassToken) ||
+		!point16Val0ExactMatch(model.Point15PassManifestPointID, expected.Point15PassManifestPointID) ||
+		!point16Val0ExactMatch(model.Point15PassManifestWaveID, expected.Point15PassManifestWaveID) ||
+		!point16Val0ExactMatch(model.Point15PassManifestClosureToken, expected.Point15PassManifestClosureToken) ||
+		!point16Val0ExactValidatedBindingValid(model.Point15PassManifestEvidenceID, expected.Point15PassManifestEvidenceID, point16Val0EvidenceIdentityValid) ||
+		!point16Val0ExactValidatedBindingValid(model.Point15ValE.PassClosureManifest.EvidenceIdentity, expected.Point15ValE.PassClosureManifest.EvidenceIdentity, point16Val0EvidenceIdentityValid) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.Point15PassManifestEvidenceHash, expected.Point15PassManifestEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.Point15ValE.PassClosureManifest.EvidenceHash, expected.Point15ValE.PassClosureManifest.EvidenceHash) ||
+		!point16Val0ExactVersionBindingValid(model.Point15PassManifestPolicyVersion, expected.Point15PassManifestPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15ValE.PassClosureManifest.PolicyVersion, expected.Point15ValE.PassClosureManifest.PolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15PassManifestEngineVersion, expected.Point15PassManifestEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15ValE.PassClosureManifest.EngineVersion, expected.Point15ValE.PassClosureManifest.EngineVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15PassManifestSchemaVersion, expected.Point15PassManifestSchemaVersion) ||
+		!point16Val0ExactVersionBindingValid(model.Point15ValE.PassClosureManifest.SchemaVersion, expected.Point15ValE.PassClosureManifest.SchemaVersion) ||
+		!point16Val0ExactTenantScopeBindingValid(model.Point15PassManifestTenantScope, expected.Point15PassManifestTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.Point15ValE.PassClosureManifest.TenantScope, expected.Point15ValE.PassClosureManifest.TenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.InheritedTenantScope, expected.InheritedTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.Point15ValE.Dependency.InheritedTenantScope, expected.Point15ValE.Dependency.InheritedTenantScope) {
+		return Point16Val0StateBlocked
+	}
+	if model.Point15ValECurrentState != Point15ValEStatePassConfirmed ||
+		model.Point15ValEDependencyState != Point15ValEStatePassConfirmed ||
+		model.Point15ValEClosureEvaluatorState != Point15ValEStatePassConfirmed ||
+		model.Point15ValEPassClosureState != Point15ValEStatePassConfirmed ||
 		!model.Point15PassAllowed ||
-		strings.TrimSpace(model.Point15PassToken) != point15Val0BlockedPassToken ||
-		strings.TrimSpace(model.Point15PassManifestPointID) != point15Val0PointID ||
-		strings.TrimSpace(model.Point15PassManifestWaveID) != point15ValEWaveID ||
-		strings.TrimSpace(model.Point15PassManifestClosureToken) != point15Val0BlockedPassToken {
+		model.Point15PassToken != point15Val0BlockedPassToken ||
+		model.Point15PassManifestPointID != point15Val0PointID ||
+		model.Point15PassManifestWaveID != point15ValEWaveID ||
+		model.Point15PassManifestClosureToken != point15Val0BlockedPassToken ||
+		!point16Val0EvidenceIdentityValid(model.Point15PassManifestEvidenceID) ||
+		!point16Val0HistoricalEvidenceHashValid(model.Point15PassManifestEvidenceHash) ||
+		!point12Val0VersionIdentityValid(model.Point15PassManifestPolicyVersion) ||
+		!point12Val0VersionIdentityValid(model.Point15PassManifestEngineVersion) ||
+		!point12Val0VersionIdentityValid(model.Point15PassManifestSchemaVersion) ||
+		!point11Val0ScopeValid(model.Point15PassManifestTenantScope) ||
+		strings.TrimSpace(model.InheritedTenantScope) != model.InheritedTenantScope {
 		return Point16Val0StateBlocked
 	}
 	return Point16Val0StateActive
@@ -533,31 +1006,34 @@ func EvaluatePoint16Val0DependencyState(model Point16Val0DependencySnapshot) str
 
 func point16Val0HistoricalReplayContextModel(dependency Point16Val0DependencySnapshot) Point16Val0HistoricalReplayContext {
 	return Point16Val0HistoricalReplayContext{
-		ContextID:                   "historical_replay_context_point16_val0_001",
-		OriginalEvidenceID:          dependency.Point15ValE.PassClosureManifest.EvidenceIdentity,
-		OriginalEvidenceHash:        dependency.Point15ValE.PassClosureManifest.EvidenceHash,
-		OriginalPolicyID:            "policy_historical_replay_001",
-		OriginalPolicyVersion:       dependency.Point15ValE.PassClosureManifest.PolicyVersion,
-		OriginalPolicyHash:          "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-		OriginalEngineID:            "engine_historical_replay_001",
-		OriginalEngineVersion:       dependency.Point15ValE.PassClosureManifest.EngineVersion,
-		OriginalEngineHash:          "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+		ContextID:                   point16Val0ContextID,
+		OriginalEvidenceID:          dependency.Point15PassManifestEvidenceID,
+		OriginalEvidenceHash:        dependency.Point15PassManifestEvidenceHash,
+		OriginalPolicyID:            point16Val0OriginalPolicyID,
+		OriginalPolicyVersion:       dependency.Point15PassManifestPolicyVersion,
+		OriginalPolicyHash:          point16Val0OriginalPolicyHash,
+		OriginalEngineID:            point16Val0OriginalEngineID,
+		OriginalEngineVersion:       dependency.Point15PassManifestEngineVersion,
+		OriginalEngineHash:          point16Val0OriginalEngineHash,
 		OriginalTenantScope:         dependency.InheritedTenantScope,
-		OriginalArtifactScope:       "artifact_scope_historical_replay_001",
-		OriginalClaimScope:          "claim_scope_historical_replay_001",
-		OriginalGovernanceScope:     "governance_scope_historical_replay_001",
-		OriginalDecisionAt:          "2026-05-08T09:00:00Z",
+		OriginalArtifactScope:       point16Val0OriginalArtifactScope,
+		OriginalClaimScope:          point16Val0OriginalClaimScope,
+		OriginalGovernanceScope:     point16Val0OriginalGovernanceScope,
+		OriginalDecisionID:          point16Val0OriginalDecisionID,
+		OriginalDecisionHash:        point16Val0OriginalDecisionHash,
+		OriginalDecisionAt:          point16Val0OriginalDecisionAt,
 		OriginalDecisionTimeSource:  point14Val0TimeSourceServerUTC,
-		OriginalEvaluatedAt:         "2026-05-08T09:05:00Z",
+		OriginalEvaluatedAt:         point16Val0OriginalEvaluatedAt,
 		OriginalEvaluatedTimeSource: point14Val0TimeSourceServerUTC,
-		ReplayAt:                    "2026-05-08T09:10:00Z",
+		ReplayAt:                    point16Val0ReplayAt,
 		ReplayTimeSource:            point14Val0TimeSourceServerUTC,
-		LineageRef:                  "lineage_point16_val0_replay_001",
+		LineageRef:                  point16Val0LineageRef,
 	}
 }
 
 func EvaluatePoint16Val0HistoricalReplayContextState(model Point16Val0HistoricalReplayContext) string {
-	if !point16Val0ContextRefValid(model.ContextID) {
+	expectedDependency := point16Val0CanonicalDependencySnapshot()
+	if !point16Val0ContextRefValid(model.ContextID) || !point16Val0ExactInternalIDValid(model.ContextID, point16Val0ContextID) {
 		return Point16Val0StateBlocked
 	}
 	requiredMissing := false
@@ -574,6 +1050,8 @@ func EvaluatePoint16Val0HistoricalReplayContextState(model Point16Val0Historical
 		model.OriginalArtifactScope,
 		model.OriginalClaimScope,
 		model.OriginalGovernanceScope,
+		model.OriginalDecisionID,
+		model.OriginalDecisionHash,
 		model.OriginalDecisionAt,
 		model.OriginalEvaluatedAt,
 		model.ReplayAt,
@@ -587,24 +1065,44 @@ func EvaluatePoint16Val0HistoricalReplayContextState(model Point16Val0Historical
 		return Point16Val0StateIncomplete
 	}
 	if !point16Val0EvidenceIdentityValid(model.OriginalEvidenceID) ||
+		!point16Val0ExactValidatedBindingValid(model.OriginalEvidenceID, expectedDependency.Point15PassManifestEvidenceID, point16Val0EvidenceIdentityValid) ||
 		!point16Val0HistoricalEvidenceHashValid(model.OriginalEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.OriginalEvidenceHash, expectedDependency.Point15PassManifestEvidenceHash) ||
 		!point16Val0PolicyIDValid(model.OriginalPolicyID) ||
+		!point16Val0ExactOriginalPolicyIDValid(model.OriginalPolicyID) ||
 		!point12Val0VersionIdentityValid(model.OriginalPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalPolicyVersion, expectedDependency.Point15PassManifestPolicyVersion) ||
 		!point12Val0HashValid(model.OriginalPolicyHash) ||
+		!point16Val0ExactOriginalPolicyHashValid(model.OriginalPolicyHash) ||
 		!point16Val0EngineIDValid(model.OriginalEngineID) ||
+		!point16Val0ExactOriginalEngineIDValid(model.OriginalEngineID) ||
 		!point12Val0VersionIdentityValid(model.OriginalEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalEngineVersion, expectedDependency.Point15PassManifestEngineVersion) ||
 		!point12Val0HashValid(model.OriginalEngineHash) ||
+		!point16Val0ExactOriginalEngineHashValid(model.OriginalEngineHash) ||
 		!point11Val0ScopeValid(model.OriginalTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.OriginalTenantScope, expectedDependency.InheritedTenantScope) ||
 		!point16Val0ArtifactScopeValid(model.OriginalArtifactScope) ||
+		!point16Val0ExactOriginalArtifactScopeValid(model.OriginalArtifactScope) ||
 		!point16Val0ClaimScopeValid(model.OriginalClaimScope) ||
+		!point16Val0ExactOriginalClaimScopeValid(model.OriginalClaimScope) ||
 		!point16Val0GovernanceScopeValid(model.OriginalGovernanceScope) ||
+		!point16Val0ExactOriginalGovernanceScopeValid(model.OriginalGovernanceScope) ||
+		!point16Val0DecisionIDValid(model.OriginalDecisionID) ||
+		!point16Val0ExactOriginalDecisionIDValid(model.OriginalDecisionID) ||
+		!point12Val0HashValid(model.OriginalDecisionHash) ||
+		!point16Val0ExactOriginalDecisionHashValid(model.OriginalDecisionHash) ||
 		!point14Val0ParsedTimeOk(model.OriginalDecisionAt) ||
+		!point16Val0ExactOriginalDecisionAtValid(model.OriginalDecisionAt) ||
 		!point14Val0ParsedTimeOk(model.OriginalEvaluatedAt) ||
+		!point16Val0ExactOriginalEvaluatedAtValid(model.OriginalEvaluatedAt) ||
 		!point14Val0ParsedTimeOk(model.ReplayAt) ||
-		!point14Val0CanonicalTimeSourceValid(model.OriginalDecisionTimeSource) ||
-		!point14Val0CanonicalTimeSourceValid(model.OriginalEvaluatedTimeSource) ||
-		!point14Val0CanonicalTimeSourceValid(model.ReplayTimeSource) ||
-		!point16Val0LineageRefValid(model.LineageRef) {
+		!point16Val0ExactReplayAtValid(model.ReplayAt) ||
+		!point16Val0ExactHistoricalTimeSourceValid(model.OriginalDecisionTimeSource) ||
+		!point16Val0ExactHistoricalTimeSourceValid(model.OriginalEvaluatedTimeSource) ||
+		!point16Val0ExactHistoricalTimeSourceValid(model.ReplayTimeSource) ||
+		!point16Val0LineageRefValid(model.LineageRef) ||
+		!point16Val0ExactLineageRefValid(model.LineageRef) {
 		return Point16Val0StateBlocked
 	}
 	decisionAt, _ := point14Val0ParsedTime(model.OriginalDecisionAt)
@@ -618,10 +1116,10 @@ func EvaluatePoint16Val0HistoricalReplayContextState(model Point16Val0Historical
 
 func point16Val0OriginalDecisionBindingModel(context Point16Val0HistoricalReplayContext) Point16Val0OriginalDecisionBinding {
 	return Point16Val0OriginalDecisionBinding{
-		BindingID:                    "original_decision_binding_point16_val0_001",
+		BindingID:                    point16Val0BindingID,
 		HistoricalReplayContextRef:   context.ContextID,
-		OriginalDecisionID:           "decision_point16_val0_original_001",
-		OriginalDecisionHash:         "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+		OriginalDecisionID:           context.OriginalDecisionID,
+		OriginalDecisionHash:         context.OriginalDecisionHash,
 		OriginalEvidenceID:           context.OriginalEvidenceID,
 		OriginalEvidenceHash:         context.OriginalEvidenceHash,
 		OriginalPolicyID:             context.OriginalPolicyID,
@@ -651,10 +1149,15 @@ func point16Val0OriginalDecisionBindingModel(context Point16Val0HistoricalReplay
 }
 
 func EvaluatePoint16Val0OriginalDecisionBindingState(model Point16Val0OriginalDecisionBinding) string {
+	expectedDependency := point16Val0CanonicalDependencySnapshot()
 	if !point16Val0DependencyRefValid(model.BindingID) ||
+		!point16Val0ExactInternalIDValid(model.BindingID, point16Val0BindingID) ||
 		!point16Val0ContextRefValid(model.HistoricalReplayContextRef) ||
+		!point16Val0ExactInternalIDValid(model.HistoricalReplayContextRef, point16Val0ContextID) ||
 		!point16Val0DecisionIDValid(model.OriginalDecisionID) ||
-		!point12Val0HashValid(model.OriginalDecisionHash) {
+		!point16Val0ExactOriginalDecisionIDValid(model.OriginalDecisionID) ||
+		!point12Val0HashValid(model.OriginalDecisionHash) ||
+		!point16Val0ExactOriginalDecisionHashValid(model.OriginalDecisionHash) {
 		return Point16Val0StateBlocked
 	}
 	requiredMissing := false
@@ -683,20 +1186,42 @@ func EvaluatePoint16Val0OriginalDecisionBindingState(model Point16Val0OriginalDe
 		return Point16Val0StateIncomplete
 	}
 	if !point16Val0EvidenceIdentityValid(model.OriginalEvidenceID) ||
+		!point16Val0ExactValidatedBindingValid(model.OriginalEvidenceID, expectedDependency.Point15PassManifestEvidenceID, point16Val0EvidenceIdentityValid) ||
 		!point16Val0HistoricalEvidenceHashValid(model.OriginalEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.OriginalEvidenceHash, expectedDependency.Point15PassManifestEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.OriginalEvidenceHash, model.CurrentEvidenceHash) ||
 		!point16Val0PolicyIDValid(model.OriginalPolicyID) ||
-		!point12Val0VersionIdentityValid(model.OriginalPolicyVersion) ||
+		!point16Val0ExactOriginalPolicyIDValid(model.OriginalPolicyID) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalPolicyVersion, model.CurrentPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalPolicyVersion, expectedDependency.Point15PassManifestPolicyVersion) ||
+		!point16Val0ExactHashBindingValid(model.OriginalPolicyHash, model.CurrentPolicyHash) ||
 		!point12Val0HashValid(model.OriginalPolicyHash) ||
+		!point16Val0ExactOriginalPolicyHashValid(model.OriginalPolicyHash) ||
 		!point16Val0EngineIDValid(model.OriginalEngineID) ||
-		!point12Val0VersionIdentityValid(model.OriginalEngineVersion) ||
+		!point16Val0ExactOriginalEngineIDValid(model.OriginalEngineID) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalEngineVersion, model.CurrentEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalEngineVersion, expectedDependency.Point15PassManifestEngineVersion) ||
+		!point16Val0ExactHashBindingValid(model.OriginalEngineHash, model.CurrentEngineHash) ||
 		!point12Val0HashValid(model.OriginalEngineHash) ||
+		!point16Val0ExactOriginalEngineHashValid(model.OriginalEngineHash) ||
 		!point11Val0ScopeValid(model.OriginalTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.OriginalTenantScope, expectedDependency.InheritedTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.OriginalTenantScope, model.CurrentTenantScope) ||
 		!point16Val0ArtifactScopeValid(model.OriginalArtifactScope) ||
+		!point16Val0ExactArtifactScopeBindingValid(model.OriginalArtifactScope, model.CurrentArtifactScope) ||
+		!point16Val0ExactOriginalArtifactScopeValid(model.OriginalArtifactScope) ||
 		!point16Val0ClaimScopeValid(model.OriginalClaimScope) ||
+		!point16Val0ExactClaimScopeBindingValid(model.OriginalClaimScope, model.CurrentClaimScope) ||
+		!point16Val0ExactOriginalClaimScopeValid(model.OriginalClaimScope) ||
 		!point16Val0GovernanceScopeValid(model.OriginalGovernanceScope) ||
+		!point16Val0ExactGovernanceScopeBindingValid(model.OriginalGovernanceScope, model.CurrentGovernanceScope) ||
+		!point16Val0ExactOriginalGovernanceScopeValid(model.OriginalGovernanceScope) ||
 		!point14Val0ParsedTimeOk(model.OriginalDecisionAt) ||
+		!point16Val0ExactOriginalDecisionAtValid(model.OriginalDecisionAt) ||
 		!point14Val0ParsedTimeOk(model.OriginalEvaluatedAt) ||
-		!point16Val0LineageRefValid(model.LineageRef) {
+		!point16Val0ExactOriginalEvaluatedAtValid(model.OriginalEvaluatedAt) ||
+		!point16Val0LineageRefValid(model.LineageRef) ||
+		!point16Val0ExactLineageRefValid(model.LineageRef) {
 		return Point16Val0StateBlocked
 	}
 	if !model.CurrentContextComparisonOnly {
@@ -707,35 +1232,36 @@ func EvaluatePoint16Val0OriginalDecisionBindingState(model Point16Val0OriginalDe
 
 func point16Val0ReplayTaxonomyModel(context Point16Val0HistoricalReplayContext, binding Point16Val0OriginalDecisionBinding) Point16Val0ReplayTaxonomy {
 	return Point16Val0ReplayTaxonomy{
-		TaxonomyID:              "replay_taxonomy_point16_val0_001",
+		TaxonomyID:              point16Val0TaxonomyID,
 		ReplayStatus:            point16Val0ReplayBound,
 		AllowedStatuses:         point16Val0ReplayStatuses(),
 		OriginalContextComplete: true,
 		OriginalEvidencePresent: true,
 		OriginalPolicyPresent:   true,
 		OriginalEnginePresent:   true,
-		EvidenceHashMatches:     context.OriginalEvidenceHash == binding.CurrentEvidenceHash,
-		PolicyHashMatches:       context.OriginalPolicyHash == binding.CurrentPolicyHash,
-		EngineHashMatches:       context.OriginalEngineHash == binding.CurrentEngineHash,
-		TenantScopeMatches:      context.OriginalTenantScope == binding.CurrentTenantScope,
-		ArtifactScopeMatches:    context.OriginalArtifactScope == binding.CurrentArtifactScope,
-		ClaimScopeMatches:       context.OriginalClaimScope == binding.CurrentClaimScope,
-		GovernanceScopeMatches:  context.OriginalGovernanceScope == binding.CurrentGovernanceScope,
+		EvidenceHashMatches:     point16Val0ExactHistoricalEvidenceHashBindingValid(context.OriginalEvidenceHash, binding.CurrentEvidenceHash),
+		PolicyHashMatches:       point16Val0ExactHashBindingValid(context.OriginalPolicyHash, binding.CurrentPolicyHash),
+		EngineHashMatches:       point16Val0ExactHashBindingValid(context.OriginalEngineHash, binding.CurrentEngineHash),
+		TenantScopeMatches:      point16Val0ExactTenantScopeBindingValid(context.OriginalTenantScope, binding.CurrentTenantScope),
+		ArtifactScopeMatches:    point16Val0ExactArtifactScopeBindingValid(context.OriginalArtifactScope, binding.CurrentArtifactScope),
+		ClaimScopeMatches:       point16Val0ExactClaimScopeBindingValid(context.OriginalClaimScope, binding.CurrentClaimScope),
+		GovernanceScopeMatches:  point16Val0ExactGovernanceScopeBindingValid(context.OriginalGovernanceScope, binding.CurrentGovernanceScope),
 		TimestampConsistent:     strings.TrimSpace(context.OriginalDecisionAt) == strings.TrimSpace(binding.OriginalDecisionAt) && strings.TrimSpace(context.OriginalEvaluatedAt) == strings.TrimSpace(binding.OriginalEvaluatedAt),
 		TimestampSafe:           true,
-		LineagePresent:          point16Val0LineageRefValid(binding.LineageRef),
+		LineagePresent:          point16Val0LineageRefValid(context.LineageRef) && point16Val0LineageRefValid(binding.LineageRef) && point16Val0ExactMatch(context.LineageRef, binding.LineageRef),
 		ReplaySupported:         true,
 	}
 }
 
 func EvaluatePoint16Val0ReplayTaxonomyState(model Point16Val0ReplayTaxonomy) string {
 	if !point16Val0DependencyRefValid(model.TaxonomyID) ||
+		!point16Val0ExactInternalIDValid(model.TaxonomyID, point16Val0TaxonomyID) ||
 		!point16Val0ReplayStatusValid(model.ReplayStatus) ||
-		!point12Val0ExactStringSetMatch(model.AllowedStatuses, point16Val0ReplayStatuses()) {
+		!point16Val0ExactRawStringSetMatch(model.AllowedStatuses, point16Val0ReplayStatuses()) {
 		return Point16Val0StateBlocked
 	}
 	expectedStatus := point16Val0ExpectedReplayStatus(model)
-	if strings.TrimSpace(model.ReplayStatus) != expectedStatus {
+	if model.ReplayStatus != expectedStatus {
 		return Point16Val0StateBlocked
 	}
 	return point16Val0ReplayStatusState(expectedStatus)
@@ -743,9 +1269,13 @@ func EvaluatePoint16Val0ReplayTaxonomyState(model Point16Val0ReplayTaxonomy) str
 
 func point16Val0CurrentSubstitutionGuardModel(context Point16Val0HistoricalReplayContext, binding Point16Val0OriginalDecisionBinding) Point16Val0CurrentSubstitutionGuard {
 	return Point16Val0CurrentSubstitutionGuard{
-		GuardID:                 "substitution_guard_point16_val0_001",
+		GuardID:                 point16Val0GuardID,
+		OriginalPolicyVersion:   context.OriginalPolicyVersion,
+		CurrentPolicyVersion:    binding.CurrentPolicyVersion,
 		OriginalPolicyHash:      context.OriginalPolicyHash,
 		CurrentPolicyHash:       binding.CurrentPolicyHash,
+		OriginalEngineVersion:   context.OriginalEngineVersion,
+		CurrentEngineVersion:    binding.CurrentEngineVersion,
 		OriginalEngineHash:      context.OriginalEngineHash,
 		CurrentEngineHash:       binding.CurrentEngineHash,
 		OriginalEvidenceHash:    context.OriginalEvidenceHash,
@@ -762,21 +1292,39 @@ func point16Val0CurrentSubstitutionGuardModel(context Point16Val0HistoricalRepla
 }
 
 func EvaluatePoint16Val0CurrentSubstitutionGuardState(model Point16Val0CurrentSubstitutionGuard) string {
+	expectedDependency := point16Val0CanonicalDependencySnapshot()
 	if !point16Val0DependencyRefValid(model.GuardID) ||
+		!point16Val0ExactInternalIDValid(model.GuardID, point16Val0GuardID) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalPolicyVersion, expectedDependency.Point15PassManifestPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalPolicyVersion, model.CurrentPolicyVersion) ||
 		!point12Val0HashValid(model.OriginalPolicyHash) ||
+		!point16Val0ExactOriginalPolicyHashValid(model.OriginalPolicyHash) ||
 		!point12Val0HashValid(model.CurrentPolicyHash) ||
+		!point16Val0ExactOriginalPolicyHashValid(model.CurrentPolicyHash) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalEngineVersion, expectedDependency.Point15PassManifestEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(model.OriginalEngineVersion, model.CurrentEngineVersion) ||
 		!point12Val0HashValid(model.OriginalEngineHash) ||
+		!point16Val0ExactOriginalEngineHashValid(model.OriginalEngineHash) ||
 		!point12Val0HashValid(model.CurrentEngineHash) ||
+		!point16Val0ExactOriginalEngineHashValid(model.CurrentEngineHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.OriginalEvidenceHash, expectedDependency.Point15PassManifestEvidenceHash) ||
 		!point16Val0HistoricalEvidenceHashValid(model.OriginalEvidenceHash) ||
-		!point16Val0HistoricalEvidenceHashValid(model.CurrentEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(model.OriginalEvidenceHash, model.CurrentEvidenceHash) ||
 		!point14Val0ParsedTimeOk(model.OriginalDecisionAt) ||
+		!point16Val0ExactOriginalDecisionAtValid(model.OriginalDecisionAt) ||
 		!point14Val0ParsedTimeOk(model.ReplayAt) ||
+		!point16Val0ExactReplayAtValid(model.ReplayAt) ||
+		!point16Val0ExactTenantScopeBindingValid(model.OriginalTenantScope, expectedDependency.InheritedTenantScope) ||
 		!point11Val0ScopeValid(model.OriginalTenantScope) ||
-		!point11Val0ScopeValid(model.CurrentTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(model.OriginalTenantScope, model.CurrentTenantScope) ||
 		!point16Val0ClaimScopeValid(model.OriginalClaimScope) ||
+		!point16Val0ExactOriginalClaimScopeValid(model.OriginalClaimScope) ||
 		!point16Val0ClaimScopeValid(model.CurrentClaimScope) ||
+		!point16Val0ExactOriginalClaimScopeValid(model.CurrentClaimScope) ||
 		!point16Val0GovernanceScopeValid(model.OriginalGovernanceScope) ||
-		!point16Val0GovernanceScopeValid(model.CurrentGovernanceScope) {
+		!point16Val0ExactOriginalGovernanceScopeValid(model.OriginalGovernanceScope) ||
+		!point16Val0GovernanceScopeValid(model.CurrentGovernanceScope) ||
+		!point16Val0ExactOriginalGovernanceScopeValid(model.CurrentGovernanceScope) {
 		return Point16Val0StateBlocked
 	}
 	if model.CurrentPolicyAuthoritative ||
@@ -793,7 +1341,7 @@ func EvaluatePoint16Val0CurrentSubstitutionGuardState(model Point16Val0CurrentSu
 
 func point16Val0ReplayReadinessEvaluationModel() Point16Val0ReplayReadinessEvaluation {
 	return Point16Val0ReplayReadinessEvaluation{
-		EvaluationID:                  "readiness_evaluation_point16_val0_001",
+		EvaluationID:                  point16Val0EvaluationID,
 		OriginalContextExactBound:     true,
 		TenantSafe:                    true,
 		TimestampSafe:                 true,
@@ -818,6 +1366,7 @@ func point16Val0ReplayReadinessEvaluationModel() Point16Val0ReplayReadinessEvalu
 
 func EvaluatePoint16Val0ReplayReadinessState(model Point16Val0ReplayReadinessEvaluation) string {
 	if !point16Val0DependencyRefValid(model.EvaluationID) ||
+		!point16Val0ExactInternalIDValid(model.EvaluationID, point16Val0EvaluationID) ||
 		!point16Val0StateValid(model.DependencyState) ||
 		!point16Val0StateValid(model.HistoricalReplayContextState) ||
 		!point16Val0StateValid(model.OriginalDecisionBindingState) ||
@@ -874,9 +1423,9 @@ func point16Val0NoOverclaimBaselineModel() Point16Val0NoOverclaimBaseline {
 }
 
 func EvaluatePoint16Val0NoOverclaimBaselineState(model Point16Val0NoOverclaimBaseline) string {
-	if strings.TrimSpace(model.ReplayDisclaimer) != point16Val0ReplayDisclaimer ||
-		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point16Val0SafeWording()) ||
-		!point12Val0ExactStringSetMatch(model.BlockedWording, point16Val0ForbiddenWording()) {
+	if model.ReplayDisclaimer != point16Val0ReplayDisclaimer ||
+		!point16Val0ExactRawStringSetMatch(model.AllowedSafeWording, point16Val0SafeWording()) ||
+		!point16Val0ExactRawStringSetMatch(model.BlockedWording, point16Val0ForbiddenWording()) {
 		return Point16Val0StateBlocked
 	}
 	if point16Val0ObservedListContainsForbiddenWording(model.ObservedTexts) {
@@ -911,17 +1460,17 @@ func Point16Val0FoundationModel() Point16Val0Foundation {
 
 func point16Val0Aggregate(states ...string) string {
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point16Val0StateBlocked {
+		if state == Point16Val0StateBlocked {
 			return Point16Val0StateBlocked
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point16Val0StateReviewRequired {
+		if state == Point16Val0StateReviewRequired {
 			return Point16Val0StateReviewRequired
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point16Val0StateIncomplete {
+		if state == Point16Val0StateIncomplete {
 			return Point16Val0StateIncomplete
 		}
 	}
@@ -940,7 +1489,7 @@ func point16Val0BlockingReasons(model Point16Val0Foundation) []string {
 	}
 	reasons := []string{}
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point16Val0StateBlocked {
+		if state == Point16Val0StateBlocked {
 			reasons = append(reasons, name)
 		}
 	}
@@ -959,7 +1508,7 @@ func point16Val0ReviewPrerequisites(model Point16Val0Foundation) []string {
 	}
 	prereqs := append([]string{}, model.Dependency.ReviewPrerequisites...)
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point16Val0StateReviewRequired || strings.TrimSpace(state) == Point16Val0StateIncomplete {
+		if state == Point16Val0StateReviewRequired || state == Point16Val0StateIncomplete {
 			prereqs = append(prereqs, name)
 		}
 	}
@@ -972,23 +1521,32 @@ func ComputePoint16Val0Foundation(model Point16Val0Foundation) Point16Val0Founda
 	model.HistoricalReplayContextState = EvaluatePoint16Val0HistoricalReplayContextState(model.HistoricalReplayContext)
 	model.OriginalDecisionBindingState = EvaluatePoint16Val0OriginalDecisionBindingState(model.OriginalDecisionBinding)
 
-	expectedEvidenceHashMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceHash) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentEvidenceHash) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceHash) == strings.TrimSpace(model.CurrentSubstitutionGuard.CurrentEvidenceHash)
-	expectedPolicyHashMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyHash) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentPolicyHash) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyHash) == strings.TrimSpace(model.CurrentSubstitutionGuard.CurrentPolicyHash)
-	expectedEngineHashMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalEngineHash) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentEngineHash) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalEngineHash) == strings.TrimSpace(model.CurrentSubstitutionGuard.CurrentEngineHash)
-	expectedTenantScopeMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalTenantScope) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentTenantScope) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalTenantScope) == strings.TrimSpace(model.CurrentSubstitutionGuard.CurrentTenantScope)
-	expectedArtifactScopeMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalArtifactScope) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentArtifactScope)
-	expectedClaimScopeMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalClaimScope) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentClaimScope) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalClaimScope) == strings.TrimSpace(model.CurrentSubstitutionGuard.CurrentClaimScope)
-	expectedGovernanceScopeMatches := strings.TrimSpace(model.HistoricalReplayContext.OriginalGovernanceScope) == strings.TrimSpace(model.OriginalDecisionBinding.CurrentGovernanceScope) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalGovernanceScope) == strings.TrimSpace(model.CurrentSubstitutionGuard.CurrentGovernanceScope)
-	expectedTimestampConsistent := strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionAt) == strings.TrimSpace(model.OriginalDecisionBinding.OriginalDecisionAt) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionAt) == strings.TrimSpace(model.CurrentSubstitutionGuard.OriginalDecisionAt) &&
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalEvaluatedAt) == strings.TrimSpace(model.OriginalDecisionBinding.OriginalEvaluatedAt) &&
-		strings.TrimSpace(model.HistoricalReplayContext.ReplayAt) == strings.TrimSpace(model.CurrentSubstitutionGuard.ReplayAt)
+	expectedEvidenceHashMatches := point16Val0ExactHistoricalEvidenceHashBindingValid(model.HistoricalReplayContext.OriginalEvidenceHash, model.OriginalDecisionBinding.CurrentEvidenceHash) &&
+		point16Val0ExactHistoricalEvidenceHashBindingValid(model.HistoricalReplayContext.OriginalEvidenceHash, model.CurrentSubstitutionGuard.CurrentEvidenceHash)
+	expectedPolicyVersionMatches := point16Val0ExactVersionBindingValid(model.HistoricalReplayContext.OriginalPolicyVersion, model.OriginalDecisionBinding.CurrentPolicyVersion) &&
+		point16Val0ExactVersionBindingValid(model.HistoricalReplayContext.OriginalPolicyVersion, model.CurrentSubstitutionGuard.CurrentPolicyVersion)
+	expectedPolicyHashMatches := point16Val0ExactHashBindingValid(model.HistoricalReplayContext.OriginalPolicyHash, model.OriginalDecisionBinding.CurrentPolicyHash) &&
+		point16Val0ExactHashBindingValid(model.HistoricalReplayContext.OriginalPolicyHash, model.CurrentSubstitutionGuard.CurrentPolicyHash)
+	expectedEngineVersionMatches := point16Val0ExactVersionBindingValid(model.HistoricalReplayContext.OriginalEngineVersion, model.OriginalDecisionBinding.CurrentEngineVersion) &&
+		point16Val0ExactVersionBindingValid(model.HistoricalReplayContext.OriginalEngineVersion, model.CurrentSubstitutionGuard.CurrentEngineVersion)
+	expectedEngineHashMatches := point16Val0ExactHashBindingValid(model.HistoricalReplayContext.OriginalEngineHash, model.OriginalDecisionBinding.CurrentEngineHash) &&
+		point16Val0ExactHashBindingValid(model.HistoricalReplayContext.OriginalEngineHash, model.CurrentSubstitutionGuard.CurrentEngineHash)
+	expectedTenantScopeMatches := point16Val0ExactTenantScopeBindingValid(model.HistoricalReplayContext.OriginalTenantScope, model.OriginalDecisionBinding.CurrentTenantScope) &&
+		point16Val0ExactTenantScopeBindingValid(model.HistoricalReplayContext.OriginalTenantScope, model.CurrentSubstitutionGuard.CurrentTenantScope)
+	expectedArtifactScopeMatches := point16Val0ExactArtifactScopeBindingValid(model.HistoricalReplayContext.OriginalArtifactScope, model.OriginalDecisionBinding.CurrentArtifactScope)
+	expectedClaimScopeMatches := point16Val0ExactClaimScopeBindingValid(model.HistoricalReplayContext.OriginalClaimScope, model.OriginalDecisionBinding.CurrentClaimScope) &&
+		point16Val0ExactClaimScopeBindingValid(model.HistoricalReplayContext.OriginalClaimScope, model.CurrentSubstitutionGuard.CurrentClaimScope)
+	expectedGovernanceScopeMatches := point16Val0ExactGovernanceScopeBindingValid(model.HistoricalReplayContext.OriginalGovernanceScope, model.OriginalDecisionBinding.CurrentGovernanceScope) &&
+		point16Val0ExactGovernanceScopeBindingValid(model.HistoricalReplayContext.OriginalGovernanceScope, model.CurrentSubstitutionGuard.CurrentGovernanceScope)
+	expectedReplayProvenanceExactBound := point16Val0ReplayProvenanceExactBound(model.HistoricalReplayContext, model.OriginalDecisionBinding)
+	expectedHistoricalTimeSourcesSafe := point16Val0ExactHistoricalTimeSourceValid(model.HistoricalReplayContext.OriginalDecisionTimeSource) &&
+		point16Val0ExactHistoricalTimeSourceValid(model.HistoricalReplayContext.OriginalEvaluatedTimeSource) &&
+		point16Val0ExactHistoricalTimeSourceValid(model.HistoricalReplayContext.ReplayTimeSource)
+	expectedTimestampConsistent := point16Val0ExactTimestampBindingValid(model.HistoricalReplayContext.OriginalDecisionAt, model.OriginalDecisionBinding.OriginalDecisionAt) &&
+		point16Val0ExactTimestampBindingValid(model.HistoricalReplayContext.OriginalDecisionAt, model.CurrentSubstitutionGuard.OriginalDecisionAt) &&
+		point16Val0ExactTimestampBindingValid(model.HistoricalReplayContext.OriginalEvaluatedAt, model.OriginalDecisionBinding.OriginalEvaluatedAt) &&
+		point16Val0ExactTimestampBindingValid(model.HistoricalReplayContext.ReplayAt, model.CurrentSubstitutionGuard.ReplayAt) &&
+		expectedHistoricalTimeSourcesSafe
 	expectedOriginalContextComplete := strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceID) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceHash) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyID) != "" &&
@@ -1001,6 +1559,8 @@ func ComputePoint16Val0Foundation(model Point16Val0Foundation) Point16Val0Founda
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalArtifactScope) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalClaimScope) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalGovernanceScope) != "" &&
+		strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionID) != "" &&
+		strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionHash) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionAt) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.OriginalEvaluatedAt) != "" &&
 		strings.TrimSpace(model.HistoricalReplayContext.ReplayAt) != ""
@@ -1016,7 +1576,7 @@ func ComputePoint16Val0Foundation(model Point16Val0Foundation) Point16Val0Founda
 		model.ReplayTaxonomy.OriginalEvidencePresent != (strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceID) != "" && strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceHash) != "") ||
 		model.ReplayTaxonomy.OriginalPolicyPresent != (strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyID) != "" && strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyVersion) != "" && strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyHash) != "") ||
 		model.ReplayTaxonomy.OriginalEnginePresent != (strings.TrimSpace(model.HistoricalReplayContext.OriginalEngineID) != "" && strings.TrimSpace(model.HistoricalReplayContext.OriginalEngineVersion) != "" && strings.TrimSpace(model.HistoricalReplayContext.OriginalEngineHash) != "") ||
-		model.ReplayTaxonomy.LineagePresent != point16Val0LineageRefValid(model.OriginalDecisionBinding.LineageRef) {
+		model.ReplayTaxonomy.LineagePresent != (point16Val0LineageRefValid(model.HistoricalReplayContext.LineageRef) && point16Val0LineageRefValid(model.OriginalDecisionBinding.LineageRef) && point16Val0ExactMatch(model.HistoricalReplayContext.LineageRef, model.OriginalDecisionBinding.LineageRef)) {
 		model.ReplayTaxonomyState = Point16Val0StateBlocked
 	} else {
 		model.ReplayTaxonomyState = EvaluatePoint16Val0ReplayTaxonomyState(model.ReplayTaxonomy)
@@ -1025,31 +1585,40 @@ func ComputePoint16Val0Foundation(model Point16Val0Foundation) Point16Val0Founda
 	model.CurrentSubstitutionGuardState = EvaluatePoint16Val0CurrentSubstitutionGuardState(model.CurrentSubstitutionGuard)
 	model.NoOverclaimState = EvaluatePoint16Val0NoOverclaimBaselineState(model.NoOverclaimBaseline)
 
-	expectedTenant := strings.TrimSpace(model.Dependency.InheritedTenantScope)
-	expectedEvidenceID := strings.TrimSpace(model.Dependency.Point15ValE.PassClosureManifest.EvidenceIdentity)
-	expectedEvidenceHash := strings.TrimSpace(model.Dependency.Point15ValE.PassClosureManifest.EvidenceHash)
-	expectedPolicyVersion := strings.TrimSpace(model.Dependency.Point15ValE.PassClosureManifest.PolicyVersion)
-	expectedEngineVersion := strings.TrimSpace(model.Dependency.Point15ValE.PassClosureManifest.EngineVersion)
+	expectedTenant := model.Dependency.InheritedTenantScope
+	expectedEvidenceID := model.Dependency.Point15PassManifestEvidenceID
+	expectedEvidenceHash := model.Dependency.Point15PassManifestEvidenceHash
+	expectedPolicyVersion := model.Dependency.Point15PassManifestPolicyVersion
+	expectedEngineVersion := model.Dependency.Point15PassManifestEngineVersion
 
-	if expectedTenant == "" ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalTenantScope) != expectedTenant ||
-		strings.TrimSpace(model.OriginalDecisionBinding.OriginalTenantScope) != expectedTenant ||
-		strings.TrimSpace(model.CurrentSubstitutionGuard.OriginalTenantScope) != expectedTenant {
+	if !point16Val0ExactTenantScopeBindingValid(expectedTenant, model.HistoricalReplayContext.OriginalTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(expectedTenant, model.OriginalDecisionBinding.OriginalTenantScope) ||
+		!point16Val0ExactTenantScopeBindingValid(expectedTenant, model.CurrentSubstitutionGuard.OriginalTenantScope) {
 		model.HistoricalReplayContextState = Point16Val0StateBlocked
 		model.OriginalDecisionBindingState = Point16Val0StateBlocked
 		model.CurrentSubstitutionGuardState = Point16Val0StateBlocked
 	}
-	if expectedEvidenceID == "" ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.OriginalDecisionBinding.OriginalEvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalEvidenceHash) != expectedEvidenceHash ||
-		strings.TrimSpace(model.OriginalDecisionBinding.OriginalEvidenceHash) != expectedEvidenceHash ||
-		strings.TrimSpace(model.CurrentSubstitutionGuard.OriginalEvidenceHash) != expectedEvidenceHash ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalPolicyVersion) != expectedPolicyVersion ||
-		strings.TrimSpace(model.OriginalDecisionBinding.OriginalPolicyVersion) != expectedPolicyVersion ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalEngineVersion) != expectedEngineVersion ||
-		strings.TrimSpace(model.OriginalDecisionBinding.OriginalEngineVersion) != expectedEngineVersion {
+	if !point16Val0ExactValidatedBindingValid(expectedEvidenceID, model.HistoricalReplayContext.OriginalEvidenceID, point16Val0EvidenceIdentityValid) ||
+		!point16Val0ExactValidatedBindingValid(expectedEvidenceID, model.OriginalDecisionBinding.OriginalEvidenceID, point16Val0EvidenceIdentityValid) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(expectedEvidenceHash, model.HistoricalReplayContext.OriginalEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(expectedEvidenceHash, model.OriginalDecisionBinding.OriginalEvidenceHash) ||
+		!point16Val0ExactHistoricalEvidenceHashBindingValid(expectedEvidenceHash, model.CurrentSubstitutionGuard.OriginalEvidenceHash) ||
+		!point16Val0ExactVersionBindingValid(expectedPolicyVersion, model.HistoricalReplayContext.OriginalPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedPolicyVersion, model.OriginalDecisionBinding.OriginalPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedPolicyVersion, model.OriginalDecisionBinding.CurrentPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedPolicyVersion, model.CurrentSubstitutionGuard.OriginalPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedPolicyVersion, model.CurrentSubstitutionGuard.CurrentPolicyVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedEngineVersion, model.HistoricalReplayContext.OriginalEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedEngineVersion, model.OriginalDecisionBinding.OriginalEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedEngineVersion, model.OriginalDecisionBinding.CurrentEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedEngineVersion, model.CurrentSubstitutionGuard.OriginalEngineVersion) ||
+		!point16Val0ExactVersionBindingValid(expectedEngineVersion, model.CurrentSubstitutionGuard.CurrentEngineVersion) {
 		model.HistoricalReplayContextState = Point16Val0StateBlocked
+		model.OriginalDecisionBindingState = Point16Val0StateBlocked
+		model.CurrentSubstitutionGuardState = Point16Val0StateBlocked
+		model.ReplayTaxonomyState = Point16Val0StateBlocked
+	}
+	if !expectedPolicyVersionMatches || !expectedEngineVersionMatches {
 		model.OriginalDecisionBindingState = Point16Val0StateBlocked
 		model.CurrentSubstitutionGuardState = Point16Val0StateBlocked
 		model.ReplayTaxonomyState = Point16Val0StateBlocked
@@ -1057,12 +1626,23 @@ func ComputePoint16Val0Foundation(model Point16Val0Foundation) Point16Val0Founda
 	if strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionAt) == "" ||
 		strings.TrimSpace(model.OriginalDecisionBinding.OriginalDecisionAt) == "" ||
 		strings.TrimSpace(model.CurrentSubstitutionGuard.OriginalDecisionAt) == "" ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionAt) != strings.TrimSpace(model.OriginalDecisionBinding.OriginalDecisionAt) ||
-		strings.TrimSpace(model.HistoricalReplayContext.OriginalDecisionAt) != strings.TrimSpace(model.CurrentSubstitutionGuard.OriginalDecisionAt) {
+		!expectedHistoricalTimeSourcesSafe ||
+		!point16Val0ExactTimestampBindingValid(model.HistoricalReplayContext.OriginalDecisionAt, model.OriginalDecisionBinding.OriginalDecisionAt) ||
+		!point16Val0ExactTimestampBindingValid(model.HistoricalReplayContext.OriginalDecisionAt, model.CurrentSubstitutionGuard.OriginalDecisionAt) {
 		model.OriginalDecisionBindingState = Point16Val0StateBlocked
+		model.HistoricalReplayContextState = Point16Val0StateBlocked
 		model.CurrentSubstitutionGuardState = Point16Val0StateBlocked
 		model.ReplayTaxonomyState = Point16Val0StateBlocked
 	}
+	if !expectedReplayProvenanceExactBound {
+		model.OriginalDecisionBindingState = Point16Val0StateBlocked
+		model.ReplayTaxonomyState = Point16Val0StateBlocked
+	}
+	model.ReplayTaxonomyState = point16Val0AggregateFoundationStates(
+		model.ReplayTaxonomyState,
+		model.HistoricalReplayContextState,
+		model.OriginalDecisionBindingState,
+	)
 
 	model.ReplayReadinessEvaluation.DependencyState = model.DependencyState
 	model.ReplayReadinessEvaluation.HistoricalReplayContextState = model.HistoricalReplayContextState
@@ -1070,12 +1650,14 @@ func ComputePoint16Val0Foundation(model Point16Val0Foundation) Point16Val0Founda
 	model.ReplayReadinessEvaluation.ReplayTaxonomyState = model.ReplayTaxonomyState
 	model.ReplayReadinessEvaluation.CurrentSubstitutionGuardState = model.CurrentSubstitutionGuardState
 	model.ReplayReadinessEvaluation.NoOverclaimState = model.NoOverclaimState
-	model.ReplayReadinessEvaluation.OriginalContextExactBound = expectedOriginalContextComplete
+	model.ReplayReadinessEvaluation.OriginalContextExactBound = expectedOriginalContextComplete && expectedReplayProvenanceExactBound
 	model.ReplayReadinessEvaluation.TenantSafe = expectedTenantScopeMatches && expectedTenant != ""
 	model.ReplayReadinessEvaluation.TimestampSafe = model.ReplayTaxonomy.TimestampSafe && expectedTimestampConsistent
 	model.ReplayReadinessEvaluation.HashSafe = expectedEvidenceHashMatches && expectedPolicyHashMatches && expectedEngineHashMatches
 	model.ReplayReadinessEvaluation.GovernanceSafe = expectedGovernanceScopeMatches
-	model.ReplayReadinessEvaluation.LineageSafe = point16Val0LineageRefValid(model.OriginalDecisionBinding.LineageRef)
+	model.ReplayReadinessEvaluation.LineageSafe = point16Val0LineageRefValid(model.HistoricalReplayContext.LineageRef) &&
+		point16Val0LineageRefValid(model.OriginalDecisionBinding.LineageRef) &&
+		point16Val0ExactMatch(model.HistoricalReplayContext.LineageRef, model.OriginalDecisionBinding.LineageRef)
 	model.ReplayReadinessEvaluation.ReplaySupported = model.ReplayTaxonomy.ReplaySupported
 	model.ReplayReadinessState = EvaluatePoint16Val0ReplayReadinessState(model.ReplayReadinessEvaluation)
 
