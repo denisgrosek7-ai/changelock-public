@@ -13,6 +13,8 @@ const (
 	developerEcosystemValCProofsSchema = "point8.developer_ecosystem.valc.proofs.v1"
 )
 
+var developerEcosystemValCModelCache cachedJSONValue
+
 type developerEcosystemValCStatusResponse struct {
 	SchemaVersion string                                        `json:"schema_version"`
 	GeneratedAt   time.Time                                     `json:"generated_at"`
@@ -79,25 +81,23 @@ func developerEcosystemValCProjectionDisclaimer() string {
 	return "projection_only not_canonical_truth developer_ecosystem_valc advisory_projection plugin_extensibility"
 }
 
-func buildDeveloperEcosystemValCValECompatibilityGate() operability.DeveloperEcosystemValCValECompatibilityGate {
+func buildDeveloperEcosystemValCValECompatibilityGateFromValB(valB operability.DeveloperEcosystemValBIntegration) operability.DeveloperEcosystemValCValECompatibilityGate {
 	model := operability.DeveloperEcosystemValCValECompatibilityGateModel()
-	valE := buildVerifierEcosystemValEProofs()
-	model.ValECurrentState = valE.ValEState
-	model.Point7State = valE.Point7State
-	model.PassRuleState = valE.PassRuleState
-	model.NoOverclaimState = valE.NoOverclaimState
-	model.ProofSurfaceState = valE.ProofSurfaceState
-	model.EvidenceQualityState = valE.EvidenceQualityState
-	model.Point7PassAllowed = valE.Point7PassAllowed
-	model.Point7PassReason = valE.Point7PassReason
-	model.SurfaceRefs = valE.SurfaceRefs
-	model.EvidenceRefs = valE.EvidenceRefs
-	model.ProjectionDisclaimer = valE.ProjectionDisclaimer
+	model.ValECurrentState = valB.ValECompatibility.ValECurrentState
+	model.Point7State = valB.ValECompatibility.Point7State
+	model.PassRuleState = valB.ValECompatibility.PassRuleState
+	model.NoOverclaimState = valB.ValECompatibility.NoOverclaimState
+	model.ProofSurfaceState = valB.ValECompatibility.ProofSurfaceState
+	model.EvidenceQualityState = valB.ValECompatibility.EvidenceQualityState
+	model.Point7PassAllowed = valB.ValECompatibility.Point7PassAllowed
+	model.Point7PassReason = valB.ValECompatibility.Point7PassReason
+	model.SurfaceRefs = append([]string{}, valB.ValECompatibility.SurfaceRefs...)
+	model.EvidenceRefs = append([]string{}, valB.ValECompatibility.EvidenceRefs...)
+	model.ProjectionDisclaimer = valB.ValECompatibility.ProjectionDisclaimer
 	return model
 }
 
-func buildDeveloperEcosystemValCValBCompatibilityGate() operability.DeveloperEcosystemValCValBCompatibilityGate {
-	valB := buildDeveloperEcosystemValBModel()
+func buildDeveloperEcosystemValCValBCompatibilityGateFromValB(valB operability.DeveloperEcosystemValBIntegration) operability.DeveloperEcosystemValCValBCompatibilityGate {
 	model := operability.DeveloperEcosystemValCValBCompatibilityGateModel()
 	model.ValBCurrentState = valB.CurrentState
 	model.Point8State = valB.Point8State
@@ -114,8 +114,7 @@ func buildDeveloperEcosystemValCValBCompatibilityGate() operability.DeveloperEco
 	return model
 }
 
-func buildDeveloperEcosystemValCDependencySnapshot() operability.DeveloperEcosystemValCDependencySnapshot {
-	valB := buildDeveloperEcosystemValBModel()
+func buildDeveloperEcosystemValCDependencySnapshotFromValB(valB operability.DeveloperEcosystemValBIntegration) operability.DeveloperEcosystemValCDependencySnapshot {
 	return operability.DeveloperEcosystemValCDependencySnapshot{
 		ValBCurrentState:          valB.CurrentState,
 		ValBPoint8State:           valB.Point8State,
@@ -135,11 +134,12 @@ func buildDeveloperEcosystemValCDependencySnapshot() operability.DeveloperEcosys
 	}
 }
 
-func buildDeveloperEcosystemValCModel() operability.DeveloperEcosystemValCIntegration {
+func buildDeveloperEcosystemValCModelUncached() operability.DeveloperEcosystemValCIntegration {
+	valB := buildDeveloperEcosystemValBModel()
 	model := operability.DeveloperEcosystemValCIntegrationModel()
-	model.ValECompatibility = buildDeveloperEcosystemValCValECompatibilityGate()
-	model.ValBCompatibility = buildDeveloperEcosystemValCValBCompatibilityGate()
-	model.Dependency = buildDeveloperEcosystemValCDependencySnapshot()
+	model.ValECompatibility = buildDeveloperEcosystemValCValECompatibilityGateFromValB(valB)
+	model.ValBCompatibility = buildDeveloperEcosystemValCValBCompatibilityGateFromValB(valB)
+	model.Dependency = buildDeveloperEcosystemValCDependencySnapshotFromValB(valB)
 	model = operability.ComputeDeveloperEcosystemValCIntegration(model)
 	model.ValECompatibility.CurrentState = model.ValECompatibilityState
 	model.ValBCompatibility.CurrentState = model.ValBCompatibilityState
@@ -155,6 +155,10 @@ func buildDeveloperEcosystemValCModel() operability.DeveloperEcosystemValCIntegr
 	model.ExtensionCompatibility.CurrentState = model.ExtensionCompatibilityState
 	model.NoOverclaim.CurrentState = model.NoOverclaimState
 	return model
+}
+
+func buildDeveloperEcosystemValCModel() operability.DeveloperEcosystemValCIntegration {
+	return loadCachedJSON(&developerEcosystemValCModelCache, buildDeveloperEcosystemValCModelUncached)
 }
 
 func (s server) developerEcosystemValCStatusHandler(w http.ResponseWriter, r *http.Request) {

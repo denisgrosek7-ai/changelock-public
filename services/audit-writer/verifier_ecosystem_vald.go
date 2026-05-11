@@ -21,6 +21,31 @@ const (
 	verifierEcosystemValDProofsSchema                     = "point7.verifier_ecosystem.vald.proofs.v1"
 )
 
+var verifierEcosystemValDSharedStatesCache cachedJSONValue
+
+type verifierEcosystemValDSharedStatesSnapshot struct {
+	Dependency                  operability.VerifierEcosystemValDDependencySnapshot         `json:"dependency"`
+	Correctness                 operability.VerifierEcosystemValDCorrectnessGate            `json:"correctness"`
+	Tooling                     operability.VerifierEcosystemValDToolingGate                `json:"tooling"`
+	SchemaCompatibility         operability.VerifierEcosystemValDSchemaCompatibilityGate    `json:"schema_compatibility"`
+	DiagnosticsConformance      operability.VerifierEcosystemValDDiagnosticsConformanceGate `json:"diagnostics_conformance"`
+	TrustKeyRotation            operability.VerifierEcosystemValDTrustKeyRotationGate       `json:"trust_key_rotation"`
+	NegativeDiagnostics         operability.VerifierEcosystemValDNegativeDiagnosticsGate    `json:"negative_diagnostics"`
+	Redaction                   operability.VerifierEcosystemValDRedactionGate              `json:"redaction"`
+	PublisherArtifact           operability.VerifierEcosystemValDPublisherArtifactGate      `json:"publisher_artifact"`
+	NoOverclaim                 operability.VerifierEcosystemValDNoOverclaimGate            `json:"no_overclaim"`
+	CorrectnessState            string                                                      `json:"correctness_state"`
+	ToolingState                string                                                      `json:"tooling_state"`
+	SchemaCompatibilityState    string                                                      `json:"schema_compatibility_state"`
+	DiagnosticsConformanceState string                                                      `json:"diagnostics_conformance_state"`
+	TrustKeyRotationState       string                                                      `json:"trust_key_rotation_state"`
+	NegativeDiagnosticsState    string                                                      `json:"negative_diagnostics_state"`
+	RedactionState              string                                                      `json:"redaction_state"`
+	PublisherArtifactState      string                                                      `json:"publisher_artifact_state"`
+	NoOverclaimState            string                                                      `json:"no_overclaim_state"`
+	ValDState                   string                                                      `json:"val_d_state"`
+}
+
 type verifierEcosystemValDModelResponse struct {
 	SchemaVersion string    `json:"schema_version"`
 	GeneratedAt   time.Time `json:"generated_at"`
@@ -138,28 +163,7 @@ func verifierEcosystemValDAudienceSurfaceSummary(model operability.VerifierEcosy
 	return publicCount, partnerCount, redactionPolicy, evidenceVisibility, trustVisibility, internalSeparated
 }
 
-func buildVerifierEcosystemValDSharedStates() (
-	operability.VerifierEcosystemValDDependencySnapshot,
-	operability.VerifierEcosystemValDCorrectnessGate,
-	operability.VerifierEcosystemValDToolingGate,
-	operability.VerifierEcosystemValDSchemaCompatibilityGate,
-	operability.VerifierEcosystemValDDiagnosticsConformanceGate,
-	operability.VerifierEcosystemValDTrustKeyRotationGate,
-	operability.VerifierEcosystemValDNegativeDiagnosticsGate,
-	operability.VerifierEcosystemValDRedactionGate,
-	operability.VerifierEcosystemValDPublisherArtifactGate,
-	operability.VerifierEcosystemValDNoOverclaimGate,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-) {
+func buildVerifierEcosystemValDSharedStatesUncached() verifierEcosystemValDSharedStatesSnapshot {
 	dependency := buildVerifierEcosystemValDDependencySnapshot()
 	_, _, _, _, _, trustModel, _, _, contractState, _, _, _, trustState, _, outputBoundaryState, _ := buildVerifierEcosystemVal0SharedStates()
 	_, _, engine, result, _, command, sdk, inputState, engineState, resultState, diagnosticsMappingState, commandState, sdkState, _ := buildVerifierEcosystemValASharedStates()
@@ -310,7 +314,54 @@ func buildVerifierEcosystemValDSharedStates() (
 		publisherArtifactState,
 		noOverclaimState,
 	)
-	return dependency, correctness, tooling, schemaCompatibility, diagnosticsConformance, trustKeyRotation, negativeDiagnostics, redaction, publisherArtifact, noOverclaim, correctnessState, toolingState, schemaCompatibilityStateGate, diagnosticsConformanceState, trustKeyRotationState, negativeDiagnosticsState, redactionState, publisherArtifactState, noOverclaimState, valDState
+	return verifierEcosystemValDSharedStatesSnapshot{
+		Dependency:                  dependency,
+		Correctness:                 correctness,
+		Tooling:                     tooling,
+		SchemaCompatibility:         schemaCompatibility,
+		DiagnosticsConformance:      diagnosticsConformance,
+		TrustKeyRotation:            trustKeyRotation,
+		NegativeDiagnostics:         negativeDiagnostics,
+		Redaction:                   redaction,
+		PublisherArtifact:           publisherArtifact,
+		NoOverclaim:                 noOverclaim,
+		CorrectnessState:            correctnessState,
+		ToolingState:                toolingState,
+		SchemaCompatibilityState:    schemaCompatibilityStateGate,
+		DiagnosticsConformanceState: diagnosticsConformanceState,
+		TrustKeyRotationState:       trustKeyRotationState,
+		NegativeDiagnosticsState:    negativeDiagnosticsState,
+		RedactionState:              redactionState,
+		PublisherArtifactState:      publisherArtifactState,
+		NoOverclaimState:            noOverclaimState,
+		ValDState:                   valDState,
+	}
+}
+
+func buildVerifierEcosystemValDSharedStates() (
+	operability.VerifierEcosystemValDDependencySnapshot,
+	operability.VerifierEcosystemValDCorrectnessGate,
+	operability.VerifierEcosystemValDToolingGate,
+	operability.VerifierEcosystemValDSchemaCompatibilityGate,
+	operability.VerifierEcosystemValDDiagnosticsConformanceGate,
+	operability.VerifierEcosystemValDTrustKeyRotationGate,
+	operability.VerifierEcosystemValDNegativeDiagnosticsGate,
+	operability.VerifierEcosystemValDRedactionGate,
+	operability.VerifierEcosystemValDPublisherArtifactGate,
+	operability.VerifierEcosystemValDNoOverclaimGate,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+) {
+	snapshot := loadCachedJSON(&verifierEcosystemValDSharedStatesCache, buildVerifierEcosystemValDSharedStatesUncached)
+	return snapshot.Dependency, snapshot.Correctness, snapshot.Tooling, snapshot.SchemaCompatibility, snapshot.DiagnosticsConformance, snapshot.TrustKeyRotation, snapshot.NegativeDiagnostics, snapshot.Redaction, snapshot.PublisherArtifact, snapshot.NoOverclaim, snapshot.CorrectnessState, snapshot.ToolingState, snapshot.SchemaCompatibilityState, snapshot.DiagnosticsConformanceState, snapshot.TrustKeyRotationState, snapshot.NegativeDiagnosticsState, snapshot.RedactionState, snapshot.PublisherArtifactState, snapshot.NoOverclaimState, snapshot.ValDState
 }
 
 func (s server) verifierEcosystemValDCorrectnessGateHandler(w http.ResponseWriter, r *http.Request) {

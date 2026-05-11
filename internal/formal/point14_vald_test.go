@@ -1,8 +1,25 @@
 package formal
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func clonePoint14ValDDependencySnapshot(t *testing.T, model Point14ValDDependencySnapshot) Point14ValDDependencySnapshot {
+	t.Helper()
+	payload, err := json.Marshal(model)
+	if err != nil {
+		t.Fatalf("marshal point14 vald dependency snapshot: %v", err)
+	}
+	var cloned Point14ValDDependencySnapshot
+	if err := json.Unmarshal(payload, &cloned); err != nil {
+		t.Fatalf("unmarshal point14 vald dependency snapshot: %v", err)
+	}
+	return cloned
+}
 
 func TestPoint14ValDDependencyState(t *testing.T) {
+	base := point14ValDDependencySnapshotModel()
 	tests := []struct {
 		name   string
 		mutate func(*Point14ValDDependencySnapshot)
@@ -71,7 +88,7 @@ func TestPoint14ValDDependencyState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValDDependencySnapshotModel()
+			model := clonePoint14ValDDependencySnapshot(t, base)
 			tc.mutate(&model)
 			if got := EvaluatePoint14ValDDependencyState(model); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
@@ -81,6 +98,7 @@ func TestPoint14ValDDependencyState(t *testing.T) {
 }
 
 func TestPoint14ValDTimelineProjectionState(t *testing.T) {
+	base := point14ValDDependencySnapshotModel()
 	tests := []struct {
 		name   string
 		mutate func(*ExternalEcosystemTimelineProjection)
@@ -109,7 +127,7 @@ func TestPoint14ValDTimelineProjectionState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValDTimelineProjectionModel(point14ValDDependencySnapshotModel())
+			model := point14ValDTimelineProjectionModel(clonePoint14ValDDependencySnapshot(t, base))
 			tc.mutate(&model)
 			if got := EvaluatePoint14ValDTimelineProjectionState(model); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
@@ -119,6 +137,7 @@ func TestPoint14ValDTimelineProjectionState(t *testing.T) {
 }
 
 func TestPoint14ValDSignalTimelineEntryState(t *testing.T) {
+	base := point14ValDDependencySnapshotModel()
 	tests := []struct {
 		name   string
 		mutate func(*ExternalSignalTimelineEntryProjection)
@@ -138,7 +157,7 @@ func TestPoint14ValDSignalTimelineEntryState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValDSignalTimelineEntryModel(point14ValDDependencySnapshotModel())
+			model := point14ValDSignalTimelineEntryModel(clonePoint14ValDDependencySnapshot(t, base))
 			tc.mutate(&model)
 			if got := EvaluatePoint14ValDSignalTimelineEntryState(model); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
@@ -295,6 +314,7 @@ func TestPoint14ValDQueryProjectionState(t *testing.T) {
 }
 
 func TestPoint14ValDAccessBoundaryState(t *testing.T) {
+	base := point14ValDDependencySnapshotModel()
 	tests := []struct {
 		name   string
 		mutate func(*EcosystemTimelineAccessBoundary)
@@ -333,9 +353,10 @@ func TestPoint14ValDAccessBoundaryState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValDAccessBoundaryModel(point14ValDDependencySnapshotModel())
+			dependency := clonePoint14ValDDependencySnapshot(t, base)
+			model := point14ValDAccessBoundaryModel(dependency)
 			tc.mutate(&model)
-			if got := EvaluatePoint14ValDAccessBoundaryState(model, point14ValDDependencySnapshotModel()); got != tc.want {
+			if got := EvaluatePoint14ValDAccessBoundaryState(model, dependency); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
 			}
 		})
@@ -343,6 +364,7 @@ func TestPoint14ValDAccessBoundaryState(t *testing.T) {
 }
 
 func TestPoint14ValDTenantPrivacyTimelineProjectionGuardState(t *testing.T) {
+	base := point14ValDDependencySnapshotModel()
 	tests := []struct {
 		name   string
 		mutate func(*TenantPrivacyTimelineProjectionGuard)
@@ -360,9 +382,10 @@ func TestPoint14ValDTenantPrivacyTimelineProjectionGuardState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValDTenantPrivacyTimelineProjectionGuardModel(point14ValDDependencySnapshotModel())
+			dependency := clonePoint14ValDDependencySnapshot(t, base)
+			model := point14ValDTenantPrivacyTimelineProjectionGuardModel(dependency)
 			tc.mutate(&model)
-			if got := EvaluatePoint14ValDTenantPrivacyTimelineProjectionGuardState(model, point14ValDDependencySnapshotModel()); got != tc.want {
+			if got := EvaluatePoint14ValDTenantPrivacyTimelineProjectionGuardState(model, dependency); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
 			}
 		})
@@ -370,6 +393,7 @@ func TestPoint14ValDTenantPrivacyTimelineProjectionGuardState(t *testing.T) {
 }
 
 func TestPoint14ValDAgentTimelineProjectionState(t *testing.T) {
+	base := point14ValDDependencySnapshotModel()
 	tests := []struct {
 		name   string
 		mutate func(*AgentEcosystemTimelineProjection)
@@ -386,9 +410,10 @@ func TestPoint14ValDAgentTimelineProjectionState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValDAgentTimelineProjectionModel(point14ValDDependencySnapshotModel())
+			dependency := clonePoint14ValDDependencySnapshot(t, base)
+			model := point14ValDAgentTimelineProjectionModel(dependency)
 			tc.mutate(&model)
-			if got := EvaluatePoint14ValDAgentTimelineProjectionState(model, point14ValDDependencySnapshotModel()); got != tc.want {
+			if got := EvaluatePoint14ValDAgentTimelineProjectionState(model, dependency); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
 			}
 		})

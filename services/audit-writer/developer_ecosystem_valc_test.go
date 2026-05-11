@@ -105,8 +105,8 @@ func TestDeveloperEcosystemValCProofsHandler(t *testing.T) {
 		len(response.IntegrationSummary) == 0 {
 		t.Fatalf("expected exact proof/evidence refs and read-only summary fields, got %#v", response)
 	}
-	if !strings.Contains(response.ProjectionDisclaimer, "projection_only") || !strings.Contains(response.ProjectionDisclaimer, "developer_ecosystem_valc") {
-		t.Fatalf("expected projection disclaimer, got %#v", response)
+	if response.ProjectionDisclaimer != developerEcosystemValCProjectionDisclaimer() {
+		t.Fatalf("expected exact projection disclaimer %q, got %#v", developerEcosystemValCProjectionDisclaimer(), response)
 	}
 }
 
@@ -135,5 +135,57 @@ func TestDeveloperEcosystemValCStatusExposesCanonicalPluginContracts(t *testing.
 	if response.Model.ExtensionCompatibility.PluginAPIVersionIdentity != operability.DeveloperEcosystemValCPluginAPIVersionIdentity ||
 		response.Model.ExtensionCompatibility.CompatibilityWindow != operability.DeveloperEcosystemValCPluginAPICompatibilityWindow {
 		t.Fatalf("expected canonical plugin API identity/window, got %#v", response.Model.ExtensionCompatibility)
+	}
+}
+
+func TestDeveloperEcosystemValCModelUsesCanonicalValBSnapshot(t *testing.T) {
+	valB := buildDeveloperEcosystemValBModel()
+	valC := buildDeveloperEcosystemValCModel()
+
+	if valC.ValECompatibility.ValECurrentState != valB.ValECompatibility.ValECurrentState ||
+		valC.ValECompatibility.Point7State != valB.ValECompatibility.Point7State ||
+		valC.ValECompatibility.PassRuleState != valB.ValECompatibility.PassRuleState ||
+		valC.ValECompatibility.NoOverclaimState != valB.ValECompatibility.NoOverclaimState ||
+		valC.ValECompatibility.ProofSurfaceState != valB.ValECompatibility.ProofSurfaceState ||
+		valC.ValECompatibility.EvidenceQualityState != valB.ValECompatibility.EvidenceQualityState ||
+		valC.ValECompatibility.Point7PassAllowed != valB.ValECompatibility.Point7PassAllowed ||
+		valC.ValECompatibility.Point7PassReason != valB.ValECompatibility.Point7PassReason ||
+		strings.Join(valC.ValECompatibility.SurfaceRefs, "\n") != strings.Join(valB.ValECompatibility.SurfaceRefs, "\n") ||
+		strings.Join(valC.ValECompatibility.EvidenceRefs, "\n") != strings.Join(valB.ValECompatibility.EvidenceRefs, "\n") ||
+		valC.ValECompatibility.ProjectionDisclaimer != valB.ValECompatibility.ProjectionDisclaimer {
+		t.Fatalf("expected Val C Val E compatibility snapshot to match canonical Val B snapshot, got %#v vs %#v", valC.ValECompatibility, valB.ValECompatibility)
+	}
+
+	if valC.ValBCompatibility.ValBCurrentState != valB.CurrentState ||
+		valC.ValBCompatibility.Point8State != valB.Point8State ||
+		valC.ValBCompatibility.ValECompatibilityState != valB.ValECompatibilityState ||
+		valC.ValBCompatibility.RepoConfigSchemaState != valB.RepoConfigSchemaState ||
+		valC.ValBCompatibility.APIVersioningState != valB.APIVersioningState ||
+		valC.ValBCompatibility.NoOverclaimState != valB.NoOverclaimState ||
+		valC.ValBCompatibility.RepoConfigCompatibilityBehavior != valB.RepoConfigSchema.CompatibilityBehavior ||
+		valC.ValBCompatibility.APIVersionIdentity != valB.APIVersioning.VersionIdentity ||
+		valC.ValBCompatibility.APICompatibilityWindow != valB.APIVersioning.CompatibilityWindow ||
+		strings.Join(valC.ValBCompatibility.SurfaceRefs, "\n") != strings.Join(valB.ProofSurfaceRefs, "\n") ||
+		strings.Join(valC.ValBCompatibility.EvidenceRefs, "\n") != strings.Join(valB.EvidenceRefs, "\n") ||
+		valC.ValBCompatibility.ProjectionDisclaimer != valB.ProjectionDisclaimer {
+		t.Fatalf("expected Val C Val B compatibility snapshot to match canonical Val B model, got %#v vs %#v", valC.ValBCompatibility, valB)
+	}
+
+	if valC.Dependency.ValBCurrentState != valB.CurrentState ||
+		valC.Dependency.ValBPoint8State != valB.Point8State ||
+		valC.Dependency.ValECompatibilityState != valB.ValECompatibilityState ||
+		valC.Dependency.DependencyState != valB.DependencyState ||
+		valC.Dependency.RepoConfigSchemaState != valB.RepoConfigSchemaState ||
+		valC.Dependency.RepoConfigValidationState != valB.RepoConfigValidationState ||
+		valC.Dependency.PolicyPreviewState != valB.PolicyPreviewState ||
+		valC.Dependency.LocalCIContinuityState != valB.LocalCIContinuityState ||
+		valC.Dependency.APISDKSurfaceState != valB.APISDKSurfaceState ||
+		valC.Dependency.ExamplesTemplatesState != valB.ExamplesTemplatesState ||
+		valC.Dependency.APIVersioningState != valB.APIVersioningState ||
+		valC.Dependency.NoOverclaimState != valB.NoOverclaimState ||
+		strings.Join(valC.Dependency.ValBProofSurfaceRefs, "\n") != strings.Join(valB.ProofSurfaceRefs, "\n") ||
+		strings.Join(valC.Dependency.ValBEvidenceRefs, "\n") != strings.Join(valB.EvidenceRefs, "\n") ||
+		valC.Dependency.ValBProjectionDisclaimer != valB.ProjectionDisclaimer {
+		t.Fatalf("expected Val C dependency snapshot to match canonical Val B model, got %#v vs %#v", valC.Dependency, valB)
 	}
 }

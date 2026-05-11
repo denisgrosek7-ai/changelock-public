@@ -14,6 +14,8 @@ const (
 	verifierEcosystemValEProofsSchema  = "point7.verifier_ecosystem.vale.proofs.v1"
 )
 
+var verifierEcosystemValEClosureModelCache cachedJSONValue
+
 type verifierEcosystemValEClosureResponse struct {
 	SchemaVersion string                                         `json:"schema_version"`
 	GeneratedAt   time.Time                                      `json:"generated_at"`
@@ -231,7 +233,7 @@ func (s server) verifierEcosystemValEProofsHandler(w http.ResponseWriter, r *htt
 	httpjson.Write(w, http.StatusOK, buildVerifierEcosystemValEProofs())
 }
 
-func buildVerifierEcosystemValEClosureModel() operability.VerifierEcosystemIntegratedClosure {
+func buildVerifierEcosystemValEClosureModelUncached() operability.VerifierEcosystemIntegratedClosure {
 	val0Proofs := buildVerifierEcosystemVal0Proofs()
 	valAProofs := buildVerifierEcosystemValAProofs()
 	valBProofs := buildVerifierEcosystemValBProofs()
@@ -443,6 +445,10 @@ func buildVerifierEcosystemValEClosureModel() operability.VerifierEcosystemInteg
 		model.Point7PassReason = operability.VerifierEcosystemValEPoint7PassReasonBlocked
 	}
 	return operability.ComputeVerifierEcosystemValEClosure(model)
+}
+
+func buildVerifierEcosystemValEClosureModel() operability.VerifierEcosystemIntegratedClosure {
+	return loadCachedJSON(&verifierEcosystemValEClosureModelCache, buildVerifierEcosystemValEClosureModelUncached)
 }
 
 func buildVerifierEcosystemValEClosure() verifierEcosystemValEClosureResponse {

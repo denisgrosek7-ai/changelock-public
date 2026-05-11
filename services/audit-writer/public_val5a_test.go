@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -361,6 +363,89 @@ func TestPublicVerifierReferencePackHandler(t *testing.T) {
 	staleInput := findPublicVerifierReplayInput(t, response.ReplayInputs, "proof_rejected_stale_json")
 	if staleInput.ExpectedState != federationDecisionRejectedStale || !strings.Contains(staleInput.Payload, federationDecisionRejectedStale) {
 		t.Fatalf("expected stale proof replay input to preserve rejection state, got %#v", staleInput)
+	}
+}
+
+func TestBuildPublicVerifierReferencePackDeterministicAndIsolated(t *testing.T) {
+	first, err := buildPublicVerifierReferencePack()
+	if err != nil {
+		t.Fatalf("build first public verifier reference pack: %v", err)
+	}
+	second, err := buildPublicVerifierReferencePack()
+	if err != nil {
+		t.Fatalf("build second public verifier reference pack: %v", err)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("expected deterministic public verifier reference pack, got %#v and %#v", first, second)
+	}
+	if len(first.Profiles) == 0 || len(first.ReplayInputs) == 0 || len(first.UsageNotes) == 0 || len(first.Limitations) == 0 {
+		t.Fatalf("expected populated reference pack, got %#v", first)
+	}
+	if len(first.ReplayInputs[0].ExpectedChecks) == 0 || len(first.ReplayInputs[0].Notes) == 0 {
+		t.Fatalf("expected replay input checks and notes, got %#v", first.ReplayInputs[0])
+	}
+
+	first.Profiles[0] = "mutated-profile"
+	first.ReplayInputs[0].Payload = "mutated-payload"
+	first.ReplayInputs[0].ExpectedChecks[0] = "mutated-check"
+	first.ReplayInputs[0].Notes[0] = "mutated-note"
+	first.UsageNotes[0] = "mutated-usage"
+	first.Limitations[0] = "mutated-limitation"
+
+	third, err := buildPublicVerifierReferencePack()
+	if err != nil {
+		t.Fatalf("build third public verifier reference pack: %v", err)
+	}
+	if !reflect.DeepEqual(second, third) {
+		t.Fatalf("expected cached public verifier reference pack to stay isolated from caller mutation, got %#v and %#v", second, third)
+	}
+
+	handoffInput := findPublicVerifierReplayInput(t, third.ReplayInputs, "handoff_bundle_valid")
+	bundleBytes, err := base64.StdEncoding.DecodeString(handoffInput.Payload)
+	if err != nil {
+		t.Fatalf("decode isolated handoff replay bundle: %v", err)
+	}
+	record, err := parseHandoffBundle(bundleBytes)
+	if err != nil {
+		t.Fatalf("parse isolated handoff replay bundle: %v", err)
+	}
+	if verification := (server{}).verifyStoredHandoff(record); verification.OverallStatus != handoffVerificationValid {
+		t.Fatalf("expected isolated cached handoff replay bundle to remain valid, got %#v", verification)
+	}
+}
+
+func TestBuildPublicVerifierReferencePackConcurrentDeterministic(t *testing.T) {
+	baseline, err := buildPublicVerifierReferencePack()
+	if err != nil {
+		t.Fatalf("build baseline public verifier reference pack: %v", err)
+	}
+
+	results := make(chan publicVerifierReferencePackResponse, 8)
+	errs := make(chan error, 8)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pack, err := buildPublicVerifierReferencePack()
+			if err != nil {
+				errs <- err
+				return
+			}
+			results <- pack
+		}()
+	}
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		t.Fatalf("concurrent public verifier reference pack build: %v", err)
+	}
+	for pack := range results {
+		if !reflect.DeepEqual(baseline, pack) {
+			t.Fatalf("expected concurrent public verifier reference packs to match baseline, got %#v and %#v", baseline, pack)
+		}
 	}
 }
 

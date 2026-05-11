@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/httpjson"
@@ -25,6 +26,12 @@ const (
 	publicSchemaIndexSchema            = "5a.public_schema_index.v1"
 	publicSchemaExportSchema           = "5a.public_schema_export.v1"
 	publicVerifierReferencePackSchema  = "5a.public_verifier_reference_pack.v1"
+)
+
+var (
+	publicVerifierReferencePackOnce   sync.Once
+	publicVerifierReferencePackCached publicVerifierReferencePackResponse
+	publicVerifierReferencePackErr    error
 )
 
 type publicSpecCompatibility struct {
@@ -293,6 +300,46 @@ type publicVerifierReferencePackResponse struct {
 	ReplayInputs  []publicVerifierReplayInput `json:"replay_inputs,omitempty"`
 	UsageNotes    []string                    `json:"usage_notes,omitempty"`
 	Limitations   []string                    `json:"limitations,omitempty"`
+}
+
+func clonePublicVerifierStrings(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	return append([]string(nil), items...)
+}
+
+func clonePublicVerifierReplayInputs(items []publicVerifierReplayInput) []publicVerifierReplayInput {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]publicVerifierReplayInput, len(items))
+	for i, item := range items {
+		cloned[i] = publicVerifierReplayInput{
+			InputID:         item.InputID,
+			ProfileID:       item.ProfileID,
+			SampleRef:       item.SampleRef,
+			InputType:       item.InputType,
+			MediaType:       item.MediaType,
+			PayloadEncoding: item.PayloadEncoding,
+			Payload:         item.Payload,
+			ExpectedState:   item.ExpectedState,
+			ExpectedChecks:  clonePublicVerifierStrings(item.ExpectedChecks),
+			Notes:           clonePublicVerifierStrings(item.Notes),
+		}
+	}
+	return cloned
+}
+
+func clonePublicVerifierReferencePack(pack publicVerifierReferencePackResponse) publicVerifierReferencePackResponse {
+	return publicVerifierReferencePackResponse{
+		SchemaVersion: pack.SchemaVersion,
+		PackID:        pack.PackID,
+		Profiles:      clonePublicVerifierStrings(pack.Profiles),
+		ReplayInputs:  clonePublicVerifierReplayInputs(pack.ReplayInputs),
+		UsageNotes:    clonePublicVerifierStrings(pack.UsageNotes),
+		Limitations:   clonePublicVerifierStrings(pack.Limitations),
+	}
 }
 
 func (s server) publicHandoffSpecHandler(w http.ResponseWriter, r *http.Request) {
@@ -1061,6 +1108,16 @@ func buildPublicSchemaExport(exportID string) (publicSchemaExportResponse, bool)
 }
 
 func buildPublicVerifierReferencePack() (publicVerifierReferencePackResponse, error) {
+	publicVerifierReferencePackOnce.Do(func() {
+		publicVerifierReferencePackCached, publicVerifierReferencePackErr = buildPublicVerifierReferencePackUncached()
+	})
+	if publicVerifierReferencePackErr != nil {
+		return publicVerifierReferencePackResponse{}, publicVerifierReferencePackErr
+	}
+	return clonePublicVerifierReferencePack(publicVerifierReferencePackCached), nil
+}
+
+func buildPublicVerifierReferencePackUncached() (publicVerifierReferencePackResponse, error) {
 	record := publicSampleHandoffRecord()
 	bundleBytes, err := buildHandoffBundle(record)
 	if err != nil {

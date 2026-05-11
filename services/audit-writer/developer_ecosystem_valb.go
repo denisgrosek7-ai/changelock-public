@@ -13,6 +13,8 @@ const (
 	developerEcosystemValBProofsSchema = "point8.developer_ecosystem.valb.proofs.v1"
 )
 
+var developerEcosystemValBModelCache cachedJSONValue
+
 type developerEcosystemValBStatusResponse struct {
 	SchemaVersion string                                        `json:"schema_version"`
 	GeneratedAt   time.Time                                     `json:"generated_at"`
@@ -118,7 +120,7 @@ func buildDeveloperEcosystemValBDependencySnapshot() operability.DeveloperEcosys
 	}
 }
 
-func buildDeveloperEcosystemValBModel() operability.DeveloperEcosystemValBIntegration {
+func buildDeveloperEcosystemValBModelUncached() operability.DeveloperEcosystemValBIntegration {
 	model := operability.DeveloperEcosystemValBIntegrationModel()
 	model.ValECompatibility = buildDeveloperEcosystemValBValECompatibilityGate()
 	model.Dependency = buildDeveloperEcosystemValBDependencySnapshot()
@@ -133,6 +135,10 @@ func buildDeveloperEcosystemValBModel() operability.DeveloperEcosystemValBIntegr
 	model.APIVersioning.CurrentState = model.APIVersioningState
 	model.NoOverclaim.CurrentState = model.NoOverclaimState
 	return model
+}
+
+func buildDeveloperEcosystemValBModel() operability.DeveloperEcosystemValBIntegration {
+	return loadCachedJSON(&developerEcosystemValBModelCache, buildDeveloperEcosystemValBModelUncached)
 }
 
 func (s server) developerEcosystemValBStatusHandler(w http.ResponseWriter, r *http.Request) {
