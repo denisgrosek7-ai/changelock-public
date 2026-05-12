@@ -11,6 +11,17 @@ func activeDeploymentMultiTenantVal0Model() DeploymentMultiTenantVal0Foundation 
 	return ComputeDeploymentMultiTenantVal0Foundation(model)
 }
 
+func assertDeploymentMultiTenantVal0NoPoint10Pass(t *testing.T, model DeploymentMultiTenantVal0Foundation) {
+	t.Helper()
+	payload, err := json.Marshal(model)
+	if err != nil {
+		t.Fatalf("marshal model: %v", err)
+	}
+	if strings.Contains(string(payload), "point_"+"10_pass") {
+		t.Fatalf("expected Val 0 to never emit point 10 pass, got %s", string(payload))
+	}
+}
+
 func TestDeploymentMultiTenantVal0AggregateProjectionDisclaimerBlocks(t *testing.T) {
 	model := activeDeploymentMultiTenantVal0Model()
 	model.ProjectionDisclaimer = "canonical_truth"
@@ -75,11 +86,35 @@ func TestDeploymentMultiTenantVal0DependencyBlockers(t *testing.T) {
 		{name: "missing vale current state blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 			model.Dependency.ValECurrentState = ""
 		}},
+		{name: "whitespace padded vale current state blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ValECurrentState = " " + OSSTrustNetworkValEStatePass + "\t"
+		}},
 		{name: "unknown vale proof refs block", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 			model.Dependency.ProofSurfaceRefs = []string{"unknown"}
 		}},
+		{name: "newline padded point 9 state blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.Point9State = "\n" + OSSTrustNetworkPoint9StatePass
+		}},
+		{name: "whitespace padded point 9 pass reason blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.Point9PassReason = " " + OSSTrustNetworkValEPoint9PassReasonAllowed + "\t"
+		}},
+		{name: "whitespace padded vale proof refs block", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ProofSurfaceRefs = []string{" " + OSSTrustNetworkValEProofSurfaceRefs()[0] + "\t"}
+		}},
+		{name: "whitespace padded vale dependency state blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ValEDependencyState = " " + OSSTrustNetworkValEDependencyStateActive + "\t"
+		}},
+		{name: "whitespace padded vale final pass rule blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ValEFinalPassRule = " " + OSSTrustNetworkValEFinalPassRuleStateActive + "\t"
+		}},
+		{name: "whitespace padded vale no overclaim state blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ValENoOverclaimState = " " + OSSTrustNetworkValENoOverclaimStateActive + "\t"
+		}},
 		{name: "missing vale evidence refs block", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 			model.Dependency.EvidenceRefs = nil
+		}},
+		{name: "newline padded vale evidence refs block", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.EvidenceRefs = []string{"\n" + OSSTrustNetworkValEProofEvidenceRefs()[0]}
 		}},
 		{name: "malformed projection disclaimer blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 			model.Dependency.ProjectionDisclaimer = "canonical_truth"
@@ -128,6 +163,22 @@ func TestDeploymentMultiTenantVal0DeploymentBlockers(t *testing.T) {
 			wantDisciplineState: DeploymentMultiTenantVal0DeploymentValidationStateBlocked,
 		},
 		{
+			name: "whitespace padded deployment evidence ref is blocked",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.DeploymentValidation.EvidenceRefs = []string{" " + deploymentMultiTenantVal0DeploymentEvidenceRefs()[0]}
+			},
+			wantState:           DeploymentMultiTenantVal0StateBlocked,
+			wantDisciplineState: DeploymentMultiTenantVal0DeploymentValidationStateBlocked,
+		},
+		{
+			name: "whitespace padded deployment state is blocked",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.DeploymentValidation.DeploymentState = " " + DeploymentMultiTenantDeploymentStateReady + "\t"
+			},
+			wantState:           DeploymentMultiTenantVal0StateBlocked,
+			wantDisciplineState: DeploymentMultiTenantVal0DeploymentValidationStateBlocked,
+		},
+		{
 			name: "incomplete deployment state is blocked",
 			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 				model.DeploymentValidation.DeploymentState = DeploymentMultiTenantDeploymentStateIncomplete
@@ -139,6 +190,14 @@ func TestDeploymentMultiTenantVal0DeploymentBlockers(t *testing.T) {
 			name: "unsupported deployment profile is not ready",
 			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 				model.DeploymentValidation.DeploymentProfile = "unsupported_profile"
+			},
+			wantState:           DeploymentMultiTenantVal0StateBlocked,
+			wantDisciplineState: DeploymentMultiTenantVal0DeploymentValidationStateUnsupported,
+		},
+		{
+			name: "whitespace padded deployment profile is not ready",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.DeploymentValidation.DeploymentProfile = " " + DeploymentMultiTenantProfileBoundedMarketplaceMSP + "\t"
 			},
 			wantState:           DeploymentMultiTenantVal0StateBlocked,
 			wantDisciplineState: DeploymentMultiTenantVal0DeploymentValidationStateUnsupported,
@@ -256,6 +315,9 @@ func TestDeploymentMultiTenantVal0PolicyEnvelopeBlockers(t *testing.T) {
 		}},
 		{name: "unknown inheritance is blocked", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 			model.PolicyEnvelope.UnknownInheritance = true
+		}},
+		{name: "whitespace padded conflict state is blocked", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.PolicyEnvelope.ConflictState = " " + DeploymentMultiTenantConflictStateNoConflict + "\t"
 		}},
 	}
 
@@ -449,23 +511,20 @@ func TestDeploymentMultiTenantVal0OperatorScopeBlockers(t *testing.T) {
 	}
 }
 
-func TestDeploymentMultiTenantVal0ValidScopedValuesRemainAllowed(t *testing.T) {
+func TestDeploymentMultiTenantVal0CanonicalExactBindingsRemainAllowed(t *testing.T) {
 	model := activeDeploymentMultiTenantVal0Model()
-	model.TenantBoundary.TenantScope = "tenant_scope_evidence_linked"
-	model.TenantBoundary.AuditBoundary = "tenant_audit_boundary"
-	model.TenantBoundary.EvidenceBoundary = "tenant_evidence_boundary"
-	model.TenantBoundary.ExportBoundary = "tenant_export_boundary"
-	model.TenantBoundary.OperatorSupportBoundary = "tenant_operator_support_boundary"
-	model.MSPAuthority.RoleScope = "bounded_tenant_support_scope"
-	model.TenantTrustScope.VerificationBoundary = "tenant_specific_identity_boundary"
-	model.ConnectorContract.Capabilities = []string{"tenant_scoped_connector_execution"}
-	model.OperatorAction.Scope = "tenant_scoped_operator_action"
-	model.PrivacyGuard.TenantPrivacyScope = "tenant_privacy_scope_evidence_linked"
-	model.FairShare.TenantResourceScope = "tenant_resource_scope_bounded"
-	model.OperationalPreflight.TenantChangeScope = "tenant_change_scope_preflight"
+	model.TenantBoundary.TenantScope = deploymentMultiTenantVal0TenantScope()
+	model.MSPAuthority.TenantScope = deploymentMultiTenantVal0TenantScope()
+	model.ConnectorContract.TenantScope = deploymentMultiTenantVal0TenantScope()
+	model.OperatorAction.TenantTarget = deploymentMultiTenantVal0OperatorTenantTarget()
+	model.ConnectorContract.Capabilities = append([]string{}, model.ConnectorContract.Capabilities...)
+	model.ConnectorContract.ReadBoundaries = append([]string{}, model.ConnectorContract.ReadBoundaries...)
+	model.ConnectorContract.MutationBoundaries = append([]string{}, model.ConnectorContract.MutationBoundaries...)
+	model.Dependency.ProofSurfaceRefs = append([]string{}, model.Dependency.ProofSurfaceRefs...)
+	model.Dependency.EvidenceRefs = append([]string{}, model.Dependency.EvidenceRefs...)
 	model = ComputeDeploymentMultiTenantVal0Foundation(model)
 	if model.CurrentState != DeploymentMultiTenantVal0StateActive {
-		t.Fatalf("expected valid scoped values to remain active, got %#v", model)
+		t.Fatalf("expected canonical exact-bound values to remain active, got %#v", model)
 	}
 }
 
@@ -524,6 +583,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 		name            string
 		mutate          func(*DeploymentMultiTenantVal0Foundation)
 		disciplineName  string
+		expectedState   string
 		disciplineState func(DeploymentMultiTenantVal0Foundation) string
 	}{
 		{
@@ -532,6 +592,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.TenantBoundary.TenantScope = "global_admin_scope"
 			},
 			disciplineName: "tenant boundary",
+			expectedState:  DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.TenantBoundaryState
 			},
@@ -542,6 +603,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.TenantBoundary.AuditBoundary = "global-admin-scope"
 			},
 			disciplineName: "tenant boundary",
+			expectedState:  DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.TenantBoundaryState
 			},
@@ -552,6 +614,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.MSPAuthority.TenantScope = "tenant_global_scope"
 			},
 			disciplineName: "msp authority",
+			expectedState:  DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.MSPAuthorityState
 			},
@@ -562,6 +625,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.MSPAuthority.RoleScope = "unscoped_operator_access"
 			},
 			disciplineName: "msp authority",
+			expectedState:  DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.MSPAuthorityState
 			},
@@ -572,6 +636,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.TenantTrustScope.TrustScope = "operator-unscoped-access"
 			},
 			disciplineName: "tenant trust scope",
+			expectedState:  DeploymentMultiTenantVal0TenantTrustScopeStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.TenantTrustScopeState
 			},
@@ -582,6 +647,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.ConnectorContract.TenantScope = "cross_tenant_global_scope"
 			},
 			disciplineName: "connector contract",
+			expectedState:  DeploymentMultiTenantVal0ConnectorContractStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.ConnectorContractState
 			},
@@ -592,6 +658,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.OperatorAction.Scope = "all_tenants_admin"
 			},
 			disciplineName: "operator action",
+			expectedState:  DeploymentMultiTenantVal0OperatorActionStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.OperatorActionState
 			},
@@ -602,6 +669,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.PrivacyGuard.TenantPrivacyScope = "any_tenant_support"
 			},
 			disciplineName: "privacy guard",
+			expectedState:  DeploymentMultiTenantVal0PrivacyGuardStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.PrivacyGuardState
 			},
@@ -612,6 +680,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.FairShare.TenantResourceScope = "wildcard_tenant_scope"
 			},
 			disciplineName: "fair share",
+			expectedState:  DeploymentMultiTenantVal0FairShareStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.FairShareState
 			},
@@ -622,6 +691,7 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 				model.OperationalPreflight.TenantChangeScope = "tenant_scope_active_ish"
 			},
 			disciplineName: "operational preflight",
+			expectedState:  DeploymentMultiTenantVal0OperationalPreflightStateBlocked,
 			disciplineState: func(model DeploymentMultiTenantVal0Foundation) string {
 				return model.OperationalPreflightState
 			},
@@ -632,8 +702,8 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 		model := activeDeploymentMultiTenantVal0Model()
 		tc.mutate(&model)
 		model = ComputeDeploymentMultiTenantVal0Foundation(model)
-		if state := tc.disciplineState(model); state == "" || !strings.HasSuffix(state, "_blocked") {
-			t.Fatalf("%s: expected blocked %s discipline, got %#v", tc.name, tc.disciplineName, model)
+		if state := tc.disciplineState(model); state != tc.expectedState {
+			t.Fatalf("%s: expected exact blocked %s discipline state %q, got %#v", tc.name, tc.disciplineName, tc.expectedState, model)
 		}
 		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
 			t.Fatalf("%s: expected overall blocked state, got %#v", tc.name, model)
@@ -738,5 +808,537 @@ func TestDeploymentMultiTenantVal0NoOverclaimBlockers(t *testing.T) {
 		if model.CurrentState != DeploymentMultiTenantVal0StateActive || model.NoOverclaimState != DeploymentMultiTenantVal0NoOverclaimStateActive {
 			t.Fatalf("expected allowed bounded claim %q to stay active, got %#v", claim, model)
 		}
+	}
+}
+
+func TestDeploymentMultiTenantVal0ProjectionDisclaimerExactBoundedBlockers(t *testing.T) {
+	disclaimer := deploymentMultiTenantVal0ProjectionDisclaimer()
+
+	t.Run("aggregate disclaimer suffix drift blocks exact state", func(t *testing.T) {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.ProjectionDisclaimer = disclaimer + " extra_scope"
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("expected aggregate disclaimer suffix drift to block current state, got %#v", model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected point 10 to remain not complete after aggregate disclaimer drift, got %#v", model)
+		}
+		payload, err := json.Marshal(model)
+		if err != nil {
+			t.Fatalf("marshal model: %v", err)
+		}
+		if strings.Contains(string(payload), "point_"+"10_pass") {
+			t.Fatalf("expected aggregate disclaimer drift not to emit point 10 pass, got %s", string(payload))
+		}
+	})
+
+	t.Run("discipline disclaimer prefix drift blocks exact no-overclaim state", func(t *testing.T) {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.NoOverclaim.ProjectionDisclaimer = "advisory " + disclaimer
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("expected discipline disclaimer prefix drift to block current state, got %#v", model)
+		}
+		if model.NoOverclaimState != DeploymentMultiTenantVal0NoOverclaimStateBlocked {
+			t.Fatalf("expected discipline disclaimer prefix drift to block no-overclaim state, got %#v", model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected point 10 to remain not complete after discipline disclaimer drift, got %#v", model)
+		}
+	})
+
+	t.Run("aggregate snapshot disclaimer dropping bounded scope blocks exact state", func(t *testing.T) {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.ProjectionDisclaimer = "projection_only not_canonical_truth deployment_multi_tenant_val0 aggregate_dependency_snapshot"
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("expected short aggregate disclaimer to block current state, got %#v", model)
+		}
+		if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
+			t.Fatalf("expected short aggregate disclaimer to emit aggregate projection disclaimer blocking reason, got %#v", model.BlockingReasons)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected point 10 to remain not complete after short aggregate disclaimer, got %#v", model)
+		}
+	})
+}
+
+func TestDeploymentMultiTenantVal0DisciplineShortAggregateProjectionDisclaimerBlocksExactState(t *testing.T) {
+	shortAggregateDisclaimer := "projection_only not_canonical_truth deployment_multi_tenant_val0 aggregate_dependency_snapshot"
+	testCases := []struct {
+		name      string
+		mutate    func(*DeploymentMultiTenantVal0Foundation)
+		getState  func(DeploymentMultiTenantVal0Foundation) string
+		wantState string
+	}{
+		{
+			name: "deployment validation discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.DeploymentValidation.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.DeploymentValidationState },
+			wantState: DeploymentMultiTenantVal0DeploymentValidationStateBlocked,
+		},
+		{
+			name: "tenant boundary discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantBoundary.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantBoundaryState },
+			wantState: DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
+		},
+		{
+			name: "msp authority discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.MSPAuthority.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.MSPAuthorityState },
+			wantState: DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
+		},
+		{
+			name: "policy envelope discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PolicyEnvelope.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PolicyEnvelopeState },
+			wantState: DeploymentMultiTenantVal0PolicyEnvelopeStateBlocked,
+		},
+		{
+			name: "tenant trust scope discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantTrustScope.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantTrustScopeState },
+			wantState: DeploymentMultiTenantVal0TenantTrustScopeStateBlocked,
+		},
+		{
+			name: "connector contract discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.ConnectorContract.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.ConnectorContractState },
+			wantState: DeploymentMultiTenantVal0ConnectorContractStateBlocked,
+		},
+		{
+			name: "operator action discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperatorAction.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperatorActionState },
+			wantState: DeploymentMultiTenantVal0OperatorActionStateBlocked,
+		},
+		{
+			name: "privacy guard discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PrivacyGuard.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PrivacyGuardState },
+			wantState: DeploymentMultiTenantVal0PrivacyGuardStateBlocked,
+		},
+		{
+			name: "fair share discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.FairShare.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.FairShareState },
+			wantState: DeploymentMultiTenantVal0FairShareStateBlocked,
+		},
+		{
+			name: "operational preflight discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperationalPreflight.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperationalPreflightState },
+			wantState: DeploymentMultiTenantVal0OperationalPreflightStateBlocked,
+		},
+		{
+			name: "future contract discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.FutureContract.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.FutureContractState },
+			wantState: DeploymentMultiTenantVal0FutureContractStateBlocked,
+		},
+		{
+			name: "no overclaim discipline",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.NoOverclaim.ProjectionDisclaimer = shortAggregateDisclaimer
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.NoOverclaimState },
+			wantState: DeploymentMultiTenantVal0NoOverclaimStateBlocked,
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantVal0Model()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("%s: expected blocked current state, got %#v", tc.name, model)
+		}
+		if tc.getState(model) != tc.wantState {
+			t.Fatalf("%s: expected discipline state %s, got %#v", tc.name, tc.wantState, model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected point 10 to remain not complete, got %#v", tc.name, model)
+		}
+	}
+}
+
+func TestDeploymentMultiTenantVal0ExactIdentityBindingBlockers(t *testing.T) {
+	testCases := []struct {
+		name      string
+		mutate    func(*DeploymentMultiTenantVal0Foundation)
+		getState  func(DeploymentMultiTenantVal0Foundation) string
+		wantState string
+	}{
+		{
+			name: "wrong tenant boundary tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantBoundary.TenantScope = "tenant:beta"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantBoundaryState },
+			wantState: DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
+		},
+		{
+			name: "wrong msp role scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.MSPAuthority.RoleScope = "support_readiness_operator_beta"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.MSPAuthorityState },
+			wantState: DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
+		},
+		{
+			name: "wrong connector id blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.ConnectorContract.ConnectorID = "marketplace_audit_connector_beta"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.ConnectorContractState },
+			wantState: DeploymentMultiTenantVal0ConnectorContractStateBlocked,
+		},
+		{
+			name: "wrong operator actor blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperatorAction.Actor = "support_operator_999"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperatorActionState },
+			wantState: DeploymentMultiTenantVal0OperatorActionStateBlocked,
+		},
+		{
+			name: "wrong operator tenant target blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperatorAction.TenantTarget = "tenant:beta"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperatorActionState },
+			wantState: DeploymentMultiTenantVal0OperatorActionStateBlocked,
+		},
+		{
+			name: "wrong privacy scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PrivacyGuard.TenantPrivacyScope = "tenant_privacy_scope_other"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PrivacyGuardState },
+			wantState: DeploymentMultiTenantVal0PrivacyGuardStateBlocked,
+		},
+		{
+			name: "wrong fair share scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.FairShare.TenantResourceScope = "tenant_resource_scope_other"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.FairShareState },
+			wantState: DeploymentMultiTenantVal0FairShareStateBlocked,
+		},
+		{
+			name: "wrong operational preflight change scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperationalPreflight.TenantChangeScope = "tenant_change_scope_other"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperationalPreflightState },
+			wantState: DeploymentMultiTenantVal0OperationalPreflightStateBlocked,
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantVal0Model()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("%s: expected blocked current state, got %#v", tc.name, model)
+		}
+		if tc.getState(model) != tc.wantState {
+			t.Fatalf("%s: expected discipline state %s, got %#v", tc.name, tc.wantState, model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected point 10 to remain not complete, got %#v", tc.name, model)
+		}
+	}
+}
+
+func TestDeploymentMultiTenantVal0WhitespaceRetaggedFreshnessAndEnumBlockers(t *testing.T) {
+	testCases := []struct {
+		name      string
+		mutate    func(*DeploymentMultiTenantVal0Foundation)
+		getState  func(DeploymentMultiTenantVal0Foundation) string
+		wantState string
+	}{
+		{
+			name: "whitespace padded deployment freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.DeploymentValidation.ValidationFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.DeploymentValidationState },
+			wantState: DeploymentMultiTenantVal0DeploymentValidationStateBlocked,
+		},
+		{
+			name: "whitespace padded tenant boundary freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantBoundary.BoundaryFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantBoundaryState },
+			wantState: DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
+		},
+		{
+			name: "whitespace padded authority freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.MSPAuthority.AuthorityFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.MSPAuthorityState },
+			wantState: DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
+		},
+		{
+			name: "whitespace padded authority mode blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.MSPAuthority.AuthorityMode = " " + DeploymentMultiTenantAuthorityModeBounded + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.MSPAuthorityState },
+			wantState: DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
+		},
+		{
+			name: "whitespace padded policy freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PolicyEnvelope.PolicyFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PolicyEnvelopeState },
+			wantState: DeploymentMultiTenantVal0PolicyEnvelopeStateBlocked,
+		},
+		{
+			name: "whitespace padded trust freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantTrustScope.TrustFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantTrustScopeState },
+			wantState: DeploymentMultiTenantVal0TenantTrustScopeStateBlocked,
+		},
+		{
+			name: "whitespace padded connector freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.ConnectorContract.ConnectorFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.ConnectorContractState },
+			wantState: DeploymentMultiTenantVal0ConnectorContractStateBlocked,
+		},
+		{
+			name: "whitespace padded connector failure behavior blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.ConnectorContract.FailureBehavior = " " + DeploymentMultiTenantConnectorFailureFailClosed + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.ConnectorContractState },
+			wantState: DeploymentMultiTenantVal0ConnectorContractStateBlocked,
+		},
+		{
+			name: "whitespace padded connector replay behavior blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.ConnectorContract.ReplayBehavior = " " + DeploymentMultiTenantConnectorReplayIdempotent + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.ConnectorContractState },
+			wantState: DeploymentMultiTenantVal0ConnectorContractStateBlocked,
+		},
+		{
+			name: "whitespace padded connector recovery behavior blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.ConnectorContract.RecoveryBehavior = " " + DeploymentMultiTenantConnectorRecoveryDeterminism + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.ConnectorContractState },
+			wantState: DeploymentMultiTenantVal0ConnectorContractStateBlocked,
+		},
+		{
+			name: "whitespace padded operator freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperatorAction.ActionFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperatorActionState },
+			wantState: DeploymentMultiTenantVal0OperatorActionStateBlocked,
+		},
+		{
+			name: "whitespace padded privacy freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PrivacyGuard.PrivacyFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PrivacyGuardState },
+			wantState: DeploymentMultiTenantVal0PrivacyGuardStateBlocked,
+		},
+		{
+			name: "whitespace padded fleet visibility mode blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PrivacyGuard.FleetVisibilityMode = " " + DeploymentMultiTenantFleetVisibilityAggregated + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PrivacyGuardState },
+			wantState: DeploymentMultiTenantVal0PrivacyGuardStateBlocked,
+		},
+		{
+			name: "whitespace padded support visibility mode blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.PrivacyGuard.SupportVisibilityMode = " " + DeploymentMultiTenantSupportVisibilityExplicit + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.PrivacyGuardState },
+			wantState: DeploymentMultiTenantVal0PrivacyGuardStateBlocked,
+		},
+		{
+			name: "whitespace padded fair share freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.FairShare.FairShareFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.FairShareState },
+			wantState: DeploymentMultiTenantVal0FairShareStateBlocked,
+		},
+		{
+			name: "whitespace padded operational preflight freshness blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperationalPreflight.PreflightFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperationalPreflightState },
+			wantState: DeploymentMultiTenantVal0OperationalPreflightStateBlocked,
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantVal0Model()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("%s: expected blocked current state, got %#v", tc.name, model)
+		}
+		if tc.getState(model) != tc.wantState {
+			t.Fatalf("%s: expected discipline state %s, got %#v", tc.name, tc.wantState, model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected point 10 to remain not complete, got %#v", tc.name, model)
+		}
+		assertDeploymentMultiTenantVal0NoPoint10Pass(t, model)
+	}
+}
+
+func TestDeploymentMultiTenantVal0AggregateStateRejectsWhitespaceRetaggedDisciplineState(t *testing.T) {
+	model := activeDeploymentMultiTenantVal0Model()
+	model.DeploymentValidationState = " " + DeploymentMultiTenantVal0DeploymentValidationStateActive + "\t"
+	if got := EvaluateDeploymentMultiTenantVal0State(model); got != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected aggregate Val0 state to reject whitespace-retagged discipline state, got %q", got)
+	}
+}
+
+func TestDeploymentMultiTenantVal0NoOverclaimAdversarialBlockers(t *testing.T) {
+	testCases := []struct {
+		name   string
+		claims []string
+	}{
+		{name: "direct forbidden phrase blocks exact state", claims: []string{"production approved"}},
+		{name: "unicode confusable forbidden phrase blocks exact state", claims: []string{"prοductiοn apprοved"}},
+		{name: "small capital confusable forbidden phrase blocks exact state", claims: []string{"prᴏduction approved"}},
+		{name: "small capital deployment approved blocks exact state", claims: []string{"ᴅeployment approved"}},
+		{name: "small capital certified managed trust blocks exact state", claims: []string{"cᴇrtified managed trust"}},
+		{name: "ligature forbidden phrase blocks exact state", claims: []string{"marketplace certiﬁed"}},
+		{name: "split field forbidden phrase blocks exact state", claims: []string{"production", "approved"}},
+		{name: "single bucket forbidden phrase with innocuous middle token blocks exact state", claims: []string{"production audit note approved"}},
+		{name: "three bucket forbidden phrase with innocuous middle token blocks exact state", claims: []string{"production", "audit note", "approved"}},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.NoOverclaim.ObservedClaims = append([]string{}, tc.claims...)
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("%s: expected blocked current state, got %#v", tc.name, model)
+		}
+		if model.NoOverclaimState != DeploymentMultiTenantVal0NoOverclaimStateBlocked {
+			t.Fatalf("%s: expected blocked no-overclaim state, got %#v", tc.name, model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected point 10 to remain not complete, got %#v", tc.name, model)
+		}
+		payload, err := json.Marshal(model)
+		if err != nil {
+			t.Fatalf("%s: marshal model: %v", tc.name, err)
+		}
+		if strings.Contains(string(payload), "point_"+"10_pass") {
+			t.Fatalf("%s: expected blocked no-overclaim path not to emit point 10 pass, got %s", tc.name, string(payload))
+		}
+	}
+}
+
+func TestDeploymentMultiTenantVal0FutureContractAdversarialObservedClaimsBlockers(t *testing.T) {
+	model := activeDeploymentMultiTenantVal0Model()
+	model.FutureContract.ObservedClaims = []string{"certifiɛd", "managed trust"}
+	model = ComputeDeploymentMultiTenantVal0Foundation(model)
+	if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected adversarial future contract claims to block current state, got %#v", model)
+	}
+	if model.FutureContractState != DeploymentMultiTenantVal0FutureContractStateBlocked {
+		t.Fatalf("expected adversarial future contract claims to block future contract state, got %#v", model)
+	}
+	if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+		t.Fatalf("expected point 10 to remain not complete after adversarial future contract claims, got %#v", model)
+	}
+
+	model = activeDeploymentMultiTenantVal0Model()
+	model.FutureContract.ObservedClaims = []string{"production", "audit note", "approved"}
+	model = ComputeDeploymentMultiTenantVal0Foundation(model)
+	if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected split future contract claims to block current state, got %#v", model)
+	}
+	if model.FutureContractState != DeploymentMultiTenantVal0FutureContractStateBlocked {
+		t.Fatalf("expected split future contract claims to block future contract state, got %#v", model)
+	}
+	if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+		t.Fatalf("expected point 10 to remain not complete after split future contract claims, got %#v", model)
+	}
+
+	model = activeDeploymentMultiTenantVal0Model()
+	model.FutureContract.ObservedClaims = []string{"ᴅeployment approved"}
+	model = ComputeDeploymentMultiTenantVal0Foundation(model)
+	if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected small-capital future contract deployment approval claim to block current state, got %#v", model)
+	}
+	if model.FutureContractState != DeploymentMultiTenantVal0FutureContractStateBlocked {
+		t.Fatalf("expected small-capital future contract deployment approval claim to block future contract state, got %#v", model)
+	}
+	if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+		t.Fatalf("expected point 10 to remain not complete after small-capital future contract deployment approval claim, got %#v", model)
+	}
+
+	model = activeDeploymentMultiTenantVal0Model()
+	model.FutureContract.ObservedClaims = []string{"marketplace certiﬁed"}
+	model = ComputeDeploymentMultiTenantVal0Foundation(model)
+	if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected ligature future contract claim to block current state, got %#v", model)
+	}
+	if model.FutureContractState != DeploymentMultiTenantVal0FutureContractStateBlocked {
+		t.Fatalf("expected ligature future contract claim to block future contract state, got %#v", model)
+	}
+	if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+		t.Fatalf("expected point 10 to remain not complete after ligature future contract claim, got %#v", model)
+	}
+
+	model = activeDeploymentMultiTenantVal0Model()
+	model.FutureContract.ObservedClaims = []string{"production audit note approved"}
+	model = ComputeDeploymentMultiTenantVal0Foundation(model)
+	if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+		t.Fatalf("expected single-bucket future contract claim with innocuous middle token to block current state, got %#v", model)
+	}
+	if model.FutureContractState != DeploymentMultiTenantVal0FutureContractStateBlocked {
+		t.Fatalf("expected single-bucket future contract claim with innocuous middle token to block future contract state, got %#v", model)
+	}
+	if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+		t.Fatalf("expected point 10 to remain not complete after single-bucket future contract claim with innocuous middle token, got %#v", model)
 	}
 }
