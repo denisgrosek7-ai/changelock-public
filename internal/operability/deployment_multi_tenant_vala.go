@@ -243,11 +243,20 @@ func deploymentMultiTenantValAProjectionDisclaimer() string {
 	return "projection_only not_canonical_truth bounded_marketplace_deployment_profile deployment_multi_tenant_vala"
 }
 
+func deploymentMultiTenantValANormalizedProjectionDisclaimer(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
+}
+
 func deploymentMultiTenantValAHasProjectionDisclaimer(value string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	return strings.Contains(normalized, "projection_only") &&
-		strings.Contains(normalized, "not_canonical_truth") &&
-		strings.Contains(normalized, "deployment_multi_tenant_vala")
+	normalized := deploymentMultiTenantValANormalizedProjectionDisclaimer(value)
+	return normalized == deploymentMultiTenantValANormalizedProjectionDisclaimer(deploymentMultiTenantValAProjectionDisclaimer()) ||
+		normalized == deploymentMultiTenantValANormalizedProjectionDisclaimer(deploymentMultiTenantValAProjectionDisclaimer()+" aggregate_dependency_snapshot") ||
+		normalized == deploymentMultiTenantValANormalizedProjectionDisclaimer("projection_only not_canonical_truth deployment_multi_tenant_vala aggregate_dependency_snapshot")
+}
+
+func deploymentMultiTenantValAHasFoundationProjectionDisclaimer(value string) bool {
+	return deploymentMultiTenantValANormalizedProjectionDisclaimer(value) ==
+		deploymentMultiTenantValANormalizedProjectionDisclaimer(deploymentMultiTenantValAProjectionDisclaimer())
 }
 
 func deploymentMultiTenantValADeploymentProfileMatrixEvidenceRefs() []string {
@@ -264,6 +273,22 @@ func deploymentMultiTenantValAIdentityBootstrapEvidenceRefs() []string {
 
 func deploymentMultiTenantValAAirGappedEvidenceBundleEvidenceRefs() []string {
 	return []string{"evidence:deployment-multi-tenant-vala-air-gapped-evidence-bundle-001"}
+}
+
+func deploymentMultiTenantValATenantScope() string {
+	return "tenant:alpha"
+}
+
+func deploymentMultiTenantValASaaSConnectorScope() string {
+	return "tenant_scoped_connector_execution"
+}
+
+func deploymentMultiTenantValASaaSOperatorSupportScope() string {
+	return "tenant_operator_support_boundary"
+}
+
+func deploymentMultiTenantValATenantSpecificIdentityBoundary() string {
+	return "tenant_specific_identity_boundary"
 }
 
 func deploymentMultiTenantValARequiredProfiles() []string {
@@ -381,12 +406,12 @@ func deploymentMultiTenantValAAllValuesValid(values []string) bool {
 }
 
 func deploymentMultiTenantValAHasNoUnsupportedOnlineDependencies(values []string) bool {
-	return len(values) == 1 && strings.TrimSpace(values[0]) == "none_explicit"
+	return len(values) == 1 && values[0] == "none_explicit"
 }
 
 func deploymentMultiTenantValAAirGappedUnsupportedDependencyIDIsValid(value string) bool {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || trimmed != strings.ToLower(trimmed) || trimmed == "none_explicit" {
+	if trimmed == "" || value != trimmed || trimmed != strings.ToLower(trimmed) || trimmed == "none_explicit" {
 		return false
 	}
 	normalized := deploymentMultiTenantVal0NormalizeClaimText(trimmed)
@@ -418,7 +443,7 @@ func deploymentMultiTenantValAAirGappedUnsupportedDependencyListIsValid(values [
 		return true
 	}
 	for _, value := range values {
-		if strings.TrimSpace(value) == "none_explicit" {
+		if value == "none_explicit" {
 			return false
 		}
 		if !deploymentMultiTenantValAAirGappedUnsupportedDependencyIDIsValid(value) {
@@ -459,21 +484,21 @@ func EvaluateDeploymentMultiTenantValADependencyState(model DeploymentMultiTenan
 	if !deploymentMultiTenantVal0HasProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValADependencyStateBlocked
 	}
-	if strings.TrimSpace(model.Val0CurrentState) != DeploymentMultiTenantVal0StateActive ||
-		strings.TrimSpace(model.Val0DependencyState) != DeploymentMultiTenantVal0DependencyStateActive ||
-		strings.TrimSpace(model.Val0DeploymentValidationState) != DeploymentMultiTenantVal0DeploymentValidationStateActive ||
-		strings.TrimSpace(model.Val0TenantBoundaryState) != DeploymentMultiTenantVal0TenantBoundaryStateActive ||
-		strings.TrimSpace(model.Val0MSPAuthorityState) != DeploymentMultiTenantVal0MSPAuthorityStateActive ||
-		strings.TrimSpace(model.Val0PolicyEnvelopeState) != DeploymentMultiTenantVal0PolicyEnvelopeStateActive ||
-		strings.TrimSpace(model.Val0TenantTrustScopeState) != DeploymentMultiTenantVal0TenantTrustScopeStateActive ||
-		strings.TrimSpace(model.Val0ConnectorContractState) != DeploymentMultiTenantVal0ConnectorContractStateActive ||
-		strings.TrimSpace(model.Val0OperatorActionState) != DeploymentMultiTenantVal0OperatorActionStateActive ||
-		strings.TrimSpace(model.Val0PrivacyGuardState) != DeploymentMultiTenantVal0PrivacyGuardStateActive ||
-		strings.TrimSpace(model.Val0FairShareState) != DeploymentMultiTenantVal0FairShareStateActive ||
-		strings.TrimSpace(model.Val0OperationalPreflightState) != DeploymentMultiTenantVal0OperationalPreflightStateActive ||
-		strings.TrimSpace(model.Val0FutureContractState) != DeploymentMultiTenantVal0FutureContractStateActive ||
-		strings.TrimSpace(model.Val0NoOverclaimState) != DeploymentMultiTenantVal0NoOverclaimStateActive ||
-		strings.TrimSpace(model.Point10State) != DeploymentMultiTenantPoint10StateNotComplete {
+	if model.Val0CurrentState != DeploymentMultiTenantVal0StateActive ||
+		model.Val0DependencyState != DeploymentMultiTenantVal0DependencyStateActive ||
+		model.Val0DeploymentValidationState != DeploymentMultiTenantVal0DeploymentValidationStateActive ||
+		model.Val0TenantBoundaryState != DeploymentMultiTenantVal0TenantBoundaryStateActive ||
+		model.Val0MSPAuthorityState != DeploymentMultiTenantVal0MSPAuthorityStateActive ||
+		model.Val0PolicyEnvelopeState != DeploymentMultiTenantVal0PolicyEnvelopeStateActive ||
+		model.Val0TenantTrustScopeState != DeploymentMultiTenantVal0TenantTrustScopeStateActive ||
+		model.Val0ConnectorContractState != DeploymentMultiTenantVal0ConnectorContractStateActive ||
+		model.Val0OperatorActionState != DeploymentMultiTenantVal0OperatorActionStateActive ||
+		model.Val0PrivacyGuardState != DeploymentMultiTenantVal0PrivacyGuardStateActive ||
+		model.Val0FairShareState != DeploymentMultiTenantVal0FairShareStateActive ||
+		model.Val0OperationalPreflightState != DeploymentMultiTenantVal0OperationalPreflightStateActive ||
+		model.Val0FutureContractState != DeploymentMultiTenantVal0FutureContractStateActive ||
+		model.Val0NoOverclaimState != DeploymentMultiTenantVal0NoOverclaimStateActive ||
+		model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 		return DeploymentMultiTenantValADependencyStateBlocked
 	}
 	return DeploymentMultiTenantValADependencyStateActive
@@ -482,11 +507,11 @@ func EvaluateDeploymentMultiTenantValADependencyState(model DeploymentMultiTenan
 func EvaluateDeploymentMultiTenantValADeploymentProfileMatrixState(model DeploymentMultiTenantValADeploymentProfileMatrix) string {
 	hasNoUnsupportedDependencies := deploymentMultiTenantValAHasNoUnsupportedOnlineDependencies(model.AirGappedUnsupportedOnlineDependencies)
 	hasExplicitUnsupportedDependencies := deploymentMultiTenantValAHasExplicitUnsupportedDependencies(model.AirGappedUnsupportedOnlineDependencies)
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		!containsExactTrimmedStringSet(model.EvidenceRefs, deploymentMultiTenantValADeploymentProfileMatrixEvidenceRefs()...) ||
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.EvidenceRefs, deploymentMultiTenantValADeploymentProfileMatrixEvidenceRefs()...) ||
 		!deploymentMultiTenantVal0FreshnessIsFresh(model.FreshnessState) ||
-		!containsExactTrimmedStringSet(model.SupportedProfiles, deploymentMultiTenantValARequiredProfiles()...) ||
-		!containsExactTrimmedStringSet(model.SupportedStates, deploymentMultiTenantValARequiredStates()...) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.SupportedProfiles, deploymentMultiTenantValARequiredProfiles()...) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.SupportedStates, deploymentMultiTenantValARequiredStates()...) ||
 		!model.ReadinessEvidenceBacked {
 		return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 	}
@@ -494,18 +519,18 @@ func EvaluateDeploymentMultiTenantValADeploymentProfileMatrixState(model Deploym
 		model.MarketplaceInstallTreatedAsProductionReady || model.UnsupportedProfileReady {
 		return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 	}
-	if strings.TrimSpace(model.SaaSState) != DeploymentMultiTenantDeploymentStateReady ||
-		!containsExactTrimmedStringSet(model.SaaSEvidenceKeys, deploymentMultiTenantValAProfileMatrixSaaSKeys()...) ||
+	if model.SaaSState != DeploymentMultiTenantDeploymentStateReady ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.SaaSEvidenceKeys, deploymentMultiTenantValAProfileMatrixSaaSKeys()...) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SaaSTenantConfig) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SaaSRegion) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SaaSIdentityBootstrap) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.SaaSConnectorScope) ||
+		model.SaaSConnectorScope != deploymentMultiTenantValASaaSConnectorScope() ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SaaSBackupPolicy) ||
-		!deploymentMultiTenantVal0BoundaryValueIsValid(model.SaaSOperatorSupportScope) {
+		model.SaaSOperatorSupportScope != deploymentMultiTenantValASaaSOperatorSupportScope() {
 		return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 	}
-	if strings.TrimSpace(model.SelfHostedState) != DeploymentMultiTenantDeploymentStateReady ||
-		!containsExactTrimmedStringSet(model.SelfHostedEvidenceKeys, deploymentMultiTenantValAProfileMatrixSelfHostedKeys()...) ||
+	if model.SelfHostedState != DeploymentMultiTenantDeploymentStateReady ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.SelfHostedEvidenceKeys, deploymentMultiTenantValAProfileMatrixSelfHostedKeys()...) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SelfHostedArtifactProvenance) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SelfHostedEnvironmentManifest) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SelfHostedConfigValidation) ||
@@ -514,11 +539,11 @@ func EvaluateDeploymentMultiTenantValADeploymentProfileMatrixState(model Deploym
 		!deploymentMultiTenantVal0ExactValueIsValid(model.SelfHostedUpgradeRollbackPlan) {
 		return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 	}
-	if !containsTrimmedString(deploymentMultiTenantValARequiredStates(), model.AirGappedState) ||
-		!containsExactTrimmedStringSet(model.AirGappedEvidenceKeys, deploymentMultiTenantValAProfileMatrixAirGappedKeys()...) ||
+	if !deploymentMultiTenantVal0ContainsExactValue(deploymentMultiTenantValARequiredStates(), model.AirGappedState) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.AirGappedEvidenceKeys, deploymentMultiTenantValAProfileMatrixAirGappedKeys()...) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.AirGappedOfflineArtifactBundle) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.AirGappedOfflineEvidenceBundle) ||
-		strings.TrimSpace(model.AirGappedSignatureHashVerificationState) != DeploymentMultiTenantValASignatureVerificationVerified ||
+		model.AirGappedSignatureHashVerificationState != DeploymentMultiTenantValASignatureVerificationVerified ||
 		model.AirGappedUnsupportedDependenciesHidden ||
 		model.AirGappedUnsupportedDependenciesSilentlyReady ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.AirGappedOfflineReplayExportPath) {
@@ -528,14 +553,14 @@ func EvaluateDeploymentMultiTenantValADeploymentProfileMatrixState(model Deploym
 		return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 	}
 	if hasExplicitUnsupportedDependencies {
-		if strings.TrimSpace(model.AirGappedState) != DeploymentMultiTenantDeploymentStateDegraded &&
-			strings.TrimSpace(model.AirGappedState) != DeploymentMultiTenantDeploymentStateUnsupported {
+		if model.AirGappedState != DeploymentMultiTenantDeploymentStateDegraded &&
+			model.AirGappedState != DeploymentMultiTenantDeploymentStateUnsupported {
 			return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 		}
 		if !model.AirGappedUnsupportedSemanticsExplicit || !model.AirGappedDegradedSemanticsExplicit {
 			return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 		}
-	} else if !hasNoUnsupportedDependencies || strings.TrimSpace(model.AirGappedState) != DeploymentMultiTenantDeploymentStateReady {
+	} else if !hasNoUnsupportedDependencies || model.AirGappedState != DeploymentMultiTenantDeploymentStateReady {
 		return DeploymentMultiTenantValADeploymentProfileMatrixStateBlocked
 	}
 	if model.InstallSucceeded && !model.ReadinessEvidenceBacked {
@@ -548,11 +573,11 @@ func EvaluateDeploymentMultiTenantValADeploymentProfileMatrixState(model Deploym
 }
 
 func EvaluateDeploymentMultiTenantValAPreflightGateState(model DeploymentMultiTenantValAPreflightGate) string {
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		!containsExactTrimmedStringSet(model.EvidenceRefs, deploymentMultiTenantValAPreflightEvidenceRefs()...) ||
-		!containsExactTrimmedStringSet(model.CheckKeys, deploymentMultiTenantValAPreflightCheckKeys()...) ||
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.EvidenceRefs, deploymentMultiTenantValAPreflightEvidenceRefs()...) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.CheckKeys, deploymentMultiTenantValAPreflightCheckKeys()...) ||
 		!deploymentMultiTenantVal0FreshnessIsFresh(model.FreshnessState) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantScope) ||
+		model.TenantScope != deploymentMultiTenantValATenantScope() ||
 		!model.InstallConfigValidation || !model.UpgradeConfigDiff || !model.DBSchemaMigrationDryRun ||
 		!model.BackupBeforeUpgradeEvidence || !model.RollbackPlanEvidence ||
 		!model.PolicyMigrationCompatibility || !model.ConnectorPermissionChangeReview ||
@@ -564,21 +589,21 @@ func EvaluateDeploymentMultiTenantValAPreflightGateState(model DeploymentMultiTe
 }
 
 func EvaluateDeploymentMultiTenantValAIdentityBootstrapState(model DeploymentMultiTenantValAIdentityBootstrap) string {
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		!containsExactTrimmedStringSet(model.SupportedModes, deploymentMultiTenantValAIdentityModes()...) ||
-		!containsExactTrimmedStringSet(model.EvidenceRefs, deploymentMultiTenantValAIdentityBootstrapEvidenceRefs()...) ||
-		!containsExactTrimmedStringSet(model.ValidationKeys, deploymentMultiTenantValAIdentityValidationKeys()...) ||
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.SupportedModes, deploymentMultiTenantValAIdentityModes()...) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.EvidenceRefs, deploymentMultiTenantValAIdentityBootstrapEvidenceRefs()...) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.ValidationKeys, deploymentMultiTenantValAIdentityValidationKeys()...) ||
 		!deploymentMultiTenantVal0FreshnessIsFresh(model.FreshnessState) ||
-		!containsTrimmedString(deploymentMultiTenantValAIdentityModes(), model.IdentityMode) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantScope) ||
+		!deploymentMultiTenantVal0ContainsExactValue(deploymentMultiTenantValAIdentityModes(), model.IdentityMode) ||
+		model.TenantScope != deploymentMultiTenantValATenantScope() ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.IssuerEntityID) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.CallbackRedirectURL) ||
-		strings.TrimSpace(model.CertificateExpiryState) != DeploymentMultiTenantValACertificateStateValid ||
+		model.CertificateExpiryState != DeploymentMultiTenantValACertificateStateValid ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.GroupRoleMapping) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.AdminBootstrapFallback) ||
 		!model.BreakGlassCompatibility || !model.BreakGlassExpiryPresent ||
 		!model.BreakGlassRevocationPresent || !model.DisabledUnsafeFallbackHandling ||
-		!deploymentMultiTenantVal0BoundaryValueIsValid(model.TenantSpecificIdentityBoundary) ||
+		model.TenantSpecificIdentityBoundary != deploymentMultiTenantValATenantSpecificIdentityBoundary() ||
 		model.UnsafeFallbackEnabled || model.SSOConfiguredMeansSecureClaim ||
 		model.IdentityReadinessImpliesDeploymentReadiness {
 		return DeploymentMultiTenantValAIdentityBootstrapStateBlocked
@@ -587,9 +612,9 @@ func EvaluateDeploymentMultiTenantValAIdentityBootstrapState(model DeploymentMul
 }
 
 func EvaluateDeploymentMultiTenantValAAirGappedEvidenceBundleState(model DeploymentMultiTenantValAAirGappedEvidenceBundle) string {
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		!containsExactTrimmedStringSet(model.EvidenceRefs, deploymentMultiTenantValAAirGappedEvidenceBundleEvidenceRefs()...) ||
-		!containsExactTrimmedStringSet(model.BundleKeys, deploymentMultiTenantValAAirGappedBundleKeys()...) ||
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.EvidenceRefs, deploymentMultiTenantValAAirGappedEvidenceBundleEvidenceRefs()...) ||
+		!deploymentMultiTenantVal0ContainsExactStringSet(model.BundleKeys, deploymentMultiTenantValAAirGappedBundleKeys()...) ||
 		!deploymentMultiTenantVal0FreshnessIsFresh(model.FreshnessState) ||
 		!model.AirGappedModeExplicit || !model.OfflineEvidenceBundleEvidenceBacked ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.BundleManifest) ||
@@ -603,7 +628,7 @@ func EvaluateDeploymentMultiTenantValAAirGappedEvidenceBundleState(model Deploym
 		model.UnsupportedOnlineDependenciesHidden ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.ReplayInstructions) ||
 		!deploymentMultiTenantVal0ExactValueIsValid(model.OfflineReplayExportPath) ||
-		strings.TrimSpace(model.SignatureHashVerificationState) != DeploymentMultiTenantValASignatureVerificationVerified ||
+		model.SignatureHashVerificationState != DeploymentMultiTenantValASignatureVerificationVerified ||
 		model.AirGappedCertifiedClaim || model.AirGappedMeansFullyOfflineVerifiedClaim {
 		return DeploymentMultiTenantValAAirGappedEvidenceBundleStateBlocked
 	}
@@ -671,12 +696,16 @@ func deploymentMultiTenantValAContainsForbiddenClaim(values ...string) bool {
 		blockedNormalized = append(blockedNormalized, deploymentMultiTenantVal0NormalizeClaimText(phrase))
 		blockedCompact = append(blockedCompact, deploymentMultiTenantVal0CompactClaimText(phrase))
 	}
+	normalizedBuckets := make([]string, 0, len(values))
+	compactBuckets := make([]string, 0, len(values))
 	for _, value := range values {
 		normalized := deploymentMultiTenantVal0NormalizeClaimText(value)
 		compact := deploymentMultiTenantVal0CompactClaimText(value)
 		if normalized == "" && compact == "" {
 			continue
 		}
+		normalizedBuckets = append(normalizedBuckets, normalized)
+		compactBuckets = append(compactBuckets, compact)
 		if _, ok := allowedExact[normalized]; ok {
 			continue
 		}
@@ -689,11 +718,17 @@ func deploymentMultiTenantValAContainsForbiddenClaim(values ...string) bool {
 			}
 		}
 	}
+	for i := range blockedNormalized {
+		if deploymentMultiTenantVal0BucketsContainForbiddenPhrase(normalizedBuckets, blockedNormalized[i]) ||
+			deploymentMultiTenantVal0BucketsContainForbiddenPhrase(compactBuckets, blockedCompact[i]) {
+			return true
+		}
+	}
 	return false
 }
 
 func EvaluateDeploymentMultiTenantValANoOverclaimState(model DeploymentMultiTenantValANoOverclaimDiscipline) string {
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		deploymentMultiTenantValAContainsForbiddenClaim(model.ObservedClaims...) {
 		return DeploymentMultiTenantValANoOverclaimStateBlocked
 	}
@@ -742,7 +777,7 @@ func deploymentMultiTenantValAPassBlockerFindings(model DeploymentMultiTenantVal
 		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "unsupported air-gapped dependency hidden or silently treated as ready"))
 	}
 	if deploymentMultiTenantValAHasExplicitUnsupportedDependencies(model.DeploymentProfileMatrix.AirGappedUnsupportedOnlineDependencies) &&
-		strings.TrimSpace(model.DeploymentProfileMatrix.AirGappedState) == DeploymentMultiTenantDeploymentStateReady {
+		model.DeploymentProfileMatrix.AirGappedState == DeploymentMultiTenantDeploymentStateReady {
 		findings = append(findings, deploymentMultiTenantValAPassBlockerFinding(deploymentMultiTenantValAPassBlockerSeverityCLB1, deploymentMultiTenantValAPassBlockerSurfaceDeploymentProfile, "explicit unsupported air-gapped dependency treated as ready"))
 	}
 	if !model.DeploymentProfileMatrix.ProfileNamingExact {
@@ -770,12 +805,12 @@ func deploymentMultiTenantValAPassBlockerFindings(model DeploymentMultiTenantVal
 }
 
 func EvaluateDeploymentMultiTenantValAPassBlockerState(model DeploymentMultiTenantValAPassBlockerOverlay) string {
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValAPassBlockerStateBlocked
 	}
 	hasCleanup := false
 	for _, finding := range model.Findings {
-		switch strings.TrimSpace(finding.Severity) {
+		switch finding.Severity {
 		case deploymentMultiTenantValAPassBlockerSeverityCLB0, deploymentMultiTenantValAPassBlockerSeverityCLB1:
 			return DeploymentMultiTenantValAPassBlockerStateBlocked
 		case deploymentMultiTenantValAPassBlockerSeverityCLB2:
@@ -791,15 +826,15 @@ func EvaluateDeploymentMultiTenantValAPassBlockerState(model DeploymentMultiTena
 }
 
 func EvaluateDeploymentMultiTenantValAState(model DeploymentMultiTenantValAFoundation) string {
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValADependencyStateActive ||
-		strings.TrimSpace(model.DeploymentProfileMatrixState) != DeploymentMultiTenantValADeploymentProfileMatrixStateActive ||
-		strings.TrimSpace(model.PreflightGateState) != DeploymentMultiTenantValAPreflightGateStateActive ||
-		strings.TrimSpace(model.IdentityBootstrapState) != DeploymentMultiTenantValAIdentityBootstrapStateActive ||
-		strings.TrimSpace(model.AirGappedEvidenceBundleState) != DeploymentMultiTenantValAAirGappedEvidenceBundleStateActive ||
-		strings.TrimSpace(model.NoOverclaimState) != DeploymentMultiTenantValANoOverclaimStateActive ||
-		strings.TrimSpace(model.PassBlockerState) != DeploymentMultiTenantValAPassBlockerStateActive ||
-		strings.TrimSpace(model.Point10State) != DeploymentMultiTenantPoint10StateNotComplete {
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
+		model.DependencyState != DeploymentMultiTenantValADependencyStateActive ||
+		model.DeploymentProfileMatrixState != DeploymentMultiTenantValADeploymentProfileMatrixStateActive ||
+		model.PreflightGateState != DeploymentMultiTenantValAPreflightGateStateActive ||
+		model.IdentityBootstrapState != DeploymentMultiTenantValAIdentityBootstrapStateActive ||
+		model.AirGappedEvidenceBundleState != DeploymentMultiTenantValAAirGappedEvidenceBundleStateActive ||
+		model.NoOverclaimState != DeploymentMultiTenantValANoOverclaimStateActive ||
+		model.PassBlockerState != DeploymentMultiTenantValAPassBlockerStateActive ||
+		model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 		return DeploymentMultiTenantValAStateBlocked
 	}
 	return DeploymentMultiTenantValAStateActive
@@ -807,7 +842,7 @@ func EvaluateDeploymentMultiTenantValAState(model DeploymentMultiTenantValAFound
 
 func deploymentMultiTenantValABlockingReasons(model DeploymentMultiTenantValAFoundation) []string {
 	reasons := []string{}
-	if !deploymentMultiTenantValAHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
 	}
 	if model.DependencyState != DeploymentMultiTenantValADependencyStateActive {
