@@ -389,10 +389,13 @@ func deploymentMultiTenantValDProjectionDisclaimer() string {
 }
 
 func deploymentMultiTenantValDHasProjectionDisclaimer(value string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	return strings.Contains(normalized, "projection_only") &&
-		strings.Contains(normalized, "not_canonical_truth") &&
-		strings.Contains(normalized, "deployment_multi_tenant_vald")
+	return value == deploymentMultiTenantValDProjectionDisclaimer() ||
+		value == deploymentMultiTenantValDProjectionDisclaimer()+" aggregate_dependency_snapshot" ||
+		value == "projection_only not_canonical_truth deployment_multi_tenant_vald aggregate_dependency_snapshot"
+}
+
+func deploymentMultiTenantValDHasFoundationProjectionDisclaimer(value string) bool {
+	return value == deploymentMultiTenantValDProjectionDisclaimer()
 }
 
 func deploymentMultiTenantValDConnectorEvidenceRefs() []string {
@@ -423,6 +426,30 @@ func deploymentMultiTenantValDAgentLearningLoopEvidenceRefs() []string {
 	return []string{"evidence:deployment-multi-tenant-vald-agent-learning-loop-001"}
 }
 
+func deploymentMultiTenantValDAgentLearningLoopHumanFeedbackRefs() []string {
+	return []string{"human_feedback_ref"}
+}
+
+func deploymentMultiTenantValDAgentLearningLoopEvaluationResultRefs() []string {
+	return []string{"evaluation_result_ref"}
+}
+
+func deploymentMultiTenantValDAgentLearningLoopRegressionTestRefs() []string {
+	return []string{"regression_test_ref"}
+}
+
+func deploymentMultiTenantValDAgentLearningLoopNoOverclaimCheckRefs() []string {
+	return []string{"no_overclaim_check_ref"}
+}
+
+func deploymentMultiTenantValDAgentLearningLoopTenantScopeCheckRefs() []string {
+	return []string{"tenant_scope_check_ref"}
+}
+
+func deploymentMultiTenantValDAgentLearningLoopApprovalGateCheckRefs() []string {
+	return []string{"approval_gate_check_ref"}
+}
+
 func deploymentMultiTenantValDEvidenceValueIsValid(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" || trimmed != strings.ToLower(trimmed) {
@@ -448,16 +475,8 @@ func deploymentMultiTenantValDEvidenceValueIsValid(value string) bool {
 	return true
 }
 
-func deploymentMultiTenantValDAllEvidenceRefsValid(values []string) bool {
-	if len(values) == 0 {
-		return false
-	}
-	for _, value := range values {
-		if !deploymentMultiTenantValDEvidenceValueIsValid(value) {
-			return false
-		}
-	}
-	return true
+func deploymentMultiTenantValDHasExactEvidenceRefs(values []string, expected ...string) bool {
+	return deploymentMultiTenantVal0ContainsExactStringSet(values, expected...)
 }
 
 func deploymentMultiTenantValDAllExactValuesValid(values []string) bool {
@@ -511,35 +530,217 @@ func deploymentMultiTenantValDClosureBlockerSurfaces() []string {
 }
 
 func deploymentMultiTenantValDApprovalStatusIsApproved(value string) bool {
-	return strings.TrimSpace(value) == deploymentMultiTenantValDApprovalStatusApproved
+	return value == deploymentMultiTenantValDApprovalStatusApproved
+}
+
+func deploymentMultiTenantValDExactEvidenceValue(value, expected string) bool {
+	return deploymentMultiTenantValDEvidenceValueIsValid(value) && value == expected
 }
 
 func deploymentMultiTenantValDSourceOfTruthIsBounded(value string) bool {
-	return deploymentMultiTenantValDEvidenceValueIsValid(value) && strings.TrimSpace(value) == "advisory_evidence_input"
+	return deploymentMultiTenantValDExactEvidenceValue(value, "advisory_evidence_input")
 }
 
 func deploymentMultiTenantValDPostActionReviewStateValid(value string) bool {
-	return strings.TrimSpace(value) == deploymentMultiTenantValDBreakGlassReviewActive
+	return value == deploymentMultiTenantValDBreakGlassReviewActive
 }
 
-func deploymentMultiTenantValDLearningApprovalStatusValid(value string) bool {
-	return deploymentMultiTenantValDEvidenceValueIsValid(value)
+func deploymentMultiTenantValDLearningModeIsSandboxOnly(value string) bool {
+	return value == "offline_sandbox_only"
+}
+
+func deploymentMultiTenantValDTrainingApprovalStatusValid(value string) bool {
+	return value == "training_approved_active"
+}
+
+func deploymentMultiTenantValDPromotionApprovalStatusValid(value string, promotionAllowed bool) bool {
+	if promotionAllowed {
+		return value == "promotion_approved_active"
+	}
+	return value == "promotion_not_approved"
+}
+
+func deploymentMultiTenantValDRuntimeActivationApprovalStatusValid(value string, runtimeActivationAllowed bool) bool {
+	if runtimeActivationAllowed {
+		return value == "runtime_activation_approved_active"
+	}
+	return value == "runtime_activation_not_approved"
+}
+
+func deploymentMultiTenantValDRecommendationApprovalStatusValid(value string) bool {
+	return value == "recommendation_reviewed"
+}
+
+func deploymentMultiTenantValDExecutionApprovalStatusValid(value string) bool {
+	return value == "execution_not_approved"
+}
+
+func deploymentMultiTenantValDModelUpgradeApprovalStatusValid(value string) bool {
+	return value == "model_upgrade_not_approved"
+}
+
+func deploymentMultiTenantValDConnectorPermissionManifestValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "connector_permission_manifest")
+}
+
+func deploymentMultiTenantValDConnectorAuditIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "connector_audit_id")
+}
+
+func deploymentMultiTenantValDConnectorReasonValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "bounded_connector_reason")
+}
+
+func deploymentMultiTenantValDOperatorReasonValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "bounded_operator_reason")
+}
+
+func deploymentMultiTenantValDHumanApprovalAuthorityValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "human_approval_authority")
+}
+
+func deploymentMultiTenantValDOperatorAuditIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "operator_action_audit_id")
+}
+
+func deploymentMultiTenantValDSupportReasonValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "support_reason")
+}
+
+func deploymentMultiTenantValDSupportAuditIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "support_access_audit_id")
+}
+
+func deploymentMultiTenantValDBreakGlassEmergencyReasonValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "emergency_reason")
+}
+
+func deploymentMultiTenantValDBreakGlassAuditIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "break_glass_audit_id")
+}
+
+func deploymentMultiTenantValDMarketplaceReasonValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "bounded_marketplace_reason")
+}
+
+func deploymentMultiTenantValDMarketplaceAuditIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "marketplace_msp_audit_id")
+}
+
+func deploymentMultiTenantValDMarketplaceCustomerReadyValidationEvidenceValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "customer_ready_validation_evidence")
+}
+
+func deploymentMultiTenantValDExpectedAgentPermissionManifest(agentType string) string {
+	switch agentType {
+	case "runtime_approval_controller":
+		return "agent_permission_manifest"
+	case "tenant_boundary_containment_agent":
+		return "containment_permission_manifest"
+	case "deployment_health_preflight_agent":
+		return "deployment_agent_permission_manifest"
+	case "connector_operator_misuse_watch_agent":
+		return "misuse_watch_permission_manifest"
+	case "recovery_rebuild_recommendation_agent":
+		return "recovery_agent_permission_manifest"
+	default:
+		return ""
+	}
+}
+
+func deploymentMultiTenantValDAgentPermissionManifestValid(agentType, value string) bool {
+	expected := deploymentMultiTenantValDExpectedAgentPermissionManifest(agentType)
+	return expected != "" && deploymentMultiTenantValDExactEvidenceValue(value, expected)
+}
+
+func deploymentMultiTenantValDAgentApprovalReasonValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "human_approved_action_required")
+}
+
+func deploymentMultiTenantValDExpectedAgentAuditID(agentType string) string {
+	switch agentType {
+	case "runtime_approval_controller":
+		return "agent_runtime_audit_id"
+	case "tenant_boundary_containment_agent":
+		return "containment_agent_audit_id"
+	case "deployment_health_preflight_agent":
+		return "deployment_agent_audit_id"
+	case "connector_operator_misuse_watch_agent":
+		return "misuse_watch_audit_id"
+	case "recovery_rebuild_recommendation_agent":
+		return "recovery_agent_audit_id"
+	default:
+		return ""
+	}
+}
+
+func deploymentMultiTenantValDAgentAuditIDValid(agentType, value string) bool {
+	expected := deploymentMultiTenantValDExpectedAgentAuditID(agentType)
+	return expected != "" && deploymentMultiTenantValDExactEvidenceValue(value, expected)
+}
+
+func deploymentMultiTenantValDLearningLoopTrainingApproverValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "human_training_approver")
+}
+
+func deploymentMultiTenantValDLearningLoopModelCandidateIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "candidate_model_id")
+}
+
+func deploymentMultiTenantValDLearningLoopModelVersionValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "candidate_model_version")
+}
+
+func deploymentMultiTenantValDLearningLoopBaselineModelVersionValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "baseline_model_version")
+}
+
+func deploymentMultiTenantValDLearningLoopAuditIDValid(value string) bool {
+	return deploymentMultiTenantValDExactEvidenceValue(value, "agent_learning_loop_audit_id")
+}
+
+func deploymentMultiTenantValDExactTenantScopedValue(value, suffix string) bool {
+	return value == deploymentMultiTenantVal0TenantScope()+" "+suffix
+}
+
+func deploymentMultiTenantValDLearningLoopTrainingDataScopeValid(value string) bool {
+	return deploymentMultiTenantValDExactTenantScopedValue(value, "training_data_scope")
+}
+
+func deploymentMultiTenantValDOperatorActionScopeValid(value string) bool {
+	return deploymentMultiTenantValDExactTenantScopedValue(value, "operator_action_scope")
+}
+
+func deploymentMultiTenantValDSupportAccessScopeValid(value string) bool {
+	return deploymentMultiTenantValDExactTenantScopedValue(value, "support_scope")
+}
+
+func deploymentMultiTenantValDBreakGlassActionScopeValid(value string) bool {
+	return deploymentMultiTenantValDExactTenantScopedValue(value, "break_glass_scope")
+}
+
+func deploymentMultiTenantValDMarketplaceMSPOperatorScopeValid(value string) bool {
+	return deploymentMultiTenantValDExactTenantScopedValue(value, "msp_operator_scope")
+}
+
+func deploymentMultiTenantValDMarketplacePartnerScopeValid(value string) bool {
+	return deploymentMultiTenantValDExactTenantScopedValue(value, "partner_scope")
 }
 
 func deploymentMultiTenantValDAgentCoreFieldsValid(agent DeploymentMultiTenantValDAgentRecommendation) bool {
 	return deploymentMultiTenantValDEvidenceValueIsValid(agent.AgentID) &&
 		deploymentMultiTenantValDEvidenceValueIsValid(agent.AgentType) &&
-		deploymentMultiTenantVal0TenantScopedValueIsValid(agent.TenantScope) &&
-		deploymentMultiTenantValDEvidenceValueIsValid(agent.PermissionManifest) &&
+		deploymentMultiTenantVal0ExactTenantScopeValueIsValid(agent.TenantScope) &&
+		deploymentMultiTenantValDAgentPermissionManifestValid(agent.AgentType, agent.PermissionManifest) &&
 		deploymentMultiTenantValDAllExactValuesValid(agent.AllowedReadSurfaces) &&
 		deploymentMultiTenantValDAllExactValuesValid(agent.AllowedRecommendationSurfaces) &&
 		deploymentMultiTenantValDAllExactValuesValid(agent.ForbiddenMutationSurfaces) &&
 		agent.ApprovalRequired &&
 		deploymentMultiTenantValDApprovalStatusIsApproved(agent.ApprovalStatus) &&
-		deploymentMultiTenantValDEvidenceValueIsValid(agent.Approver) &&
-		deploymentMultiTenantValDEvidenceValueIsValid(agent.ApprovalReason) &&
-		deploymentMultiTenantValDEvidenceValueIsValid(agent.AuditID) &&
-		deploymentMultiTenantValDAllEvidenceRefsValid(agent.EvidenceRefs) &&
+		deploymentMultiTenantValDHumanApprovalAuthorityValid(agent.Approver) &&
+		deploymentMultiTenantValDAgentApprovalReasonValid(agent.ApprovalReason) &&
+		deploymentMultiTenantValDAgentAuditIDValid(agent.AgentType, agent.AuditID) &&
+		deploymentMultiTenantValDHasExactEvidenceRefs(agent.EvidenceRefs, deploymentMultiTenantValDAgenticOverlayEvidenceRefs()...) &&
 		deploymentMultiTenantValDEvidenceValueIsValid(agent.RecommendationID) &&
 		deploymentMultiTenantValDEvidenceValueIsValid(agent.RecommendationType) &&
 		agent.HumanReviewRequired &&
@@ -548,32 +749,32 @@ func deploymentMultiTenantValDAgentCoreFieldsValid(agent DeploymentMultiTenantVa
 		!agent.Point10PassAllowed &&
 		!agent.ExternalAPIAllowed &&
 		agent.DiagnosticOutputComplete &&
-		deploymentMultiTenantValDHasProjectionDisclaimer(agent.ProjectionDisclaimer)
+		deploymentMultiTenantValDHasFoundationProjectionDisclaimer(agent.ProjectionDisclaimer)
 }
 
 func EvaluateDeploymentMultiTenantValDAgentLearningLoopState(model DeploymentMultiTenantValDAgentLearningLoop) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!model.LearningAllowed ||
-		strings.TrimSpace(model.LearningMode) != "offline_sandbox_only" ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TrainingDataScope) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.TrainingDataRefs) ||
+		!deploymentMultiTenantValDLearningModeIsSandboxOnly(model.LearningMode) ||
+		!deploymentMultiTenantValDLearningLoopTrainingDataScopeValid(model.TrainingDataScope) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.TrainingDataRefs, deploymentMultiTenantValDAgentLearningLoopEvidenceRefs()...) ||
 		!model.TrainingDataPrivacyFiltered ||
 		!model.TrainingDataTenantScoped ||
 		model.TrainingDataCrossTenant ||
 		!model.TrainingDataCustomerApproved ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.HumanFeedbackRefs) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.HumanFeedbackRefs, deploymentMultiTenantValDAgentLearningLoopHumanFeedbackRefs()...) ||
 		!model.HumanFeedbackAuditLinked ||
 		!model.TrainingApprovalRequired ||
-		!deploymentMultiTenantValDLearningApprovalStatusValid(model.TrainingApprovalStatus) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.TrainingApprover) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.ModelCandidateID) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.ModelVersion) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.BaselineModelVersion) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvaluationResultRefs) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.RegressionTestRefs) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.NoOverclaimCheckRefs) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.TenantScopeCheckRefs) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.ApprovalGateCheckRefs) ||
+		!deploymentMultiTenantValDTrainingApprovalStatusValid(model.TrainingApprovalStatus) ||
+		!deploymentMultiTenantValDLearningLoopTrainingApproverValid(model.TrainingApprover) ||
+		!deploymentMultiTenantValDLearningLoopModelCandidateIDValid(model.ModelCandidateID) ||
+		!deploymentMultiTenantValDLearningLoopModelVersionValid(model.ModelVersion) ||
+		!deploymentMultiTenantValDLearningLoopBaselineModelVersionValid(model.BaselineModelVersion) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvaluationResultRefs, deploymentMultiTenantValDAgentLearningLoopEvaluationResultRefs()...) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.RegressionTestRefs, deploymentMultiTenantValDAgentLearningLoopRegressionTestRefs()...) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.NoOverclaimCheckRefs, deploymentMultiTenantValDAgentLearningLoopNoOverclaimCheckRefs()...) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.TenantScopeCheckRefs, deploymentMultiTenantValDAgentLearningLoopTenantScopeCheckRefs()...) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.ApprovalGateCheckRefs, deploymentMultiTenantValDAgentLearningLoopApprovalGateCheckRefs()...) ||
 		!model.LearnedOutputAdvisoryOnly ||
 		model.ExternalAPIAllowed ||
 		model.ProductionSelfModificationAllowed ||
@@ -581,8 +782,8 @@ func EvaluateDeploymentMultiTenantValDAgentLearningLoopState(model DeploymentMul
 		model.CanonicalMutationAllowed ||
 		model.Point10PassAllowed ||
 		!model.ApprovalRequired ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvidenceRefs) ||
+		!deploymentMultiTenantValDLearningLoopAuditIDValid(model.AuditID) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvidenceRefs, deploymentMultiTenantValDAgentLearningLoopEvidenceRefs()...) ||
 		!model.DiagnosticOutputComplete ||
 		model.CandidateWeakensNoOverclaim ||
 		model.CandidateWeakensTenantIsolation ||
@@ -599,15 +800,15 @@ func EvaluateDeploymentMultiTenantValDAgentLearningLoopState(model DeploymentMul
 		model.LearnedOutputTreatedAsCanonicalTruth {
 		return DeploymentMultiTenantValDAgentLearningLoopStateBlocked
 	}
-	if model.PromotionAllowed && !deploymentMultiTenantValDLearningApprovalStatusValid(model.PromotionApprovalStatus) {
+	if !deploymentMultiTenantValDPromotionApprovalStatusValid(model.PromotionApprovalStatus, model.PromotionAllowed) {
 		return DeploymentMultiTenantValDAgentLearningLoopStateBlocked
 	}
-	if model.RuntimeActivationAllowed && !deploymentMultiTenantValDLearningApprovalStatusValid(model.RuntimeActivationApprovalStatus) {
+	if !deploymentMultiTenantValDRuntimeActivationApprovalStatusValid(model.RuntimeActivationApprovalStatus, model.RuntimeActivationAllowed) {
 		return DeploymentMultiTenantValDAgentLearningLoopStateBlocked
 	}
-	if !deploymentMultiTenantValDLearningApprovalStatusValid(model.RecommendationApprovalStatus) ||
-		!deploymentMultiTenantValDLearningApprovalStatusValid(model.ExecutionApprovalStatus) ||
-		!deploymentMultiTenantValDLearningApprovalStatusValid(model.ModelUpgradeApprovalStatus) {
+	if !deploymentMultiTenantValDRecommendationApprovalStatusValid(model.RecommendationApprovalStatus) ||
+		!deploymentMultiTenantValDExecutionApprovalStatusValid(model.ExecutionApprovalStatus) ||
+		!deploymentMultiTenantValDModelUpgradeApprovalStatusValid(model.ModelUpgradeApprovalStatus) {
 		return DeploymentMultiTenantValDAgentLearningLoopStateBlocked
 	}
 	return DeploymentMultiTenantValDAgentLearningLoopStateActive
@@ -639,29 +840,29 @@ func EvaluateDeploymentMultiTenantValDDependencyState(model DeploymentMultiTenan
 	if !deploymentMultiTenantValCHasProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValDDependencyStateBlocked
 	}
-	if strings.TrimSpace(model.ValCCurrentState) != DeploymentMultiTenantValCStateActive ||
-		strings.TrimSpace(model.ValCDependencyState) != DeploymentMultiTenantValCDependencyStateActive ||
-		strings.TrimSpace(model.ValCHAReadinessState) != DeploymentMultiTenantValCHAReadinessStateActive ||
-		strings.TrimSpace(model.ValCRecoveryReadinessState) != DeploymentMultiTenantValCRecoveryReadinessStateActive ||
-		strings.TrimSpace(model.ValCSLAReadinessState) != DeploymentMultiTenantValCSLAReadinessStateActive ||
-		strings.TrimSpace(model.ValCTenantTrustScopeState) != DeploymentMultiTenantValCTenantTrustScopeStateActive ||
-		strings.TrimSpace(model.ValCSiloVisibilityState) != DeploymentMultiTenantValCSiloVisibilityStateActive ||
-		strings.TrimSpace(model.ValCPrivacyGuardState) != DeploymentMultiTenantValCPrivacyGuardStateActive ||
-		strings.TrimSpace(model.ValCNoOverclaimState) != DeploymentMultiTenantValCNoOverclaimStateActive ||
-		strings.TrimSpace(model.ValCClosureBlockerState) != DeploymentMultiTenantValCClosureBlockerStateActive ||
-		strings.TrimSpace(model.Point10State) != DeploymentMultiTenantPoint10StateNotComplete {
+	if model.ValCCurrentState != DeploymentMultiTenantValCStateActive ||
+		model.ValCDependencyState != DeploymentMultiTenantValCDependencyStateActive ||
+		model.ValCHAReadinessState != DeploymentMultiTenantValCHAReadinessStateActive ||
+		model.ValCRecoveryReadinessState != DeploymentMultiTenantValCRecoveryReadinessStateActive ||
+		model.ValCSLAReadinessState != DeploymentMultiTenantValCSLAReadinessStateActive ||
+		model.ValCTenantTrustScopeState != DeploymentMultiTenantValCTenantTrustScopeStateActive ||
+		model.ValCSiloVisibilityState != DeploymentMultiTenantValCSiloVisibilityStateActive ||
+		model.ValCPrivacyGuardState != DeploymentMultiTenantValCPrivacyGuardStateActive ||
+		model.ValCNoOverclaimState != DeploymentMultiTenantValCNoOverclaimStateActive ||
+		model.ValCClosureBlockerState != DeploymentMultiTenantValCClosureBlockerStateActive ||
+		model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 		return DeploymentMultiTenantValDDependencyStateBlocked
 	}
 	return DeploymentMultiTenantValDDependencyStateActive
 }
 
 func EvaluateDeploymentMultiTenantValDConnectorCapabilityState(model DeploymentMultiTenantValDConnectorCapabilityManifest) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!deploymentMultiTenantVal0FreshnessIsFresh(model.FreshnessState) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ConnectorID) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ConnectorType) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantScope) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.PermissionManifest) ||
+		!deploymentMultiTenantVal0ExactTenantScopeValueIsValid(model.TenantScope) ||
+		!deploymentMultiTenantValDConnectorPermissionManifestValid(model.PermissionManifest) ||
 		!model.CapabilityManifestPresent ||
 		!deploymentMultiTenantValDAllExactValuesValid(model.ReadCapabilities) ||
 		!deploymentMultiTenantValDAllExactValuesValid(model.WriteCapabilities) ||
@@ -670,13 +871,12 @@ func EvaluateDeploymentMultiTenantValDConnectorCapabilityState(model DeploymentM
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ReplayPolicy) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RateLimitPolicy) ||
 		!model.AuditRequired ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.SourceOfTruth) ||
+		!deploymentMultiTenantValDConnectorAuditIDValid(model.AuditID) ||
 		!deploymentMultiTenantValDSourceOfTruthIsBounded(model.SourceOfTruth) ||
 		!model.TenantScopedExecution ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RecoveryBehavior) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.FailureBehavior) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvidenceRefs) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvidenceRefs, deploymentMultiTenantValDConnectorEvidenceRefs()...) ||
 		!model.DiagnosticOutputComplete ||
 		model.ConnectorAsSourceOfTruth ||
 		model.ConnectorBypassesDeploymentGate ||
@@ -686,28 +886,28 @@ func EvaluateDeploymentMultiTenantValDConnectorCapabilityState(model DeploymentM
 		model.RetryReplayDuplicatesActiveEvidenceRisk {
 		return DeploymentMultiTenantValDConnectorCapabilityStateBlocked
 	}
-	if model.MutationAllowed && (!model.MutationCapabilityExplicit || !deploymentMultiTenantValDEvidenceValueIsValid(model.Reason) || !deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID)) {
+	if model.MutationAllowed && (!model.MutationCapabilityExplicit || !deploymentMultiTenantValDConnectorReasonValid(model.Reason) || !deploymentMultiTenantValDConnectorAuditIDValid(model.AuditID)) {
 		return DeploymentMultiTenantValDConnectorCapabilityStateBlocked
 	}
 	return DeploymentMultiTenantValDConnectorCapabilityStateActive
 }
 
 func EvaluateDeploymentMultiTenantValDOperatorActionState(model DeploymentMultiTenantValDOperatorActionPolicy) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.Actor) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ActorType) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantTarget) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.ActionScope) ||
+		!deploymentMultiTenantVal0ExactTenantScopeValueIsValid(model.TenantTarget) ||
+		!deploymentMultiTenantValDOperatorActionScopeValid(model.ActionScope) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ActionType) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.Reason) ||
+		!deploymentMultiTenantValDOperatorReasonValid(model.Reason) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuthorizationBasis) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.Approver) ||
+		!deploymentMultiTenantValDHumanApprovalAuthorityValid(model.Approver) ||
 		!deploymentMultiTenantValDApprovalStatusIsApproved(model.ApprovalStatus) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuthorityBasis) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.Expiry) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RevocationPath) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvidenceRefs) ||
+		!deploymentMultiTenantValDOperatorAuditIDValid(model.AuditID) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvidenceRefs, deploymentMultiTenantValDOperatorEvidenceRefs()...) ||
 		!model.RBACABACEnforced ||
 		!model.SSOContextBound ||
 		!model.TenantScopeBound ||
@@ -716,29 +916,29 @@ func EvaluateDeploymentMultiTenantValDOperatorActionState(model DeploymentMultiT
 		model.CanonicalMutationAllowed ||
 		model.OperatorActionCanonicalApproval ||
 		!model.DiagnosticOutputComplete ||
-		!deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+		!deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValDOperatorActionStateBlocked
 	}
 	return DeploymentMultiTenantValDOperatorActionStateActive
 }
 
 func EvaluateDeploymentMultiTenantValDSupportAccessState(model DeploymentMultiTenantValDSupportAccessEnforcement) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.SupportAccessID) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.SupportActor) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantTarget) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.SupportScope) ||
+		!deploymentMultiTenantVal0ExactTenantScopeValueIsValid(model.TenantTarget) ||
+		!deploymentMultiTenantValDSupportAccessScopeValid(model.SupportScope) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.SSOSessionReference) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RBACRole) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ABACConditions) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuthorityBasis) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.Reason) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.Approver) ||
+		!deploymentMultiTenantValDSupportReasonValid(model.Reason) ||
+		!deploymentMultiTenantValDHumanApprovalAuthorityValid(model.Approver) ||
 		!deploymentMultiTenantValDApprovalStatusIsApproved(model.ApprovalStatus) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.Expiry) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RevocationPath) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvidenceRefs) ||
+		!deploymentMultiTenantValDSupportAuditIDValid(model.AuditID) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvidenceRefs, deploymentMultiTenantValDSupportEvidenceRefs()...) ||
 		!deploymentMultiTenantVal0BoundaryValueIsValid(model.SupportVisibilityBoundary) ||
 		!model.DataResidencyBoundaryRespected ||
 		!model.TenantIsolationBoundaryRespected ||
@@ -752,19 +952,19 @@ func EvaluateDeploymentMultiTenantValDSupportAccessState(model DeploymentMultiTe
 }
 
 func EvaluateDeploymentMultiTenantValDBreakGlassState(model DeploymentMultiTenantValDBreakGlassAccess) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.BreakGlassID) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.EmergencyReason) ||
+		!deploymentMultiTenantValDBreakGlassEmergencyReasonValid(model.EmergencyReason) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.Actor) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantTarget) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.ActionScope) ||
+		!deploymentMultiTenantVal0ExactTenantScopeValueIsValid(model.TenantTarget) ||
+		!deploymentMultiTenantValDBreakGlassActionScopeValid(model.ActionScope) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuthorizationBasis) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.Approver) ||
+		!deploymentMultiTenantValDHumanApprovalAuthorityValid(model.Approver) ||
 		!deploymentMultiTenantValDApprovalStatusIsApproved(model.ApprovalStatus) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.Expiry) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RevocationPath) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvidenceRefs) ||
+		!deploymentMultiTenantValDBreakGlassAuditIDValid(model.AuditID) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvidenceRefs, deploymentMultiTenantValDBreakGlassEvidenceRefs()...) ||
 		!model.PostActionReviewRequired ||
 		!deploymentMultiTenantValDPostActionReviewStateValid(model.PostActionReviewState) ||
 		!model.TenantScopeBound ||
@@ -780,20 +980,20 @@ func EvaluateDeploymentMultiTenantValDBreakGlassState(model DeploymentMultiTenan
 }
 
 func EvaluateDeploymentMultiTenantValDMarketplaceMSPAuthorityState(model DeploymentMultiTenantValDMarketplaceMSPAuthorityBoundary) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.MarketplaceProfile) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.MSPOperatorScope) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.PartnerScope) ||
-		!deploymentMultiTenantVal0TenantScopedValueIsValid(model.TenantScope) ||
+		!deploymentMultiTenantValDMarketplaceMSPOperatorScopeValid(model.MSPOperatorScope) ||
+		!deploymentMultiTenantValDMarketplacePartnerScopeValid(model.PartnerScope) ||
+		!deploymentMultiTenantVal0ExactTenantScopeValueIsValid(model.TenantScope) ||
 		!deploymentMultiTenantVal0BoundaryValueIsValid(model.DeploymentScope) ||
 		!deploymentMultiTenantVal0BoundaryValueIsValid(model.SupportScope) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuthorityBoundary) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.ApprovalBoundary) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.AuditID) ||
-		!deploymentMultiTenantValDEvidenceValueIsValid(model.Reason) ||
+		!deploymentMultiTenantValDMarketplaceAuditIDValid(model.AuditID) ||
+		!deploymentMultiTenantValDMarketplaceReasonValid(model.Reason) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.Expiry) ||
 		!deploymentMultiTenantValDEvidenceValueIsValid(model.RevocationPath) ||
-		!deploymentMultiTenantValDAllEvidenceRefsValid(model.EvidenceRefs) ||
+		!deploymentMultiTenantValDHasExactEvidenceRefs(model.EvidenceRefs, deploymentMultiTenantValDMarketplaceMSPEvidenceRefs()...) ||
 		!model.DiagnosticOutputComplete ||
 		model.PassAuthorityAllowed ||
 		model.ProductionReadinessAuthorityAllowed ||
@@ -803,7 +1003,7 @@ func EvaluateDeploymentMultiTenantValDMarketplaceMSPAuthorityState(model Deploym
 		model.PartnerCertifiedDeploymentClaim {
 		return DeploymentMultiTenantValDMarketplaceMSPAuthorityStateBlocked
 	}
-	if model.CustomerReadyWordingPresent && !deploymentMultiTenantValDEvidenceValueIsValid(model.CustomerReadyValidationEvidence) {
+	if model.CustomerReadyWordingPresent && !deploymentMultiTenantValDMarketplaceCustomerReadyValidationEvidenceValid(model.CustomerReadyValidationEvidence) {
 		return DeploymentMultiTenantValDMarketplaceMSPAuthorityStateBlocked
 	}
 	return DeploymentMultiTenantValDMarketplaceMSPAuthorityStateActive
@@ -857,7 +1057,7 @@ func deploymentMultiTenantValDAgentRecommendationState(agent DeploymentMultiTena
 }
 
 func EvaluateDeploymentMultiTenantValDAgenticOverlayState(model DeploymentMultiTenantValDAgenticOverlay) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValDAgenticOverlayStateBlocked
 	}
 	if EvaluateDeploymentMultiTenantValDAgentLearningLoopState(model.LearningLoop) != DeploymentMultiTenantValDAgentLearningLoopStateActive {
@@ -971,8 +1171,18 @@ func deploymentMultiTenantValDContainsForbiddenClaim(values ...string) bool {
 		"legal certification",
 		"copied competitor workflow",
 	}
+	crossNormalizedParts := make([]string, 0, len(values))
+	corpusNormalizedParts := make([]string, 0, len(values))
+	var corpusCompact strings.Builder
 	for _, value := range values {
 		normalized := deploymentMultiTenantVal0NormalizeClaimText(value)
+		compact := deploymentMultiTenantVal0CompactClaimText(value)
+		if normalized == "" && compact == "" {
+			continue
+		}
+		if normalized != "" {
+			crossNormalizedParts = append(crossNormalizedParts, normalized)
+		}
 		isAllowedExact := false
 		for _, allowed := range allowedExact {
 			if normalized == deploymentMultiTenantVal0NormalizeClaimText(allowed) {
@@ -983,17 +1193,37 @@ func deploymentMultiTenantValDContainsForbiddenClaim(values ...string) bool {
 		if isAllowedExact {
 			continue
 		}
+		if normalized != "" {
+			corpusNormalizedParts = append(corpusNormalizedParts, normalized)
+		}
+		corpusCompact.WriteString(compact)
 		for _, forbidden := range disallowed {
-			if strings.Contains(normalized, deploymentMultiTenantVal0NormalizeClaimText(forbidden)) {
+			blockedNormalized := deploymentMultiTenantVal0NormalizeClaimText(forbidden)
+			blockedCompact := deploymentMultiTenantVal0CompactClaimText(forbidden)
+			if strings.Contains(normalized, blockedNormalized) ||
+				strings.Contains(compact, blockedCompact) ||
+				deploymentMultiTenantVal0ValueContainsForbiddenPhraseTokenSequence(normalized, blockedNormalized) {
 				return true
 			}
+		}
+	}
+	corpusNormalized := strings.Join(corpusNormalizedParts, " ")
+	corpusCompactValue := corpusCompact.String()
+	for _, forbidden := range disallowed {
+		blockedNormalized := deploymentMultiTenantVal0NormalizeClaimText(forbidden)
+		blockedCompact := deploymentMultiTenantVal0CompactClaimText(forbidden)
+		if strings.Contains(corpusNormalized, blockedNormalized) || strings.Contains(corpusCompactValue, blockedCompact) {
+			return true
+		}
+		if deploymentMultiTenantVal0BucketsContainForbiddenPhraseAcrossValues(crossNormalizedParts, blockedNormalized) {
+			return true
 		}
 	}
 	return false
 }
 
 func EvaluateDeploymentMultiTenantValDNoOverclaimState(model DeploymentMultiTenantValDNoOverclaimDiscipline) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		model.CleanRoomIPViolationDetected ||
 		deploymentMultiTenantValDContainsForbiddenClaim(model.ObservedClaims...) {
 		return DeploymentMultiTenantValDNoOverclaimStateBlocked
@@ -1091,10 +1321,10 @@ func deploymentMultiTenantValDClosureBlockerFindings(model DeploymentMultiTenant
 	if model.AgenticOverlay.LearningLoop.AgentModifiesProductionPolicy {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB0, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "agent modifies production policy", true, "remove production policy self-modification and keep learning offline-only"))
 	}
-	if model.AgenticOverlay.LearningLoop.RuntimeActivationAllowed && !deploymentMultiTenantValDLearningApprovalStatusValid(model.AgenticOverlay.LearningLoop.RuntimeActivationApprovalStatus) {
+	if !deploymentMultiTenantValDRuntimeActivationApprovalStatusValid(model.AgenticOverlay.LearningLoop.RuntimeActivationApprovalStatus, model.AgenticOverlay.LearningLoop.RuntimeActivationAllowed) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB0, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "runtime activation without human approval", true, "require human approval before any runtime activation step"))
 	}
-	if model.AgenticOverlay.LearningLoop.PromotionAllowed && !deploymentMultiTenantValDLearningApprovalStatusValid(model.AgenticOverlay.LearningLoop.PromotionApprovalStatus) {
+	if !deploymentMultiTenantValDPromotionApprovalStatusValid(model.AgenticOverlay.LearningLoop.PromotionApprovalStatus, model.AgenticOverlay.LearningLoop.PromotionAllowed) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB0, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "model promotion without human approval", true, "require human-approved model promotion before any candidate advances"))
 	}
 	if model.AgenticOverlay.LearningLoop.ProductionSelfModificationAllowed {
@@ -1154,10 +1384,10 @@ func deploymentMultiTenantValDClosureBlockerFindings(model DeploymentMultiTenant
 	if !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.RuntimeApprovalController.ApprovalQueue) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "approval workflow missing", true, "add approval workflow and bounded approval queue before final review"))
 	}
-	if !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.RuntimeApprovalController.AuditID) {
+	if !deploymentMultiTenantValDAgentAuditIDValid(model.AgenticOverlay.RuntimeApprovalController.AgentType, model.AgenticOverlay.RuntimeApprovalController.AuditID) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "audit trail missing", true, "add agent audit trail before final review"))
 	}
-	if !deploymentMultiTenantValDAllEvidenceRefsValid(model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs) {
+	if !deploymentMultiTenantValDHasExactEvidenceRefs(model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs, deploymentMultiTenantValDAgenticOverlayEvidenceRefs()...) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "evidence refs missing", true, "add exact evidence refs before final review"))
 	}
 	if !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.RuntimeApprovalController.PermissionManifest) {
@@ -1185,32 +1415,35 @@ func deploymentMultiTenantValDClosureBlockerFindings(model DeploymentMultiTenant
 	) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "stale revoked expired duplicate or unrelated evidence handling not proven", true, "reject stale revoked expired duplicate unrelated evidence tokens and rerun Val D fail-closed tests"))
 	}
-	if !model.AgenticOverlay.LearningLoop.TrainingApprovalRequired || !deploymentMultiTenantValDLearningApprovalStatusValid(model.AgenticOverlay.LearningLoop.TrainingApprovalStatus) || !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.LearningLoop.TrainingApprover) {
+	if !model.AgenticOverlay.LearningLoop.TrainingApprovalRequired || !deploymentMultiTenantValDTrainingApprovalStatusValid(model.AgenticOverlay.LearningLoop.TrainingApprovalStatus) || !deploymentMultiTenantValDLearningLoopTrainingApproverValid(model.AgenticOverlay.LearningLoop.TrainingApprover) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "training approval workflow missing", true, "add human-approved learning workflow before final review"))
 	}
 	if !model.AgenticOverlay.LearningLoop.HumanFeedbackAuditLinked {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "human feedback audit link missing", true, "link human feedback to audit evidence before final review"))
 	}
-	if !deploymentMultiTenantValDAllEvidenceRefsValid(model.AgenticOverlay.LearningLoop.EvaluationResultRefs) {
+	if !deploymentMultiTenantValDHasExactEvidenceRefs(model.AgenticOverlay.LearningLoop.EvaluationResultRefs, deploymentMultiTenantValDAgentLearningLoopEvaluationResultRefs()...) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "evaluation result refs missing", true, "add evaluation result refs before final review"))
 	}
-	if !deploymentMultiTenantValDAllEvidenceRefsValid(model.AgenticOverlay.LearningLoop.RegressionTestRefs) {
+	if !deploymentMultiTenantValDHasExactEvidenceRefs(model.AgenticOverlay.LearningLoop.RegressionTestRefs, deploymentMultiTenantValDAgentLearningLoopRegressionTestRefs()...) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "regression test refs missing", true, "add regression test refs before final review"))
 	}
-	if !deploymentMultiTenantValDAllEvidenceRefsValid(model.AgenticOverlay.LearningLoop.NoOverclaimCheckRefs) {
+	if !deploymentMultiTenantValDHasExactEvidenceRefs(model.AgenticOverlay.LearningLoop.NoOverclaimCheckRefs, deploymentMultiTenantValDAgentLearningLoopNoOverclaimCheckRefs()...) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "no-overclaim check refs missing", true, "add no-overclaim check refs before final review"))
 	}
-	if !deploymentMultiTenantValDAllEvidenceRefsValid(model.AgenticOverlay.LearningLoop.TenantScopeCheckRefs) {
+	if !deploymentMultiTenantValDHasExactEvidenceRefs(model.AgenticOverlay.LearningLoop.TenantScopeCheckRefs, deploymentMultiTenantValDAgentLearningLoopTenantScopeCheckRefs()...) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "tenant-scope check refs missing", true, "add tenant-scope check refs before final review"))
 	}
-	if !deploymentMultiTenantValDAllEvidenceRefsValid(model.AgenticOverlay.LearningLoop.ApprovalGateCheckRefs) {
+	if !deploymentMultiTenantValDHasExactEvidenceRefs(model.AgenticOverlay.LearningLoop.ApprovalGateCheckRefs, deploymentMultiTenantValDAgentLearningLoopApprovalGateCheckRefs()...) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "approval-gate check refs missing", true, "add approval-gate check refs before final review"))
 	}
-	if !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.LearningLoop.ModelCandidateID) || !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.LearningLoop.ModelVersion) {
+	if !deploymentMultiTenantValDLearningLoopModelCandidateIDValid(model.AgenticOverlay.LearningLoop.ModelCandidateID) || !deploymentMultiTenantValDLearningLoopModelVersionValid(model.AgenticOverlay.LearningLoop.ModelVersion) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "model candidate versioning missing", true, "add bounded candidate model versioning before final review"))
 	}
-	if !deploymentMultiTenantValDEvidenceValueIsValid(model.AgenticOverlay.LearningLoop.BaselineModelVersion) {
+	if !deploymentMultiTenantValDLearningLoopBaselineModelVersionValid(model.AgenticOverlay.LearningLoop.BaselineModelVersion) {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "baseline model version missing", true, "add bounded baseline model version before final review"))
+	}
+	if !deploymentMultiTenantValDLearningLoopAuditIDValid(model.AgenticOverlay.LearningLoop.AuditID) {
+		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, "learning-loop audit trail missing", true, "add bounded learning-loop audit trail before final review"))
 	}
 	if model.DependencyState != DeploymentMultiTenantValDDependencyStateActive {
 		findings = append(findings, deploymentMultiTenantValDClosureBlockerFinding(DeploymentMultiTenantValDBlockerLevelCLB1, DeploymentMultiTenantValDClosureSurfaceConnectorSandbox, "dependency gate missing or not exact active", true, "restore exact active Val C dependency before Val D final review"))
@@ -1252,7 +1485,7 @@ func deploymentMultiTenantValDClosureBlockerFindings(model DeploymentMultiTenant
 }
 
 func EvaluateDeploymentMultiTenantValDClosureBlockerState(model DeploymentMultiTenantValDClosureBlockerOverlay) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValDClosureBlockerStateBlocked
 	}
 	hasCleanup := false
@@ -1294,7 +1527,7 @@ func EvaluateDeploymentMultiTenantValDClosureBlockerState(model DeploymentMultiT
 }
 
 func EvaluateDeploymentMultiTenantValDState(model DeploymentMultiTenantValDFoundation) string {
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValDDependencyStateActive ||
 		strings.TrimSpace(model.ConnectorCapabilityState) != DeploymentMultiTenantValDConnectorCapabilityStateActive ||
 		strings.TrimSpace(model.OperatorActionState) != DeploymentMultiTenantValDOperatorActionStateActive ||
@@ -1312,7 +1545,7 @@ func EvaluateDeploymentMultiTenantValDState(model DeploymentMultiTenantValDFound
 
 func deploymentMultiTenantValDBlockingReasons(model DeploymentMultiTenantValDFoundation) []string {
 	reasons := []string{}
-	if !deploymentMultiTenantValDHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
 	}
 	if model.DependencyState != DeploymentMultiTenantValDDependencyStateActive {

@@ -15,7 +15,7 @@ func deploymentMultiTenantValDHasFinding(findings []DeploymentMultiTenantValDClo
 	for _, finding := range findings {
 		if finding.BlockerLevel == level &&
 			finding.Surface == surface &&
-			strings.Contains(finding.Reason, reason) {
+			finding.Reason == reason {
 			return true
 		}
 	}
@@ -65,6 +65,60 @@ func TestDeploymentMultiTenantValDAggregateProjectionDisclaimerBlocks(t *testing
 	}
 	if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
 		t.Fatalf("expected aggregate projection disclaimer blocking reason, got %#v", model.BlockingReasons)
+	}
+}
+
+func TestDeploymentMultiTenantValDProjectionDisclaimerExactBoundedBlockers(t *testing.T) {
+	testCases := []struct {
+		name                string
+		mutate              func(*DeploymentMultiTenantValDFoundation)
+		wantDisciplineState string
+	}{
+		{
+			name: "aggregate snapshot disclaimer blocks live foundation",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.ProjectionDisclaimer = deploymentMultiTenantValDProjectionDisclaimer() + " aggregate_dependency_snapshot"
+			},
+		},
+		{
+			name: "leading whitespace aggregate disclaimer blocks live foundation",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.ProjectionDisclaimer = " " + deploymentMultiTenantValDProjectionDisclaimer()
+			},
+		},
+		{
+			name: "connector capability uppercase disclaimer blocks live discipline",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.ConnectorCapability.ProjectionDisclaimer = strings.ToUpper(deploymentMultiTenantValDProjectionDisclaimer())
+			},
+			wantDisciplineState: DeploymentMultiTenantValDConnectorCapabilityStateBlocked,
+		},
+		{
+			name: "no overclaim aggregate disclaimer blocks live discipline",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.NoOverclaim.ProjectionDisclaimer = deploymentMultiTenantValDProjectionDisclaimer() + " aggregate_dependency_snapshot"
+			},
+			wantDisciplineState: DeploymentMultiTenantValDNoOverclaimStateBlocked,
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValDModel()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantValDFoundation(model)
+		if model.CurrentState != DeploymentMultiTenantValDStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected blocked ValD state and not-complete point10 state, got %#v", tc.name, model)
+		}
+		switch tc.wantDisciplineState {
+		case DeploymentMultiTenantValDConnectorCapabilityStateBlocked:
+			if model.ConnectorCapabilityState != tc.wantDisciplineState {
+				t.Fatalf("%s: expected blocked connector capability state, got %#v", tc.name, model)
+			}
+		case DeploymentMultiTenantValDNoOverclaimStateBlocked:
+			if model.NoOverclaimState != tc.wantDisciplineState {
+				t.Fatalf("%s: expected blocked no-overclaim state, got %#v", tc.name, model)
+			}
+		}
 	}
 }
 
@@ -177,6 +231,32 @@ func TestDeploymentMultiTenantValDDependencySnapshotPropagatesUpstreamProjection
 	}
 }
 
+func TestDeploymentMultiTenantValDWhitespaceRetaggedDependencySnapshotBlockers(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*DeploymentMultiTenantValDFoundation)
+	}{
+		{name: "whitespace retagged valc current state blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.Dependency.ValCCurrentState = " " + DeploymentMultiTenantValCStateActive + " "
+		}},
+		{name: "tab retagged valc dependency state blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.Dependency.ValCDependencyState = "\t" + DeploymentMultiTenantValCDependencyStateActive
+		}},
+		{name: "newline retagged point10 state blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.Dependency.Point10State = DeploymentMultiTenantPoint10StateNotComplete + "\n"
+		}},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValDModel()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantValDFoundation(model)
+		if model.DependencyState != DeploymentMultiTenantValDDependencyStateBlocked || model.CurrentState != DeploymentMultiTenantValDStateBlocked {
+			t.Fatalf("%s: expected blocked dependency state, got %#v", tc.name, model)
+		}
+	}
+}
+
 func TestDeploymentMultiTenantValDConnectorCapabilityBlockers(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -200,6 +280,9 @@ func TestDeploymentMultiTenantValDConnectorCapabilityBlockers(t *testing.T) {
 		{name: "permission manifest missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.PermissionManifest = ""
 		}},
+		{name: "permission manifest non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.PermissionManifest = "connector_permission_manifest_v2"
+		}},
 		{name: "capability manifest missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.CapabilityManifestPresent = false
 		}},
@@ -215,10 +298,20 @@ func TestDeploymentMultiTenantValDConnectorCapabilityBlockers(t *testing.T) {
 			model.ConnectorCapability.MutationCapabilityExplicit = true
 			model.ConnectorCapability.Reason = ""
 		}},
+		{name: "mutation reason non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.MutationAllowed = true
+			model.ConnectorCapability.MutationCapabilityExplicit = true
+			model.ConnectorCapability.Reason = "bounded_connector_reason_v2"
+		}},
 		{name: "mutation without audit blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.MutationAllowed = true
 			model.ConnectorCapability.MutationCapabilityExplicit = true
 			model.ConnectorCapability.AuditID = ""
+		}},
+		{name: "mutation audit id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.MutationAllowed = true
+			model.ConnectorCapability.MutationCapabilityExplicit = true
+			model.ConnectorCapability.AuditID = "connector_audit_id_v2"
 		}},
 		{name: "connector as source of truth blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.ConnectorAsSourceOfTruth = true
@@ -229,6 +322,12 @@ func TestDeploymentMultiTenantValDConnectorCapabilityBlockers(t *testing.T) {
 		{name: "retry replay duplicate active evidence risk blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.RetryReplayDuplicatesActiveEvidenceRisk = true
 		}},
+		{name: "source of truth padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.SourceOfTruth = " advisory_evidence_input "
+		}},
+		{name: "source of truth padded with tab newline blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.SourceOfTruth = "\tadvisory_evidence_input\n"
+		}},
 		{name: "missing replay policy blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.ReplayPolicy = ""
 		}},
@@ -237,6 +336,12 @@ func TestDeploymentMultiTenantValDConnectorCapabilityBlockers(t *testing.T) {
 		}},
 		{name: "invalid evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.EvidenceRefs = []string{"revoked_connector_evidence"}
+		}},
+		{name: "whitespace retagged canonical evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.EvidenceRefs = []string{deploymentMultiTenantValDConnectorEvidenceRefs()[0] + " "}
+		}},
+		{name: "sibling surface evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.ConnectorCapability.EvidenceRefs = append([]string{}, deploymentMultiTenantValDOperatorEvidenceRefs()...)
 		}},
 	}
 	for _, tc := range testCases {
@@ -269,8 +374,17 @@ func TestDeploymentMultiTenantValDOperatorActionBlockers(t *testing.T) {
 		{name: "action scope cross tenant blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.ActionScope = "cross_tenant_operator_scope"
 		}},
+		{name: "tenant target prefixed canonical token blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.TenantTarget = "ops " + deploymentMultiTenantVal0TenantScope()
+		}},
+		{name: "action scope suffixed canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.ActionScope = "tenant:alpha operator_action_scope extra"
+		}},
 		{name: "reason missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.Reason = ""
+		}},
+		{name: "reason non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.Reason = "bounded_operator_reason_v2"
 		}},
 		{name: "authorization basis missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.AuthorizationBasis = ""
@@ -281,6 +395,12 @@ func TestDeploymentMultiTenantValDOperatorActionBlockers(t *testing.T) {
 		{name: "approval missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.Approver = ""
 		}},
+		{name: "approval non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.Approver = "human_approval_delegate"
+		}},
+		{name: "approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.ApprovalStatus = " " + deploymentMultiTenantValDApprovalStatusApproved + " "
+		}},
 		{name: "expiry missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.Expiry = ""
 		}},
@@ -289,6 +409,9 @@ func TestDeploymentMultiTenantValDOperatorActionBlockers(t *testing.T) {
 		}},
 		{name: "audit id missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.AuditID = ""
+		}},
+		{name: "audit id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.AuditID = "operator_action_audit_id_v2"
 		}},
 		{name: "rbac abac bypass blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.RBACABACEnforced = false
@@ -304,6 +427,9 @@ func TestDeploymentMultiTenantValDOperatorActionBlockers(t *testing.T) {
 		}},
 		{name: "canonical mutation allowed blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.OperatorAction.CanonicalMutationAllowed = true
+		}},
+		{name: "extra operator evidence ref blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.OperatorAction.EvidenceRefs = append(append([]string{}, deploymentMultiTenantValDOperatorEvidenceRefs()...), "extra_operator_evidence")
 		}},
 	}
 	for _, tc := range testCases {
@@ -333,6 +459,12 @@ func TestDeploymentMultiTenantValDSupportAccessBlockers(t *testing.T) {
 		{name: "support scope unscoped blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.SupportScope = "unscoped_support_scope"
 		}},
+		{name: "tenant target prefixed canonical token blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.TenantTarget = "ops " + deploymentMultiTenantVal0TenantScope()
+		}},
+		{name: "support scope suffixed canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.SupportScope = "tenant:alpha support_scope extra"
+		}},
 		{name: "sso session reference missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.SSOSessionReference = ""
 		}},
@@ -348,8 +480,17 @@ func TestDeploymentMultiTenantValDSupportAccessBlockers(t *testing.T) {
 		{name: "reason missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.Reason = ""
 		}},
+		{name: "reason non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.Reason = "support_reason_v2"
+		}},
+		{name: "approval status padded with tab newline blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.ApprovalStatus = "\t" + deploymentMultiTenantValDApprovalStatusApproved + "\n"
+		}},
 		{name: "approval missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.Approver = ""
+		}},
+		{name: "approval non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.Approver = "human_approval_delegate"
 		}},
 		{name: "expiry missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.Expiry = ""
@@ -359,6 +500,9 @@ func TestDeploymentMultiTenantValDSupportAccessBlockers(t *testing.T) {
 		}},
 		{name: "audit id missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.AuditID = ""
+		}},
+		{name: "audit id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.AuditID = "support_access_audit_id_v2"
 		}},
 		{name: "data residency boundary bypass blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.DataResidencyBoundaryRespected = false
@@ -371,6 +515,9 @@ func TestDeploymentMultiTenantValDSupportAccessBlockers(t *testing.T) {
 		}},
 		{name: "raw tenant evidence exposed blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.SupportAccess.RawTenantEvidenceExposed = true
+		}},
+		{name: "support evidence refs from sibling surface block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.SupportAccess.EvidenceRefs = append([]string{}, deploymentMultiTenantValDOperatorEvidenceRefs()...)
 		}},
 	}
 	for _, tc := range testCases {
@@ -403,11 +550,26 @@ func TestDeploymentMultiTenantValDBreakGlassBlockers(t *testing.T) {
 		{name: "action scope unscoped blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.ActionScope = "unscoped_break_glass_scope"
 		}},
+		{name: "tenant target prefixed canonical token blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.TenantTarget = "ops " + deploymentMultiTenantVal0TenantScope()
+		}},
+		{name: "action scope suffixed canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.ActionScope = "tenant:alpha break_glass_scope extra"
+		}},
 		{name: "authorization basis missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.AuthorizationBasis = ""
 		}},
+		{name: "emergency reason non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.EmergencyReason = "emergency_reason_v2"
+		}},
 		{name: "approval missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.Approver = ""
+		}},
+		{name: "approval non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.Approver = "human_approval_delegate"
+		}},
+		{name: "approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.ApprovalStatus = " " + deploymentMultiTenantValDApprovalStatusApproved + " "
 		}},
 		{name: "expiry missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.Expiry = ""
@@ -421,8 +583,14 @@ func TestDeploymentMultiTenantValDBreakGlassBlockers(t *testing.T) {
 		{name: "audit id missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.AuditID = ""
 		}},
+		{name: "audit id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.AuditID = "break_glass_audit_id_v2"
+		}},
 		{name: "post action review missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.PostActionReviewRequired = false
+		}},
+		{name: "post action review padded with tab newline blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.BreakGlass.PostActionReviewState = "\t" + deploymentMultiTenantValDBreakGlassReviewActive + "\n"
 		}},
 		{name: "persistent access blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.BreakGlass.PersistentAccessGranted = true
@@ -467,15 +635,25 @@ func TestDeploymentMultiTenantValDMarketplaceMSPBlockers(t *testing.T) {
 		{name: "msp scope cross tenant blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.MarketplaceMSPAuthority.MSPOperatorScope = "cross_tenant_msp_scope"
 		}},
+		{name: "msp scope suffixed canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.MarketplaceMSPAuthority.MSPOperatorScope = "tenant:alpha msp_operator_scope extra"
+		}},
 		{name: "partner scope global blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.MarketplaceMSPAuthority.PartnerScope = "global_partner_scope"
 		}},
 		{name: "partner scope unscoped blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.MarketplaceMSPAuthority.PartnerScope = "unscoped_partner_scope"
 		}},
+		{name: "partner scope prefixed canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.MarketplaceMSPAuthority.PartnerScope = "ops tenant:alpha partner_scope"
+		}},
 		{name: "customer ready evidence missing while wording present blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.MarketplaceMSPAuthority.CustomerReadyWordingPresent = true
 			model.MarketplaceMSPAuthority.CustomerReadyValidationEvidence = ""
+		}},
+		{name: "customer ready evidence non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.MarketplaceMSPAuthority.CustomerReadyWordingPresent = true
+			model.MarketplaceMSPAuthority.CustomerReadyValidationEvidence = "customer_ready_validation_evidence_v2"
 		}},
 		{name: "msp partner pass authority allowed blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.MarketplaceMSPAuthority.PassAuthorityAllowed = true
@@ -491,6 +669,12 @@ func TestDeploymentMultiTenantValDMarketplaceMSPBlockers(t *testing.T) {
 		}},
 		{name: "audit reason expiry revocation missing blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.MarketplaceMSPAuthority.AuditID = ""
+		}},
+		{name: "audit id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.MarketplaceMSPAuthority.AuditID = "marketplace_msp_audit_id_v2"
+		}},
+		{name: "reason non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.MarketplaceMSPAuthority.Reason = "bounded_marketplace_reason_v2"
 		}},
 	}
 	for _, tc := range testCases {
@@ -511,6 +695,9 @@ func TestDeploymentMultiTenantValDAgenticOverlayBlockers(t *testing.T) {
 		{name: "missing permission manifest blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.PermissionManifest = ""
 		}},
+		{name: "permission manifest non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.PermissionManifest = "agent_permission_manifest_v2"
+		}},
 		{name: "missing tenant scope blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.TenantScope = ""
 		}},
@@ -523,14 +710,32 @@ func TestDeploymentMultiTenantValDAgenticOverlayBlockers(t *testing.T) {
 		{name: "cross tenant scope blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.TenantScope = "cross_tenant_agent_scope"
 		}},
+		{name: "runtime approval tenant scope suffixed canonical token blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.TenantScope = deploymentMultiTenantVal0TenantScope() + " runtime_scope"
+		}},
+		{name: "aggregate snapshot projection disclaimer blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.ProjectionDisclaimer = deploymentMultiTenantValDProjectionDisclaimer() + " aggregate_dependency_snapshot"
+		}},
 		{name: "external api enabled by default blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.ExternalAPIAllowed = true
 		}},
 		{name: "missing approval blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.Approver = ""
 		}},
+		{name: "approval non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.Approver = "human_approval_delegate"
+		}},
+		{name: "approval reason non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.ApprovalReason = "human_approved_action_required_v2"
+		}},
+		{name: "runtime approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.ApprovalStatus = " " + deploymentMultiTenantValDApprovalStatusApproved + " "
+		}},
 		{name: "missing audit trail blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.AuditID = ""
+		}},
+		{name: "audit trail non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.AuditID = "agent_runtime_audit_id_v2"
 		}},
 		{name: "canonical mutation allowed blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.CanonicalMutationAllowed = true
@@ -601,6 +806,12 @@ func TestDeploymentMultiTenantValDAgenticOverlayBlockers(t *testing.T) {
 		{name: "unrelated evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs = []string{"unrelated_agent_evidence"}
 		}},
+		{name: "runtime approval evidence refs padded with whitespace block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs = []string{deploymentMultiTenantValDAgenticOverlayEvidenceRefs()[0] + " "}
+		}},
+		{name: "runtime approval evidence refs from connector surface block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs = append([]string{}, deploymentMultiTenantValDConnectorEvidenceRefs()...)
+		}},
 	}
 	for _, tc := range testCases {
 		model := activeDeploymentMultiTenantValDModel()
@@ -617,6 +828,9 @@ func TestDeploymentMultiTenantValDAgentLearningLoopBlockers(t *testing.T) {
 		name   string
 		mutate func(*DeploymentMultiTenantValDFoundation)
 	}{
+		{name: "learning mode padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.LearningMode = " offline_sandbox_only "
+		}},
 		{name: "online production self modification blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.LearningMode = "online_self_modification"
 		}},
@@ -637,11 +851,35 @@ func TestDeploymentMultiTenantValDAgentLearningLoopBlockers(t *testing.T) {
 		{name: "cross tenant training data blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.TrainingDataCrossTenant = true
 		}},
+		{name: "training data scope suffixed canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.TrainingDataScope = "tenant:alpha training_data_scope extra"
+		}},
+		{name: "training data scope tab retagged canonical composite blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.TrainingDataScope = "tenant:alpha\ttraining_data_scope"
+		}},
 		{name: "unapproved customer-data training blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.TrainingDataCustomerApproved = false
 		}},
 		{name: "missing audit-linked human feedback blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.HumanFeedbackAuditLinked = false
+		}},
+		{name: "training approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.TrainingApprovalStatus = " training_approved_active "
+		}},
+		{name: "training approver non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.TrainingApprover = "human_training_approver_v2"
+		}},
+		{name: "model candidate id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.ModelCandidateID = "candidate_model_id_v2"
+		}},
+		{name: "model version non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.ModelVersion = "candidate_model_version_v2"
+		}},
+		{name: "baseline model version non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.BaselineModelVersion = "baseline_model_version_v2"
+		}},
+		{name: "audit id non canonical but plausible blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.AuditID = "agent_learning_loop_audit_id_v2"
 		}},
 		{name: "missing regression tests blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.RegressionTestRefs = nil
@@ -676,6 +914,29 @@ func TestDeploymentMultiTenantValDAgentLearningLoopBlockers(t *testing.T) {
 		{name: "candidate enabling point10 pass blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.CandidateEnablesPoint10Pass = true
 		}},
+		{name: "runtime activation requested without approved status blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.RuntimeActivationAllowed = true
+		}},
+		{name: "runtime activation approved status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.RuntimeActivationAllowed = true
+			model.AgenticOverlay.LearningLoop.RuntimeActivationApprovalStatus = " runtime_activation_approved_active "
+		}},
+		{name: "promotion requested without approved status blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.PromotionAllowed = true
+		}},
+		{name: "promotion approved status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.PromotionAllowed = true
+			model.AgenticOverlay.LearningLoop.PromotionApprovalStatus = " promotion_approved_active "
+		}},
+		{name: "recommendation approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.RecommendationApprovalStatus = " recommendation_reviewed "
+		}},
+		{name: "execution approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.ExecutionApprovalStatus = " execution_not_approved "
+		}},
+		{name: "model upgrade approval status padded with spaces blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.ModelUpgradeApprovalStatus = " model_upgrade_not_approved "
+		}},
 		{name: "recommendation approval treated as execution approval blocks", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.RecommendationApprovalMeansExecutionApproval = true
 		}},
@@ -699,6 +960,21 @@ func TestDeploymentMultiTenantValDAgentLearningLoopBlockers(t *testing.T) {
 		}},
 		{name: "unrelated evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.EvidenceRefs = []string{"unrelated_learning_evidence"}
+		}},
+		{name: "whitespace padded learning loop evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.EvidenceRefs = []string{deploymentMultiTenantValDAgentLearningLoopEvidenceRefs()[0] + " "}
+		}},
+		{name: "non canonical but plausible learning loop evidence refs block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.EvidenceRefs = []string{"evidence:deployment-multi-tenant-vald-agent-learning-loop-999"}
+		}},
+		{name: "training data refs padded with whitespace block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.TrainingDataRefs = []string{deploymentMultiTenantValDAgentLearningLoopEvidenceRefs()[0] + " "}
+		}},
+		{name: "human feedback refs extra entry block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.HumanFeedbackRefs = append(append([]string{}, deploymentMultiTenantValDAgentLearningLoopHumanFeedbackRefs()...), "extra_human_feedback_ref")
+		}},
+		{name: "evaluation result refs padded with whitespace block", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.EvaluationResultRefs = []string{" evaluation_result_ref "}
 		}},
 	}
 	for _, tc := range testCases {
@@ -787,8 +1063,14 @@ func TestDeploymentMultiTenantValDClosureBlockerOverlayCLB0AndCLB1Blockers(t *te
 		{name: "audit trail missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.AuditID = ""
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "audit trail missing"},
+		{name: "non canonical runtime approval audit trail produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.AuditID = "agent_runtime_audit_id_v2"
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "audit trail missing"},
 		{name: "evidence refs missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs = nil
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "evidence refs missing"},
+		{name: "sibling surface evidence refs produce cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.RuntimeApprovalController.EvidenceRefs = append([]string{}, deploymentMultiTenantValDConnectorEvidenceRefs()...)
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "evidence refs missing"},
 		{name: "permission manifest missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.ConnectorCapability.PermissionManifest = ""
@@ -807,6 +1089,9 @@ func TestDeploymentMultiTenantValDClosureBlockerOverlayCLB0AndCLB1Blockers(t *te
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "recovery recommendation lacks required evidence pack"},
 		{name: "learning workflow missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.TrainingApprovalStatus = ""
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "training approval workflow missing"},
+		{name: "non canonical training approver produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.TrainingApprover = "human_training_approver_v2"
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "training approval workflow missing"},
 		{name: "human feedback audit link missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.HumanFeedbackAuditLinked = false
@@ -829,9 +1114,21 @@ func TestDeploymentMultiTenantValDClosureBlockerOverlayCLB0AndCLB1Blockers(t *te
 		{name: "model candidate versioning missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.ModelCandidateID = ""
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "model candidate versioning missing"},
+		{name: "non canonical model candidate versioning produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.ModelVersion = "candidate_model_version_v2"
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "model candidate versioning missing"},
 		{name: "baseline model version missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.BaselineModelVersion = ""
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "baseline model version missing"},
+		{name: "non canonical baseline model version produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.BaselineModelVersion = "baseline_model_version_v2"
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "baseline model version missing"},
+		{name: "learning loop audit trail missing produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.AuditID = ""
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "learning-loop audit trail missing"},
+		{name: "non canonical learning loop audit trail produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
+			model.AgenticOverlay.LearningLoop.AuditID = "agent_learning_loop_audit_id_v2"
+		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "learning-loop audit trail missing"},
 		{name: "stale revoked expired duplicate unrelated evidence handling not proven produces cl b1 blocker", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.ModelCandidateID = "expired_model_candidate_id"
 		}, level: DeploymentMultiTenantValDBlockerLevelCLB1, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "stale revoked expired duplicate or unrelated evidence handling not proven"},
@@ -876,22 +1173,22 @@ func TestDeploymentMultiTenantValDClosureBlockerOverlayCLB2Cleanup(t *testing.T)
 		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "ambiguous model candidate naming"},
 		{name: "missing safe wording example emits cleanup", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.SafeWordingExamplePresent = false
-		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "missing safe wording example"},
+		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "missing safe wording example for connector operator or agent recommendations"},
 		{name: "missing safe wording example for advisory learning emits cleanup", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.SafeWordingExamplePresent = false
 		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "missing safe wording example for advisory learning"},
 		{name: "incomplete diagnostic output emits cleanup", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.DiagnosticOutputComplete = false
-		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete diagnostic output"},
+		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete diagnostic output for connector operator support break-glass or agent blockers"},
 		{name: "incomplete diagnostic output for learning loop emits cleanup", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.DiagnosticOutputComplete = false
 		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete diagnostic output for learning-loop blockers"},
 		{name: "incomplete runbook wording emits cleanup", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.RuntimeApprovalController.RunbookWordingComplete = false
-		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete bounded runbook wording"},
+		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete bounded runbook wording without direct pass bypass"},
 		{name: "incomplete runbook wording for model promotion emits cleanup", mutate: func(model *DeploymentMultiTenantValDFoundation) {
 			model.AgenticOverlay.LearningLoop.RunbookWordingComplete = false
-		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete runbook wording for model promotion"},
+		}, surface: DeploymentMultiTenantValDClosureSurfaceAgenticOverlay, reason: "incomplete runbook wording for model promotion without direct pass bypass"},
 	}
 	for _, tc := range testCases {
 		model := activeDeploymentMultiTenantValDModel()
@@ -1014,6 +1311,7 @@ func TestDeploymentMultiTenantValDNoOverclaimBlockers(t *testing.T) {
 		"customer ready without validation",
 		"autonomous remediation approved",
 		"agent approved deployment",
+		"agent approved bounded deployment",
 		"agent certified recovery",
 		"AI certified fix",
 		"auto-merge safe",
@@ -1023,6 +1321,7 @@ func TestDeploymentMultiTenantValDNoOverclaimBlockers(t *testing.T) {
 		"agent guaranteed tenant isolation",
 		"agent proves compliance",
 		"point_" + "10_pass by agent",
+		"point 10 audit pass by agent",
 		"agent is source of truth",
 		"external AI verified",
 		"external API verified",
@@ -1044,6 +1343,7 @@ func TestDeploymentMultiTenantValDNoOverclaimBlockers(t *testing.T) {
 		"recommendation approval means execution approval",
 		"execution approval means model upgrade approval",
 		"learned output is canonical truth",
+		"learned output advisory is canonical truth",
 		"learned model certified",
 		"AI model certified",
 		"agent learning guarantees security",
@@ -1051,6 +1351,7 @@ func TestDeploymentMultiTenantValDNoOverclaimBlockers(t *testing.T) {
 		"point_" + "10_pass by learned model",
 		"external AI verified model",
 		"sandboxed connector execution connector is source of truth",
+		"connector advisory is source of truth",
 		"connector capability manifest connector mutation safe by default",
 		"bounded operator authority operator approved deployment",
 		"break-glass approval required break-glass permanent access",
@@ -1106,11 +1407,25 @@ func TestDeploymentMultiTenantValDNoOverclaimBlockers(t *testing.T) {
 		}
 	}
 
+	splitBlockedClaims := [][]string{
+		{"agent approved", "deployment"},
+		{"learned output", "is canonical truth"},
+		{"connector", "is source of truth"},
+	}
+	for _, claims := range splitBlockedClaims {
+		model := activeDeploymentMultiTenantValDModel()
+		model.NoOverclaim.ObservedClaims = claims
+		model = ComputeDeploymentMultiTenantValDFoundation(model)
+		if model.NoOverclaimState != DeploymentMultiTenantValDNoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValDStateBlocked {
+			t.Fatalf("expected blocked split no-overclaim state for %q, got %#v", claims, model)
+		}
+	}
+
 	for _, claim := range allowedClaims {
 		model := activeDeploymentMultiTenantValDModel()
 		model.NoOverclaim.ObservedClaims = []string{claim}
 		model = ComputeDeploymentMultiTenantValDFoundation(model)
-		if model.NoOverclaimState != DeploymentMultiTenantValDNoOverclaimStateActive {
+		if model.NoOverclaimState != DeploymentMultiTenantValDNoOverclaimStateActive || model.CurrentState != DeploymentMultiTenantValDStateActive {
 			t.Fatalf("expected allowed claim %q to remain active, got %#v", claim, model)
 		}
 	}

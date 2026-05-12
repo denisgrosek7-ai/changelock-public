@@ -82,6 +82,20 @@ func TestDeploymentMultiTenantValAProjectionDisclaimerExactBoundedBlockers(t *te
 			wantDisciplineState: "",
 		},
 		{
+			name: "aggregate disclaimer leading whitespace blocks exact state",
+			mutate: func(model *DeploymentMultiTenantValAFoundation) {
+				model.ProjectionDisclaimer = " " + deploymentMultiTenantValAProjectionDisclaimer()
+			},
+			wantDisciplineState: "",
+		},
+		{
+			name: "aggregate disclaimer uppercase retagging blocks exact state",
+			mutate: func(model *DeploymentMultiTenantValAFoundation) {
+				model.ProjectionDisclaimer = strings.ToUpper(deploymentMultiTenantValAProjectionDisclaimer())
+			},
+			wantDisciplineState: "",
+		},
+		{
 			name: "preflight disclaimer suffix drift blocks exact discipline state",
 			mutate: func(model *DeploymentMultiTenantValAFoundation) {
 				model.PreflightGate.ProjectionDisclaimer = deploymentMultiTenantValAProjectionDisclaimer() + " extra_suffix"
@@ -216,6 +230,12 @@ func TestDeploymentMultiTenantValADependencyBlockers(t *testing.T) {
 		}},
 		{name: "point10 state complete blocks", mutate: func(model *DeploymentMultiTenantValAFoundation) {
 			model.Dependency.Point10State = "deployment_multi_tenant_point_10_complete"
+		}},
+		{name: "whitespace retagged aggregate dependency disclaimer blocks", mutate: func(model *DeploymentMultiTenantValAFoundation) {
+			model.Dependency.ProjectionDisclaimer = " " + deploymentMultiTenantVal0ProjectionDisclaimer() + " aggregate_dependency_snapshot"
+		}},
+		{name: "uppercase aggregate dependency disclaimer blocks", mutate: func(model *DeploymentMultiTenantValAFoundation) {
+			model.Dependency.ProjectionDisclaimer = strings.ToUpper(deploymentMultiTenantVal0ProjectionDisclaimer() + " aggregate_dependency_snapshot")
 		}},
 		{name: "malformed projection disclaimer blocks", mutate: func(model *DeploymentMultiTenantValAFoundation) {
 			model.Dependency.ProjectionDisclaimer = "canonical_truth"
@@ -646,9 +666,12 @@ func TestDeploymentMultiTenantValANoOverclaimBlockers(t *testing.T) {
 		model := activeDeploymentMultiTenantValAModel()
 		model.NoOverclaim.ObservedClaims = []string{claim}
 		model = ComputeDeploymentMultiTenantValAFoundation(model)
-		if model.NoOverclaimState != DeploymentMultiTenantValANoOverclaimStateActive {
+		if model.NoOverclaimState != DeploymentMultiTenantValANoOverclaimStateActive ||
+			model.CurrentState != DeploymentMultiTenantValAStateActive ||
+			model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 			t.Fatalf("expected allowed bounded wording for %q, got %#v", claim, model)
 		}
+		assertDeploymentMultiTenantValANoPoint10Pass(t, model)
 	}
 }
 

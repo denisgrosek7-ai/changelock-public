@@ -243,20 +243,14 @@ func deploymentMultiTenantValAProjectionDisclaimer() string {
 	return "projection_only not_canonical_truth bounded_marketplace_deployment_profile deployment_multi_tenant_vala"
 }
 
-func deploymentMultiTenantValANormalizedProjectionDisclaimer(value string) string {
-	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
-}
-
 func deploymentMultiTenantValAHasProjectionDisclaimer(value string) bool {
-	normalized := deploymentMultiTenantValANormalizedProjectionDisclaimer(value)
-	return normalized == deploymentMultiTenantValANormalizedProjectionDisclaimer(deploymentMultiTenantValAProjectionDisclaimer()) ||
-		normalized == deploymentMultiTenantValANormalizedProjectionDisclaimer(deploymentMultiTenantValAProjectionDisclaimer()+" aggregate_dependency_snapshot") ||
-		normalized == deploymentMultiTenantValANormalizedProjectionDisclaimer("projection_only not_canonical_truth deployment_multi_tenant_vala aggregate_dependency_snapshot")
+	return value == deploymentMultiTenantValAProjectionDisclaimer() ||
+		value == deploymentMultiTenantValAProjectionDisclaimer()+" aggregate_dependency_snapshot" ||
+		value == "projection_only not_canonical_truth deployment_multi_tenant_vala aggregate_dependency_snapshot"
 }
 
 func deploymentMultiTenantValAHasFoundationProjectionDisclaimer(value string) bool {
-	return deploymentMultiTenantValANormalizedProjectionDisclaimer(value) ==
-		deploymentMultiTenantValANormalizedProjectionDisclaimer(deploymentMultiTenantValAProjectionDisclaimer())
+	return value == deploymentMultiTenantValAProjectionDisclaimer()
 }
 
 func deploymentMultiTenantValADeploymentProfileMatrixEvidenceRefs() []string {

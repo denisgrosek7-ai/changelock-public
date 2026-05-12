@@ -15,11 +15,22 @@ func deploymentMultiTenantValBHasFinding(findings []DeploymentMultiTenantValBClo
 	for _, finding := range findings {
 		if finding.BlockerLevel == level &&
 			finding.Surface == surface &&
-			strings.Contains(finding.Reason, reason) {
+			finding.Reason == reason {
 			return true
 		}
 	}
 	return false
+}
+
+func assertDeploymentMultiTenantValBNoPoint10Pass(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+	t.Helper()
+	payload, err := json.Marshal(model)
+	if err != nil {
+		t.Fatalf("marshal model: %v", err)
+	}
+	if strings.Contains(string(payload), "point_"+"10_pass") {
+		t.Fatalf("expected Val B to never emit point 10 pass, got %s", string(payload))
+	}
 }
 
 func TestDeploymentMultiTenantValBHappyPathAndPoint10NotComplete(t *testing.T) {
@@ -33,13 +44,7 @@ func TestDeploymentMultiTenantValBHappyPathAndPoint10NotComplete(t *testing.T) {
 	if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 		t.Fatalf("expected point 10 to remain not complete, got %#v", model)
 	}
-	payload, err := json.Marshal(model)
-	if err != nil {
-		t.Fatalf("marshal model: %v", err)
-	}
-	if strings.Contains(string(payload), "point_"+"10_pass") {
-		t.Fatalf("expected Val B to never emit point 10 pass, got %s", string(payload))
-	}
+	assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
 }
 
 func TestDeploymentMultiTenantValBAggregateProjectionDisclaimerBlocks(t *testing.T) {
@@ -51,6 +56,96 @@ func TestDeploymentMultiTenantValBAggregateProjectionDisclaimerBlocks(t *testing
 	}
 	if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
 		t.Fatalf("expected aggregate projection disclaimer blocking reason, got %#v", model.BlockingReasons)
+	}
+}
+
+func TestDeploymentMultiTenantValBProjectionDisclaimerExactBoundedBlockers(t *testing.T) {
+	testCases := []struct {
+		name                string
+		mutate              func(*DeploymentMultiTenantValBFoundation)
+		wantDisciplineState string
+	}{
+		{
+			name: "aggregate disclaimer suffix drift blocks exact state",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.ProjectionDisclaimer = deploymentMultiTenantValBProjectionDisclaimer() + " extra_suffix"
+			},
+		},
+		{
+			name: "aggregate disclaimer leading whitespace blocks exact state",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.ProjectionDisclaimer = " " + deploymentMultiTenantValBProjectionDisclaimer()
+			},
+		},
+		{
+			name: "aggregate disclaimer uppercase retagging blocks exact state",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.ProjectionDisclaimer = strings.ToUpper(deploymentMultiTenantValBProjectionDisclaimer())
+			},
+		},
+		{
+			name: "tenant isolation disclaimer prefix drift blocks exact discipline state",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.TenantIsolation.ProjectionDisclaimer = "prefix " + deploymentMultiTenantValBProjectionDisclaimer()
+			},
+			wantDisciplineState: DeploymentMultiTenantValBTenantIsolationStateBlocked,
+		},
+		{
+			name: "no overclaim disclaimer suffix drift blocks exact discipline state",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.NoOverclaim.ProjectionDisclaimer = deploymentMultiTenantValBProjectionDisclaimer() + " extra_suffix"
+			},
+			wantDisciplineState: DeploymentMultiTenantValBNoOverclaimStateBlocked,
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValBModel()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		if model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+			t.Fatalf("%s: expected blocked ValB state, got %#v", tc.name, model)
+		}
+		switch tc.wantDisciplineState {
+		case DeploymentMultiTenantValBTenantIsolationStateBlocked:
+			if model.TenantIsolationState != tc.wantDisciplineState {
+				t.Fatalf("%s: expected blocked tenant isolation state, got %#v", tc.name, model)
+			}
+		case DeploymentMultiTenantValBNoOverclaimStateBlocked:
+			if model.NoOverclaimState != tc.wantDisciplineState {
+				t.Fatalf("%s: expected blocked no-overclaim state, got %#v", tc.name, model)
+			}
+		}
+		assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
+	}
+}
+
+func TestDeploymentMultiTenantValBDependencyCompatibleProjectionDisclaimersDoNotActivateFoundation(t *testing.T) {
+	testCases := []struct {
+		name       string
+		disclaimer string
+	}{
+		{
+			name:       "canonical disclaimer with aggregate suffix still blocks live foundation",
+			disclaimer: deploymentMultiTenantValBProjectionDisclaimer() + " aggregate_dependency_snapshot",
+		},
+		{
+			name:       "short aggregate disclaimer still blocks live foundation",
+			disclaimer: "projection_only not_canonical_truth deployment_multi_tenant_valb aggregate_dependency_snapshot",
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValBModel()
+		model.ProjectionDisclaimer = tc.disclaimer
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		if model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+			t.Fatalf("%s: expected blocked ValB state, got %#v", tc.name, model)
+		}
+		if !containsTrimmedString(model.BlockingReasons, "aggregate_projection_disclaimer_blocked") {
+			t.Fatalf("%s: expected aggregate projection disclaimer blocking reason, got %#v", tc.name, model.BlockingReasons)
+		}
+		assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
 	}
 }
 
@@ -88,6 +183,12 @@ func TestDeploymentMultiTenantValBDependencyBlockers(t *testing.T) {
 		}},
 		{name: "point10 state complete blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
 			model.Dependency.Point10State = "deployment_multi_tenant_point_10_complete"
+		}},
+		{name: "whitespace retagged aggregate dependency disclaimer blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.Dependency.ProjectionDisclaimer = " " + deploymentMultiTenantValAProjectionDisclaimer() + " aggregate_dependency_snapshot"
+		}},
+		{name: "uppercase aggregate dependency disclaimer blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.Dependency.ProjectionDisclaimer = strings.ToUpper(deploymentMultiTenantValAProjectionDisclaimer() + " aggregate_dependency_snapshot")
 		}},
 		{name: "malformed projection disclaimer blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
 			model.Dependency.ProjectionDisclaimer = "canonical_truth"
@@ -134,6 +235,197 @@ func TestDeploymentMultiTenantValBDependencySnapshotCopiesAggregateComputedValAP
 	snapshot.ProjectionDisclaimer = valA.ProjectionDisclaimer
 	if EvaluateDeploymentMultiTenantValBDependencyState(snapshot) != DeploymentMultiTenantValBDependencyStateBlocked {
 		t.Fatalf("expected malformed aggregate disclaimer to block dependency without component fallback, got %#v", snapshot)
+	}
+}
+
+func TestDeploymentMultiTenantValBWhitespaceRetaggedDependencySnapshotBlockers(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*DeploymentMultiTenantValBFoundation)
+	}{
+		{name: "whitespace retagged vala current state blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.Dependency.ValACurrentState = " " + DeploymentMultiTenantValAStateActive + " "
+		}},
+		{name: "tab retagged vala dependency state blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.Dependency.ValADependencyState = "\t" + DeploymentMultiTenantValADependencyStateActive
+		}},
+		{name: "newline retagged point10 state blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.Dependency.Point10State = DeploymentMultiTenantPoint10StateNotComplete + "\n"
+		}},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValBModel()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		if model.DependencyState != DeploymentMultiTenantValBDependencyStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+			t.Fatalf("%s: expected blocked dependency and ValB state, got %#v", tc.name, model)
+		}
+		assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
+	}
+}
+
+func TestDeploymentMultiTenantValBEvidenceRefsRequireRawExactBinding(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*DeploymentMultiTenantValBFoundation)
+		assert func(*testing.T, DeploymentMultiTenantValBFoundation)
+	}{
+		{
+			name: "tenant isolation leading whitespace evidence ref blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.TenantIsolation.EvidenceRefs[0] = " " + deploymentMultiTenantValBTenantIsolationEvidenceRefs()[0]
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.TenantIsolationState != DeploymentMultiTenantValBTenantIsolationStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked tenant isolation state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "data residency trailing whitespace evidence ref blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.DataResidency.EvidenceRefs[0] = deploymentMultiTenantValBDataResidencyEvidenceRefs()[0] + " "
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.DataResidencyState != DeploymentMultiTenantValBDataResidencyStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked data residency state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "tenant lifecycle tab padded evidence ref blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.TenantLifecycle.EvidenceRefs[0] = "\t" + deploymentMultiTenantValBTenantLifecycleEvidenceRefs()[0]
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.TenantLifecycleState != DeploymentMultiTenantValBTenantLifecycleStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked tenant lifecycle state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "fair share newline padded evidence ref blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.FairShareQuota.EvidenceRefs[0] = deploymentMultiTenantValBFairShareEvidenceRefs()[0] + "\n"
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.FairShareQuotaState != DeploymentMultiTenantValBFairShareQuotaStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked fair-share state, got %#v", model)
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValBModel()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		tc.assert(t, model)
+		assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
+	}
+}
+
+func TestDeploymentMultiTenantValBTenantScopeRequiresRawExactBinding(t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*DeploymentMultiTenantValBFoundation)
+		assert func(*testing.T, DeploymentMultiTenantValBFoundation)
+	}{
+		{
+			name: "tenant isolation bare lower-case tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.TenantIsolation.TenantScope = "ops_scope"
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.TenantIsolationState != DeploymentMultiTenantValBTenantIsolationStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked tenant isolation state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "tenant isolation prefixed tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.TenantIsolation.TenantScope = "ops " + deploymentMultiTenantVal0TenantScope()
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.TenantIsolationState != DeploymentMultiTenantValBTenantIsolationStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked tenant isolation state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "data residency suffixed tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.DataResidency.TenantScope = deploymentMultiTenantVal0TenantScope() + " ops"
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.DataResidencyState != DeploymentMultiTenantValBDataResidencyStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked data residency state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "tenant lifecycle tab padded tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.TenantLifecycle.TenantScope = "\t" + deploymentMultiTenantVal0TenantScope()
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.TenantLifecycleState != DeploymentMultiTenantValBTenantLifecycleStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked tenant lifecycle state, got %#v", model)
+				}
+			},
+		},
+		{
+			name: "fair share newline padded tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantValBFoundation) {
+				model.FairShareQuota.TenantScope = deploymentMultiTenantVal0TenantScope() + "\n"
+			},
+			assert: func(t *testing.T, model DeploymentMultiTenantValBFoundation) {
+				t.Helper()
+				if model.FairShareQuotaState != DeploymentMultiTenantValBFairShareQuotaStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+					t.Fatalf("expected blocked fair-share state, got %#v", model)
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValBModel()
+		tc.mutate(&model)
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		tc.assert(t, model)
+		assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
+	}
+}
+
+func TestDeploymentMultiTenantValBDataResidencyRegionConflictStateRequiresRawExactBinding(t *testing.T) {
+	testCases := []struct {
+		name  string
+		value string
+	}{
+		{name: "leading whitespace conflict state blocks", value: " " + DeploymentMultiTenantConflictStateNoConflict},
+		{name: "trailing whitespace conflict state blocks", value: DeploymentMultiTenantConflictStateNoConflict + " "},
+		{name: "tab padded conflict state blocks", value: "\t" + DeploymentMultiTenantConflictStateNoConflict},
+		{name: "newline padded conflict state blocks", value: DeploymentMultiTenantConflictStateNoConflict + "\n"},
+	}
+
+	for _, tc := range testCases {
+		model := activeDeploymentMultiTenantValBModel()
+		model.DataResidency.RegionConflictState = tc.value
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		if model.DataResidencyState != DeploymentMultiTenantValBDataResidencyStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+			t.Fatalf("%s: expected blocked data residency state, got %#v", tc.name, model)
+		}
+		assertDeploymentMultiTenantValBNoPoint10Pass(t, model)
 	}
 }
 
@@ -198,6 +490,12 @@ func TestDeploymentMultiTenantValBTenantIsolationBlockers(t *testing.T) {
 		}},
 		{name: "stale tenant scope blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
 			model.TenantIsolation.TenantScope = "stale"
+		}},
+		{name: "wrong tenant scope blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.TenantIsolation.TenantScope = "tenant:beta"
+		}},
+		{name: "duplicate tenant scope refs block", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.TenantIsolation.TenantScope = "tenant:alpha tenant:beta"
 		}},
 	}
 
@@ -266,6 +564,9 @@ func TestDeploymentMultiTenantValBDataResidencyBlockers(t *testing.T) {
 		}},
 		{name: "region summary treated as canonical truth blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
 			model.DataResidency.RegionSummaryCanonicalTruth = true
+		}},
+		{name: "wrong tenant scope blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.DataResidency.TenantScope = "tenant:beta"
 		}},
 	}
 
@@ -496,6 +797,9 @@ func TestDeploymentMultiTenantValBTenantLifecycleBlockers(t *testing.T) {
 		{name: "lifecycle inferred from dashboard summary only blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
 			model.TenantLifecycle.DashboardSummaryOnly = true
 		}},
+		{name: "wrong tenant scope blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.TenantLifecycle.TenantScope = "tenant:beta"
+		}},
 	}
 
 	for _, tc := range testCases {
@@ -554,6 +858,9 @@ func TestDeploymentMultiTenantValBFairShareQuotaBlockers(t *testing.T) {
 		}},
 		{name: "global queue starvation without bounded degradation blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
 			model.FairShareQuota.GlobalQueueStarvationWithoutBoundedDegradation = true
+		}},
+		{name: "wrong tenant scope blocks", mutate: func(model *DeploymentMultiTenantValBFoundation) {
+			model.FairShareQuota.TenantScope = "tenant:beta"
 		}},
 	}
 
@@ -871,6 +1178,19 @@ func TestDeploymentMultiTenantValBClosureBlockerOverlayCLB2Cleanup(t *testing.T)
 	}
 }
 
+func TestDeploymentMultiTenantValBClosureBlockerFindingReasonMustMatchExactly(t *testing.T) {
+	finding := DeploymentMultiTenantValBClosureBlockerFinding{
+		BlockerLevel:      DeploymentMultiTenantValBBlockerLevelCLB2,
+		Surface:           DeploymentMultiTenantValBClosureSurfaceDataResidency,
+		Reason:            "ambiguous region naming / extra context",
+		BlocksCurrentWave: true,
+		RequiredFollowup:  "normalize region naming",
+	}
+	if deploymentMultiTenantValBHasFinding([]DeploymentMultiTenantValBClosureBlockerFinding{finding}, DeploymentMultiTenantValBBlockerLevelCLB2, DeploymentMultiTenantValBClosureSurfaceDataResidency, "ambiguous region naming") {
+		t.Fatalf("expected exact reason match only, got %#v", finding)
+	}
+}
+
 func TestDeploymentMultiTenantValBClosureBlockerOverlayRejectsLegacyAndUnknownLevels(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -979,6 +1299,7 @@ func TestDeploymentMultiTenantValBClosureBlockerOverlayCLB3Advisory(t *testing.T
 func TestDeploymentMultiTenantValBNoOverclaimBlockers(t *testing.T) {
 	blockedClaims := []string{
 		"tenant isolation guaranteed",
+		"tenant isolation evidence guaranteed",
 		"zero cross-tenant leakage",
 		"no leakage guaranteed",
 		"data residency certified",
@@ -1000,7 +1321,9 @@ func TestDeploymentMultiTenantValBNoOverclaimBlockers(t *testing.T) {
 		"transfer safe by default",
 		"dashboard proves tenant isolation",
 		"fleet view proves data residency",
+		"fleet view evidence proves data residency",
 		"support summary is canonical truth",
+		"support summary evidence is canonical truth",
 		"region summary is canonical truth",
 		"evidence-linked tenant isolation test tenant isolation guaranteed",
 		"data residency evidence data residency certified",
@@ -1016,6 +1339,20 @@ func TestDeploymentMultiTenantValBNoOverclaimBlockers(t *testing.T) {
 		model = ComputeDeploymentMultiTenantValBFoundation(model)
 		if model.NoOverclaimState != DeploymentMultiTenantValBNoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
 			t.Fatalf("expected forbidden claim %q to block, got %#v", claim, model)
+		}
+	}
+
+	splitBlockedClaims := [][]string{
+		{"tenant isolation", "guaranteed"},
+		{"fleet view", "proves data residency"},
+		{"support summary", "is canonical truth"},
+	}
+	for _, claims := range splitBlockedClaims {
+		model := activeDeploymentMultiTenantValBModel()
+		model.NoOverclaim.ObservedClaims = claims
+		model = ComputeDeploymentMultiTenantValBFoundation(model)
+		if model.NoOverclaimState != DeploymentMultiTenantValBNoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValBStateBlocked {
+			t.Fatalf("expected split forbidden claims %q to block, got %#v", claims, model)
 		}
 	}
 
@@ -1045,7 +1382,7 @@ func TestDeploymentMultiTenantValBNoOverclaimBlockers(t *testing.T) {
 		model := activeDeploymentMultiTenantValBModel()
 		model.NoOverclaim.ObservedClaims = []string{claim}
 		model = ComputeDeploymentMultiTenantValBFoundation(model)
-		if model.NoOverclaimState != DeploymentMultiTenantValBNoOverclaimStateActive {
+		if model.NoOverclaimState != DeploymentMultiTenantValBNoOverclaimStateActive || model.CurrentState != DeploymentMultiTenantValBStateActive {
 			t.Fatalf("expected allowed bounded wording for %q, got %#v", claim, model)
 		}
 	}

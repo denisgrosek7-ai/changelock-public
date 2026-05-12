@@ -34,6 +34,25 @@ func TestDeploymentMultiTenantVal0AggregateProjectionDisclaimerBlocks(t *testing
 	}
 }
 
+func TestDeploymentMultiTenantVal0CanonicalTenantTokenValueRequiresExactSingleToken(t *testing.T) {
+	if !deploymentMultiTenantVal0CanonicalTenantTokenValueIsValid(deploymentMultiTenantVal0TenantScope()) {
+		t.Fatalf("expected exact canonical tenant token to be valid")
+	}
+
+	invalid := []string{
+		"",
+		"ops " + deploymentMultiTenantVal0TenantScope(),
+		deploymentMultiTenantVal0TenantScope() + " support_scope",
+		deploymentMultiTenantVal0TenantScope() + "\tsupport_scope",
+		deploymentMultiTenantVal0TenantScope() + "\nprofile",
+	}
+	for _, value := range invalid {
+		if deploymentMultiTenantVal0CanonicalTenantTokenValueIsValid(value) {
+			t.Fatalf("expected non-exact tenant token %q to be invalid", value)
+		}
+	}
+}
+
 func TestDeploymentMultiTenantVal0HappyPathAndPoint10NotComplete(t *testing.T) {
 	model := activeDeploymentMultiTenantVal0Model()
 	if model.CurrentState != DeploymentMultiTenantVal0StateActive {
@@ -118,6 +137,12 @@ func TestDeploymentMultiTenantVal0DependencyBlockers(t *testing.T) {
 		}},
 		{name: "malformed projection disclaimer blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 			model.Dependency.ProjectionDisclaimer = "canonical_truth"
+		}},
+		{name: "whitespace retagged aggregate dependency disclaimer blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ProjectionDisclaimer = " " + ossTrustNetworkValEProjectionDisclaimer() + " aggregate_dependency_snapshot"
+		}},
+		{name: "uppercase aggregate dependency disclaimer blocks", mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+			model.Dependency.ProjectionDisclaimer = strings.ToUpper(ossTrustNetworkValEProjectionDisclaimer() + " aggregate_dependency_snapshot")
 		}},
 	}
 
@@ -833,6 +858,45 @@ func TestDeploymentMultiTenantVal0ProjectionDisclaimerExactBoundedBlockers(t *te
 		}
 	})
 
+	t.Run("aggregate disclaimer leading whitespace blocks exact state", func(t *testing.T) {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.ProjectionDisclaimer = " " + disclaimer
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("expected aggregate disclaimer leading whitespace to block current state, got %#v", model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected point 10 to remain not complete after aggregate disclaimer leading whitespace, got %#v", model)
+		}
+		assertDeploymentMultiTenantVal0NoPoint10Pass(t, model)
+	})
+
+	t.Run("aggregate disclaimer uppercase retagging blocks exact state", func(t *testing.T) {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.ProjectionDisclaimer = strings.ToUpper(disclaimer)
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("expected aggregate disclaimer uppercase retagging to block current state, got %#v", model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected point 10 to remain not complete after aggregate disclaimer uppercase retagging, got %#v", model)
+		}
+		assertDeploymentMultiTenantVal0NoPoint10Pass(t, model)
+	})
+
+	t.Run("canonical aggregate snapshot disclaimer blocks live foundation", func(t *testing.T) {
+		model := activeDeploymentMultiTenantVal0Model()
+		model.ProjectionDisclaimer = disclaimer + " aggregate_dependency_snapshot"
+		model = ComputeDeploymentMultiTenantVal0Foundation(model)
+		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked {
+			t.Fatalf("expected canonical aggregate snapshot disclaimer to block live current state, got %#v", model)
+		}
+		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected point 10 to remain not complete after canonical aggregate snapshot disclaimer, got %#v", model)
+		}
+		assertDeploymentMultiTenantVal0NoPoint10Pass(t, model)
+	})
+
 	t.Run("discipline disclaimer prefix drift blocks exact no-overclaim state", func(t *testing.T) {
 		model := activeDeploymentMultiTenantVal0Model()
 		model.NoOverclaim.ProjectionDisclaimer = "advisory " + disclaimer
@@ -1002,6 +1066,22 @@ func TestDeploymentMultiTenantVal0ExactIdentityBindingBlockers(t *testing.T) {
 			wantState: DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
 		},
 		{
+			name: "whitespace padded tenant boundary tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantBoundary.TenantScope = " " + deploymentMultiTenantVal0TenantScope() + " "
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantBoundaryState },
+			wantState: DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
+		},
+		{
+			name: "bare lower case tenant boundary tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.TenantBoundary.TenantScope = "alpha"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.TenantBoundaryState },
+			wantState: DeploymentMultiTenantVal0TenantBoundaryStateBlocked,
+		},
+		{
 			name: "wrong msp role scope blocks",
 			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 				model.MSPAuthority.RoleScope = "support_readiness_operator_beta"
@@ -1029,6 +1109,14 @@ func TestDeploymentMultiTenantVal0ExactIdentityBindingBlockers(t *testing.T) {
 			name: "wrong operator tenant target blocks",
 			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 				model.OperatorAction.TenantTarget = "tenant:beta"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperatorActionState },
+			wantState: DeploymentMultiTenantVal0OperatorActionStateBlocked,
+		},
+		{
+			name: "prefixed operator tenant target blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.OperatorAction.TenantTarget = "ops " + deploymentMultiTenantVal0TenantScope()
 			},
 			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.OperatorActionState },
 			wantState: DeploymentMultiTenantVal0OperatorActionStateBlocked,
@@ -1102,6 +1190,14 @@ func TestDeploymentMultiTenantVal0WhitespaceRetaggedFreshnessAndEnumBlockers(t *
 			name: "whitespace padded authority freshness blocks",
 			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
 				model.MSPAuthority.AuthorityFreshnessState = " " + IntelligenceCalibrationFreshnessFresh + "\t"
+			},
+			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.MSPAuthorityState },
+			wantState: DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
+		},
+		{
+			name: "tab padded msp tenant scope blocks",
+			mutate: func(model *DeploymentMultiTenantVal0Foundation) {
+				model.MSPAuthority.TenantScope = "\t" + deploymentMultiTenantVal0TenantScope()
 			},
 			getState:  func(model DeploymentMultiTenantVal0Foundation) string { return model.MSPAuthorityState },
 			wantState: DeploymentMultiTenantVal0MSPAuthorityStateBlocked,
@@ -1244,12 +1340,15 @@ func TestDeploymentMultiTenantVal0NoOverclaimAdversarialBlockers(t *testing.T) {
 	}{
 		{name: "direct forbidden phrase blocks exact state", claims: []string{"production approved"}},
 		{name: "unicode confusable forbidden phrase blocks exact state", claims: []string{"prοductiοn apprοved"}},
+		{name: "open-o confusable forbidden phrase blocks exact state", claims: []string{"prɔduction apprɔved"}},
 		{name: "small capital confusable forbidden phrase blocks exact state", claims: []string{"prᴏduction approved"}},
 		{name: "small capital deployment approved blocks exact state", claims: []string{"ᴅeployment approved"}},
 		{name: "small capital certified managed trust blocks exact state", claims: []string{"cᴇrtified managed trust"}},
 		{name: "ligature forbidden phrase blocks exact state", claims: []string{"marketplace certiﬁed"}},
 		{name: "split field forbidden phrase blocks exact state", claims: []string{"production", "approved"}},
+		{name: "open-o split field forbidden phrase blocks exact state", claims: []string{"prɔduction", "apprɔved"}},
 		{name: "single bucket forbidden phrase with innocuous middle token blocks exact state", claims: []string{"production audit note approved"}},
+		{name: "open-o innocuous middle token forbidden phrase blocks exact state", claims: []string{"prɔduction audit nɔte apprɔved"}},
 		{name: "three bucket forbidden phrase with innocuous middle token blocks exact state", claims: []string{"production", "audit note", "approved"}},
 	}
 

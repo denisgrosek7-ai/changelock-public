@@ -189,10 +189,12 @@ func ossTrustNetworkValEProjectionDisclaimer() string {
 }
 
 func ossTrustNetworkValEHasProjectionDisclaimer(value string) bool {
-	normalized := ossTrustNetworkValENormalizeText(value)
-	return strings.Contains(normalized, "projection_only") &&
-		strings.Contains(normalized, "not_canonical_truth") &&
-		strings.Contains(normalized, "oss_trust_network_vale")
+	return value == ossTrustNetworkValEProjectionDisclaimer() ||
+		value == ossTrustNetworkValEProjectionDisclaimer()+" aggregate_dependency_snapshot"
+}
+
+func ossTrustNetworkValEHasFoundationProjectionDisclaimer(value string) bool {
+	return value == ossTrustNetworkValEProjectionDisclaimer()
 }
 
 func OSSTrustNetworkValEProofSurfaceRefs() []string {
@@ -277,7 +279,7 @@ func ossTrustNetworkValECopyEvidence(items []ReferenceArchitectureEvidenceRefere
 }
 
 func OSSTrustNetworkValEProofEvidenceQualityValid(evidence []ReferenceArchitectureEvidenceReference, refs []string) bool {
-	if !containsExactTrimmedStringSet(refs, OSSTrustNetworkValEProofEvidenceRefs()...) {
+	if !ossTrustNetworkValEContainsExactStringSet(refs, OSSTrustNetworkValEProofEvidenceRefs()...) {
 		return false
 	}
 	expected := ossTrustNetworkValEExpectedEvidenceMetadataByID()
@@ -290,7 +292,7 @@ func OSSTrustNetworkValEProofEvidenceQualityValid(evidence []ReferenceArchitectu
 	}
 	seen := map[string]struct{}{}
 	for _, evidenceRef := range evidence {
-		id := strings.TrimSpace(evidenceRef.EvidenceID)
+		id := evidenceRef.EvidenceID
 		expectedMetadata, exists := expected[id]
 		if id == "" || !exists {
 			return false
@@ -299,13 +301,35 @@ func OSSTrustNetworkValEProofEvidenceQualityValid(evidence []ReferenceArchitectu
 			return false
 		}
 		seen[id] = struct{}{}
-		if strings.TrimSpace(evidenceRef.EvidenceType) != expectedMetadata.EvidenceType ||
-			strings.TrimSpace(evidenceRef.Source) != expectedMetadata.Source ||
-			strings.TrimSpace(evidenceRef.Scope) != expectedMetadata.Scope {
+		if evidenceRef.EvidenceType != expectedMetadata.EvidenceType ||
+			evidenceRef.Source != expectedMetadata.Source ||
+			evidenceRef.Scope != expectedMetadata.Scope {
 			return false
 		}
 	}
 	return len(seen) == len(expected)
+}
+
+func ossTrustNetworkValEContainsExactStringSet(values []string, expected ...string) bool {
+	if len(values) != len(expected) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value == "" {
+			return false
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return false
+		}
+		seen[value] = struct{}{}
+	}
+	for _, item := range expected {
+		if _, ok := seen[item]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func ossTrustNetworkValENormalizeText(value string) string {
@@ -315,10 +339,10 @@ func ossTrustNetworkValENormalizeText(value string) string {
 func ossTrustNetworkValENormalizeClaimText(value string) string {
 	var builder strings.Builder
 	lastSpace := true
-	for _, char := range strings.TrimSpace(value) {
-		lower := unicode.ToLower(char)
-		if unicode.IsLetter(lower) || unicode.IsDigit(lower) {
-			builder.WriteRune(lower)
+	for _, char := range strings.TrimSpace(deploymentMultiTenantVal0CompatibilityFold(value)) {
+		folded := deploymentMultiTenantVal0ConfusableFold(char)
+		if unicode.IsLetter(folded) || unicode.IsDigit(folded) {
+			builder.WriteRune(folded)
 			lastSpace = false
 			continue
 		}
@@ -332,20 +356,20 @@ func ossTrustNetworkValENormalizeClaimText(value string) string {
 
 func ossTrustNetworkValECompactClaimText(value string) string {
 	var builder strings.Builder
-	for _, char := range value {
-		lower := unicode.ToLower(char)
-		if unicode.IsLetter(lower) || unicode.IsDigit(lower) {
-			builder.WriteRune(lower)
+	for _, char := range deploymentMultiTenantVal0CompatibilityFold(value) {
+		folded := deploymentMultiTenantVal0ConfusableFold(char)
+		if unicode.IsLetter(folded) || unicode.IsDigit(folded) {
+			builder.WriteRune(folded)
 		}
 	}
 	return builder.String()
 }
 
 func ossTrustNetworkValEPoint9PassReasonState(value string) string {
-	switch ossTrustNetworkValENormalizeText(value) {
-	case ossTrustNetworkValENormalizeText(OSSTrustNetworkValEPoint9PassReasonAllowed):
+	switch value {
+	case OSSTrustNetworkValEPoint9PassReasonAllowed:
 		return ossTrustNetworkValEPoint9PassReasonStateAllowed
-	case ossTrustNetworkValENormalizeText(OSSTrustNetworkValEPoint9PassReasonBlocked):
+	case OSSTrustNetworkValEPoint9PassReasonBlocked:
 		return ossTrustNetworkValEPoint9PassReasonStateBlocked
 	default:
 		return ossTrustNetworkValEPoint9PassReasonStateUnknown
@@ -362,8 +386,7 @@ func ossTrustNetworkValEPassAllowedClaim(values ...string) bool {
 }
 
 func ossTrustNetworkValEExactSafePoint9PassDiagnostic(value string) bool {
-	normalized := ossTrustNetworkValENormalizeText(value)
-	if normalized == "" {
+	if value == "" {
 		return false
 	}
 	safe := []string{
@@ -376,7 +399,7 @@ func ossTrustNetworkValEExactSafePoint9PassDiagnostic(value string) bool {
 		OSSTrustNetworkValEPoint9PassSafeDiagnosticValDCannotReturn,
 	}
 	for _, candidate := range safe {
-		if normalized == ossTrustNetworkValENormalizeText(candidate) {
+		if value == candidate {
 			return true
 		}
 	}
@@ -452,6 +475,8 @@ func ossTrustNetworkValEContainsForbiddenClaim(values ...string) bool {
 		blockedCompact = append(blockedCompact, ossTrustNetworkValECompactClaimText(blocked))
 	}
 	point9PassCompact := ossTrustNetworkValECompactClaimText("point_9_pass")
+	normalizedBuckets := make([]string, 0, len(values))
+	compactBuckets := make([]string, 0, len(values))
 	for _, value := range values {
 		normalized := ossTrustNetworkValENormalizeClaimText(value)
 		compact := ossTrustNetworkValECompactClaimText(value)
@@ -464,6 +489,8 @@ func ossTrustNetworkValEContainsForbiddenClaim(values ...string) bool {
 		if _, ok := allowedExact[compact]; ok {
 			continue
 		}
+		normalizedBuckets = append(normalizedBuckets, normalized)
+		compactBuckets = append(compactBuckets, compact)
 		for i := range blockedNormalized {
 			if blockedNormalized[i] != "" && strings.Contains(normalized, blockedNormalized[i]) {
 				return true
@@ -472,7 +499,18 @@ func ossTrustNetworkValEContainsForbiddenClaim(values ...string) bool {
 				return true
 			}
 		}
+		if strings.Contains(compact, "certifi") && strings.Contains(compact, "package") {
+			return true
+		}
 		if strings.Contains(compact, point9PassCompact) && !ossTrustNetworkValEExactSafePoint9PassDiagnostic(value) {
+			return true
+		}
+	}
+	for i := range blockedNormalized {
+		if blockedNormalized[i] != "" && deploymentMultiTenantVal0BucketsContainForbiddenPhrase(normalizedBuckets, blockedNormalized[i]) {
+			return true
+		}
+		if blockedCompact[i] != "" && deploymentMultiTenantVal0BucketsContainForbiddenPhrase(compactBuckets, blockedCompact[i]) {
 			return true
 		}
 	}
@@ -626,24 +664,25 @@ func EvaluateOSSTrustNetworkValEVal0SourceState(model OSSTrustNetworkVal0Foundat
 	) || len(model.ProofSurfaceRefs) == 0 || len(model.EvidenceRefs) == 0 {
 		return OSSTrustNetworkValESourceStateIncomplete
 	}
-	if !ossTrustNetworkVal0HasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if model.ProjectionDisclaimer != ossTrustNetworkVal0ProjectionDisclaimer() {
 		return OSSTrustNetworkValESourceStateUnknown
 	}
-	if !containsExactTrimmedStringSet(model.ProofSurfaceRefs, OSSTrustNetworkVal0ProofSurfaceRefs()...) ||
+	if !ossTrustNetworkValEContainsExactStringSet(model.ProofSurfaceRefs, OSSTrustNetworkVal0ProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.EvidenceRefs, OSSTrustNetworkVal0ProofEvidenceRefs()...) ||
 		!OSSTrustNetworkVal0ProofEvidenceQualityValid(ossTrustNetworkVal0Evidence(), model.EvidenceRefs) {
 		return OSSTrustNetworkValESourceStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == OSSTrustNetworkVal0StateActive &&
-		strings.TrimSpace(model.Point9State) == OSSTrustNetworkPoint9StateNotComplete &&
-		strings.TrimSpace(model.DependencyState) == OSSTrustNetworkVal0DependencyStateActive &&
-		strings.TrimSpace(model.SignalContractState) == OSSTrustNetworkVal0SignalContractStateActive &&
-		strings.TrimSpace(model.TrustMarkingState) == OSSTrustNetworkVal0TrustMarkingStateActive &&
-		strings.TrimSpace(model.MaintainerIdentityState) == OSSTrustNetworkVal0MaintainerIdentityStateActive &&
-		strings.TrimSpace(model.RegistryFreshnessState) == OSSTrustNetworkVal0RegistryFreshnessStateActive &&
-		strings.TrimSpace(model.SharedVEXState) == OSSTrustNetworkVal0SharedVEXStateActive &&
-		strings.TrimSpace(model.PropagationState) == OSSTrustNetworkVal0PropagationStateActive &&
-		strings.TrimSpace(model.LocalApplicabilityState) == OSSTrustNetworkVal0LocalApplicabilityStateActive &&
-		strings.TrimSpace(model.NoOverclaimState) == OSSTrustNetworkVal0NoOverclaimStateActive {
+	if model.CurrentState == OSSTrustNetworkVal0StateActive &&
+		model.Point9State == OSSTrustNetworkPoint9StateNotComplete &&
+		model.DependencyState == OSSTrustNetworkVal0DependencyStateActive &&
+		model.SignalContractState == OSSTrustNetworkVal0SignalContractStateActive &&
+		model.TrustMarkingState == OSSTrustNetworkVal0TrustMarkingStateActive &&
+		model.MaintainerIdentityState == OSSTrustNetworkVal0MaintainerIdentityStateActive &&
+		model.RegistryFreshnessState == OSSTrustNetworkVal0RegistryFreshnessStateActive &&
+		model.SharedVEXState == OSSTrustNetworkVal0SharedVEXStateActive &&
+		model.PropagationState == OSSTrustNetworkVal0PropagationStateActive &&
+		model.LocalApplicabilityState == OSSTrustNetworkVal0LocalApplicabilityStateActive &&
+		model.NoOverclaimState == OSSTrustNetworkVal0NoOverclaimStateActive {
 		return OSSTrustNetworkValESourceStateActive
 	}
 	severity := 0
@@ -682,25 +721,26 @@ func EvaluateOSSTrustNetworkValEValASourceState(model OSSTrustNetworkValACore) s
 	) || len(model.ProofSurfaceRefs) == 0 || len(model.EvidenceRefs) == 0 {
 		return OSSTrustNetworkValESourceStateIncomplete
 	}
-	if !ossTrustNetworkValAHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if model.ProjectionDisclaimer != ossTrustNetworkValAProjectionDisclaimer() {
 		return OSSTrustNetworkValESourceStateUnknown
 	}
-	if !containsExactTrimmedStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValAProofSurfaceRefs()...) ||
+	if !ossTrustNetworkValEContainsExactStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValAProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.EvidenceRefs, OSSTrustNetworkValAProofEvidenceRefs()...) ||
 		!OSSTrustNetworkValAProofEvidenceQualityValid(ossTrustNetworkValAEvidence(), model.EvidenceRefs) {
 		return OSSTrustNetworkValESourceStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == OSSTrustNetworkValAStateActive &&
-		strings.TrimSpace(model.Point9State) == OSSTrustNetworkPoint9StateNotComplete &&
-		strings.TrimSpace(model.DependencyState) == OSSTrustNetworkValADependencyStateActive &&
-		strings.TrimSpace(model.ReleaseTrustIntakeState) == OSSTrustNetworkValAReleaseTrustIntakeStateActive &&
-		strings.TrimSpace(model.SigningSignalState) == OSSTrustNetworkValASigningSignalStateActive &&
-		strings.TrimSpace(model.MaintainerAttestationState) == OSSTrustNetworkValAMaintainerAttestationStateActive &&
-		strings.TrimSpace(model.ProvenanceMaterialState) == OSSTrustNetworkValAProvenanceMaterialStateActive &&
-		strings.TrimSpace(model.RegistryDescriptorState) == OSSTrustNetworkValARegistryDescriptorStateActive &&
-		strings.TrimSpace(model.RegistryMetadataState) == OSSTrustNetworkValARegistryMetadataStateActive &&
-		strings.TrimSpace(model.TypoSquattingWarningState) == OSSTrustNetworkValATypoSquattingWarningStateActive &&
-		strings.TrimSpace(model.DriftSignalState) == OSSTrustNetworkValADriftSignalStateActive &&
-		strings.TrimSpace(model.NoOverclaimState) == OSSTrustNetworkValANoOverclaimStateActive {
+	if model.CurrentState == OSSTrustNetworkValAStateActive &&
+		model.Point9State == OSSTrustNetworkPoint9StateNotComplete &&
+		model.DependencyState == OSSTrustNetworkValADependencyStateActive &&
+		model.ReleaseTrustIntakeState == OSSTrustNetworkValAReleaseTrustIntakeStateActive &&
+		model.SigningSignalState == OSSTrustNetworkValASigningSignalStateActive &&
+		model.MaintainerAttestationState == OSSTrustNetworkValAMaintainerAttestationStateActive &&
+		model.ProvenanceMaterialState == OSSTrustNetworkValAProvenanceMaterialStateActive &&
+		model.RegistryDescriptorState == OSSTrustNetworkValARegistryDescriptorStateActive &&
+		model.RegistryMetadataState == OSSTrustNetworkValARegistryMetadataStateActive &&
+		model.TypoSquattingWarningState == OSSTrustNetworkValATypoSquattingWarningStateActive &&
+		model.DriftSignalState == OSSTrustNetworkValADriftSignalStateActive &&
+		model.NoOverclaimState == OSSTrustNetworkValANoOverclaimStateActive {
 		return OSSTrustNetworkValESourceStateActive
 	}
 	severity := 0
@@ -740,25 +780,26 @@ func EvaluateOSSTrustNetworkValEValBSourceState(model OSSTrustNetworkValBCore) s
 	) || len(model.ProofSurfaceRefs) == 0 || len(model.EvidenceRefs) == 0 {
 		return OSSTrustNetworkValESourceStateIncomplete
 	}
-	if !ossTrustNetworkValBHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if model.ProjectionDisclaimer != ossTrustNetworkValBProjectionDisclaimer() {
 		return OSSTrustNetworkValESourceStateUnknown
 	}
-	if !containsExactTrimmedStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValBProofSurfaceRefs()...) ||
+	if !ossTrustNetworkValEContainsExactStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValBProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.EvidenceRefs, OSSTrustNetworkValBProofEvidenceRefs()...) ||
 		!OSSTrustNetworkValBProofEvidenceQualityValid(ossTrustNetworkValBEvidence(), model.EvidenceRefs) {
 		return OSSTrustNetworkValESourceStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == OSSTrustNetworkValBStateActive &&
-		strings.TrimSpace(model.Point9State) == OSSTrustNetworkPoint9StateNotComplete &&
-		strings.TrimSpace(model.DependencyState) == OSSTrustNetworkValBDependencyStateActive &&
-		strings.TrimSpace(model.CandidateSignalIntakeState) == OSSTrustNetworkValBCandidateSignalIntakeStateActive &&
-		strings.TrimSpace(model.ReviewWorkflowState) == OSSTrustNetworkValBReviewWorkflowStateActive &&
-		strings.TrimSpace(model.SharedVEXTriageState) == OSSTrustNetworkValBSharedVEXTriageStateActive &&
-		strings.TrimSpace(model.SourceWeightingState) == OSSTrustNetworkValBSourceWeightingStateActive &&
-		strings.TrimSpace(model.LocalApplicabilityState) == OSSTrustNetworkValBLocalApplicabilityStateActive &&
-		strings.TrimSpace(model.PropagationExchangeState) == OSSTrustNetworkValBPropagationExchangeStateActive &&
-		strings.TrimSpace(model.SupersessionRevocationState) == OSSTrustNetworkValBSupersessionRevocationStateActive &&
-		strings.TrimSpace(model.ReviewerAuditabilityState) == OSSTrustNetworkValBReviewerAuditabilityStateActive &&
-		strings.TrimSpace(model.NoOverclaimState) == OSSTrustNetworkValBNoOverclaimStateActive {
+	if model.CurrentState == OSSTrustNetworkValBStateActive &&
+		model.Point9State == OSSTrustNetworkPoint9StateNotComplete &&
+		model.DependencyState == OSSTrustNetworkValBDependencyStateActive &&
+		model.CandidateSignalIntakeState == OSSTrustNetworkValBCandidateSignalIntakeStateActive &&
+		model.ReviewWorkflowState == OSSTrustNetworkValBReviewWorkflowStateActive &&
+		model.SharedVEXTriageState == OSSTrustNetworkValBSharedVEXTriageStateActive &&
+		model.SourceWeightingState == OSSTrustNetworkValBSourceWeightingStateActive &&
+		model.LocalApplicabilityState == OSSTrustNetworkValBLocalApplicabilityStateActive &&
+		model.PropagationExchangeState == OSSTrustNetworkValBPropagationExchangeStateActive &&
+		model.SupersessionRevocationState == OSSTrustNetworkValBSupersessionRevocationStateActive &&
+		model.ReviewerAuditabilityState == OSSTrustNetworkValBReviewerAuditabilityStateActive &&
+		model.NoOverclaimState == OSSTrustNetworkValBNoOverclaimStateActive {
 		return OSSTrustNetworkValESourceStateActive
 	}
 	severity := 0
@@ -798,25 +839,26 @@ func EvaluateOSSTrustNetworkValEValCSourceState(model OSSTrustNetworkValCCore) s
 	) || len(model.ProofSurfaceRefs) == 0 || len(model.EvidenceRefs) == 0 {
 		return OSSTrustNetworkValESourceStateIncomplete
 	}
-	if !ossTrustNetworkValCHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if model.ProjectionDisclaimer != ossTrustNetworkValCProjectionDisclaimer() {
 		return OSSTrustNetworkValESourceStateUnknown
 	}
-	if !containsExactTrimmedStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValCProofSurfaceRefs()...) ||
+	if !ossTrustNetworkValEContainsExactStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValCProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.EvidenceRefs, OSSTrustNetworkValCProofEvidenceRefs()...) ||
 		!OSSTrustNetworkValCProofEvidenceQualityValid(ossTrustNetworkValCEvidence(), model.EvidenceRefs) {
 		return OSSTrustNetworkValESourceStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == OSSTrustNetworkValCStateActive &&
-		strings.TrimSpace(model.Point9State) == OSSTrustNetworkPoint9StateNotComplete &&
-		strings.TrimSpace(model.DependencyState) == OSSTrustNetworkValCDependencyStateActive &&
-		strings.TrimSpace(model.TrustVisibilityState) == OSSTrustNetworkValCTrustVisibilityStateActive &&
-		strings.TrimSpace(model.PackageTrustStatusState) == OSSTrustNetworkValCPackageTrustStatusStateActive &&
-		strings.TrimSpace(model.ExportBoundaryState) == OSSTrustNetworkValCExportBoundaryStateActive &&
-		strings.TrimSpace(model.RemediationSuggestionState) == OSSTrustNetworkValCRemediationSuggestionStateActive &&
-		strings.TrimSpace(model.PRProposalState) == OSSTrustNetworkValCPRProposalStateActive &&
-		strings.TrimSpace(model.LocalOverrideState) == OSSTrustNetworkValCLocalOverrideStateActive &&
-		strings.TrimSpace(model.RemediationSafetyState) == OSSTrustNetworkValCRemediationSafetyStateActive &&
-		strings.TrimSpace(model.EcosystemConsistencyState) == OSSTrustNetworkValCEcosystemConsistencyStateActive &&
-		strings.TrimSpace(model.NoOverclaimState) == OSSTrustNetworkValCNoOverclaimStateActive {
+	if model.CurrentState == OSSTrustNetworkValCStateActive &&
+		model.Point9State == OSSTrustNetworkPoint9StateNotComplete &&
+		model.DependencyState == OSSTrustNetworkValCDependencyStateActive &&
+		model.TrustVisibilityState == OSSTrustNetworkValCTrustVisibilityStateActive &&
+		model.PackageTrustStatusState == OSSTrustNetworkValCPackageTrustStatusStateActive &&
+		model.ExportBoundaryState == OSSTrustNetworkValCExportBoundaryStateActive &&
+		model.RemediationSuggestionState == OSSTrustNetworkValCRemediationSuggestionStateActive &&
+		model.PRProposalState == OSSTrustNetworkValCPRProposalStateActive &&
+		model.LocalOverrideState == OSSTrustNetworkValCLocalOverrideStateActive &&
+		model.RemediationSafetyState == OSSTrustNetworkValCRemediationSafetyStateActive &&
+		model.EcosystemConsistencyState == OSSTrustNetworkValCEcosystemConsistencyStateActive &&
+		model.NoOverclaimState == OSSTrustNetworkValCNoOverclaimStateActive {
 		return OSSTrustNetworkValESourceStateActive
 	}
 	severity := 0
@@ -855,24 +897,25 @@ func EvaluateOSSTrustNetworkValEValDSourceState(model OSSTrustNetworkValDCore) s
 	) || len(model.ProofSurfaceRefs) == 0 || len(model.EvidenceRefs) == 0 {
 		return OSSTrustNetworkValESourceStateIncomplete
 	}
-	if !ossTrustNetworkValDHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if model.ProjectionDisclaimer != ossTrustNetworkValDProjectionDisclaimer() {
 		return OSSTrustNetworkValESourceStateUnknown
 	}
-	if !containsExactTrimmedStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValDProofSurfaceRefs()...) ||
+	if !ossTrustNetworkValEContainsExactStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValDProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.EvidenceRefs, OSSTrustNetworkValDProofEvidenceRefs()...) ||
 		!OSSTrustNetworkValDProofEvidenceQualityValid(ossTrustNetworkValDEvidence(), model.EvidenceRefs) {
 		return OSSTrustNetworkValESourceStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == OSSTrustNetworkValDStateActive &&
-		strings.TrimSpace(model.Point9State) == OSSTrustNetworkPoint9StateNotComplete &&
-		strings.TrimSpace(model.DependencyState) == OSSTrustNetworkValDDependencyStateActive &&
-		strings.TrimSpace(model.SignalCorrectnessState) == OSSTrustNetworkValDSignalCorrectnessStateActive &&
-		strings.TrimSpace(model.ReleaseFoundationState) == OSSTrustNetworkValDReleaseFoundationStateActive &&
-		strings.TrimSpace(model.ReviewedIntelligenceState) == OSSTrustNetworkValDReviewedIntelligenceStateActive &&
-		strings.TrimSpace(model.PropagationSafetyState) == OSSTrustNetworkValDPropagationSafetyStateActive &&
-		strings.TrimSpace(model.RemediationPRSafetyState) == OSSTrustNetworkValDRemediationPRSafetyStateActive &&
-		strings.TrimSpace(model.EcosystemVisibilityConsistencyState) == OSSTrustNetworkValDEcosystemVisibilityConsistencyStateActive &&
-		strings.TrimSpace(model.EvidenceQualityState) == OSSTrustNetworkValDEvidenceQualityStateActive &&
-		strings.TrimSpace(model.NoOverclaimState) == OSSTrustNetworkValDNoOverclaimStateActive {
+	if model.CurrentState == OSSTrustNetworkValDStateActive &&
+		model.Point9State == OSSTrustNetworkPoint9StateNotComplete &&
+		model.DependencyState == OSSTrustNetworkValDDependencyStateActive &&
+		model.SignalCorrectnessState == OSSTrustNetworkValDSignalCorrectnessStateActive &&
+		model.ReleaseFoundationState == OSSTrustNetworkValDReleaseFoundationStateActive &&
+		model.ReviewedIntelligenceState == OSSTrustNetworkValDReviewedIntelligenceStateActive &&
+		model.PropagationSafetyState == OSSTrustNetworkValDPropagationSafetyStateActive &&
+		model.RemediationPRSafetyState == OSSTrustNetworkValDRemediationPRSafetyStateActive &&
+		model.EcosystemVisibilityConsistencyState == OSSTrustNetworkValDEcosystemVisibilityConsistencyStateActive &&
+		model.EvidenceQualityState == OSSTrustNetworkValDEvidenceQualityStateActive &&
+		model.NoOverclaimState == OSSTrustNetworkValDNoOverclaimStateActive {
 		return OSSTrustNetworkValESourceStateActive
 	}
 	severity := 0
@@ -897,25 +940,26 @@ func EvaluateOSSTrustNetworkValEDependencyState(model OSSTrustNetworkValEIntegra
 	if strings.TrimSpace(model.ProjectionDisclaimer) == "" || strings.TrimSpace(model.Point9PassReason) == "" {
 		return OSSTrustNetworkValEDependencyStateIncomplete
 	}
-	if !ossTrustNetworkValEHasProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !ossTrustNetworkValEHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return OSSTrustNetworkValEDependencyStateUnknown
 	}
-	if strings.TrimSpace(model.ValDSourceState) != OSSTrustNetworkValESourceStateActive ||
-		!containsExactTrimmedStringSet(model.ValDSource.ProofSurfaceRefs, OSSTrustNetworkValDProofSurfaceRefs()...) ||
+	if model.ValDSourceState != OSSTrustNetworkValESourceStateActive ||
+		!ossTrustNetworkValEContainsExactStringSet(model.ValDSource.ProofSurfaceRefs, OSSTrustNetworkValDProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.ValDSource.EvidenceRefs, OSSTrustNetworkValDProofEvidenceRefs()...) ||
 		!OSSTrustNetworkValDProofEvidenceQualityValid(ossTrustNetworkValDEvidence(), model.ValDSource.EvidenceRefs) {
 		return OSSTrustNetworkValEDependencyStateBlocked
 	}
-	if strings.TrimSpace(model.ValDSource.CurrentState) == OSSTrustNetworkValDStateActive &&
-		strings.TrimSpace(model.ValDSource.Point9State) == OSSTrustNetworkPoint9StateNotComplete &&
-		strings.TrimSpace(model.ValDSource.DependencyState) == OSSTrustNetworkValDDependencyStateActive &&
-		strings.TrimSpace(model.ValDSource.SignalCorrectnessState) == OSSTrustNetworkValDSignalCorrectnessStateActive &&
-		strings.TrimSpace(model.ValDSource.ReleaseFoundationState) == OSSTrustNetworkValDReleaseFoundationStateActive &&
-		strings.TrimSpace(model.ValDSource.ReviewedIntelligenceState) == OSSTrustNetworkValDReviewedIntelligenceStateActive &&
-		strings.TrimSpace(model.ValDSource.PropagationSafetyState) == OSSTrustNetworkValDPropagationSafetyStateActive &&
-		strings.TrimSpace(model.ValDSource.RemediationPRSafetyState) == OSSTrustNetworkValDRemediationPRSafetyStateActive &&
-		strings.TrimSpace(model.ValDSource.EcosystemVisibilityConsistencyState) == OSSTrustNetworkValDEcosystemVisibilityConsistencyStateActive &&
-		strings.TrimSpace(model.ValDSource.EvidenceQualityState) == OSSTrustNetworkValDEvidenceQualityStateActive &&
-		strings.TrimSpace(model.ValDSource.NoOverclaimState) == OSSTrustNetworkValDNoOverclaimStateActive {
+	if model.ValDSource.CurrentState == OSSTrustNetworkValDStateActive &&
+		model.ValDSource.Point9State == OSSTrustNetworkPoint9StateNotComplete &&
+		model.ValDSource.DependencyState == OSSTrustNetworkValDDependencyStateActive &&
+		model.ValDSource.SignalCorrectnessState == OSSTrustNetworkValDSignalCorrectnessStateActive &&
+		model.ValDSource.ReleaseFoundationState == OSSTrustNetworkValDReleaseFoundationStateActive &&
+		model.ValDSource.ReviewedIntelligenceState == OSSTrustNetworkValDReviewedIntelligenceStateActive &&
+		model.ValDSource.PropagationSafetyState == OSSTrustNetworkValDPropagationSafetyStateActive &&
+		model.ValDSource.RemediationPRSafetyState == OSSTrustNetworkValDRemediationPRSafetyStateActive &&
+		model.ValDSource.EcosystemVisibilityConsistencyState == OSSTrustNetworkValDEcosystemVisibilityConsistencyStateActive &&
+		model.ValDSource.EvidenceQualityState == OSSTrustNetworkValDEvidenceQualityStateActive &&
+		model.ValDSource.NoOverclaimState == OSSTrustNetworkValDNoOverclaimStateActive {
 		return OSSTrustNetworkValEDependencyStateActive
 	}
 	return OSSTrustNetworkValEDependencyStateBlocked
@@ -936,17 +980,21 @@ func EvaluateOSSTrustNetworkValEIntegratedClosureState(model OSSTrustNetworkValE
 	) || len(gate.EvidenceRefs) == 0 || len(gate.Caveats) == 0 {
 		return OSSTrustNetworkValEIntegratedClosureStateIncomplete
 	}
-	if !ossTrustNetworkValEHasProjectionDisclaimer(gate.ProjectionDisclaimer) {
-		return OSSTrustNetworkValEIntegratedClosureStateUnknown
-	}
-	if !containsExactTrimmedStringSet(gate.EvidenceRefs, "evidence:ostn-vale-integrated-closure-001", "evidence:ostn-vale-point9-governance-001") {
+	if gate.GateID != OSSTrustNetworkValEIntegratedClosureGateModel().GateID ||
+		gate.Version != OSSTrustNetworkValEIntegratedClosureGateModel().Version {
 		return OSSTrustNetworkValEIntegratedClosureStateBlocked
 	}
-	if strings.TrimSpace(model.Val0Source.Point9State) != OSSTrustNetworkPoint9StateNotComplete ||
-		strings.TrimSpace(model.ValASource.Point9State) != OSSTrustNetworkPoint9StateNotComplete ||
-		strings.TrimSpace(model.ValBSource.Point9State) != OSSTrustNetworkPoint9StateNotComplete ||
-		strings.TrimSpace(model.ValCSource.Point9State) != OSSTrustNetworkPoint9StateNotComplete ||
-		strings.TrimSpace(model.ValDSource.Point9State) != OSSTrustNetworkPoint9StateNotComplete {
+	if !ossTrustNetworkValEHasFoundationProjectionDisclaimer(gate.ProjectionDisclaimer) {
+		return OSSTrustNetworkValEIntegratedClosureStateUnknown
+	}
+	if !ossTrustNetworkValEContainsExactStringSet(gate.EvidenceRefs, "evidence:ostn-vale-integrated-closure-001", "evidence:ostn-vale-point9-governance-001") {
+		return OSSTrustNetworkValEIntegratedClosureStateBlocked
+	}
+	if model.Val0Source.Point9State != OSSTrustNetworkPoint9StateNotComplete ||
+		model.ValASource.Point9State != OSSTrustNetworkPoint9StateNotComplete ||
+		model.ValBSource.Point9State != OSSTrustNetworkPoint9StateNotComplete ||
+		model.ValCSource.Point9State != OSSTrustNetworkPoint9StateNotComplete ||
+		model.ValDSource.Point9State != OSSTrustNetworkPoint9StateNotComplete {
 		return OSSTrustNetworkValEIntegratedClosureStateBlocked
 	}
 	if !gate.CanonicalExecutionAuditEvidenceSourceOfTruth ||
@@ -999,10 +1047,13 @@ func EvaluateOSSTrustNetworkValECanonicalBoundaryState(model OSSTrustNetworkValE
 	) || len(gate.EvidenceRefs) == 0 || len(gate.Caveats) == 0 {
 		return OSSTrustNetworkValECanonicalBoundaryStateIncomplete
 	}
-	if !ossTrustNetworkValEHasProjectionDisclaimer(gate.ProjectionDisclaimer) {
+	if gate.BoundaryID != OSSTrustNetworkValECanonicalBoundaryGateModel().BoundaryID {
+		return OSSTrustNetworkValECanonicalBoundaryStateBlocked
+	}
+	if !ossTrustNetworkValEHasFoundationProjectionDisclaimer(gate.ProjectionDisclaimer) {
 		return OSSTrustNetworkValECanonicalBoundaryStateUnknown
 	}
-	if !containsExactTrimmedStringSet(gate.EvidenceRefs, "evidence:ostn-vale-canonical-boundary-001") {
+	if !ossTrustNetworkValEContainsExactStringSet(gate.EvidenceRefs, "evidence:ostn-vale-canonical-boundary-001") {
 		return OSSTrustNetworkValECanonicalBoundaryStateBlocked
 	}
 	if gate.RegistrySurfaceAuthorityClaim ||
@@ -1020,8 +1071,8 @@ func EvaluateOSSTrustNetworkValECanonicalBoundaryState(model OSSTrustNetworkValE
 		!gate.LocalOverrideVisibleEvidenceLinked ||
 		!gate.LocalOverrideVisible ||
 		!gate.LocalEnterpriseApplicabilityExplicit ||
-		strings.TrimSpace(model.ValBSource.LocalApplicabilityState) != OSSTrustNetworkValBLocalApplicabilityStateActive ||
-		strings.TrimSpace(model.ValCSource.LocalOverrideState) != OSSTrustNetworkValCLocalOverrideStateActive ||
+		model.ValBSource.LocalApplicabilityState != OSSTrustNetworkValBLocalApplicabilityStateActive ||
+		model.ValCSource.LocalOverrideState != OSSTrustNetworkValCLocalOverrideStateActive ||
 		!model.ValCSource.LocalOverride.LocalOnlyBoundary ||
 		len(model.ValCSource.LocalOverride.EvidenceRefs) == 0 ||
 		strings.TrimSpace(model.ValCSource.LocalOverride.Rationale) == "" ||
@@ -1039,13 +1090,14 @@ func EvaluateOSSTrustNetworkValEEvidenceQualityState(model OSSTrustNetworkValEEv
 		strings.TrimSpace(model.DependencyProjectionDisclaimer) == "" || strings.TrimSpace(model.ProjectionDisclaimer) == "" {
 		return OSSTrustNetworkValEEvidenceQualityStateIncomplete
 	}
-	if !ossTrustNetworkValEHasProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !ossTrustNetworkValEHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!ossTrustNetworkValDHasProjectionDisclaimer(model.DependencyProjectionDisclaimer) {
 		return OSSTrustNetworkValEEvidenceQualityStateUnknown
 	}
-	if !containsExactTrimmedStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValEProofSurfaceRefs()...) ||
-		!containsExactTrimmedStringSet(model.DependencyProofSurfaceRefs, OSSTrustNetworkValDProofSurfaceRefs()...) ||
-		!containsExactTrimmedStringSet(model.DependencyEvidenceRefs, OSSTrustNetworkValDProofEvidenceRefs()...) ||
+	if !ossTrustNetworkValEContainsExactStringSet(model.ProofSurfaceRefs, OSSTrustNetworkValEProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.EvidenceRefs, OSSTrustNetworkValEProofEvidenceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.DependencyProofSurfaceRefs, OSSTrustNetworkValDProofSurfaceRefs()...) ||
+		!ossTrustNetworkValEContainsExactStringSet(model.DependencyEvidenceRefs, OSSTrustNetworkValDProofEvidenceRefs()...) ||
 		!OSSTrustNetworkValEProofEvidenceQualityValid(model.Evidence, model.EvidenceRefs) ||
 		!OSSTrustNetworkValDProofEvidenceQualityValid(model.DependencyEvidence, model.DependencyEvidenceRefs) {
 		return OSSTrustNetworkValEEvidenceQualityStateBlocked
@@ -1057,7 +1109,7 @@ func EvaluateOSSTrustNetworkValENoOverclaimState(model OSSTrustNetworkValEIntegr
 	if strings.TrimSpace(model.Point9PassReason) == "" || strings.TrimSpace(model.NoOverclaim.ProjectionDisclaimer) == "" {
 		return OSSTrustNetworkValENoOverclaimStateIncomplete
 	}
-	if !ossTrustNetworkValEHasProjectionDisclaimer(model.NoOverclaim.ProjectionDisclaimer) {
+	if !ossTrustNetworkValEHasFoundationProjectionDisclaimer(model.NoOverclaim.ProjectionDisclaimer) {
 		return OSSTrustNetworkValENoOverclaimStateUnknown
 	}
 	if model.NoOverclaim.Point9PassClaim ||
@@ -1075,11 +1127,11 @@ func EvaluateOSSTrustNetworkValENoOverclaimState(model OSSTrustNetworkValEIntegr
 	if ossTrustNetworkValEContainsForbiddenClaim(claims...) {
 		return OSSTrustNetworkValENoOverclaimStateBlocked
 	}
-	if strings.TrimSpace(model.Val0Source.NoOverclaimState) != OSSTrustNetworkVal0NoOverclaimStateActive ||
-		strings.TrimSpace(model.ValASource.NoOverclaimState) != OSSTrustNetworkValANoOverclaimStateActive ||
-		strings.TrimSpace(model.ValBSource.NoOverclaimState) != OSSTrustNetworkValBNoOverclaimStateActive ||
-		strings.TrimSpace(model.ValCSource.NoOverclaimState) != OSSTrustNetworkValCNoOverclaimStateActive ||
-		strings.TrimSpace(model.ValDSource.NoOverclaimState) != OSSTrustNetworkValDNoOverclaimStateActive {
+	if model.Val0Source.NoOverclaimState != OSSTrustNetworkVal0NoOverclaimStateActive ||
+		model.ValASource.NoOverclaimState != OSSTrustNetworkValANoOverclaimStateActive ||
+		model.ValBSource.NoOverclaimState != OSSTrustNetworkValBNoOverclaimStateActive ||
+		model.ValCSource.NoOverclaimState != OSSTrustNetworkValCNoOverclaimStateActive ||
+		model.ValDSource.NoOverclaimState != OSSTrustNetworkValDNoOverclaimStateActive {
 		return OSSTrustNetworkValENoOverclaimStateBlocked
 	}
 	return OSSTrustNetworkValENoOverclaimStateActive
@@ -1113,6 +1165,9 @@ func EvaluateOSSTrustNetworkValEFinalPassRuleState(model OSSTrustNetworkValEInte
 		!model.CanonicalBoundary.FinalClosureApprovesProductionUse &&
 		ossTrustNetworkValEPassAllowedClaim(model.Point9PassReason) {
 		return OSSTrustNetworkValEFinalPassRuleStateActive
+	}
+	if reasonState == ossTrustNetworkValEPoint9PassReasonStateBlocked {
+		return OSSTrustNetworkValEFinalPassRuleStateBlocked
 	}
 	if model.DependencyState == OSSTrustNetworkValEDependencyStateBlocked ||
 		model.IntegratedClosureState == OSSTrustNetworkValEIntegratedClosureStateBlocked ||
@@ -1232,7 +1287,7 @@ func ossTrustNetworkValEBlockingReasons(model OSSTrustNetworkValEIntegratedClosu
 }
 
 func ComputeOSSTrustNetworkValEClosure(model OSSTrustNetworkValEIntegratedClosure) OSSTrustNetworkValEIntegratedClosure {
-	claimedValDSourceState := strings.TrimSpace(model.ValDSourceState)
+	claimedValDSourceState := model.ValDSourceState
 
 	model.Val0SourceState = EvaluateOSSTrustNetworkValEVal0SourceState(model.Val0Source)
 	model.ValASourceState = EvaluateOSSTrustNetworkValEValASourceState(model.ValASource)
@@ -1249,7 +1304,7 @@ func ComputeOSSTrustNetworkValEClosure(model OSSTrustNetworkValEIntegratedClosur
 	model.NoOverclaimState = EvaluateOSSTrustNetworkValENoOverclaimState(model)
 	if ossTrustNetworkValECanPromotePoint9PassReason(model) {
 		model.Point9PassReason = OSSTrustNetworkValEPoint9PassReasonAllowed
-	} else if ossTrustNetworkValEPoint9PassReasonState(model.Point9PassReason) != ossTrustNetworkValEPoint9PassReasonStateUnknown || !ossTrustNetworkValEContainsForbiddenClaim(model.Point9PassReason) {
+	} else {
 		model.Point9PassReason = OSSTrustNetworkValEPoint9PassReasonBlocked
 	}
 	model.FinalPassRuleState = EvaluateOSSTrustNetworkValEFinalPassRuleState(model)

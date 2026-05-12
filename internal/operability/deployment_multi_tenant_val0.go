@@ -480,21 +480,14 @@ func deploymentMultiTenantVal0ProjectionDisclaimer() string {
 	return "projection_only not_canonical_truth bounded_marketplace_deployment_profile tenant_scoped_operational_model deployment_multi_tenant_val0"
 }
 
-func deploymentMultiTenantVal0NormalizedProjectionDisclaimer(value string) string {
-	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
-}
-
 func deploymentMultiTenantVal0HasProjectionDisclaimer(value string) bool {
-	normalized := deploymentMultiTenantVal0NormalizedProjectionDisclaimer(value)
-	return normalized == deploymentMultiTenantVal0NormalizedProjectionDisclaimer(deploymentMultiTenantVal0ProjectionDisclaimer()) ||
-		normalized == deploymentMultiTenantVal0NormalizedProjectionDisclaimer(deploymentMultiTenantVal0ProjectionDisclaimer()+" aggregate_dependency_snapshot") ||
-		normalized == deploymentMultiTenantVal0NormalizedProjectionDisclaimer("projection_only not_canonical_truth deployment_multi_tenant_val0 aggregate_dependency_snapshot")
+	return value == deploymentMultiTenantVal0ProjectionDisclaimer() ||
+		value == deploymentMultiTenantVal0ProjectionDisclaimer()+" aggregate_dependency_snapshot" ||
+		value == "projection_only not_canonical_truth deployment_multi_tenant_val0 aggregate_dependency_snapshot"
 }
 
 func deploymentMultiTenantVal0HasFoundationProjectionDisclaimer(value string) bool {
-	normalized := deploymentMultiTenantVal0NormalizedProjectionDisclaimer(value)
-	return normalized == deploymentMultiTenantVal0NormalizedProjectionDisclaimer(deploymentMultiTenantVal0ProjectionDisclaimer()) ||
-		normalized == deploymentMultiTenantVal0NormalizedProjectionDisclaimer(deploymentMultiTenantVal0ProjectionDisclaimer()+" aggregate_dependency_snapshot")
+	return value == deploymentMultiTenantVal0ProjectionDisclaimer()
 }
 
 func deploymentMultiTenantVal0CompatibilityFold(value string) string {
@@ -695,11 +688,35 @@ func deploymentMultiTenantVal0ExactValueIsValid(value string) bool {
 }
 
 func deploymentMultiTenantVal0TenantScopedValueIsValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if !deploymentMultiTenantVal0ExactValueIsValid(trimmed) {
+	if strings.TrimSpace(value) != value {
 		return false
 	}
-	return containsTrimmedString(strings.Fields(deploymentMultiTenantVal0NormalizeClaimText(trimmed)), "tenant")
+	if !deploymentMultiTenantVal0ExactValueIsValid(value) {
+		return false
+	}
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		return false
+	}
+	foundTenantScope := false
+	for _, field := range fields {
+		if !strings.HasPrefix(field, "tenant:") {
+			continue
+		}
+		foundTenantScope = true
+		if field != deploymentMultiTenantVal0TenantScope() {
+			return false
+		}
+	}
+	return foundTenantScope
+}
+
+func deploymentMultiTenantVal0ExactTenantScopeValueIsValid(value string) bool {
+	return value == deploymentMultiTenantVal0TenantScope()
+}
+
+func deploymentMultiTenantVal0CanonicalTenantTokenValueIsValid(value string) bool {
+	return deploymentMultiTenantVal0ExactTenantScopeValueIsValid(value)
 }
 
 func deploymentMultiTenantVal0ScopedValueIsValid(value string) bool {
@@ -1109,6 +1126,54 @@ func deploymentMultiTenantVal0BucketsContainForbiddenPhrase(values []string, phr
 	return false
 }
 
+func deploymentMultiTenantVal0BucketsContainForbiddenPhraseAcrossValues(values []string, phrase string) bool {
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	matched := 0
+	distinctBuckets := 0
+	lastBucket := -1
+	for bucketIndex, value := range values {
+		bucketTokens := strings.Fields(value)
+		if len(bucketTokens) == 0 {
+			continue
+		}
+		for _, token := range bucketTokens {
+			if token != phraseTokens[matched] {
+				continue
+			}
+			if bucketIndex != lastBucket {
+				distinctBuckets++
+				lastBucket = bucketIndex
+			}
+			matched++
+			if matched == len(phraseTokens) {
+				return distinctBuckets > 1
+			}
+		}
+	}
+	return false
+}
+
+func deploymentMultiTenantVal0ValueContainsForbiddenPhraseTokenSequence(value, phrase string) bool {
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	matched := 0
+	for _, token := range strings.Fields(value) {
+		if token != phraseTokens[matched] {
+			continue
+		}
+		matched++
+		if matched == len(phraseTokens) {
+			return true
+		}
+	}
+	return false
+}
+
 func deploymentMultiTenantVal0ConfusableFold(char rune) rune {
 	switch unicode.ToLower(char) {
 	case 'ɛ', 'е', '℮', 'ℯ', 'ҽ', 'ᴇ':
@@ -1139,7 +1204,7 @@ func deploymentMultiTenantVal0ConfusableFold(char rune) rune {
 		return 'n'
 	case 'ᴘ', 'ρ', 'р':
 		return 'p'
-	case 'ο', 'о', 'ᴏ':
+	case 'ο', 'о', 'ᴏ', 'ɔ':
 		return 'o'
 	case 'а', 'ɑ', 'ᴀ':
 		return 'a'
