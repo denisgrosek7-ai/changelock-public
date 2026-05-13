@@ -1085,6 +1085,8 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 
 	splitBlockedClaims := [][]string{
 		{"production", "approved"},
+		{"not production approval", "approved"},
+		{"not production approval", "apprоved"},
 		{"point 10 pass", "by agent"},
 		{"connector", "is source of truth"},
 		{"learned output", "is canonical truth"},
@@ -1097,6 +1099,41 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 			t.Fatalf("expected blocked split no-overclaim for %q, got %#v", claims, model)
 		}
 	}
+
+	allowedSplitClaims := [][]string{
+		{"validated deployment baseline", "not production approval"},
+	}
+	for _, claims := range allowedSplitClaims {
+		model := activeDeploymentMultiTenantValEModel()
+		model.NoOverclaim.ObservedClaims = claims
+		model = ComputeDeploymentMultiTenantValEFoundation(model)
+		if model.NoOverclaimState != DeploymentMultiTenantValENoOverclaimStateActive || model.CurrentState != DeploymentMultiTenantValEStatePass || model.Point10State != DeploymentMultiTenantPoint10StatePass {
+			t.Fatalf("expected allowed split no-overclaim for %q to preserve active/pass closure, got %#v", claims, model)
+		}
+		for _, reason := range model.BlockingReasons {
+			if reason == "no_overclaim_blocked" {
+				t.Fatalf("expected allowed split no-overclaim for %q not to include no_overclaim_blocked reason, got %#v", claims, model.BlockingReasons)
+			}
+		}
+	}
+
+	t.Run("allowed disclaimer plus non-allowed suffix blocks with exact no-overclaim reason", func(t *testing.T) {
+		model := activeDeploymentMultiTenantValEModel()
+		model.NoOverclaim.ObservedClaims = []string{"not production approval", "approved"}
+		model = ComputeDeploymentMultiTenantValEFoundation(model)
+		if model.NoOverclaimState != DeploymentMultiTenantValENoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("expected blocked split exploit to fail closed, got %#v", model)
+		}
+		reasons := map[string]bool{}
+		for _, reason := range model.BlockingReasons {
+			reasons[reason] = true
+		}
+		for _, expected := range []string{"no_overclaim_blocked", "point_10_not_passed"} {
+			if !reasons[expected] {
+				t.Fatalf("expected split exploit to include reason %q, got %#v", expected, model.BlockingReasons)
+			}
+		}
+	})
 
 	allowedClaims := []string{
 		"validated deployment baseline",

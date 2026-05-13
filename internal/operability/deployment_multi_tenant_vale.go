@@ -1469,6 +1469,7 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		blockedCompact = append(blockedCompact, deploymentMultiTenantVal0CompactClaimText(forbidden))
 	}
 	crossNormalizedParts := make([]string, 0, len(values))
+	crossPartAllowed := make([]bool, 0, len(values))
 	corpusNormalizedParts := make([]string, 0, len(values))
 	var corpusCompact strings.Builder
 	for _, value := range values {
@@ -1477,11 +1478,16 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		if normalized == "" && compact == "" {
 			continue
 		}
-		if _, ok := allowedNormalized[normalized]; ok {
+		_, isAllowed := allowedNormalized[normalized]
+		if normalized != "" {
+			// Keep all non-empty buckets for cross-value sequence detection, including allowed entries.
+			crossNormalizedParts = append(crossNormalizedParts, normalized)
+			crossPartAllowed = append(crossPartAllowed, isAllowed)
+		}
+		if isAllowed {
 			continue
 		}
 		if normalized != "" {
-			crossNormalizedParts = append(crossNormalizedParts, normalized)
 			corpusNormalizedParts = append(corpusNormalizedParts, normalized)
 		}
 		corpusCompact.WriteString(compact)
@@ -1499,8 +1505,45 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		if strings.Contains(corpusNormalized, blockedNormalized[i]) || strings.Contains(corpusCompactValue, blockedCompact[i]) {
 			return true
 		}
-		if deploymentMultiTenantVal0BucketsContainForbiddenPhraseAcrossValues(crossNormalizedParts, blockedNormalized[i]) {
+		if deploymentMultiTenantValEForbiddenPhraseAcrossValues(crossNormalizedParts, crossPartAllowed, blockedNormalized[i]) {
 			return true
+		}
+	}
+	return false
+}
+
+func deploymentMultiTenantValEForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	matched := 0
+	distinctBuckets := 0
+	lastBucket := -1
+	matchedIncludesNonAllowed := false
+	for bucketIndex, value := range values {
+		bucketTokens := strings.Fields(value)
+		if len(bucketTokens) == 0 {
+			continue
+		}
+		for _, token := range bucketTokens {
+			if token != phraseTokens[matched] {
+				continue
+			}
+			if bucketIndex != lastBucket {
+				distinctBuckets++
+				lastBucket = bucketIndex
+			}
+			if !allowed[bucketIndex] {
+				matchedIncludesNonAllowed = true
+			}
+			matched++
+			if matched == len(phraseTokens) {
+				return distinctBuckets > 1 && matchedIncludesNonAllowed
+			}
 		}
 	}
 	return false

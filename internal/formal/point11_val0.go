@@ -2,6 +2,7 @@ package formal
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/denisgrosek/changelock/internal/operability"
@@ -84,6 +85,11 @@ const (
 	point11Val0CrossDomainFreshnessIncompatible = "freshness_incompatible"
 	point11Val0CrossDomainIssuerTrusted         = "issuer_trusted_by_local_rule"
 	point11Val0CrossDomainIssuerUnknown         = "issuer_trust_rule_unknown"
+)
+
+var (
+	point11Val0ExpectedDependencyProjectionDisclaimerOnce   sync.Once
+	point11Val0ExpectedDependencyProjectionDisclaimerCached string
 )
 
 type Point11Val0Point10RepoReview struct {
@@ -351,7 +357,12 @@ func point11Val0HasFoundationProjectionDisclaimer(value string) bool {
 }
 
 func point11Val0ExpectedDependencyProjectionDisclaimer() string {
-	return operability.DeploymentMultiTenantValEFoundationModel().Point10PassRule.ProjectionDisclaimer
+	point11Val0ExpectedDependencyProjectionDisclaimerOnce.Do(func() {
+		// Deterministic baseline: cache once to avoid rebuilding full Point10 models on every dependency check.
+		point11Val0ExpectedDependencyProjectionDisclaimerCached =
+			operability.DeploymentMultiTenantValEFoundationModel().Point10PassRule.ProjectionDisclaimer
+	})
+	return point11Val0ExpectedDependencyProjectionDisclaimerCached
 }
 
 func point11Val0ValidDependencyProjectionDisclaimer(value string) bool {
