@@ -628,8 +628,8 @@ func EvaluatePoint14ValDDependencyState(model Point14ValDDependencySnapshot) str
 		!model.Point14ValCCIGreen ||
 		!model.Point14ValCReviewedOnMain ||
 		model.Point14PassSeen ||
-		strings.TrimSpace(model.Point14ValCPointID) != point14Val0PointID ||
-		strings.TrimSpace(model.Point14ValCWaveID) != point14ValCWaveID ||
+		model.Point14ValCPointID != point14Val0PointID ||
+		model.Point14ValCWaveID != point14ValCWaveID ||
 		!point14ValCStateValid(model.Point14ValCCurrentState) ||
 		!point14ValCStateValid(model.Point14ValCDependencyState) ||
 		!point14ValCStateValid(model.Point14ValCCorrectionNoticeState) ||
@@ -652,82 +652,82 @@ func EvaluatePoint14ValDDependencyState(model Point14ValDDependencySnapshot) str
 		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
 		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
 		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
-		strings.TrimSpace(model.InheritedPoint11PublicationState) == "" ||
-		strings.TrimSpace(model.InheritedPoint11NoOverclaimState) == "" ||
-		strings.TrimSpace(model.InheritedPoint11FinalPassGateState) == "" ||
-		strings.TrimSpace(model.InheritedPoint10CurrentState) == "" ||
-		strings.TrimSpace(model.InheritedPoint10NoOverclaimState) == "" ||
-		strings.TrimSpace(model.InheritedPoint10ProjectionState) == "" ||
-		strings.TrimSpace(model.InheritedPoint10PassRuleState) == "" ||
+		model.InheritedPoint11PublicationState == "" ||
+		model.InheritedPoint11NoOverclaimState == "" ||
+		model.InheritedPoint11FinalPassGateState == "" ||
+		model.InheritedPoint10CurrentState == "" ||
+		model.InheritedPoint10NoOverclaimState == "" ||
+		model.InheritedPoint10ProjectionState == "" ||
+		model.InheritedPoint10PassRuleState == "" ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.Point14ValCCurrentState) != strings.TrimSpace(model.Point14ValC.CurrentState) ||
-		strings.TrimSpace(model.Point14ValCDependencyState) != strings.TrimSpace(model.Point14ValC.DependencyState) ||
-		strings.TrimSpace(model.Point14ValCCorrectionNoticeState) != strings.TrimSpace(model.Point14ValC.CorrectionNoticeState) ||
-		strings.TrimSpace(model.Point14ValCRevocationRequestState) != strings.TrimSpace(model.Point14ValC.RevocationRequestState) ||
-		strings.TrimSpace(model.Point14ValCSupersessionRecordState) != strings.TrimSpace(model.Point14ValC.SupersessionRecordState) ||
-		strings.TrimSpace(model.Point14ValCPublicationApprovalState) != strings.TrimSpace(model.Point14ValC.PublicationApprovalState) ||
-		strings.TrimSpace(model.Point14ValCVisibilityBoundaryState) != strings.TrimSpace(model.Point14ValC.VisibilityBoundaryState) ||
-		strings.TrimSpace(model.Point14ValCTenantPrivacyState) != strings.TrimSpace(model.Point14ValC.TenantPrivacyState) ||
-		strings.TrimSpace(model.Point14ValCRedactionLimitationState) != strings.TrimSpace(model.Point14ValC.RedactionLimitationState) ||
-		strings.TrimSpace(model.Point14ValCGovernanceTraceState) != strings.TrimSpace(model.Point14ValC.GovernanceTraceState) ||
-		strings.TrimSpace(model.Point14ValCAgentPublicationBoundaryState) != strings.TrimSpace(model.Point14ValC.AgentPublicationBoundaryState) ||
-		strings.TrimSpace(model.Point14ValCNoExternalAuthorityState) != strings.TrimSpace(model.Point14ValC.NoExternalAuthorityState) ||
-		strings.TrimSpace(model.Point14ValCNoOverclaimState) != strings.TrimSpace(model.Point14ValC.NoOverclaimState) ||
+	if model.Point14ValCCurrentState != model.Point14ValC.CurrentState ||
+		model.Point14ValCDependencyState != model.Point14ValC.DependencyState ||
+		model.Point14ValCCorrectionNoticeState != model.Point14ValC.CorrectionNoticeState ||
+		model.Point14ValCRevocationRequestState != model.Point14ValC.RevocationRequestState ||
+		model.Point14ValCSupersessionRecordState != model.Point14ValC.SupersessionRecordState ||
+		model.Point14ValCPublicationApprovalState != model.Point14ValC.PublicationApprovalState ||
+		model.Point14ValCVisibilityBoundaryState != model.Point14ValC.VisibilityBoundaryState ||
+		model.Point14ValCTenantPrivacyState != model.Point14ValC.TenantPrivacyState ||
+		model.Point14ValCRedactionLimitationState != model.Point14ValC.RedactionLimitationState ||
+		model.Point14ValCGovernanceTraceState != model.Point14ValC.GovernanceTraceState ||
+		model.Point14ValCAgentPublicationBoundaryState != model.Point14ValC.AgentPublicationBoundaryState ||
+		model.Point14ValCNoExternalAuthorityState != model.Point14ValC.NoExternalAuthorityState ||
+		model.Point14ValCNoOverclaimState != model.Point14ValC.NoOverclaimState ||
 		model.Point14ValCComputedFromUpstream != model.Point14ValC.Dependency.SnapshotFromComputedOutput ||
-		strings.TrimSpace(model.InheritedPoint14ValBCurrentState) != strings.TrimSpace(model.Point14ValC.Dependency.Point14ValBCurrentState) ||
-		strings.TrimSpace(model.InheritedPoint14ValACurrentState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint14ValACurrentState) ||
-		strings.TrimSpace(model.InheritedPoint14Val0CurrentState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint14Val0CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint13ValECurrentState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint13ValECurrentState) ||
-		strings.TrimSpace(model.InheritedPoint13ValEPassClosureState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint13ValEPassClosureState) ||
+		model.InheritedPoint14ValBCurrentState != model.Point14ValC.Dependency.Point14ValBCurrentState ||
+		model.InheritedPoint14ValACurrentState != model.Point14ValC.Dependency.InheritedPoint14ValACurrentState ||
+		model.InheritedPoint14Val0CurrentState != model.Point14ValC.Dependency.InheritedPoint14Val0CurrentState ||
+		model.InheritedPoint13ValECurrentState != model.Point14ValC.Dependency.InheritedPoint13ValECurrentState ||
+		model.InheritedPoint13ValEPassClosureState != model.Point14ValC.Dependency.InheritedPoint13ValEPassClosureState ||
 		model.InheritedPoint13ValEPassAllowed != model.Point14ValC.Dependency.InheritedPoint13ValEPassAllowed ||
-		strings.TrimSpace(model.InheritedPoint13ValEPassToken) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint13ValEPassToken) ||
-		strings.TrimSpace(model.InheritedPoint12CurrentState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint12CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12DependencyState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint12DependencyState) ||
-		strings.TrimSpace(model.InheritedPoint12PassClosureState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint12PassClosureState) ||
-		strings.TrimSpace(model.InheritedPoint12ReviewerResult) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint12ReviewerResult) ||
-		strings.TrimSpace(model.InheritedPoint11PublicationState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint11PublicationState) ||
-		strings.TrimSpace(model.InheritedPoint11NoOverclaimState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint11NoOverclaimState) ||
-		strings.TrimSpace(model.InheritedPoint11FinalPassGateState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint11FinalPassGateState) ||
-		strings.TrimSpace(model.InheritedPoint10CurrentState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint10CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint10NoOverclaimState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint10NoOverclaimState) ||
-		strings.TrimSpace(model.InheritedPoint10ProjectionState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint10ProjectionState) ||
-		strings.TrimSpace(model.InheritedPoint10PassRuleState) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedPoint10PassRuleState) ||
-		strings.TrimSpace(model.InheritedTenantScope) != strings.TrimSpace(model.Point14ValC.Dependency.InheritedTenantScope) {
+		model.InheritedPoint13ValEPassToken != model.Point14ValC.Dependency.InheritedPoint13ValEPassToken ||
+		model.InheritedPoint12CurrentState != model.Point14ValC.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != model.Point14ValC.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != model.Point14ValC.Dependency.InheritedPoint12PassClosureState ||
+		model.InheritedPoint12ReviewerResult != model.Point14ValC.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedPoint11PublicationState != model.Point14ValC.Dependency.InheritedPoint11PublicationState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValC.Dependency.InheritedPoint11NoOverclaimState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValC.Dependency.InheritedPoint11FinalPassGateState ||
+		model.InheritedPoint10CurrentState != model.Point14ValC.Dependency.InheritedPoint10CurrentState ||
+		model.InheritedPoint10NoOverclaimState != model.Point14ValC.Dependency.InheritedPoint10NoOverclaimState ||
+		model.InheritedPoint10ProjectionState != model.Point14ValC.Dependency.InheritedPoint10ProjectionState ||
+		model.InheritedPoint10PassRuleState != model.Point14ValC.Dependency.InheritedPoint10PassRuleState ||
+		model.InheritedTenantScope != model.Point14ValC.Dependency.InheritedTenantScope {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.Point14ValCCurrentState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCDependencyState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCCorrectionNoticeState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCRevocationRequestState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCSupersessionRecordState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCPublicationApprovalState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCVisibilityBoundaryState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCTenantPrivacyState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCRedactionLimitationState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCGovernanceTraceState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCAgentPublicationBoundaryState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCNoExternalAuthorityState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.Point14ValCNoOverclaimState) != Point14ValCStateActive ||
-		strings.TrimSpace(model.InheritedPoint14ValBCurrentState) != Point14ValBStateActive ||
-		strings.TrimSpace(model.InheritedPoint14ValACurrentState) != Point14ValAStateActive ||
-		strings.TrimSpace(model.InheritedPoint14Val0CurrentState) != Point14Val0StateActive ||
-		strings.TrimSpace(model.InheritedPoint13ValECurrentState) != Point13ValEStatePassConfirmed ||
-		strings.TrimSpace(model.InheritedPoint13ValEPassClosureState) != Point13ValEStateActive ||
+	if model.Point14ValCCurrentState != Point14ValCStateActive ||
+		model.Point14ValCDependencyState != Point14ValCStateActive ||
+		model.Point14ValCCorrectionNoticeState != Point14ValCStateActive ||
+		model.Point14ValCRevocationRequestState != Point14ValCStateActive ||
+		model.Point14ValCSupersessionRecordState != Point14ValCStateActive ||
+		model.Point14ValCPublicationApprovalState != Point14ValCStateActive ||
+		model.Point14ValCVisibilityBoundaryState != Point14ValCStateActive ||
+		model.Point14ValCTenantPrivacyState != Point14ValCStateActive ||
+		model.Point14ValCRedactionLimitationState != Point14ValCStateActive ||
+		model.Point14ValCGovernanceTraceState != Point14ValCStateActive ||
+		model.Point14ValCAgentPublicationBoundaryState != Point14ValCStateActive ||
+		model.Point14ValCNoExternalAuthorityState != Point14ValCStateActive ||
+		model.Point14ValCNoOverclaimState != Point14ValCStateActive ||
+		model.InheritedPoint14ValBCurrentState != Point14ValBStateActive ||
+		model.InheritedPoint14ValACurrentState != Point14ValAStateActive ||
+		model.InheritedPoint14Val0CurrentState != Point14Val0StateActive ||
+		model.InheritedPoint13ValECurrentState != Point13ValEStatePassConfirmed ||
+		model.InheritedPoint13ValEPassClosureState != Point13ValEStateActive ||
 		!model.InheritedPoint13ValEPassAllowed ||
-		strings.TrimSpace(model.InheritedPoint13ValEPassToken) != point13ValEPoint13PassToken ||
-		strings.TrimSpace(model.InheritedPoint12CurrentState) != Point12ValEStatePassConfirmed ||
-		strings.TrimSpace(model.InheritedPoint12DependencyState) != Point12ValEStateActive ||
-		strings.TrimSpace(model.InheritedPoint12PassClosureState) != Point12ValEStateActive ||
-		strings.TrimSpace(model.InheritedPoint12ReviewerResult) != point12ValEReviewerResultPassConfirmed ||
-		strings.TrimSpace(model.InheritedPoint11PublicationState) != Point11ValDPublicationReviewStateActive ||
-		strings.TrimSpace(model.InheritedPoint11NoOverclaimState) != Point11ValDNoOverclaimReviewStateActive ||
-		strings.TrimSpace(model.InheritedPoint11FinalPassGateState) != Point11ValDFinalPassGateStateActive ||
-		strings.TrimSpace(model.InheritedPoint10CurrentState) != operability.DeploymentMultiTenantPoint10StatePass ||
-		strings.TrimSpace(model.InheritedPoint10NoOverclaimState) != operability.DeploymentMultiTenantValENoOverclaimStateActive ||
-		strings.TrimSpace(model.InheritedPoint10ProjectionState) != operability.DeploymentMultiTenantValEProjectionBoundaryStateActive ||
-		strings.TrimSpace(model.InheritedPoint10PassRuleState) != operability.DeploymentMultiTenantValEPoint10PassRuleStateActive {
+		model.InheritedPoint13ValEPassToken != point13ValEPoint13PassToken ||
+		model.InheritedPoint12CurrentState != Point12ValEStatePassConfirmed ||
+		model.InheritedPoint12DependencyState != Point12ValEStateActive ||
+		model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
+		model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed ||
+		model.InheritedPoint11PublicationState != Point11ValDPublicationReviewStateActive ||
+		model.InheritedPoint11NoOverclaimState != Point11ValDNoOverclaimReviewStateActive ||
+		model.InheritedPoint11FinalPassGateState != Point11ValDFinalPassGateStateActive ||
+		model.InheritedPoint10CurrentState != operability.DeploymentMultiTenantPoint10StatePass ||
+		model.InheritedPoint10NoOverclaimState != operability.DeploymentMultiTenantValENoOverclaimStateActive ||
+		model.InheritedPoint10ProjectionState != operability.DeploymentMultiTenantValEProjectionBoundaryStateActive ||
+		model.InheritedPoint10PassRuleState != operability.DeploymentMultiTenantValEPoint10PassRuleStateActive {
 		return Point14ValDStateBlocked
 	}
 	return Point14ValDStateActive
@@ -763,7 +763,7 @@ func EvaluatePoint14ValDTimelineProjectionState(model ExternalEcosystemTimelineP
 		!model.ProjectionOnly {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != "" {
+	if model.TenantScope != "" {
 		if !point11Val0ScopeValid(model.TenantScope) || strings.TrimSpace(model.GlobalScopeClassification) != "" {
 			return Point14ValDStateBlocked
 		}
@@ -1045,8 +1045,8 @@ func EvaluatePoint14ValDAccessBoundaryState(model EcosystemTimelineAccessBoundar
 		!point14Val0CanonicalTimeSourceValid(model.AccessTimeSource) {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != "" {
-		if !point11Val0ScopeValid(model.TenantScope) || strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) || strings.TrimSpace(model.GlobalScopeClassification) != "" {
+	if model.TenantScope != "" {
+		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope || strings.TrimSpace(model.GlobalScopeClassification) != "" {
 			return Point14ValDStateBlocked
 		}
 	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
@@ -1077,7 +1077,7 @@ func point14ValDTenantPrivacyTimelineProjectionGuardModel(dependency Point14ValD
 func EvaluatePoint14ValDTenantPrivacyTimelineProjectionGuardState(model TenantPrivacyTimelineProjectionGuard, dependency Point14ValDDependencySnapshot) string {
 	if !point14Val0BoundaryRefValid(model.BoundaryID) ||
 		!point11Val0ScopeValid(model.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
+		model.TenantScope != dependency.InheritedTenantScope ||
 		!point14ValDExactValueValid(model.ProjectionTargetScope, point14ValCVisibilityClassifications()) ||
 		!point14ValDExactValueValid(model.PublicPrivateClassification, point14ValCPublicPrivateBoundaries()) ||
 		!point14ValCPublicationBoundaryPairValid(model.ProjectionTargetScope, model.PublicPrivateClassification) ||
@@ -1106,7 +1106,7 @@ func point14ValDAgentTimelineProjectionModel(dependency Point14ValDDependencySna
 func EvaluatePoint14ValDAgentTimelineProjectionState(model AgentEcosystemTimelineProjection, dependency Point14ValDDependencySnapshot) string {
 	if !point14ValDAgentTimelineProjectionIDValid(model.ProjectionID) ||
 		!point11Val0ScopeValid(model.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
+		model.TenantScope != dependency.InheritedTenantScope ||
 		(len(model.AgentInputRefs) > 0 && !point14Val0AgentInputRefsValid(model.AgentInputRefs)) ||
 		(len(model.AgentRecommendationRefs) > 0 && !point14Val0RefListValid(model.AgentRecommendationRefs, "agent_recommendation_")) ||
 		!point14Val0EvidenceRefsValid(model.EvidenceRefs) ||
@@ -1277,7 +1277,7 @@ func point14ValDNoOverclaimTimelineWordingModel() Point14ValDNoOverclaimTimeline
 }
 
 func EvaluatePoint14ValDNoOverclaimTimelineWordingState(model Point14ValDNoOverclaimTimelineWording) string {
-	if strings.TrimSpace(model.ProjectionDisclaimer) != point14ValDProjectionDisclaimerBase ||
+	if model.ProjectionDisclaimer != point14ValDProjectionDisclaimerBase ||
 		!point14Val0TextListValid(model.AllowedSafeWording) ||
 		!point14Val0TextListValid(model.BlockedWording) {
 		return Point14ValDStateBlocked

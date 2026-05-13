@@ -42,9 +42,56 @@ func TestPoint14ValEDependencyState(t *testing.T) {
 		want   string
 	}{
 		{
+			name:   "canonical inherited boundary snapshot stays pass confirmed",
+			mutate: func(model *Point14ValEDependencySnapshot) {},
+			want:   Point14ValEStatePassConfirmed,
+		},
+		{
 			name: "missing point14 vald blocks",
 			mutate: func(model *Point14ValEDependencySnapshot) {
 				model.Point14ValDCurrentState = ""
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 current state in vald dependency blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint10CurrentState += " "
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 no overclaim state in vald dependency blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint10NoOverclaimState += " "
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 projection state in vald dependency blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint10ProjectionState += " "
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 pass rule state in vald dependency blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint10PassRuleState += " "
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "tab newline retagged embedded vald current state blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.CurrentState = "\t" + model.Point14ValD.CurrentState + "\n"
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point11 final pass gate in vald dependency blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint11FinalPassGateState += " "
 			},
 			want: Point14ValEStateBlocked,
 		},
@@ -170,6 +217,8 @@ func TestPoint14PassClosureManifestState(t *testing.T) {
 		{"wrong point id blocks", func(model *Point14PassClosureManifest) { model.PointID = "point_15" }, Point14ValEStateBlocked},
 		{"missing wave id blocks", func(model *Point14PassClosureManifest) { model.WaveID = "" }, Point14ValEStateBlocked},
 		{"wrong closure token blocks", func(model *Point14PassClosureManifest) { model.ClosureToken = "point_14_prepass" }, Point14ValEStateBlocked},
+		{"whitespace retagged generated at blocks", func(model *Point14PassClosureManifest) { model.GeneratedAt = " " + model.GeneratedAt + " " }, Point14ValEStateBlocked},
+		{"different canonical generated at blocks", func(model *Point14PassClosureManifest) { model.GeneratedAt = "2026-05-07T10:00:00Z" }, Point14ValEStateBlocked},
 		{"missing dependency gate result blocks", func(model *Point14PassClosureManifest) { model.DependencyGateResult = "" }, Point14ValEStateBlocked},
 		{"missing tests run blocks", func(model *Point14PassClosureManifest) { model.TestsRun = nil }, Point14ValEStateBlocked},
 		{"missing negative fixtures run blocks", func(model *Point14PassClosureManifest) { model.NegativeFixturesRun = nil }, Point14ValEStateBlocked},
@@ -205,6 +254,12 @@ func TestPoint14ValEExternalSignalValidationClosureCheckState(t *testing.T) {
 		want   string
 	}{
 		{"external signal candidate remains bounded active", func(model *Point14ValEExternalSignalValidationClosureCheck) {}, Point14ValEStatePassConfirmed},
+		{"whitespace retagged vala current state blocks", func(model *Point14ValEExternalSignalValidationClosureCheck) {
+			model.ValACurrentState = " " + model.ValACurrentState + " "
+		}, Point14ValEStateBlocked},
+		{"tab newline retagged validation result state blocks", func(model *Point14ValEExternalSignalValidationClosureCheck) {
+			model.ValidationResultState = "\t" + model.ValidationResultState + "\n"
+		}, Point14ValEStateBlocked},
 		{"external signal canonical authority blocks", func(model *Point14ValEExternalSignalValidationClosureCheck) { model.CanonicalAuthorityGranted = true }, Point14ValEStateBlocked},
 		{"external signal pass blocks", func(model *Point14ValEExternalSignalValidationClosureCheck) { model.PassEmitted = true }, Point14ValEStateBlocked},
 		{"source identity authority grant blocks", func(model *Point14ValEExternalSignalValidationClosureCheck) {
@@ -233,6 +288,12 @@ func TestPoint14ValEConflictDisputeClosureCheckState(t *testing.T) {
 		want   string
 	}{
 		{"bounded unresolved dispute review required prevents pass", func(model *Point14ValEConflictDisputeClosureCheck) { model.UnresolvedDisputeReviewRequired = true }, Point14ValEStateReviewRequired},
+		{"whitespace retagged valb current state blocks", func(model *Point14ValEConflictDisputeClosureCheck) {
+			model.ValBCurrentState = " " + model.ValBCurrentState + " "
+		}, Point14ValEStateBlocked},
+		{"tab newline retagged dispute triage result state blocks", func(model *Point14ValEConflictDisputeClosureCheck) {
+			model.DisputeTriageResultState = "\t" + model.DisputeTriageResultState + "\n"
+		}, Point14ValEStateBlocked},
 		{"evidence required prevents pass unless properly closed by governance", func(model *Point14ValEConflictDisputeClosureCheck) { model.EvidenceRequiredUnclosed = true }, Point14ValEStateIncomplete},
 		{"crowd public vendor scanner auditor partner agent authority resolution blocks", func(model *Point14ValEConflictDisputeClosureCheck) { model.ExternalAuthorityResolutionDetected = true }, Point14ValEStateBlocked},
 		{"dispute auto resolution blocks", func(model *Point14ValEConflictDisputeClosureCheck) { model.DisputeAutoResolved = true }, Point14ValEStateBlocked},
@@ -257,6 +318,12 @@ func TestPoint14ValECorrectionPublicationClosureCheckState(t *testing.T) {
 		want   string
 	}{
 		{"bounded correction notice passes only with governance audit limitations", func(model *Point14ValECorrectionPublicationClosureCheck) {}, Point14ValEStatePassConfirmed},
+		{"whitespace retagged valc current state blocks", func(model *Point14ValECorrectionPublicationClosureCheck) {
+			model.ValCCurrentState = " " + model.ValCCurrentState + " "
+		}, Point14ValEStateBlocked},
+		{"tab newline retagged publication approval state blocks", func(model *Point14ValECorrectionPublicationClosureCheck) {
+			model.PublicationApprovalState = "\t" + model.PublicationApprovalState + "\n"
+		}, Point14ValEStateBlocked},
 		{"correction auto published blocks", func(model *Point14ValECorrectionPublicationClosureCheck) { model.CorrectionAutoPublished = true }, Point14ValEStateBlocked},
 		{"revocation auto executed blocks", func(model *Point14ValECorrectionPublicationClosureCheck) { model.RevocationAutoExecuted = true }, Point14ValEStateBlocked},
 		{"supersession silent replacement blocks", func(model *Point14ValECorrectionPublicationClosureCheck) { model.SupersessionSilentReplacement = true }, Point14ValEStateBlocked},
@@ -288,6 +355,12 @@ func TestPoint14ValETimelineProjectionClosureCheckState(t *testing.T) {
 		want   string
 	}{
 		{"read only timeline active", func(model *Point14ValETimelineProjectionClosureCheck) {}, Point14ValEStatePassConfirmed},
+		{"whitespace retagged vald current state blocks", func(model *Point14ValETimelineProjectionClosureCheck) {
+			model.ValDCurrentState = " " + model.ValDCurrentState + " "
+		}, Point14ValEStateBlocked},
+		{"tab newline retagged query projection state blocks", func(model *Point14ValETimelineProjectionClosureCheck) {
+			model.QueryProjectionState = "\t" + model.QueryProjectionState + "\n"
+		}, Point14ValEStateBlocked},
 		{"timeline mutation blocks", func(model *Point14ValETimelineProjectionClosureCheck) { model.TimelineMutationDetected = true }, Point14ValEStateBlocked},
 		{"query mutation blocks", func(model *Point14ValETimelineProjectionClosureCheck) { model.QueryMutationDetected = true }, Point14ValEStateBlocked},
 		{"timeline dispute resolution blocks", func(model *Point14ValETimelineProjectionClosureCheck) { model.TimelineResolvesDisputes = true }, Point14ValEStateBlocked},

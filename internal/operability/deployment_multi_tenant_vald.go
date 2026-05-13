@@ -1528,16 +1528,16 @@ func EvaluateDeploymentMultiTenantValDClosureBlockerState(model DeploymentMultiT
 
 func EvaluateDeploymentMultiTenantValDState(model DeploymentMultiTenantValDFoundation) string {
 	if !deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		strings.TrimSpace(model.DependencyState) != DeploymentMultiTenantValDDependencyStateActive ||
-		strings.TrimSpace(model.ConnectorCapabilityState) != DeploymentMultiTenantValDConnectorCapabilityStateActive ||
-		strings.TrimSpace(model.OperatorActionState) != DeploymentMultiTenantValDOperatorActionStateActive ||
-		strings.TrimSpace(model.SupportAccessState) != DeploymentMultiTenantValDSupportAccessStateActive ||
-		strings.TrimSpace(model.BreakGlassState) != DeploymentMultiTenantValDBreakGlassStateActive ||
-		strings.TrimSpace(model.MarketplaceMSPAuthorityState) != DeploymentMultiTenantValDMarketplaceMSPAuthorityStateActive ||
-		strings.TrimSpace(model.AgenticOverlayState) != DeploymentMultiTenantValDAgenticOverlayStateActive ||
-		strings.TrimSpace(model.NoOverclaimState) != DeploymentMultiTenantValDNoOverclaimStateActive ||
-		strings.TrimSpace(model.ClosureBlockerState) != DeploymentMultiTenantValDClosureBlockerStateActive ||
-		strings.TrimSpace(model.Point10State) != DeploymentMultiTenantPoint10StateNotComplete {
+		model.DependencyState != DeploymentMultiTenantValDDependencyStateActive ||
+		model.ConnectorCapabilityState != DeploymentMultiTenantValDConnectorCapabilityStateActive ||
+		model.OperatorActionState != DeploymentMultiTenantValDOperatorActionStateActive ||
+		model.SupportAccessState != DeploymentMultiTenantValDSupportAccessStateActive ||
+		model.BreakGlassState != DeploymentMultiTenantValDBreakGlassStateActive ||
+		model.MarketplaceMSPAuthorityState != DeploymentMultiTenantValDMarketplaceMSPAuthorityStateActive ||
+		model.AgenticOverlayState != DeploymentMultiTenantValDAgenticOverlayStateActive ||
+		model.NoOverclaimState != DeploymentMultiTenantValDNoOverclaimStateActive ||
+		model.ClosureBlockerState != DeploymentMultiTenantValDClosureBlockerStateActive ||
+		model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 		return DeploymentMultiTenantValDStateBlocked
 	}
 	return DeploymentMultiTenantValDStateActive

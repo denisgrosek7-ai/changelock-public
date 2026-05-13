@@ -316,9 +316,46 @@ func point11Val0ValidTimestamp(value string) bool {
 }
 
 func point11Val0ValidProjectionDisclaimer(value string) bool {
-	normalized := point11Val0NormalizeText(value)
-	return strings.Contains(normalized, "projection_only") &&
-		strings.Contains(normalized, "not_canonical_truth")
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
+		return false
+	}
+	if strings.ToLower(value) != value {
+		return false
+	}
+	tokens := strings.Fields(value)
+	if len(tokens) != 3 || tokens[0] != "projection_only" || tokens[1] != "not_canonical_truth" {
+		return false
+	}
+	if !point11Val0ProjectionDisclaimerSuffixValid(tokens[2]) {
+		return false
+	}
+	// Projection disclaimers must stay advisory-only and must not carry forbidden authority claims.
+	return !point11Val0ContainsForbiddenClaim(tokens[0] + " " + tokens[1] + " " + strings.ReplaceAll(tokens[2], "_", " "))
+}
+
+func point11Val0ProjectionDisclaimerSuffixValid(value string) bool {
+	if value == "" || strings.HasPrefix(value, "_") || strings.HasSuffix(value, "_") || strings.Contains(value, "__") {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func point11Val0HasFoundationProjectionDisclaimer(value string) bool {
+	return value == point11Val0ProjectionDisclaimerBaseline
+}
+
+func point11Val0ExpectedDependencyProjectionDisclaimer() string {
+	return operability.DeploymentMultiTenantValEFoundationModel().Point10PassRule.ProjectionDisclaimer
+}
+
+func point11Val0ValidDependencyProjectionDisclaimer(value string) bool {
+	return value == point11Val0ExpectedDependencyProjectionDisclaimer()
 }
 
 func point11Val0IdentityValueValid(value string) bool {
@@ -643,23 +680,23 @@ func point11Val0DependencySnapshotModel() Point11Val0DependencySnapshot {
 }
 
 func EvaluatePoint11Val0DependencyState(model Point11Val0DependencySnapshot) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0ValidDependencyProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!model.LatestValEClosurePatchPresent ||
 		model.Point10PassOutsideValE ||
 		model.Point10CLB0OpenFindings > 0 ||
 		model.Point10CLB1OpenFindings > 0 ||
 		model.Point10CLB2OpenFindings > 0 ||
-		strings.TrimSpace(model.Point10CurrentState) != operability.DeploymentMultiTenantValEStatePass ||
-		strings.TrimSpace(model.Point10DependencyState) != operability.DeploymentMultiTenantValEDependencyStateActive ||
-		strings.TrimSpace(model.Point10IntegratedInvariantState) != operability.DeploymentMultiTenantValEIntegratedInvariantStateActive ||
-		strings.TrimSpace(model.Point10EvidenceQualityState) != operability.DeploymentMultiTenantValEEvidenceQualityStateActive ||
-		strings.TrimSpace(model.Point10CLBClosureState) != operability.DeploymentMultiTenantValECLBClosureStateActive ||
-		strings.TrimSpace(model.Point10PassClosureManifestState) != operability.DeploymentMultiTenantValEPassClosureManifestStateActive ||
-		strings.TrimSpace(model.Point10NoOverclaimState) != operability.DeploymentMultiTenantValENoOverclaimStateActive ||
-		strings.TrimSpace(model.Point10ProjectionBoundaryState) != operability.DeploymentMultiTenantValEProjectionBoundaryStateActive ||
-		strings.TrimSpace(model.Point10CleanRoomIPState) != operability.DeploymentMultiTenantValECleanRoomIPStateActive ||
-		strings.TrimSpace(model.Point10PassRuleState) != operability.DeploymentMultiTenantValEPoint10PassRuleStateActive ||
-		strings.TrimSpace(model.Point10State) != operability.DeploymentMultiTenantPoint10StatePass {
+		model.Point10CurrentState != operability.DeploymentMultiTenantValEStatePass ||
+		model.Point10DependencyState != operability.DeploymentMultiTenantValEDependencyStateActive ||
+		model.Point10IntegratedInvariantState != operability.DeploymentMultiTenantValEIntegratedInvariantStateActive ||
+		model.Point10EvidenceQualityState != operability.DeploymentMultiTenantValEEvidenceQualityStateActive ||
+		model.Point10CLBClosureState != operability.DeploymentMultiTenantValECLBClosureStateActive ||
+		model.Point10PassClosureManifestState != operability.DeploymentMultiTenantValEPassClosureManifestStateActive ||
+		model.Point10NoOverclaimState != operability.DeploymentMultiTenantValENoOverclaimStateActive ||
+		model.Point10ProjectionBoundaryState != operability.DeploymentMultiTenantValEProjectionBoundaryStateActive ||
+		model.Point10CleanRoomIPState != operability.DeploymentMultiTenantValECleanRoomIPStateActive ||
+		model.Point10PassRuleState != operability.DeploymentMultiTenantValEPoint10PassRuleStateActive ||
+		model.Point10State != operability.DeploymentMultiTenantPoint10StatePass {
 		return Point11Val0DependencyStateBlocked
 	}
 	if !model.CIGreenVisible || !model.MergeStatusVisible || len(model.ReviewPrerequisites) > 0 {
@@ -672,7 +709,7 @@ func EvaluatePoint11Val0DependencyState(model Point11Val0DependencySnapshot) str
 }
 
 func EvaluatePoint11Val0PolicyContractState(model Point11Val0PolicyContract) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.PolicyID) ||
 		!point11Val0IdentityValueValid(model.Version) ||
 		!point11Val0ScopeValid(model.Scope) ||
@@ -709,7 +746,7 @@ func EvaluatePoint11Val0PolicyContractState(model Point11Val0PolicyContract) str
 }
 
 func EvaluatePoint11Val0ClaimGovernanceState(model Point11Val0ClaimGovernance) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0ContainsTrimmed(point11Val0AllowedClaimLifecycles(), model.LifecycleState) ||
 		!point11Val0IdentityValueValid(model.ClaimID) ||
 		!point11Val0IdentityValueValid(model.ClaimType) ||
@@ -781,7 +818,7 @@ func EvaluatePoint11Val0ClaimGovernanceState(model Point11Val0ClaimGovernance) s
 }
 
 func EvaluatePoint11Val0AuthorityMatrixState(model Point11Val0AuthorityMatrix) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.ClaimType) ||
 		!point11Val0IdentityValueValid(model.Proposer) ||
 		!point11Val0IdentityValueValid(model.Reviewer) ||
@@ -807,7 +844,7 @@ func EvaluatePoint11Val0AuthorityMatrixState(model Point11Val0AuthorityMatrix) s
 }
 
 func EvaluatePoint11Val0ExceptionGovernanceState(model Point11Val0ExceptionGovernance) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.ExceptionID) ||
 		!point11Val0EmergencyClaimRefValid(model.EmergencyClaimID) ||
 		!point11Val0IdentityValueValid(model.Reason) ||
@@ -835,7 +872,7 @@ func EvaluatePoint11Val0ExceptionGovernanceState(model Point11Val0ExceptionGover
 }
 
 func EvaluatePoint11Val0ABACGovernanceState(model Point11Val0ABACGovernance) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.Subject) ||
 		!point11Val0IdentityValueValid(model.Role) ||
 		!point11Val0ScopeValid(model.Tenant) ||
@@ -871,7 +908,7 @@ func point11Val0DecisionRefStateIsActive(state string) bool {
 }
 
 func EvaluatePoint11Val0DecisionBindingState(model Point11Val0DecisionBinding) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.DecisionID) ||
 		!point11Val0IdentityValueValid(model.PolicyRef) ||
 		!point11Val0EvidenceRefsValid(model.EvidenceRefs) ||
@@ -896,7 +933,7 @@ func EvaluatePoint11Val0DecisionBindingState(model Point11Val0DecisionBinding) s
 }
 
 func EvaluatePoint11Val0NoOverclaimState(model Point11Val0NoOverclaimDiscipline) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		point11Val0ContainsForbiddenClaim(model.ObservedClaims...) {
 		return Point11Val0NoOverclaimStateBlocked
 	}
@@ -904,7 +941,7 @@ func EvaluatePoint11Val0NoOverclaimState(model Point11Val0NoOverclaimDiscipline)
 }
 
 func EvaluatePoint11Val0CrossDomainCompatibilityState(model Point11Val0CrossDomainCompatibility) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point11Val0IdentityValueValid(model.TrustRootRef) ||
 		!point11Val0AllValuesValid(model.AcceptedClaimTypes) ||
 		!point11Val0IdentityValueValid(model.RevocationHandling) ||
@@ -936,7 +973,7 @@ func EvaluatePoint11Val0CrossDomainCompatibilityState(model Point11Val0CrossDoma
 }
 
 func EvaluatePoint11Val0State(model Point11Val0Foundation) string {
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return Point11Val0StateBlocked
 	}
 	states := []string{
@@ -973,7 +1010,7 @@ func EvaluatePoint11Val0State(model Point11Val0Foundation) string {
 
 func point11Val0BlockingReasons(model Point11Val0Foundation) []string {
 	reasons := []string{}
-	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
+	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
 	}
 	if model.DependencyState == Point11Val0DependencyStateBlocked {

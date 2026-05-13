@@ -1227,6 +1227,53 @@ func TestDeploymentMultiTenantValDClosureBlockerOverlayCLB3Advisory(t *testing.T
 	}
 }
 
+func TestDeploymentMultiTenantValDStateRejectsWhitespaceRetaggedCriticalStates(t *testing.T) {
+	baseline := activeDeploymentMultiTenantValDModel()
+	if got := EvaluateDeploymentMultiTenantValDState(baseline); got != DeploymentMultiTenantValDStateActive {
+		t.Fatalf("expected canonical happy path to remain active, got %s", got)
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(*DeploymentMultiTenantValDFoundation)
+	}{
+		{
+			name: "leading whitespace dependency state blocks",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.DependencyState = " " + DeploymentMultiTenantValDDependencyStateActive
+			},
+		},
+		{
+			name: "tab newline retagged no-overclaim state blocks",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.NoOverclaimState = "\t" + DeploymentMultiTenantValDNoOverclaimStateActive + "\n"
+			},
+		},
+		{
+			name: "trailing whitespace closure blocker state blocks",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.ClosureBlockerState = DeploymentMultiTenantValDClosureBlockerStateActive + " "
+			},
+		},
+		{
+			name: "tab newline retagged point10 state blocks",
+			mutate: func(model *DeploymentMultiTenantValDFoundation) {
+				model.Point10State = "\t" + DeploymentMultiTenantPoint10StateNotComplete + "\n"
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := activeDeploymentMultiTenantValDModel()
+			tc.mutate(&model)
+			if got := EvaluateDeploymentMultiTenantValDState(model); got != DeploymentMultiTenantValDStateBlocked {
+				t.Fatalf("expected whitespace retagged critical state to block, got %s", got)
+			}
+		})
+	}
+}
+
 func TestDeploymentMultiTenantValDClosureBlockerOverlayRejectsLegacyAndUnknownLevels(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -1420,6 +1467,14 @@ func TestDeploymentMultiTenantValDNoOverclaimBlockers(t *testing.T) {
 			t.Fatalf("expected blocked split no-overclaim state for %q, got %#v", claims, model)
 		}
 	}
+	t.Run("confusable forbidden wording blocks", func(t *testing.T) {
+		model := activeDeploymentMultiTenantValDModel()
+		model.NoOverclaim.ObservedClaims = []string{"agent apprоved deployment"}
+		model = ComputeDeploymentMultiTenantValDFoundation(model)
+		if model.NoOverclaimState != DeploymentMultiTenantValDNoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValDStateBlocked {
+			t.Fatalf("expected blocked confusable no-overclaim state, got %#v", model)
+		}
+	})
 
 	for _, claim := range allowedClaims {
 		model := activeDeploymentMultiTenantValDModel()

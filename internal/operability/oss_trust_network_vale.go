@@ -435,6 +435,8 @@ func ossTrustNetworkValEContainsForbiddenClaim(values ...string) bool {
 		"regulator-approved",
 		"audit passed",
 		"compliance guaranteed",
+		"production approval",
+		"deployment approval",
 		"production approved",
 		"deployment approved",
 		"legal certification",

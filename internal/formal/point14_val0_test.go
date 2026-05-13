@@ -258,6 +258,20 @@ func TestPoint14Val0ExternalSignalCandidateState(t *testing.T) {
 			want: Point14Val0StateBlocked,
 		},
 		{
+			name: "whitespace retagged received time source blocks",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.ReceivedTimeSource = " " + point14Val0TimeSourceServerUTC
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "tab newline retagged received timestamp blocks",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.ReceivedAt = "\t" + model.ReceivedAt + "\n"
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
 			name: "future dated advisory source event is review required",
 			mutate: func(model *ExternalEcosystemSignalCandidate) {
 				model.SourceEventAt = "2026-05-05T10:15:00Z"
@@ -622,6 +636,27 @@ func TestPoint14Val0AgentBoundaryAndNoOverclaim(t *testing.T) {
 	t.Run("forbidden ecosystem wording blocks", func(t *testing.T) {
 		model := point14Val0NoOverclaimEcosystemWordingModel()
 		model.ObservedPublicationTexts = []string{"production approved"}
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("forbidden ecosystem wording with tab retag blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.ObservedPublicationTexts = []string{"production\tapproved"}
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("forbidden ecosystem wording with confusable rune blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.ObservedPublicationTexts = []string{"prоduction approved"}
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("split forbidden ecosystem wording across observed corpus blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.ObservedPublicationTexts = []string{"production", "approved"}
 		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
 			t.Fatalf("expected blocked, got %s", got)
 		}
