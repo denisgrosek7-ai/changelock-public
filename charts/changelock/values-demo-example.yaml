@@ -1,0 +1,3 @@
+# Demo package example.
+# Demo is local/evaluation-safe and does not imply production approval.
+deploymentProfile: demo

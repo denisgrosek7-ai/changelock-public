@@ -1,4 +1,4 @@
-.PHONY: bootstrap lint test build run-local audit-up audit-run audit-migrate ui-install ui-dev ui-build observability-up metrics-check package helm-lint helm-template helm-template-prod helm-package go-live-smoke kind-up kind-down kind-load-images e2e
+.PHONY: bootstrap lint test build run-local audit-up audit-run audit-migrate ui-install ui-dev ui-build observability-up metrics-check package helm-lint helm-template helm-template-demo helm-template-pilot helm-template-enterprise helm-template-production-alias helm-package go-live-smoke kind-up kind-down kind-load-images e2e
 
 bootstrap:
 	go mod download
@@ -53,8 +53,17 @@ helm-lint:
 helm-template:
 	helm template changelock charts/changelock
 
-helm-template-prod:
-	helm template changelock charts/changelock -f charts/changelock/values-prod-example.yaml
+helm-template-demo:
+	helm template changelock charts/changelock -f charts/changelock/values-demo-example.yaml
+
+helm-template-pilot:
+	helm template changelock charts/changelock -f charts/changelock/values-pilot-example.yaml
+
+helm-template-enterprise:
+	helm template changelock charts/changelock -f charts/changelock/values-enterprise-example.yaml
+
+helm-template-production-alias:
+	helm template changelock charts/changelock -f charts/changelock/values-enterprise-example.yaml --set releaseProfile=production
 
 helm-package:
 	helm package charts/changelock

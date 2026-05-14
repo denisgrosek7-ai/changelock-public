@@ -1,6 +1,9 @@
 # Evaluation/demo defaults only.
-# For real deployments start from charts/changelock/values-prod-example.yaml
-# and set deploymentProfile=production.
+# Canonical package examples:
+# - charts/changelock/values-demo-example.yaml
+# - charts/changelock/values-pilot-example.yaml
+# - charts/changelock/values-enterprise-example.yaml
+# `releaseProfile=production` is accepted only as an enterprise guardrail alias.
 deploymentProfile: demo
 
 nameOverride: ""

@@ -75,7 +75,7 @@ export CHANGELOCK_VAULT_TRANSIT_KEY=changelock-control-plane
   - auto-unseal protects Vault server key custody
   - transit signing is the API ChangeLock uses for evidence signatures
 - Helm packaging exposes safe non-secret signer settings and expects secrets to come from Kubernetes Secrets.
-- `deploymentProfile=production` does not imply signer enablement by itself. `vault-transit` remains opt-in and requires explicit secret/config wiring.
+- `deploymentProfile=enterprise` does not imply signer enablement by itself. `releaseProfile=production` remains only a compatibility alias for enterprise guardrails; `vault-transit` remains opt-in and requires explicit secret/config wiring.
 - Use `docs/operations/go-live-checklist.md` to validate signing and verification after deployment if signer support is enabled.
 
 ## Limits intentionally left for later

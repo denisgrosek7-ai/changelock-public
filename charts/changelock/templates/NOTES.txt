@@ -1,7 +1,7 @@
 ChangeLock has been installed.
 
 Deployment profile:
-  {{ .Values.deploymentProfile }}
+  {{ include "changelock.profile" . | trim }}
 
 Useful commands:
   kubectl get pods -n {{ .Release.Namespace }}
@@ -17,7 +17,13 @@ If you enable deploy-gate.webhook.enabled, make sure:
   - deployGate.webhook.caBundle contains the matching CA bundle
   - only namespaces that should be enforced carry {{ .Values.deployGate.webhook.namespaceSelectorLabelKey }}={{ .Values.deployGate.webhook.namespaceSelectorLabelValue }}
 
-For production:
-  - use charts/changelock/values-prod-example.yaml as the starting point
+Canonical package examples:
+  - demo: charts/changelock/values-demo-example.yaml
+  - pilot: charts/changelock/values-pilot-example.yaml
+  - enterprise: charts/changelock/values-enterprise-example.yaml
+  - production is accepted only as an enterprise guardrail alias
+
+For enterprise:
+  - use charts/changelock/values-enterprise-example.yaml as the starting point
   - review docs/operations/go-live-checklist.md
   - keep machine tokens and signer provider credentials in Kubernetes Secrets

@@ -14,31 +14,36 @@ Prerequisites for the scripted smoke path:
   - `deploymentProfile=demo`
   - `CHANGELOCK_AUTH_MODE=disabled` or `static-token`
   - not a production go-live target
-- standard production single-cluster
-  - `deploymentProfile=production`
+- controlled pilot
+  - `deploymentProfile=pilot`
+  - digest-pinned ChangeLock component images
+  - not a production approval signal
+- enterprise single-cluster
+  - `deploymentProfile=enterprise`
+  - `releaseProfile=production` is accepted only as an enterprise guardrail alias
   - `sync.mode=disabled`
   - `auth.mode=oidc-jwt` recommended
-- production hub
-  - `deploymentProfile=production`
+- enterprise hub
+  - `deploymentProfile=enterprise`
   - `sync.mode=hub`
   - cluster bindings secret configured when `sync.requireClusterId=true`
-- production spoke
-  - `deploymentProfile=production`
+- enterprise spoke
+  - `deploymentProfile=enterprise`
   - `sync.mode=spoke`
   - `sync.clusterId`, `sync.hubUrl`, and machine auth token configured
-- signer-enabled production
-  - `deploymentProfile=production`
+- signer-enabled enterprise
+  - `deploymentProfile=enterprise`
   - `signer.mode=vault-transit`
   - signer secret and Vault transit settings configured
-- signer-identity-aware production
+- signer-identity-aware enterprise
   - `signingIdentity.enforcement=monitor|enforce`
   - signer policies recorded intentionally before rollout
   - `signingIdentity.workflowsDir` only relied on when repository workflow files are actually mounted into `audit-writer`
-- VEX-aware production
+- VEX-aware enterprise
   - `deployGate.vexDeployMode=enforce`
   - `audit-writer` vulnerability/VEX APIs reachable from `deploy-gate`
   - optional `auditWriter.env.CHANGELOCK_VEX_IMPORT_DIR` only when mounted VEX documents are intentionally used
-- runtime closed-loop production
+- runtime closed-loop enterprise
   - `runtimeAgent.selfHealing.mode` intentionally chosen
   - `runtimeAgent.closedLoop.reconcileInterval` set
   - protected namespaces/workloads reviewed

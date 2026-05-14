@@ -39,6 +39,11 @@ reject_staged_env_files() {
   fi
 }
 
+is_manifest_resource() {
+  local path="$1"
+  [[ "${path}" =~ ^deploy/k8s/.+\.(yaml|yml)$ ]] || [[ "${path}" =~ ^deploy/manifests/.+\.(yaml|yml)$ ]]
+}
+
 if [ -f "${repo_root}/.env" ]; then
   set -a
   . "${repo_root}/.env"
@@ -82,6 +87,9 @@ if [ "${#files[@]}" -gt 0 ]; then
       *.yaml|*.yml) ;;
       *) continue ;;
     esac
+    if ! is_manifest_resource "${file}"; then
+      continue
+    fi
     if [ -f "${file}" ]; then
       args+=("--file" "${file}")
       continue

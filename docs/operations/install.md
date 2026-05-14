@@ -1,6 +1,6 @@
 # Install
 
-Phase 7e makes Helm the preferred production-minded packaging path. The raw manifests under `deploy/k8s/` remain useful references, but the supported installation surface is now `charts/changelock/`.
+Phase 7e makes Helm the preferred deployment packaging path. The raw manifests under `deploy/k8s/` remain useful references, but the supported installation surface is now `charts/changelock/`.
 
 ## Prerequisites
 
@@ -8,7 +8,7 @@ Phase 7e makes Helm the preferred production-minded packaging path. The raw mani
 - Helm 3.15+
 - a PostgreSQL instance
   - either the bundled single-instance chart StatefulSet for evaluation
-  - or an external HA PostgreSQL service for production
+  - or an external HA PostgreSQL service for enterprise
 - published container images for the ChangeLock components
 
 ## Default install
@@ -26,10 +26,11 @@ The default chart values are for evaluation/demo posture:
 helm install changelock ./charts/changelock -n changelock-system --create-namespace
 ```
 
-## Production-minded install
+## Enterprise install
 
-Recommended production posture:
-- `deploymentProfile=production`
+Recommended enterprise posture:
+- `deploymentProfile=enterprise`
+- `releaseProfile=production` is accepted only as a compatibility alias for enterprise guardrails
 - external PostgreSQL
 - bearer auth from existing Kubernetes secrets
   - `oidc-jwt` for human/operator access
@@ -39,7 +40,7 @@ Recommended production posture:
 - signer identity monitoring left at `monitor` until allowlists and workflow inputs are verified
 - optional VEX-aware deploy enforcement only when the vulnerability API path is intended to be fail-closed
 - optional runtime closed-loop remediation only after desired-state trust, protected-target lists, and CNI behavior are reviewed
-- prod values example layered on top
+- enterprise values example layered on top
 
 Create the auth secret for OIDC/JWT mode:
 ```bash
@@ -56,7 +57,7 @@ kubectl create secret generic changelock-postgres \
 Create the hub sync bindings secret when `sync.mode=hub`:
 ```bash
 kubectl create secret generic changelock-sync \
-  --from-literal=CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON='{"service-internal-prod":{"clusters":["prod-eu","prod-us"],"tenants":["acme","globex"]}}'
+  --from-literal=CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON='{"service-internal-enterprise":{"clusters":["enterprise-eu","enterprise-us"],"tenants":["acme","globex"]}}'
 ```
 
 Create the signer secret when `signer.mode=vault-transit`:
@@ -65,20 +66,20 @@ kubectl create secret generic changelock-signer \
   --from-literal=CHANGELOCK_VAULT_TOKEN='REDACTED'
 ```
 
-Install with the prod example:
+Install with the enterprise example:
 ```bash
 helm upgrade --install changelock ./charts/changelock \
   -n changelock-system --create-namespace \
-  -f ./charts/changelock/values-prod-example.yaml
+  -f ./charts/changelock/values-enterprise-example.yaml
 ```
 
-Production notes:
-- the prod example expects `auth.existingSecret=changelock-auth`
-- the prod example expects `externalPostgresql.existingSecret=changelock-postgres`
-- the prod example expects `sync.clusterBindingsExistingSecret=changelock-sync` in hub mode
-- the prod example expects `signer.existingSecret=changelock-signer` in `vault-transit` mode
-- do not copy demo tokens into production secrets
-- if you switch to `static-token` auth in production, supply a non-demo `CHANGELOCK_AUTH_TOKENS_JSON` and a distinct internal service token in the auth secret
+Enterprise notes:
+- the enterprise example expects `auth.existingSecret=changelock-auth`
+- the enterprise example expects `externalPostgresql.existingSecret=changelock-postgres`
+- the enterprise example expects `sync.clusterBindingsExistingSecret=changelock-sync` in hub mode
+- the enterprise example expects `signer.existingSecret=changelock-signer` in `vault-transit` mode
+- do not copy demo tokens into enterprise secrets
+- if you switch to `static-token` auth in enterprise, supply a non-demo `CHANGELOCK_AUTH_TOKENS_JSON` and a distinct internal service token in the auth secret
 - if you enable `deployGate.vexDeployMode=enforce`, make sure `audit-writer` vulnerability/VEX endpoints are reachable from `deploy-gate`
 - if you want VEX-as-code imports, set `auditWriter.env.CHANGELOCK_VEX_IMPORT_DIR` and mount the JSON documents into the `audit-writer` container through your own Helm overlay or manifest customization
 - if you want internal trust scorecards and auditor-ready exports, review:
@@ -106,7 +107,7 @@ Production notes:
   - `signingIdentity.requireRekor`
   - `signingIdentity.quarantineOnDrift`
   - `signingIdentity.workflowsDir`
-- `signingIdentity.workflowsDir` only provides repository-local workflow drift checks when the `audit-writer` container actually has workflow files mounted there. The chart does not assume a repo checkout in production.
+- `signingIdentity.workflowsDir` only provides repository-local workflow drift checks when the `audit-writer` container actually has workflow files mounted there. The chart does not assume a repo checkout in enterprise.
 - treat `quarantineNetworkPolicyEnabled=true` as opt-in. Verify your cluster actually enforces `NetworkPolicy` before relying on it for containment.
 
 ## Supported deployment modes
@@ -114,37 +115,41 @@ Production notes:
 - local demo
   - `deploymentProfile=demo`
   - `CHANGELOCK_AUTH_MODE=disabled` is acceptable
-- standard production single-cluster
-  - `deploymentProfile=production`
+- controlled pilot
+  - `deploymentProfile=pilot`
+  - ChangeLock component images must be digest-pinned
+  - pilot success is not production approval
+- enterprise single-cluster
+  - `deploymentProfile=enterprise`
   - `sync.mode=disabled`
-- production hub
-  - `deploymentProfile=production`
+- enterprise hub
+  - `deploymentProfile=enterprise`
   - `sync.mode=hub`
   - cluster bindings secret required when `sync.requireClusterId=true`
-- production spoke
-  - `deploymentProfile=production`
+- enterprise spoke
+  - `deploymentProfile=enterprise`
   - `sync.mode=spoke`
   - `sync.clusterId`, `sync.hubUrl`, and machine auth token required
-- signer-enabled production
-  - `deploymentProfile=production`
+- signer-enabled enterprise
+  - `deploymentProfile=enterprise`
   - `signer.mode=vault-transit`
   - signer secret and Vault transit config required
-- signer-identity-aware production
+- signer-identity-aware enterprise
   - optional
   - start with `signingIdentity.enforcement=monitor`
   - move to `enforce` only after signer policies are recorded and expected workflows are visible
   - if `signingIdentity.requireRekor=true`, transparency evidence must already be present and verifiable
-- deeper AI guidance aware production
+- deeper AI guidance aware enterprise
   - optional
   - start with `auditWriter.env.CHANGELOCK_AI_GUIDANCE_MODE=disabled`
   - if enabled, use `local-template`
   - keep it advisory-only and verify that redaction settings match your internal data-handling posture
-- VEX-aware production
+- VEX-aware enterprise
   - optional
   - `deployGate.vexDeployMode=enforce`
   - `audit-writer` vulnerability + VEX APIs must be reachable
   - use canonical VEX statements or imported CSAF/CycloneDX VEX documents
-- runtime closed-loop production
+- runtime closed-loop enterprise
   - optional
   - start with `runtimeAgent.selfHealing.mode=alert-only`
   - enable mutation only for supported workload kinds

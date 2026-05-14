@@ -24,8 +24,12 @@ Related docs:
   - `deploymentProfile=demo`
   - `CHANGELOCK_AUTH_MODE=disabled`
   - `CHANGELOCK_AUTH_MODE=static-token`
-- production-minded:
-  - `deploymentProfile=production`
+- pilot:
+  - `deploymentProfile=pilot`
+  - digest-pinned ChangeLock component images
+- enterprise:
+  - `deploymentProfile=enterprise`
+  - `releaseProfile=production` is a compatibility alias for enterprise guardrails only
   - external PostgreSQL
   - Helm deployment
   - `CHANGELOCK_AUTH_MODE=oidc-jwt`
@@ -36,7 +40,7 @@ Related docs:
 - bundled single-instance PostgreSQL
 - `CHANGELOCK_AUTH_MODE=disabled`
 - static demo tokens from `config/auth-tokens.example.json`
-- inline demo/service tokens copied into production values instead of Kubernetes secrets
+- inline demo/service tokens copied into pilot or enterprise values instead of Kubernetes secrets
 
 ## Current supportable boundaries
 

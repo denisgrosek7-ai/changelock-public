@@ -14,7 +14,7 @@ Related docs:
 1. Take a PostgreSQL backup before the upgrade.
 2. Render the target manifests locally:
 ```bash
-helm template changelock ./charts/changelock -n changelock-system -f ./charts/changelock/values-prod-example.yaml >/tmp/changelock-rendered.yaml
+helm template changelock ./charts/changelock -n changelock-system -f ./charts/changelock/values-enterprise-example.yaml >/tmp/changelock-rendered.yaml
 ```
 3. Review changes to:
 - image tags
@@ -24,7 +24,7 @@ helm template changelock ./charts/changelock -n changelock-system -f ./charts/ch
 - new feature env flags such as vuln-ops
 4. Apply the upgrade:
 ```bash
-helm upgrade --install changelock ./charts/changelock -n changelock-system -f ./charts/changelock/values-prod-example.yaml
+helm upgrade --install changelock ./charts/changelock -n changelock-system -f ./charts/changelock/values-enterprise-example.yaml
 ```
 5. Verify:
 ```bash

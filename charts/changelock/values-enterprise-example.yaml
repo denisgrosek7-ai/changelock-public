@@ -1,6 +1,8 @@
-# Production baseline example.
+# Enterprise baseline example.
 # Do not use demo tokens or docker-compose.dev.yml defaults with this file.
-deploymentProfile: production
+# `releaseProfile=production` is accepted as a compatibility alias for these
+# enterprise guardrails, but production is not a fourth package/tier.
+deploymentProfile: enterprise
 
 auth:
   mode: oidc-jwt
@@ -31,7 +33,7 @@ sync:
   clusterBindingsKey: CHANGELOCK_SYNC_CLUSTER_BINDINGS_JSON
   # Spoke example:
   # mode: spoke
-  # clusterId: prod-eu
+  # clusterId: enterprise-eu
   # hubUrl: https://changelock-hub.example.com
   # tokenExistingSecret: changelock-sync
   # tokenKey: CHANGELOCK_SYNC_TOKEN
@@ -65,6 +67,10 @@ externalPostgresql:
   existingSecret: changelock-postgres
 
 auditWriter:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-audit-writer@sha256:1111111111111111111111111111111111111111111111111111111111111111
+    tag: ""
+    pullPolicy: IfNotPresent
   replicaCount: 2
   antiAffinity: required
   podDisruptionBudget:
@@ -101,6 +107,10 @@ auditWriter:
     CHANGELOCK_AI_GUIDANCE_REDACT_SENSITIVE: "true"
 
 policyEngine:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-policy-engine@sha256:2222222222222222222222222222222222222222222222222222222222222222
+    tag: ""
+    pullPolicy: IfNotPresent
   replicaCount: 2
   antiAffinity: required
   podDisruptionBudget:
@@ -115,6 +125,10 @@ policyEngine:
       memory: 1Gi
 
 attestationVerifier:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-attestation-verifier@sha256:3333333333333333333333333333333333333333333333333333333333333333
+    tag: ""
+    pullPolicy: IfNotPresent
   replicaCount: 2
   antiAffinity: soft
   podDisruptionBudget:
@@ -129,6 +143,10 @@ attestationVerifier:
       memory: 1Gi
 
 deployGate:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-deploy-gate@sha256:4444444444444444444444444444444444444444444444444444444444444444
+    tag: ""
+    pullPolicy: IfNotPresent
   replicaCount: 3
   antiAffinity: required
   # Optional: set to enforce once VEX-aware vulnerability evaluation is part of the admission posture.
@@ -138,7 +156,7 @@ deployGate:
     secretName: changelock-deploy-gate-tls
   webhook:
     enabled: true
-    caBundle: REPLACE_WITH_BASE64_CA_BUNDLE
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCg==
   podDisruptionBudget:
     enabled: true
     minAvailable: 2
@@ -153,6 +171,10 @@ deployGate:
       memory: 1Gi
 
 runtimeAgent:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-runtime-agent@sha256:5555555555555555555555555555555555555555555555555555555555555555
+    tag: ""
+    pullPolicy: IfNotPresent
   replicaCount: 1
   resources:
     requests:

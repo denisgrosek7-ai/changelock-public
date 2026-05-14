@@ -252,12 +252,14 @@ The Helm chart now exposes OIDC/JWT settings through `charts/changelock/values.y
 
 - `deploymentProfile`
   - `demo` keeps local/evaluation posture simple
-  - `production` enables Helm-side guardrails for auth, sync, and signer configuration
+  - `pilot` enables digest-pinned pilot packaging without creating a production approval claim
+  - `enterprise` enables Helm-side guardrails for auth, sync, signer configuration, and digest-pinned ChangeLock component images
+  - `production` is accepted only as an enterprise guardrail alias, not as a fourth package
 - `auth.createSecret`
   - in demo profile, the chart auto-generates a release-local internal service token if none is provided
-  - in production, prefer `auth.existingSecret` or an explicitly managed secret-creation flow
-- do not copy demo bearer tokens into production chart values or secrets
-- use `charts/changelock/values-prod-example.yaml` as the production baseline
+  - in enterprise, prefer `auth.existingSecret` or an explicitly managed secret-creation flow
+- do not copy demo bearer tokens into pilot or enterprise chart values or secrets
+- use `charts/changelock/values-demo-example.yaml`, `charts/changelock/values-pilot-example.yaml`, or `charts/changelock/values-enterprise-example.yaml` as the canonical package baseline
 
 - `auth.mode`
 - `auth.roleClaim`

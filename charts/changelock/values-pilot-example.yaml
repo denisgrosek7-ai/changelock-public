@@ -1,0 +1,44 @@
+# Pilot package example.
+# Pilot uses digest-pinned ChangeLock component images and remains a bounded
+# validation package. Pilot success is not production approval.
+deploymentProfile: pilot
+
+auth:
+  mode: static-token
+  createSecret: true
+  internalServiceToken: pilot-internal-service-token-change-before-use
+  tokensJson: >-
+    [{"token":"pilot-viewer-token-change-before-use","subject":"pilot-viewer","role":"viewer","token_id":"pilot-viewer"},{"token":"pilot-operator-token-change-before-use","subject":"pilot-operator","role":"operator","token_id":"pilot-operator"}]
+  requireTenantScope: true
+
+auditWriter:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-audit-writer@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    tag: ""
+    pullPolicy: IfNotPresent
+
+policyEngine:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-policy-engine@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    tag: ""
+    pullPolicy: IfNotPresent
+
+attestationVerifier:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-attestation-verifier@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    tag: ""
+    pullPolicy: IfNotPresent
+
+deployGate:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-deploy-gate@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+    tag: ""
+    pullPolicy: IfNotPresent
+  webhook:
+    enabled: false
+
+runtimeAgent:
+  image:
+    repository: ghcr.io/denisgrosek7-ai/changelock-runtime-agent@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+    tag: ""
+    pullPolicy: IfNotPresent
