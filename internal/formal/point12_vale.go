@@ -1684,12 +1684,14 @@ func point12ValEFoundationModelFromUpstream(
 }
 
 func Point12ValEFoundationModel() Point12ValEFoundation {
-	val0 := ComputePoint12Val0Foundation(Point12Val0FoundationModel())
-	valA := ComputePoint12ValAFoundation(Point12ValAFoundationModel())
-	valB := ComputePoint12ValBFoundation(Point12ValBFoundationModel())
-	valC := ComputePoint12ValCFoundation(Point12ValCFoundationModel())
-	valD := ComputePoint12ValDFoundation(Point12ValDFoundationModel())
-	return point12ValEFoundationModelFromUpstream(val0, valA, valB, valC, valD)
+	return cachedFormalModel(&point12ValEFoundationModelOnce, &point12ValEFoundationModelCached, func() Point12ValEFoundation {
+		val0 := ComputePoint12Val0Foundation(Point12Val0FoundationModel())
+		valA := ComputePoint12ValAFoundation(Point12ValAFoundationModel())
+		valB := ComputePoint12ValBFoundation(Point12ValBFoundationModel())
+		valC := ComputePoint12ValCFoundation(Point12ValCFoundationModel())
+		valD := ComputePoint12ValDFoundation(Point12ValDFoundationModel())
+		return point12ValEFoundationModelFromUpstream(val0, valA, valB, valC, valD)
+	})
 }
 
 func point12ValECurrentState(model Point12ValEFoundation) string {

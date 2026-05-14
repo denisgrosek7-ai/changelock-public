@@ -522,8 +522,10 @@ func point14ValEDependencySnapshotFromUpstream(valD Point14ValDFoundation) Point
 }
 
 func point14ValEDependencySnapshotModel() Point14ValEDependencySnapshot {
-	valD := ComputePoint14ValDFoundation(Point14ValDFoundationModel())
-	return point14ValEDependencySnapshotFromUpstream(valD)
+	return cachedFormalModel(&point14ValEDependencySnapshotModelOnce, &point14ValEDependencySnapshotModelCached, func() Point14ValEDependencySnapshot {
+		valD := ComputePoint14ValDFoundation(Point14ValDFoundationModel())
+		return point14ValEDependencySnapshotFromUpstream(valD)
+	})
 }
 
 func EvaluatePoint14ValEDependencyState(model Point14ValEDependencySnapshot) string {
@@ -1217,8 +1219,10 @@ func point14ValEFoundationModelFromUpstream(valD Point14ValDFoundation) Point14V
 }
 
 func Point14ValEFoundationModel() Point14ValEFoundation {
-	valD := ComputePoint14ValDFoundation(Point14ValDFoundationModel())
-	return point14ValEFoundationModelFromUpstream(valD)
+	return cachedFormalModel(&point14ValEFoundationModelOnce, &point14ValEFoundationModelCached, func() Point14ValEFoundation {
+		valD := ComputePoint14ValDFoundation(Point14ValDFoundationModel())
+		return point14ValEFoundationModelFromUpstream(valD)
+	})
 }
 
 func point14ValEFoundationState(states ...string) string {

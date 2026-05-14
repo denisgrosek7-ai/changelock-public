@@ -818,11 +818,13 @@ func point14Val0ActivePoint11ValDFoundation() Point11ValDFoundation {
 }
 
 func point14Val0DependencySnapshotModel() Point14Val0DependencySnapshot {
-	valE := ComputePoint13ValEFoundation(Point13ValEFoundationModel())
-	point12 := ComputePoint12ValEFoundation(Point12ValEFoundationModel())
-	point11 := point14Val0ActivePoint11ValDFoundation()
-	point10 := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
-	return point14Val0DependencySnapshotFromUpstream(valE, point12, point11, point10)
+	return cachedFormalModel(&point14Val0DependencySnapshotModelOnce, &point14Val0DependencySnapshotModelCached, func() Point14Val0DependencySnapshot {
+		valE := ComputePoint13ValEFoundation(Point13ValEFoundationModel())
+		point12 := ComputePoint12ValEFoundation(Point12ValEFoundationModel())
+		point11 := point14Val0ActivePoint11ValDFoundation()
+		point10 := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
+		return point14Val0DependencySnapshotFromUpstream(valE, point12, point11, point10)
+	})
 }
 
 func EvaluatePoint14Val0DependencyState(model Point14Val0DependencySnapshot) string {
@@ -1542,11 +1544,13 @@ func point14Val0FoundationModelFromUpstream(
 }
 
 func Point14Val0FoundationModel() Point14Val0Foundation {
-	valE := ComputePoint13ValEFoundation(Point13ValEFoundationModel())
-	point12 := ComputePoint12ValEFoundation(Point12ValEFoundationModel())
-	point11 := point14Val0ActivePoint11ValDFoundation()
-	point10 := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
-	return point14Val0FoundationModelFromUpstream(valE, point12, point11, point10)
+	return cachedFormalModel(&point14Val0FoundationModelOnce, &point14Val0FoundationModelCached, func() Point14Val0Foundation {
+		valE := ComputePoint13ValEFoundation(Point13ValEFoundationModel())
+		point12 := ComputePoint12ValEFoundation(Point12ValEFoundationModel())
+		point11 := point14Val0ActivePoint11ValDFoundation()
+		point10 := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
+		return point14Val0FoundationModelFromUpstream(valE, point12, point11, point10)
+	})
 }
 
 func ComputePoint14Val0Foundation(model Point14Val0Foundation) Point14Val0Foundation {

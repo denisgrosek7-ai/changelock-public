@@ -1451,8 +1451,10 @@ func point13ValEFoundationModelFromUpstream(valD Point13ValDFoundation) Point13V
 }
 
 func Point13ValEFoundationModel() Point13ValEFoundation {
-	valD := ComputePoint13ValDFoundation(Point13ValDFoundationModel())
-	return point13ValEFoundationModelFromUpstream(valD)
+	return cachedFormalModel(&point13ValEFoundationModelOnce, &point13ValEFoundationModelCached, func() Point13ValEFoundation {
+		valD := ComputePoint13ValDFoundation(Point13ValDFoundationModel())
+		return point13ValEFoundationModelFromUpstream(valD)
+	})
 }
 
 func ComputePoint13ValEFoundation(model Point13ValEFoundation) Point13ValEFoundation {
