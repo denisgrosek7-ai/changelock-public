@@ -26,9 +26,56 @@ func TestPoint14ValDDependencyState(t *testing.T) {
 		want   string
 	}{
 		{
+			name:   "canonical inherited boundary snapshot stays active",
+			mutate: func(model *Point14ValDDependencySnapshot) {},
+			want:   Point14ValDStateActive,
+		},
+		{
 			name: "missing point14 valc blocks",
 			mutate: func(model *Point14ValDDependencySnapshot) {
 				model.Point14ValCCurrentState = ""
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 current state in valc dependency blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint10CurrentState += " "
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 no overclaim state in valc dependency blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint10NoOverclaimState += " "
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 pass rule state in valc dependency blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint10PassRuleState += " "
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 projection state in valc dependency blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint10ProjectionState += " "
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "tab newline retagged embedded valc current state blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.CurrentState = "\t" + model.Point14ValC.CurrentState + "\n"
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point11 final pass gate in valc dependency blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint11FinalPassGateState += " "
 			},
 			want: Point14ValDStateBlocked,
 		},

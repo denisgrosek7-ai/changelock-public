@@ -102,6 +102,24 @@ func TestPoint15Val0DependencyState(t *testing.T) {
 			model.Point14ValEComputedFromUpstream = true
 			model.Point14ValE.Dependency.SnapshotFromComputedOutput = false
 		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 pass token is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Point14PassToken += " "
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 manifest wave id is tab newline retagged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.PassClosureManifest.WaveID = "\t" + model.Point14ValE.PassClosureManifest.WaveID + "\n"
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 dependency inherited point10 state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.InheritedPoint10CurrentState += " "
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 dependency inherited point10 no overclaim state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.InheritedPoint10NoOverclaimState += " "
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 dependency inherited point10 projection state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.InheritedPoint10ProjectionState += " "
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 dependency inherited point10 pass rule state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.InheritedPoint10PassRuleState += " "
+		}, Point15Val0StateBlocked},
 		{"blocks when point14 pass token absent", func(model *Point15Val0DependencySnapshot) { model.Point14PassToken = "" }, Point15Val0StateBlocked},
 		{"blocks when point14 pass token not from vale", func(model *Point15Val0DependencySnapshot) { model.Point14PassManifestWaveID = point14ValDWaveID }, Point15Val0StateBlocked},
 		{"blocks when point15 pass already appears", func(model *Point15Val0DependencySnapshot) { model.Point15PassSeen = true }, Point15Val0StateBlocked},
@@ -283,6 +301,15 @@ func TestPoint15Val0TimestampDisciplineState(t *testing.T) {
 		{"future active evidence blocks", func(model *Point15Val0TimestampDiscipline) {
 			model.ValidatedAt = "2026-05-06T18:35:00Z"
 		}, Point15Val0StateBlocked},
+		{"whitespace retagged observed time source blocks", func(model *Point15Val0TimestampDiscipline) {
+			model.ObservedTimeSource = " " + point14Val0TimeSourceServerUTC
+		}, Point15Val0StateBlocked},
+		{"tab newline retagged reference-now time source blocks", func(model *Point15Val0TimestampDiscipline) {
+			model.ReferenceNowTimeSource = "\t" + point14Val0TimeSourceServerUTC + "\n"
+		}, Point15Val0StateBlocked},
+		{"whitespace retagged observed timestamp blocks", func(model *Point15Val0TimestampDiscipline) {
+			model.ObservedAt = " " + model.ObservedAt
+		}, Point15Val0StateBlocked},
 		{"backdated approval requires review", func(model *Point15Val0TimestampDiscipline) {
 			model.ReviewerApprovedAt = "2026-05-06T18:24:00Z"
 		}, Point15Val0StateReviewRequired},
@@ -393,6 +420,15 @@ func TestPoint15Val0NoOverclaimGuardState(t *testing.T) {
 	}{
 		{"forbidden wording blocks", func(model *Point15Val0NoOverclaimGuard) {
 			model.ObservedTexts = []string{"continuous assurance guaranteed"}
+		}, Point15Val0StateBlocked},
+		{"forbidden wording with tab retag blocks", func(model *Point15Val0NoOverclaimGuard) {
+			model.ObservedTexts = []string{"continuous assurance\tguaranteed"}
+		}, Point15Val0StateBlocked},
+		{"forbidden wording with confusable rune blocks", func(model *Point15Val0NoOverclaimGuard) {
+			model.ObservedTexts = []string{"continuous assurance guаranteed"}
+		}, Point15Val0StateBlocked},
+		{"split forbidden wording across observed corpus blocks", func(model *Point15Val0NoOverclaimGuard) {
+			model.ObservedTexts = []string{"continuous assurance", "guaranteed"}
 		}, Point15Val0StateBlocked},
 		{"safe bounded wording passes", func(model *Point15Val0NoOverclaimGuard) {}, Point15Val0StateActive},
 		{"internal blocked diagnostics remain classified", func(model *Point15Val0NoOverclaimGuard) {

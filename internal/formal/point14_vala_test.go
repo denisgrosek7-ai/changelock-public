@@ -9,9 +9,56 @@ func TestPoint14ValADependencyState(t *testing.T) {
 		want   string
 	}{
 		{
+			name:   "canonical inherited boundary snapshot stays active",
+			mutate: func(model *Point14ValADependencySnapshot) {},
+			want:   Point14ValAStateActive,
+		},
+		{
 			name: "missing point14 val0 blocks",
 			mutate: func(model *Point14ValADependencySnapshot) {
 				model.Point14Val0CurrentState = ""
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 state in val0 dependency blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.InheritedPoint10CurrentState += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 no overclaim state in val0 dependency blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.InheritedPoint10NoOverclaimState += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 projection state in val0 dependency blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.InheritedPoint10ProjectionState += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 pass rule state in val0 dependency blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.InheritedPoint10PassRuleState += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "tab newline retagged embedded val0 current state blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.CurrentState = "\t" + model.Point14Val0.CurrentState + "\n"
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged point13 pass token from embedded point13 blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point13ValE.Point13PassToken += " "
 			},
 			want: Point14ValAStateBlocked,
 		},

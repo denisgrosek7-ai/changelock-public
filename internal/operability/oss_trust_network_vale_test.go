@@ -394,6 +394,8 @@ func TestOSSTrustNetworkValEPoint9PassReasonDisciplineAndNoOverclaim(t *testing.
 		},
 		{name: "exact allowed reason passes", reason: OSSTrustNetworkValEPoint9PassReasonAllowed, wantNoOver: OSSTrustNetworkValENoOverclaimStateActive, wantPass: OSSTrustNetworkValEFinalPassRuleStateActive},
 		{name: "blocked ineligible reason blocks", reason: "point_9_pass production approved", wantNoOver: OSSTrustNetworkValENoOverclaimStateBlocked, wantPass: OSSTrustNetworkValEFinalPassRuleStateBlocked},
+		{name: "blocked ineligible production approval reason blocks", reason: "point_9_pass production approval", wantNoOver: OSSTrustNetworkValENoOverclaimStateBlocked, wantPass: OSSTrustNetworkValEFinalPassRuleStateBlocked},
+		{name: "blocked ineligible deployment approval reason blocks", reason: "point_9_pass deployment approval", wantNoOver: OSSTrustNetworkValENoOverclaimStateBlocked, wantPass: OSSTrustNetworkValEFinalPassRuleStateBlocked},
 		{name: "spaced point 9 pass production approved blocks", reason: "point 9 pass production approved", wantNoOver: OSSTrustNetworkValENoOverclaimStateBlocked, wantPass: OSSTrustNetworkValEFinalPassRuleStateBlocked},
 		{name: "confusable production approved blocks", reason: "prοductiοn apprοved", wantNoOver: OSSTrustNetworkValENoOverclaimStateBlocked, wantPass: OSSTrustNetworkValEFinalPassRuleStateBlocked},
 		{name: "open-o confusable production approved blocks", reason: "prɔduction apprɔved", wantNoOver: OSSTrustNetworkValENoOverclaimStateBlocked, wantPass: OSSTrustNetworkValEFinalPassRuleStateBlocked},

@@ -73,7 +73,7 @@ func TestPoint11Val0DependencyGate(t *testing.T) {
 		}
 	})
 
-	t.Run("copied projection disclaimer propagates exactly from computed upstream output", func(t *testing.T) {
+	t.Run("non-canonical propagated projection disclaimer blocks dependency gate", func(t *testing.T) {
 		valE := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
 		valE.Point10PassRule.ProjectionDisclaimer = "projection_only not_canonical_truth propagated_upstream_point10_vale"
 		snapshot := SnapshotPoint11Val0DependencyFromComputedPoint10ValE(valE, Point11Val0Point10RepoReview{
@@ -86,8 +86,8 @@ func TestPoint11Val0DependencyGate(t *testing.T) {
 		if snapshot.ProjectionDisclaimer != valE.Point10PassRule.ProjectionDisclaimer {
 			t.Fatalf("expected exact copied projection disclaimer, got snapshot=%q valE=%q", snapshot.ProjectionDisclaimer, valE.Point10PassRule.ProjectionDisclaimer)
 		}
-		if got := EvaluatePoint11Val0DependencyState(snapshot); got != Point11Val0DependencyStateActive {
-			t.Fatalf("expected active dependency with propagated disclaimer, got %#v", snapshot)
+		if got := EvaluatePoint11Val0DependencyState(snapshot); got != Point11Val0DependencyStateBlocked {
+			t.Fatalf("expected blocked dependency with non-canonical propagated disclaimer, got state=%q snapshot=%#v", got, snapshot)
 		}
 	})
 
@@ -98,6 +98,12 @@ func TestPoint11Val0DependencyGate(t *testing.T) {
 	}{
 		{name: "malformed upstream projection disclaimer blocks", mutate: func(model *Point11Val0DependencySnapshot) {
 			model.ProjectionDisclaimer = "canonical_truth"
+		}, wantState: Point11Val0DependencyStateBlocked},
+		{name: "whitespace retagged upstream projection disclaimer blocks", mutate: func(model *Point11Val0DependencySnapshot) {
+			model.ProjectionDisclaimer = " " + point11Val0ExpectedDependencyProjectionDisclaimer() + " "
+		}, wantState: Point11Val0DependencyStateBlocked},
+		{name: "tab newline retagged upstream projection disclaimer blocks", mutate: func(model *Point11Val0DependencySnapshot) {
+			model.ProjectionDisclaimer = "\t" + point11Val0ExpectedDependencyProjectionDisclaimer() + "\n"
 		}, wantState: Point11Val0DependencyStateBlocked},
 		{name: "missing point10 pass blocks", mutate: func(model *Point11Val0DependencySnapshot) {
 			model.Point10State = operability.DeploymentMultiTenantPoint10StateNotComplete

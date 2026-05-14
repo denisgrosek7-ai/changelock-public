@@ -420,10 +420,7 @@ func deploymentMultiTenantValEProjectionDisclaimer() string {
 }
 
 func deploymentMultiTenantValEHasProjectionDisclaimer(value string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	return strings.Contains(normalized, "projection_only") &&
-		strings.Contains(normalized, "not_canonical_truth") &&
-		strings.Contains(normalized, "deployment_multi_tenant_vale")
+	return value == deploymentMultiTenantValEProjectionDisclaimer()
 }
 
 func deploymentMultiTenantValEHasFoundationProjectionDisclaimer(value string) bool {
@@ -490,8 +487,12 @@ func deploymentMultiTenantValETwitter(timestamp string) bool {
 	if timestamp == "" || strings.TrimSpace(timestamp) != timestamp {
 		return false
 	}
-	_, err := time.Parse(time.RFC3339, timestamp)
-	return err == nil
+	parsed, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return false
+	}
+	// Require canonical RFC3339 serialization, not just parseability.
+	return parsed.UTC().Format(time.RFC3339) == timestamp
 }
 
 func deploymentMultiTenantValETwitterOrFreshnessValid(timestamp, freshness string) bool {
@@ -781,11 +782,11 @@ func deploymentMultiTenantValEDependencySnapshotModel() DeploymentMultiTenantVal
 }
 
 func EvaluateDeploymentMultiTenantValEDependencyState(model DeploymentMultiTenantValEDependencySnapshot) string {
-	if !deploymentMultiTenantVal0HasProjectionDisclaimer(model.Val0.ProjectionDisclaimer) ||
-		!deploymentMultiTenantValAHasProjectionDisclaimer(model.ValA.ProjectionDisclaimer) ||
-		!deploymentMultiTenantValBHasProjectionDisclaimer(model.ValB.ProjectionDisclaimer) ||
-		!deploymentMultiTenantValCHasProjectionDisclaimer(model.ValC.ProjectionDisclaimer) ||
-		!deploymentMultiTenantValDHasProjectionDisclaimer(model.ValD.ProjectionDisclaimer) {
+	if !deploymentMultiTenantVal0HasFoundationProjectionDisclaimer(model.Val0.ProjectionDisclaimer) ||
+		!deploymentMultiTenantValAHasFoundationProjectionDisclaimer(model.ValA.ProjectionDisclaimer) ||
+		!deploymentMultiTenantValBHasFoundationProjectionDisclaimer(model.ValB.ProjectionDisclaimer) ||
+		!deploymentMultiTenantValCHasFoundationProjectionDisclaimer(model.ValC.ProjectionDisclaimer) ||
+		!deploymentMultiTenantValDHasFoundationProjectionDisclaimer(model.ValD.ProjectionDisclaimer) {
 		return DeploymentMultiTenantValEDependencyStateBlocked
 	}
 	if model.Val0.CurrentState != DeploymentMultiTenantVal0StateActive ||
@@ -1176,43 +1177,53 @@ func deploymentMultiTenantValEManifestIdentityValueValid(key, value string) bool
 }
 
 func deploymentMultiTenantValEManifestEvidenceIdentityPairs(value string) (map[string]string, bool) {
-	if value != strings.TrimSpace(value) {
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
 		return nil, false
 	}
-	fields := strings.Fields(value)
-	if len(fields) == 0 {
+	tokens := strings.Split(value, " ")
+	if len(tokens) == 0 {
 		return nil, false
 	}
-	pairs := map[string]string{}
-	for index := 0; index < len(fields); index++ {
-		token := strings.TrimSpace(fields[index])
+	for _, token := range tokens {
 		if token == "" {
 			return nil, false
 		}
-		key := ""
-		rawValue := ""
-		switch {
-		case strings.Contains(token, "="):
+	}
+	pairs := map[string]string{}
+
+	equalsFormat := true
+	for _, token := range tokens {
+		if strings.Count(token, "=") != 1 {
+			equalsFormat = false
+			break
+		}
+	}
+	if equalsFormat {
+		for _, token := range tokens {
 			parts := strings.SplitN(token, "=", 2)
-			key = strings.TrimSpace(parts[0])
-			rawValue = strings.TrimSpace(parts[1])
-		case strings.Contains(token, ":"):
-			parts := strings.SplitN(token, ":", 2)
-			key = strings.TrimSpace(parts[0])
-			rawValue = strings.TrimSpace(parts[1])
-			if rawValue == "" {
-				if index+1 >= len(fields) {
-					return nil, false
-				}
-				if strings.Contains(fields[index+1], "=") || deploymentMultiTenantValEManifestIdentityKeyToken(fields[index+1]) {
-					return nil, false
-				}
-				index++
-				rawValue = strings.TrimSpace(fields[index])
+			key := parts[0]
+			rawValue := parts[1]
+			if key == "" || rawValue == "" || !deploymentMultiTenantValEIdentityValueIsValid(key) {
+				return nil, false
 			}
-		default:
+			if _, exists := pairs[key]; exists {
+				return nil, false
+			}
+			pairs[key] = rawValue
+		}
+		return pairs, true
+	}
+
+	if len(tokens)%2 != 0 {
+		return nil, false
+	}
+	for index := 0; index < len(tokens); index += 2 {
+		keyToken := tokens[index]
+		rawValue := tokens[index+1]
+		if strings.Contains(keyToken, "=") || !strings.HasSuffix(keyToken, ":") {
 			return nil, false
 		}
+		key := strings.TrimSuffix(keyToken, ":")
 		if key == "" || rawValue == "" || !deploymentMultiTenantValEIdentityValueIsValid(key) {
 			return nil, false
 		}
@@ -1277,12 +1288,10 @@ func EvaluateDeploymentMultiTenantValEPassClosureManifestState(model DeploymentM
 		!deploymentMultiTenantValETwitterExactResultTokens(model.CLBClosureResult, deploymentMultiTenantValECLBClosureResultTokens()...) ||
 		model.EvidenceQualityResult != DeploymentMultiTenantValEEvidenceQualityStateActive ||
 		model.CrossWaveInvariantResult != DeploymentMultiTenantValEIntegratedInvariantStateActive ||
-		!deploymentMultiTenantValETwitter(model.Timestamp) {
+		model.Timestamp != deploymentMultiTenantValEManifestTimestampActive {
 		return DeploymentMultiTenantValEPassClosureManifestStateBlocked
 	}
-	if model.CommitSHAIfAvailable != deploymentMultiTenantValENotYetCommitted &&
-		(strings.TrimSpace(model.CommitSHAIfAvailable) != model.CommitSHAIfAvailable ||
-			!deploymentMultiTenantValEValueIsValid(model.CommitSHAIfAvailable)) {
+	if model.CommitSHAIfAvailable != deploymentMultiTenantValENotYetCommitted {
 		return DeploymentMultiTenantValEPassClosureManifestStateBlocked
 	}
 	if model.ReviewerResult == DeploymentMultiTenantValEReviewerResultPassConfirmed {
@@ -1357,6 +1366,8 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		allowedNormalized[deploymentMultiTenantVal0NormalizeClaimText(allowed)] = struct{}{}
 	}
 	disallowed := []string{
+		"production approval",
+		"deployment approval",
 		"production approved",
 		"deployment approved",
 		"marketplace certified",
@@ -1458,6 +1469,7 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		blockedCompact = append(blockedCompact, deploymentMultiTenantVal0CompactClaimText(forbidden))
 	}
 	crossNormalizedParts := make([]string, 0, len(values))
+	crossPartAllowed := make([]bool, 0, len(values))
 	corpusNormalizedParts := make([]string, 0, len(values))
 	var corpusCompact strings.Builder
 	for _, value := range values {
@@ -1466,10 +1478,13 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		if normalized == "" && compact == "" {
 			continue
 		}
+		_, isAllowed := allowedNormalized[normalized]
 		if normalized != "" {
+			// Keep all non-empty buckets for cross-value sequence detection, including allowed entries.
 			crossNormalizedParts = append(crossNormalizedParts, normalized)
+			crossPartAllowed = append(crossPartAllowed, isAllowed)
 		}
-		if _, ok := allowedNormalized[normalized]; ok {
+		if isAllowed {
 			continue
 		}
 		if normalized != "" {
@@ -1490,8 +1505,45 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		if strings.Contains(corpusNormalized, blockedNormalized[i]) || strings.Contains(corpusCompactValue, blockedCompact[i]) {
 			return true
 		}
-		if deploymentMultiTenantVal0BucketsContainForbiddenPhraseAcrossValues(crossNormalizedParts, blockedNormalized[i]) {
+		if deploymentMultiTenantValEForbiddenPhraseAcrossValues(crossNormalizedParts, crossPartAllowed, blockedNormalized[i]) {
 			return true
+		}
+	}
+	return false
+}
+
+func deploymentMultiTenantValEForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	matched := 0
+	distinctBuckets := 0
+	lastBucket := -1
+	matchedIncludesNonAllowed := false
+	for bucketIndex, value := range values {
+		bucketTokens := strings.Fields(value)
+		if len(bucketTokens) == 0 {
+			continue
+		}
+		for _, token := range bucketTokens {
+			if token != phraseTokens[matched] {
+				continue
+			}
+			if bucketIndex != lastBucket {
+				distinctBuckets++
+				lastBucket = bucketIndex
+			}
+			if !allowed[bucketIndex] {
+				matchedIncludesNonAllowed = true
+			}
+			matched++
+			if matched == len(phraseTokens) {
+				return distinctBuckets > 1 && matchedIncludesNonAllowed
+			}
 		}
 	}
 	return false
@@ -1643,156 +1695,158 @@ func deploymentMultiTenantValEProjectionSurfaceEntry(surface, disclaimer string)
 }
 
 func DeploymentMultiTenantValEFoundationModel() DeploymentMultiTenantValEFoundation {
-	disclaimer := deploymentMultiTenantValEProjectionDisclaimer()
-	dependency := deploymentMultiTenantValEDependencySnapshotModel()
-	return DeploymentMultiTenantValEFoundation{
-		CurrentState:             DeploymentMultiTenantValEStateBlocked,
-		Point10State:             DeploymentMultiTenantPoint10StateNotComplete,
-		DependencyState:          DeploymentMultiTenantValEDependencyStateActive,
-		IntegratedInvariantState: DeploymentMultiTenantValEIntegratedInvariantStateActive,
-		EvidenceQualityState:     DeploymentMultiTenantValEEvidenceQualityStateActive,
-		CLBClosureState:          DeploymentMultiTenantValECLBClosureStateActive,
-		PassClosureManifestState: DeploymentMultiTenantValEPassClosureManifestStateActive,
-		NoOverclaimState:         DeploymentMultiTenantValENoOverclaimStateActive,
-		ProjectionBoundaryState:  DeploymentMultiTenantValEProjectionBoundaryStateActive,
-		CleanRoomIPState:         DeploymentMultiTenantValECleanRoomIPStateActive,
-		Point10PassRuleState:     DeploymentMultiTenantValEPoint10PassRuleStateActive,
-		Dependency:               dependency,
-		IntegratedInvariantReview: DeploymentMultiTenantValEIntegratedInvariantReview{
-			EvidenceRefs:                                           append([]string{}, deploymentMultiTenantValERequiredEvidenceRefs()...),
-			FreshnessState:                                         IntelligenceCalibrationFreshnessFresh,
-			DiagnosticOutputComplete:                               true,
-			ProjectionDisclaimer:                                   disclaimer,
-			InstallSuccessDoesNotImplyReadiness:                    true,
-			MarketplaceInstallDoesNotImplyProductionApproval:       true,
-			SelfHostedReadinessEvidenceLinked:                      true,
-			AirGappedSemanticsExplicit:                             true,
-			UnsupportedDependenciesExplicit:                        true,
-			OperationalPreflightTenantScopedApprovalEvidenceLinked: true,
-			SSOConfiguredDoesNotMeanSecure:                         true,
-			SSOReadinessDoesNotImplyDeploymentReadiness:            true,
-			RBACABACEnforced:                                       true,
-			SupportOperatorAuthorityBasisRequired:                  true,
-			BreakGlassNoPersistentGlobalAccess:                     true,
-			BreakGlassNoPassAuthority:                              true,
-			CrossTenantLeakageBlocks:                               true,
-			DataResidencyBypassBlocks:                              true,
-			CrossRegionFlowRequiresScopedAuditedException:          true,
-			SummaryViewsNotCanonicalTruth:                          true,
-			TenantIsolationEvidenceBacked:                          true,
-			HAReadinessEvidenceLinked:                              true,
-			HANotUptimeGuarantee:                                   true,
-			BackupExistsNotRestoreReady:                            true,
-			RestoreTestEvidenceRequired:                            true,
-			DRReadinessRequiresDrillEvidence:                       true,
-			RPORTOTargetsNotGuarantees:                             true,
-			SLAReadinessSupportabilityOnly:                         true,
-			ConnectorNotSourceOfTruth:                              true,
-			ConnectorMutationRequiresExplicitCapability:            true,
-			RetryReplayCannotDuplicateActiveEvidence:               true,
-			OperatorCannotMutateCanonicalEvidenceSpine:             true,
-			SupportBreakGlassCannotBypassBoundary:                  true,
-			AgentRecommendationsAdvisoryOnly:                       true,
-			AgentCannotSelfPromoteDeployApprove:                    true,
-			AgentCannotMutateProduction:                            true,
-			AgentCannotMutateCanonicalEvidenceSpine:                true,
-			AgentCannotEnableExternalAPIsByDefault:                 true,
-			AgentCannotExecuteRecoveryWithoutApproval:              true,
-			LearnedOutputNotCanonicalTruth:                         true,
-			AgentCannotEmitPoint10Pass:                             true,
-			ProjectionViewsBoundedAdvisory:                         true,
-			MSPPartnerCannotApprovePass:                            true,
-			MSPPartnerCannotApproveProductionReadiness:             true,
-			MSPPartnerCannotBecomeSourceOfTruth:                    true,
-		},
-		EvidenceQualityMap: DeploymentMultiTenantValEEvidenceQualityMap{
-			Entries: []DeploymentMultiTenantValEEvidenceQualityEntry{
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-val0-foundation", "foundation_dependency", "computed_val0_output", "val_0"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-vala-profile", "profile_readiness", "computed_vala_output", "val_a"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-valb-isolation", "tenant_isolation", "computed_valb_output", "val_b"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-valc-recovery", "reliability_recovery", "computed_valc_output", "val_c"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-vald-agentic", "agentic_governance", "computed_vald_output", "val_d"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-no-overclaim", "no_overclaim", "vale_no_overclaim_review", "no_overclaim"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-clb-closure", "clb_closure", "vale_closure_ledger", "clb_closure"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-clean-room", "clean_room_ip", "vale_clean_room_review", "clean_room_ip"),
-				deploymentMultiTenantValEEvidenceEntry("evidence:vale-pass-manifest", "pass_closure_manifest", "vale_pass_manifest", "pass_closure_manifest"),
+	return cachedOperabilityModel(&deploymentMultiTenantValEFoundationModelOnce, &deploymentMultiTenantValEFoundationModelCached, func() DeploymentMultiTenantValEFoundation {
+		disclaimer := deploymentMultiTenantValEProjectionDisclaimer()
+		dependency := deploymentMultiTenantValEDependencySnapshotModel()
+		return DeploymentMultiTenantValEFoundation{
+			CurrentState:             DeploymentMultiTenantValEStateBlocked,
+			Point10State:             DeploymentMultiTenantPoint10StateNotComplete,
+			DependencyState:          DeploymentMultiTenantValEDependencyStateActive,
+			IntegratedInvariantState: DeploymentMultiTenantValEIntegratedInvariantStateActive,
+			EvidenceQualityState:     DeploymentMultiTenantValEEvidenceQualityStateActive,
+			CLBClosureState:          DeploymentMultiTenantValECLBClosureStateActive,
+			PassClosureManifestState: DeploymentMultiTenantValEPassClosureManifestStateActive,
+			NoOverclaimState:         DeploymentMultiTenantValENoOverclaimStateActive,
+			ProjectionBoundaryState:  DeploymentMultiTenantValEProjectionBoundaryStateActive,
+			CleanRoomIPState:         DeploymentMultiTenantValECleanRoomIPStateActive,
+			Point10PassRuleState:     DeploymentMultiTenantValEPoint10PassRuleStateActive,
+			Dependency:               dependency,
+			IntegratedInvariantReview: DeploymentMultiTenantValEIntegratedInvariantReview{
+				EvidenceRefs:                                           append([]string{}, deploymentMultiTenantValERequiredEvidenceRefs()...),
+				FreshnessState:                                         IntelligenceCalibrationFreshnessFresh,
+				DiagnosticOutputComplete:                               true,
+				ProjectionDisclaimer:                                   disclaimer,
+				InstallSuccessDoesNotImplyReadiness:                    true,
+				MarketplaceInstallDoesNotImplyProductionApproval:       true,
+				SelfHostedReadinessEvidenceLinked:                      true,
+				AirGappedSemanticsExplicit:                             true,
+				UnsupportedDependenciesExplicit:                        true,
+				OperationalPreflightTenantScopedApprovalEvidenceLinked: true,
+				SSOConfiguredDoesNotMeanSecure:                         true,
+				SSOReadinessDoesNotImplyDeploymentReadiness:            true,
+				RBACABACEnforced:                                       true,
+				SupportOperatorAuthorityBasisRequired:                  true,
+				BreakGlassNoPersistentGlobalAccess:                     true,
+				BreakGlassNoPassAuthority:                              true,
+				CrossTenantLeakageBlocks:                               true,
+				DataResidencyBypassBlocks:                              true,
+				CrossRegionFlowRequiresScopedAuditedException:          true,
+				SummaryViewsNotCanonicalTruth:                          true,
+				TenantIsolationEvidenceBacked:                          true,
+				HAReadinessEvidenceLinked:                              true,
+				HANotUptimeGuarantee:                                   true,
+				BackupExistsNotRestoreReady:                            true,
+				RestoreTestEvidenceRequired:                            true,
+				DRReadinessRequiresDrillEvidence:                       true,
+				RPORTOTargetsNotGuarantees:                             true,
+				SLAReadinessSupportabilityOnly:                         true,
+				ConnectorNotSourceOfTruth:                              true,
+				ConnectorMutationRequiresExplicitCapability:            true,
+				RetryReplayCannotDuplicateActiveEvidence:               true,
+				OperatorCannotMutateCanonicalEvidenceSpine:             true,
+				SupportBreakGlassCannotBypassBoundary:                  true,
+				AgentRecommendationsAdvisoryOnly:                       true,
+				AgentCannotSelfPromoteDeployApprove:                    true,
+				AgentCannotMutateProduction:                            true,
+				AgentCannotMutateCanonicalEvidenceSpine:                true,
+				AgentCannotEnableExternalAPIsByDefault:                 true,
+				AgentCannotExecuteRecoveryWithoutApproval:              true,
+				LearnedOutputNotCanonicalTruth:                         true,
+				AgentCannotEmitPoint10Pass:                             true,
+				ProjectionViewsBoundedAdvisory:                         true,
+				MSPPartnerCannotApprovePass:                            true,
+				MSPPartnerCannotApproveProductionReadiness:             true,
+				MSPPartnerCannotBecomeSourceOfTruth:                    true,
 			},
-			ProjectionDisclaimer:     disclaimer,
-			DiagnosticOutputComplete: true,
-		},
-		CLBClosureLedger: DeploymentMultiTenantValECLBClosureLedger{
-			RiskExceptionRefs:        []string{},
-			RiskExceptions:           []DeploymentMultiTenantValERiskException{},
-			RequiredFollowupRefs:     []string{},
-			ReviewerNotes:            "final_closure_review_complete",
-			ProjectionBoundaryResult: "projection_boundary advisory_only",
-			CleanRoomIPResult:        "clean_room_ip active",
-			NoOverclaimResult:        "no_overclaim active",
-			ProjectionDisclaimer:     disclaimer,
-			DiagnosticOutputComplete: true,
-		},
-		PassClosureManifest: DeploymentMultiTenantValEPassClosureManifest{
-			PointID:                  deploymentMultiTenantValEPointID,
-			WaveID:                   deploymentMultiTenantValEWaveID,
-			Scope:                    deploymentMultiTenantValEScope,
-			DependencyGateResult:     deploymentMultiTenantValEFoundationDependencyGateResult(dependency),
-			EvidenceIdentity:         "policy_version=" + deploymentMultiTenantValEExpectedPolicyVersion() + " engine_version=" + deploymentMultiTenantValEExpectedEngineVersion() + " schema_version=" + deploymentMultiTenantValEExpectedSchemaVersion() + " tenant_scope=" + deploymentMultiTenantValEExpectedTenantScope() + " deployment_profile=" + deploymentMultiTenantValEExpectedDeploymentProfile(),
-			CommandsRun:              append([]string{}, deploymentMultiTenantValERequiredCommandSet()...),
-			TestsRun:                 append([]string{}, deploymentMultiTenantValERequiredTestSet()...),
-			NegativeFixturesRun:      append([]string{}, deploymentMultiTenantValERequiredNegativeFixtures()...),
-			ProjectionBoundaryResult: deploymentMultiTenantValEManifestProjectionBoundary,
-			NoOverclaimGrepResult:    strings.Join(deploymentMultiTenantValENoOverclaimResultTokens(), " "),
-			CleanRoomIPResult:        strings.Join(deploymentMultiTenantValECleanRoomIPResultTokens(), " "),
-			CLBClosureResult:         strings.Join(deploymentMultiTenantValECLBClosureResultTokens(), " "),
-			EvidenceQualityResult:    DeploymentMultiTenantValEEvidenceQualityStateActive,
-			CrossWaveInvariantResult: DeploymentMultiTenantValEIntegratedInvariantStateActive,
-			ReviewerResult:           DeploymentMultiTenantValEReviewerResultPassConfirmed,
-			Timestamp:                deploymentMultiTenantValEManifestTimestampActive,
-			CommitSHAIfAvailable:     deploymentMultiTenantValENotYetCommitted,
-			ProjectionDisclaimer:     disclaimer,
-			DiagnosticOutputComplete: true,
-		},
-		NoOverclaim: DeploymentMultiTenantValENoOverclaimDiscipline{
-			ObservedClaims:       []string{"validated deployment baseline", "not production approval"},
-			ProjectionDisclaimer: disclaimer,
-		},
-		ProjectionBoundaryReview: DeploymentMultiTenantValEProjectionBoundaryReview{
-			Surfaces: []DeploymentMultiTenantValEProjectionSurface{
-				deploymentMultiTenantValEProjectionSurfaceEntry("dashboard", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("fleet", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("marketplace", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("msp", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("partner", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("connector", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("operator_support", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("agentic_recommendation", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("auditor_export", disclaimer),
-				deploymentMultiTenantValEProjectionSurfaceEntry("docs_public_wording", disclaimer),
+			EvidenceQualityMap: DeploymentMultiTenantValEEvidenceQualityMap{
+				Entries: []DeploymentMultiTenantValEEvidenceQualityEntry{
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-val0-foundation", "foundation_dependency", "computed_val0_output", "val_0"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-vala-profile", "profile_readiness", "computed_vala_output", "val_a"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-valb-isolation", "tenant_isolation", "computed_valb_output", "val_b"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-valc-recovery", "reliability_recovery", "computed_valc_output", "val_c"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-vald-agentic", "agentic_governance", "computed_vald_output", "val_d"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-no-overclaim", "no_overclaim", "vale_no_overclaim_review", "no_overclaim"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-clb-closure", "clb_closure", "vale_closure_ledger", "clb_closure"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-clean-room", "clean_room_ip", "vale_clean_room_review", "clean_room_ip"),
+					deploymentMultiTenantValEEvidenceEntry("evidence:vale-pass-manifest", "pass_closure_manifest", "vale_pass_manifest", "pass_closure_manifest"),
+				},
+				ProjectionDisclaimer:     disclaimer,
+				DiagnosticOutputComplete: true,
 			},
-			ProjectionDisclaimer:     disclaimer,
-			DiagnosticOutputComplete: true,
-		},
-		CleanRoomIPReview: DeploymentMultiTenantValECleanRoomIPReview{
-			EvidenceRefs:                     []string{"evidence:deployment-multi-tenant-vale-clean-room-ip-001"},
-			ProjectionDisclaimer:             disclaimer,
-			DiagnosticOutputComplete:         true,
-			PublicAPIBoundaryPresent:         true,
-			StandardsBasedFormatsUsed:        true,
-			LicenseIPReviewStatus:            "license_ip_review_complete",
-			ThirdPartyComponentsUsed:         true,
-			ThirdPartyComponentOriginPresent: true,
-			IPOriginLedgerPresent:            true,
-			ExternalLegalReviewAcknowledged:  true,
-		},
-		Point10PassRule: DeploymentMultiTenantValEPoint10PassRule{
-			AllTestsPassed:              true,
-			AllNegativeFixturesPassed:   true,
-			AllGrepsPassed:              true,
-			PriorVal0DPoint10PassAbsent: true,
-			ProjectionDisclaimer:        disclaimer,
-			DiagnosticOutputComplete:    true,
-		},
-	}
+			CLBClosureLedger: DeploymentMultiTenantValECLBClosureLedger{
+				RiskExceptionRefs:        []string{},
+				RiskExceptions:           []DeploymentMultiTenantValERiskException{},
+				RequiredFollowupRefs:     []string{},
+				ReviewerNotes:            "final_closure_review_complete",
+				ProjectionBoundaryResult: "projection_boundary advisory_only",
+				CleanRoomIPResult:        "clean_room_ip active",
+				NoOverclaimResult:        "no_overclaim active",
+				ProjectionDisclaimer:     disclaimer,
+				DiagnosticOutputComplete: true,
+			},
+			PassClosureManifest: DeploymentMultiTenantValEPassClosureManifest{
+				PointID:                  deploymentMultiTenantValEPointID,
+				WaveID:                   deploymentMultiTenantValEWaveID,
+				Scope:                    deploymentMultiTenantValEScope,
+				DependencyGateResult:     deploymentMultiTenantValEFoundationDependencyGateResult(dependency),
+				EvidenceIdentity:         "policy_version=" + deploymentMultiTenantValEExpectedPolicyVersion() + " engine_version=" + deploymentMultiTenantValEExpectedEngineVersion() + " schema_version=" + deploymentMultiTenantValEExpectedSchemaVersion() + " tenant_scope=" + deploymentMultiTenantValEExpectedTenantScope() + " deployment_profile=" + deploymentMultiTenantValEExpectedDeploymentProfile(),
+				CommandsRun:              append([]string{}, deploymentMultiTenantValERequiredCommandSet()...),
+				TestsRun:                 append([]string{}, deploymentMultiTenantValERequiredTestSet()...),
+				NegativeFixturesRun:      append([]string{}, deploymentMultiTenantValERequiredNegativeFixtures()...),
+				ProjectionBoundaryResult: deploymentMultiTenantValEManifestProjectionBoundary,
+				NoOverclaimGrepResult:    strings.Join(deploymentMultiTenantValENoOverclaimResultTokens(), " "),
+				CleanRoomIPResult:        strings.Join(deploymentMultiTenantValECleanRoomIPResultTokens(), " "),
+				CLBClosureResult:         strings.Join(deploymentMultiTenantValECLBClosureResultTokens(), " "),
+				EvidenceQualityResult:    DeploymentMultiTenantValEEvidenceQualityStateActive,
+				CrossWaveInvariantResult: DeploymentMultiTenantValEIntegratedInvariantStateActive,
+				ReviewerResult:           DeploymentMultiTenantValEReviewerResultPassConfirmed,
+				Timestamp:                deploymentMultiTenantValEManifestTimestampActive,
+				CommitSHAIfAvailable:     deploymentMultiTenantValENotYetCommitted,
+				ProjectionDisclaimer:     disclaimer,
+				DiagnosticOutputComplete: true,
+			},
+			NoOverclaim: DeploymentMultiTenantValENoOverclaimDiscipline{
+				ObservedClaims:       []string{"validated deployment baseline", "not production approval"},
+				ProjectionDisclaimer: disclaimer,
+			},
+			ProjectionBoundaryReview: DeploymentMultiTenantValEProjectionBoundaryReview{
+				Surfaces: []DeploymentMultiTenantValEProjectionSurface{
+					deploymentMultiTenantValEProjectionSurfaceEntry("dashboard", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("fleet", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("marketplace", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("msp", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("partner", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("connector", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("operator_support", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("agentic_recommendation", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("auditor_export", disclaimer),
+					deploymentMultiTenantValEProjectionSurfaceEntry("docs_public_wording", disclaimer),
+				},
+				ProjectionDisclaimer:     disclaimer,
+				DiagnosticOutputComplete: true,
+			},
+			CleanRoomIPReview: DeploymentMultiTenantValECleanRoomIPReview{
+				EvidenceRefs:                     []string{"evidence:deployment-multi-tenant-vale-clean-room-ip-001"},
+				ProjectionDisclaimer:             disclaimer,
+				DiagnosticOutputComplete:         true,
+				PublicAPIBoundaryPresent:         true,
+				StandardsBasedFormatsUsed:        true,
+				LicenseIPReviewStatus:            "license_ip_review_complete",
+				ThirdPartyComponentsUsed:         true,
+				ThirdPartyComponentOriginPresent: true,
+				IPOriginLedgerPresent:            true,
+				ExternalLegalReviewAcknowledged:  true,
+			},
+			Point10PassRule: DeploymentMultiTenantValEPoint10PassRule{
+				AllTestsPassed:              true,
+				AllNegativeFixturesPassed:   true,
+				AllGrepsPassed:              true,
+				PriorVal0DPoint10PassAbsent: true,
+				ProjectionDisclaimer:        disclaimer,
+				DiagnosticOutputComplete:    true,
+			},
+		}
+	})
 }
 
 func deploymentMultiTenantValEBlockingReasons(model DeploymentMultiTenantValEFoundation) []string {

@@ -9,9 +9,56 @@ func TestPoint14ValCDependencyState(t *testing.T) {
 		want   string
 	}{
 		{
+			name:   "canonical inherited boundary snapshot stays active",
+			mutate: func(model *Point14ValCDependencySnapshot) {},
+			want:   Point14ValCStateActive,
+		},
+		{
 			name: "missing point14 valb blocks",
 			mutate: func(model *Point14ValCDependencySnapshot) {
 				model.Point14ValBCurrentState = ""
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 current state in valb dependency blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint10CurrentState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 no overclaim state in valb dependency blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint10NoOverclaimState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 projection state in valb dependency blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint10ProjectionState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point10 pass rule state in valb dependency blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint10PassRuleState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "tab newline retagged embedded valb current state blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.CurrentState = "\t" + model.Point14ValB.CurrentState + "\n"
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged nested point11 final pass gate in valb dependency blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint11FinalPassGateState += " "
 			},
 			want: Point14ValCStateBlocked,
 		},
