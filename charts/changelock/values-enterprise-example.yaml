@@ -156,7 +156,7 @@ deployGate:
     secretName: changelock-deploy-gate-tls
   webhook:
     enabled: true
-    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCg==
+    caBundle: REPLACE_WITH_BASE64_CA_BUNDLE
   podDisruptionBudget:
     enabled: true
     minAvailable: 2
