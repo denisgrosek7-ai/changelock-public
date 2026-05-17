@@ -2,6 +2,7 @@ package formal
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -13,6 +14,15 @@ var (
 
 func point15ValECloneStrings(values []string) []string {
 	return append([]string(nil), values...)
+}
+
+func point15ValEStringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func clonePoint15ValEFoundation(model Point15ValEContinuousVerificationClosureFoundation) Point15ValEContinuousVerificationClosureFoundation {
@@ -152,6 +162,21 @@ func TestPoint15ValEDependencyState(t *testing.T) {
 		{"blocks when vald ci not green", func(model *Point15ValEDependencySnapshot) { model.Point15ValDCIGreen = false }, Point15ValEStateBlocked},
 		{"blocks when vald not reviewed on main", func(model *Point15ValEDependencySnapshot) { model.Point15ValDReviewedOnMain = false }, Point15ValEStateBlocked},
 		{"blocks when inherited valc missing", func(model *Point15ValEDependencySnapshot) { model.InheritedPoint15ValCCurrentState = "" }, Point15ValEStateBlocked},
+		{"blocks whitespace retagged embedded vald state", func(model *Point15ValEDependencySnapshot) {
+			retagged := " " + Point15ValDStateActive + " "
+			model.Point15ValDCurrentState = retagged
+			model.Point15ValD.CurrentState = retagged
+		}, Point15ValEStateBlocked},
+		{"blocks tab newline retagged inherited point14 state", func(model *Point15ValEDependencySnapshot) {
+			retagged := "\t" + Point14ValEStatePassConfirmed + "\n"
+			model.InheritedPoint14ValECurrentState = retagged
+			model.Point15ValD.Dependency.InheritedPoint14ValECurrentState = retagged
+		}, Point15ValEStateBlocked},
+		{"blocks padded inherited tenant scope even when nested snapshot matches", func(model *Point15ValEDependencySnapshot) {
+			retagged := " " + model.InheritedTenantScope + " "
+			model.InheritedTenantScope = retagged
+			model.Point15ValD.Dependency.InheritedTenantScope = retagged
+		}, Point15ValEStateBlocked},
 		{"blocks when point15 pass appears before final path", func(model *Point15ValEDependencySnapshot) { model.Point15PassSeen = true }, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
@@ -179,6 +204,9 @@ func TestPoint15ValEClosureEvaluatorState(t *testing.T) {
 		{"incomplete component stays incomplete", func(model *Point15ValEClosureEvaluator) { model.TimestampIntegrityState = Point15ValEStateIncomplete }, Point15ValEStateIncomplete},
 		{"no mutation paths false blocks", func(model *Point15ValEClosureEvaluator) { model.NoMutationPathsDetected = false }, Point15ValEStateBlocked},
 		{"premature point15 pass blocks", func(model *Point15ValEClosureEvaluator) { model.NoPrematurePoint15Pass = false }, Point15ValEStateBlocked},
+		{"padded closure evaluator id blocks raw exact identity", func(model *Point15ValEClosureEvaluator) {
+			model.ClosureEvaluatorID = " " + model.ClosureEvaluatorID + " "
+		}, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -206,6 +234,7 @@ func TestPoint15ValEPassClosureManifestState(t *testing.T) {
 		{"missing tests run blocks", func(model *Point15PassClosureManifest) { model.TestsRun = nil }, Point15ValEStateBlocked},
 		{"missing greps run blocks", func(model *Point15PassClosureManifest) { model.GrepsRun = nil }, Point15ValEStateBlocked},
 		{"missing negative fixtures blocks", func(model *Point15PassClosureManifest) { model.NegativeFixturesRun = nil }, Point15ValEStateBlocked},
+		{"missing evidence id blocks", func(model *Point15PassClosureManifest) { model.EvidenceID = "" }, Point15ValEStateBlocked},
 		{"missing evidence identity blocks", func(model *Point15PassClosureManifest) { model.EvidenceIdentity = "" }, Point15ValEStateBlocked},
 		{"missing evidence hash blocks", func(model *Point15PassClosureManifest) { model.EvidenceHash = "" }, Point15ValEStateBlocked},
 		{"missing tenant scope blocks", func(model *Point15PassClosureManifest) { model.TenantScope = "" }, Point15ValEStateBlocked},
@@ -216,6 +245,42 @@ func TestPoint15ValEPassClosureManifestState(t *testing.T) {
 		{"missing tenant privacy result blocks", func(model *Point15PassClosureManifest) { model.TenantPrivacyResult = "" }, Point15ValEStateBlocked},
 		{"missing no overclaim result blocks", func(model *Point15PassClosureManifest) { model.NoOverclaimResult = "" }, Point15ValEStateBlocked},
 		{"missing clb result blocks", func(model *Point15PassClosureManifest) { model.CLBResult = "" }, Point15ValEStateBlocked},
+		{"padded point id blocks", func(model *Point15PassClosureManifest) {
+			model.PointID = " " + model.PointID + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline closure token blocks", func(model *Point15PassClosureManifest) {
+			model.ClosureToken = "\t" + point15Val0BlockedPassToken + "\n"
+		}, Point15ValEStateBlocked},
+		{"padded final point15 pass token blocks", func(model *Point15PassClosureManifest) {
+			model.Point15PassToken = point15Val0BlockedPassToken + " "
+		}, Point15ValEStateBlocked},
+		{"padded tenant scope blocks", func(model *Point15PassClosureManifest) {
+			model.TenantScope = " " + model.TenantScope + " "
+		}, Point15ValEStateBlocked},
+		{"padded evidence hash blocks", func(model *Point15PassClosureManifest) {
+			model.EvidenceHash = "\t" + model.EvidenceHash + "\n"
+		}, Point15ValEStateBlocked},
+		{"padded evidence id blocks raw exact manifest binding", func(model *Point15PassClosureManifest) {
+			model.EvidenceID = " " + model.EvidenceID + " "
+		}, Point15ValEStateBlocked},
+		{"offset generated at blocks raw canonical manifest time", func(model *Point15PassClosureManifest) {
+			model.GeneratedAt = "2026-05-07T09:30:00+00:00"
+		}, Point15ValEStateBlocked},
+		{"non utc offset generated at blocks raw canonical manifest time", func(model *Point15PassClosureManifest) {
+			model.GeneratedAt = "2026-05-07T10:30:00+01:00"
+		}, Point15ValEStateBlocked},
+		{"manifest evidence identity evidence id mismatch blocks", func(model *Point15PassClosureManifest) {
+			model.EvidenceIdentity = strings.Replace(model.EvidenceIdentity, "evidence_id="+model.EvidenceID, "evidence_id=evidence:foreign-tenant", 1)
+		}, Point15ValEStateBlocked},
+		{"manifest evidence identity hash mismatch blocks", func(model *Point15PassClosureManifest) {
+			model.EvidenceIdentity = strings.Replace(model.EvidenceIdentity, "evidence_hash="+model.EvidenceHash, "evidence_hash=sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 1)
+		}, Point15ValEStateBlocked},
+		{"manifest evidence id field mismatch blocks", func(model *Point15PassClosureManifest) {
+			model.EvidenceID = "evidence:foreign-tenant"
+		}, Point15ValEStateBlocked},
+		{"manifest evidence identity extra key blocks", func(model *Point15PassClosureManifest) {
+			model.EvidenceIdentity += " extra=authority"
+		}, Point15ValEStateBlocked},
 		{"review required dependency returns review required", func(model *Point15PassClosureManifest) {
 			model.DependencyGateResult = Point15ValEStateReviewRequired
 			model.Point15PassAllowed = false
@@ -313,6 +378,18 @@ func TestPoint15ValEFreshnessTaxonomyClosureCheckState(t *testing.T) {
 			model.DowngradeOutcome = point15Val0DowngradeBlocked
 			model.MappedState = Point15Val0StateBlocked
 			model.RetainsActiveClosure = false
+		}, Point15ValEStateBlocked},
+		{"padded freshness taxonomy state blocks raw exact component", func(model *Point15ValEFreshnessTaxonomyClosureCheck) {
+			model.FreshnessTaxonomyState = " " + model.FreshnessTaxonomyState + " "
+		}, Point15ValEStateBlocked},
+		{"padded freshness check id blocks raw exact component", func(model *Point15ValEFreshnessTaxonomyClosureCheck) {
+			model.CheckID = " " + model.CheckID + " "
+		}, Point15ValEStateBlocked},
+		{"padded tenant scope blocks raw exact freshness component", func(model *Point15ValEFreshnessTaxonomyClosureCheck) {
+			model.TenantScope = " " + model.TenantScope + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline evidence id blocks raw exact component", func(model *Point15ValEFreshnessTaxonomyClosureCheck) {
+			model.EvidenceID = "\t" + model.EvidenceID + "\n"
 		}, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
@@ -421,6 +498,12 @@ func TestPoint15ValEScheduledRevalidationClosureCheckState(t *testing.T) {
 			model.RunResult = point15ValBRunCompletedClean
 			model.ExactBindingConfirmed = false
 		}, Point15ValEStateBlocked},
+		{"padded schedule state blocks raw exact component", func(model *Point15ValEScheduledRevalidationClosureCheck) {
+			model.ScheduleState = " " + model.ScheduleState + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline run result blocks raw exact component", func(model *Point15ValEScheduledRevalidationClosureCheck) {
+			model.RunResult = "\t" + model.RunResult + "\n"
+		}, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -505,6 +588,12 @@ func TestPoint15ValEReplayProofHistoryClosureCheckState(t *testing.T) {
 	}{
 		{"replay proof history remains visible", func(*Point15ValEReplayProofHistoryClosureCheck) {}, Point15ValEStatePassConfirmed},
 		{"missing replay ref blocks", func(model *Point15ValEReplayProofHistoryClosureCheck) { model.ReplayRef = "" }, Point15ValEStateBlocked},
+		{"padded replay ref blocks raw exact closure binding", func(model *Point15ValEReplayProofHistoryClosureCheck) {
+			model.ReplayRef = " " + model.ReplayRef + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline proof pack ref blocks raw exact closure binding", func(model *Point15ValEReplayProofHistoryClosureCheck) {
+			model.ProofPackRef = "\t" + model.ProofPackRef + "\n"
+		}, Point15ValEStateBlocked},
 		{"prior state must remain visible", func(model *Point15ValEReplayProofHistoryClosureCheck) { model.PriorStateVisible = false }, Point15ValEStateBlocked},
 		{"hash binding must remain visible", func(model *Point15ValEReplayProofHistoryClosureCheck) { model.HashBindingVisible = false }, Point15ValEStateBlocked},
 		{"hidden proof history blocks", func(model *Point15ValEReplayProofHistoryClosureCheck) { model.ProofHistoryHidden = true }, Point15ValEStateBlocked},
@@ -532,6 +621,9 @@ func TestPoint15ValETenantPrivacyClosureCheckState(t *testing.T) {
 		{"cross tenant enforcement blocks", func(model *Point15ValETenantPrivacyClosureCheck) { model.CrossTenantEnforcementDetected = true }, Point15ValEStateBlocked},
 		{"cross tenant projection blocks", func(model *Point15ValETenantPrivacyClosureCheck) { model.CrossTenantProjectionDetected = true }, Point15ValEStateBlocked},
 		{"tenant private data exposure blocks", func(model *Point15ValETenantPrivacyClosureCheck) { model.TenantPrivateDataExposed = true }, Point15ValEStateBlocked},
+		{"tab newline tenant scope blocks raw exact tenant privacy component", func(model *Point15ValETenantPrivacyClosureCheck) {
+			model.TenantScope = "\t" + model.TenantScope + "\n"
+		}, Point15ValEStateBlocked},
 		{"redaction hiding decisive evidence requires review", func(model *Point15ValETenantPrivacyClosureCheck) { model.RedactionHidesDecisiveEvidence = true }, Point15ValEStateReviewRequired},
 	}
 	for _, tc := range tests {
@@ -564,8 +656,41 @@ func TestPoint15ValETimestampIntegrityClosureCheckState(t *testing.T) {
 		{"missing trusted displayed time is incomplete", func(model *Point15ValETimestampIntegrityClosureCheck) {
 			model.ProjectionDisplayedAt = ""
 		}, Point15ValEStateIncomplete},
+		{"whitespace only enforcement timestamp blocks instead of falling back", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.EnforcementEnforcedAt = " "
+		}, Point15ValEStateBlocked},
 		{"untrusted displayed time source blocks", func(model *Point15ValETimestampIntegrityClosureCheck) {
 			model.ProjectionDisplayedTimeSource = point14Val0TimeSourceClientLocal
+		}, Point15ValEStateBlocked},
+		{"non UTC offset reference time blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.ReferenceNow = "2026-05-07T10:30:00+01:00"
+		}, Point15ValEStateBlocked},
+		{"padded scheduled status token blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.ScheduledStatus = " " + model.ScheduledStatus + " "
+		}, Point15ValEStateBlocked},
+		{"padded tenant scope blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.TenantScope = " " + model.TenantScope + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline run result token blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.RunResult = "\t" + model.RunResult + "\n"
+		}, Point15ValEStateBlocked},
+		{"whitespace only revalidation due timestamp blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.RevalidationRequired = true
+			model.RevalidationDueAt = " "
+		}, Point15ValEStateBlocked},
+		{"whitespace only revalidation completed timestamp blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.RevalidationCompletedAt = " "
+		}, Point15ValEStateBlocked},
+		{"whitespace only source event timestamp blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.SourceEventAt = " "
+		}, Point15ValEStateBlocked},
+		{"padded source event time source blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.SourceEventAt = "2026-05-07T10:29:00Z"
+			model.SourceEventTimeSource = " " + model.SourceEventTimeSource + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline source event time source blocks raw exact timestamp closure", func(model *Point15ValETimestampIntegrityClosureCheck) {
+			model.SourceEventAt = "2026-05-07T10:29:00Z"
+			model.SourceEventTimeSource = "\t" + model.SourceEventTimeSource + "\n"
 		}, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
@@ -593,6 +718,9 @@ func TestPoint15ValEAuthorityBoundaryClosureCheckState(t *testing.T) {
 		{"timeline cannot create authority", func(model *Point15ValEAuthorityBoundaryClosureCheck) { model.TimelineAuthorityAllowed = true }, Point15ValEStateBlocked},
 		{"query cannot mutate", func(model *Point15ValEAuthorityBoundaryClosureCheck) { model.QueryMutationAllowed = true }, Point15ValEStateBlocked},
 		{"external source cannot become authority", func(model *Point15ValEAuthorityBoundaryClosureCheck) { model.ExternalAuthorityAllowed = true }, Point15ValEStateBlocked},
+		{"tab newline tenant scope blocks raw exact authority boundary component", func(model *Point15ValEAuthorityBoundaryClosureCheck) {
+			model.TenantScope = "\t" + model.TenantScope + "\n"
+		}, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -643,6 +771,141 @@ func TestPoint15ValENoOverclaimFinalCheckState(t *testing.T) {
 		{"forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
 			model.ObservedTexts = append(model.ObservedTexts, "continuous assurance guaranteed")
 		}, Point15ValEStateBlocked},
+		{"inherited point10 readiness overclaim wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "marketplace production ready")
+		}, Point15ValEStateBlocked},
+		{"unhyphenated inherited readiness overclaim wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "self hosted production approved")
+		}, Point15ValEStateBlocked},
+		{"unicode dash forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "regulator\u2011approved")
+		}, Point15ValEStateBlocked},
+		{"slash separator forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production/approved")
+		}, Point15ValEStateBlocked},
+		{"dot separator forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "deployment.approved")
+		}, Point15ValEStateBlocked},
+		{"underscore separator forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production_approved")
+		}, Point15ValEStateBlocked},
+		{"intra bucket filler forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production is approved")
+		}, Point15ValEStateBlocked},
+		{"long filler forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production is now fully globally approved")
+		}, Point15ValEStateBlocked},
+		{"confusable forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "pr\u0254duction approved")
+		}, Point15ValEStateBlocked},
+		{"zero width forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "pr\u200doduction approved")
+		}, Point15ValEStateBlocked},
+		{"zero width separator forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production\u200bapproved")
+		}, Point15ValEStateBlocked},
+		{"math bold forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "\U0001d429\U0001d42b\U0001d428\U0001d41d\U0001d42e\U0001d41c\U0001d42d\U0001d422\U0001d428\U0001d427 \U0001d41a\U0001d429\U0001d429\U0001d42b\U0001d428\U0001d42f\U0001d41e\U0001d41d")
+		}, Point15ValEStateBlocked},
+		{"greek nu forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production appro\u03bded")
+		}, Point15ValEStateBlocked},
+		{"greek upsilon forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "prod\u03c5ction approved")
+		}, Point15ValEStateBlocked},
+		{"small cap u forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "prod\U00001d1cction approved")
+		}, Point15ValEStateBlocked},
+		{"latin upsilon forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "prod\u028action approved")
+		}, Point15ValEStateBlocked},
+		{"greek delta forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "production approve\u03b4")
+		}, Point15ValEStateBlocked},
+		{"small cap t forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "official au\U00001d1bhority")
+		}, Point15ValEStateBlocked},
+		{"latin alpha forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "glob\u0251l truth")
+		}, Point15ValEStateBlocked},
+		{"latin iota forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "off\u0269cial authority")
+		}, Point15ValEStateBlocked},
+		{"dental click forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "comp\u01c0iance guaranteed")
+		}, Point15ValEStateBlocked},
+		{"armenian oh forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "c\u0585mpliance guaranteed")
+		}, Point15ValEStateBlocked},
+		{"greek eta forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "productio\u03b7 approved")
+		}, Point15ValEStateBlocked},
+		{"latin eng forbidden wording blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = append(model.ObservedTexts, "productio\u014b approved")
+		}, Point15ValEStateBlocked},
+		{"internal underscore machine token remains non-boundary safe wording", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.InternalDiagnosticTexts = append(model.InternalDiagnosticTexts, "internal_production_approved_metric")
+		}, Point15ValEStatePassConfirmed},
+		{"split forbidden wording across observed corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		}, Point15ValEStateBlocked},
+		{"split unhyphenated inherited readiness overclaim blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"air gapped", "certified"}
+		}, Point15ValEStateBlocked},
+		{"tab newline split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"production\t", "\napproved"}
+		}, Point15ValEStateBlocked},
+		{"unicode dash split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"deployment\u2013", "approved"}
+		}, Point15ValEStateBlocked},
+		{"slash split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"deployment/", "approved"}
+		}, Point15ValEStateBlocked},
+		{"zero width split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"deployment", "appro\u200dved"}
+		}, Point15ValEStateBlocked},
+		{"word fragment split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"produc", "tion approved"}
+		}, Point15ValEStateBlocked},
+		{"right leg u split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"prod\uab4e", "ction approved"}
+		}, Point15ValEStateBlocked},
+		{"latin upsilon split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"prod\u028a", "ction approved"}
+		}, Point15ValEStateBlocked},
+		{"greek nu split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"production", "appro\u03bded"}
+		}, Point15ValEStateBlocked},
+		{"greek delta split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"production", "approve\u03b4"}
+		}, Point15ValEStateBlocked},
+		{"small cap t split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"official au", "\U00001d1bhority"}
+		}, Point15ValEStateBlocked},
+		{"latin alpha split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"glob\u0251l", "truth"}
+		}, Point15ValEStateBlocked},
+		{"latin iota split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"off\u0269cial", "authority"}
+		}, Point15ValEStateBlocked},
+		{"dental click split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"comp\u01c0iance", "guaranteed"}
+		}, Point15ValEStateBlocked},
+		{"armenian oh split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"c\u0585mpliance", "guaranteed"}
+		}, Point15ValEStateBlocked},
+		{"armenian vo split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"productio\u0578", "approved"}
+		}, Point15ValEStateBlocked},
+		{"latin n with long right leg split forbidden wording across corpus blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ObservedTexts = []string{"productio\u019e", "approved"}
+		}, Point15ValEStateBlocked},
+		{"padded projection disclaimer blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ProjectionDisclaimer = " " + model.ProjectionDisclaimer + " "
+		}, Point15ValEStateBlocked},
+		{"tab newline projection disclaimer blocks", func(model *Point15ValENoOverclaimFinalCheck) {
+			model.ProjectionDisclaimer = "\t" + model.ProjectionDisclaimer + "\n"
+		}, Point15ValEStateBlocked},
 		{"mutated allowed wording set blocks", func(model *Point15ValENoOverclaimFinalCheck) {
 			model.AllowedSafeWording = model.AllowedSafeWording[:len(model.AllowedSafeWording)-1]
 		}, Point15ValEStateBlocked},
@@ -687,25 +950,261 @@ func TestPoint15ValECLBFinalCheckState(t *testing.T) {
 	}
 }
 
-func TestPoint15ValEFoundationState(t *testing.T) {
+func TestPoint15ValEComponentAggregateRawExact(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*Point15ValEContinuousVerificationClosureFoundation)
+		states []string
 		want   string
 	}{
-		{"final closure emits point15 pass only on clean vale path", func(*Point15ValEContinuousVerificationClosureFoundation) {}, Point15ValEStatePassConfirmed},
+		{
+			name:   "empty aggregate blocks instead of pass confirming",
+			states: nil,
+			want:   Point15ValEStateBlocked,
+		},
+		{
+			name:   "happy path exact pass confirmed states remain pass confirmed",
+			states: []string{Point15ValEStatePassConfirmed, Point15ValEStatePassConfirmed},
+			want:   Point15ValEStatePassConfirmed,
+		},
+		{
+			name:   "padded pass confirmed state blocks raw exact aggregate",
+			states: []string{" " + Point15ValEStatePassConfirmed + " ", Point15ValEStatePassConfirmed},
+			want:   Point15ValEStateBlocked,
+		},
+		{
+			name:   "tab newline pass confirmed state blocks raw exact aggregate",
+			states: []string{Point15ValEStatePassConfirmed, "\t" + Point15ValEStatePassConfirmed + "\n"},
+			want:   Point15ValEStateBlocked,
+		},
+		{
+			name:   "review required state preserves review precedence",
+			states: []string{Point15ValEStatePassConfirmed, Point15ValEStateReviewRequired},
+			want:   Point15ValEStateReviewRequired,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := point15ValEComponentAggregate(tc.states...); got != tc.want {
+				t.Fatalf("expected aggregate %s, got %s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestPoint15ValEFoundationState(t *testing.T) {
+	tests := []struct {
+		name        string
+		mutate      func(*Point15ValEContinuousVerificationClosureFoundation)
+		want        string
+		wantReasons []string
+	}{
+		{"final closure emits point15 pass only on clean vale path", func(*Point15ValEContinuousVerificationClosureFoundation) {}, Point15ValEStatePassConfirmed, nil},
 		{"missing projection boundary result blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.ProjectionClosureCheck.DisplayOnly = false
-		}, Point15ValEStateBlocked},
+		}, Point15ValEStateBlocked, nil},
+		{"padded nested vald dashboard mode blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dashboard.ProjectionMode = " " + model.Dependency.Point15ValD.Dashboard.ProjectionMode + " "
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"tab newline nested vald query action blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Query.ProjectionAction = "\t" + model.Dependency.Point15ValD.Query.ProjectionAction + "\n"
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"padded nested vald query public visibility blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Query.Visibility = " " + point15ValDVisibilityPublicBlocked + " "
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"padded nested vald no-overclaim disclaimer blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.NoOverclaimGuard.ProjectionDisclaimer = " " + model.Dependency.Point15ValD.NoOverclaimGuard.ProjectionDisclaimer + " "
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"padded nested valb schedule tenant scope blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Schedule.TenantScope = " " + model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Schedule.TenantScope + " "
+		}, Point15ValEStateBlocked, []string{"tenant_privacy"}},
+		{"tab newline nested vald viewer scope blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.AccessTenantPrivacy.ViewerScope = "\t" + model.Dependency.Point15ValD.AccessTenantPrivacy.ViewerScope + "\n"
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"padded nested vald timestamp projection mode blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.TimestampDisplayDiscipline.ProjectionMode = " " + model.Dependency.Point15ValD.TimestampDisplayDiscipline.ProjectionMode + " "
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald timeline validity creation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Timeline.TimelineCreatesValidity = true
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"padded nested vald replay ref blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.ReplayProofHistory.ReplayRef = " " + model.Dependency.Point15ValD.ReplayProofHistory.ReplayRef + " "
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"tab newline nested vald proof pack ref blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.ReplayProofHistory.ProofPackRef = "\t" + model.Dependency.Point15ValD.ReplayProofHistory.ProofPackRef + "\n"
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald authority pass allowed blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.AuthorityBoundary.PassAllowed = true
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald dashboard pass authority blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.AuthorityBoundary.DashboardApprovesPass = true
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald evidence mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.NoMutationGuard.EvidenceMutationAttempted = true
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald pass restore blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.NoMutationGuard.PassRestoreAttempted = true
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald no overclaim forbidden wording blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.NoOverclaimGuard.ObservedTexts = append(model.Dependency.Point15ValD.NoOverclaimGuard.ObservedTexts, "production approved")
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"stale nested vald inherited point10 readiness overclaim blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.NoOverclaimGuard.ObservedTexts = append(model.Dependency.Point15ValD.NoOverclaimGuard.ObservedTexts, "marketplace production ready")
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"direct vale split no overclaim blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoOverclaimFinalCheck.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"direct vale tab newline no overclaim blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoOverclaimFinalCheck.ObservedTexts = []string{"production\t", "\napproved"}
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"direct vale zero width split no overclaim blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoOverclaimFinalCheck.ObservedTexts = []string{"deployment", "appro\u200dved"}
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"direct vale confusable no overclaim blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoOverclaimFinalCheck.ObservedTexts = []string{"production appro\u03bded"}
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"direct vale long filler no overclaim blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoOverclaimFinalCheck.ObservedTexts = []string{"production is now fully globally approved"}
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"direct vale internal blocked diagnostic must stay classified in aggregate", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoOverclaimFinalCheck.InternalDiagnosticTexts = []string{"public badge"}
+			model.NoOverclaimFinalCheck.InternalDiagnosticsClassifiedBlocked = false
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"stale nested vald query redaction state whitespace retag blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Query.RedactionState = " " + point15ValDRedactionNone + " "
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald query redaction state tab newline retag blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Query.RedactionState = "\t" + point15ValDRedactionNone + "\n"
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested valc no overclaim forbidden wording blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.NoOverclaimGuard.ObservedTexts = append(model.Dependency.Point15ValD.Dependency.Point15ValC.NoOverclaimGuard.ObservedTexts, "deployment approved")
+		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
 		{"clb blocker prevents final pass", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.CLBFinalCheck.CLB1Present = true
-		}, Point15ValEStateBlocked},
+		}, Point15ValEStateBlocked, nil},
 		{"manifest evidence identity drift blocks", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.PassClosureManifest.EvidenceIdentity = "wrong_identity"
-		}, Point15ValEStateBlocked},
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest evidence id field drift blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EvidenceID = "evidence:foreign-tenant"
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest evidence id missing blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EvidenceID = ""
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest evidence id padding blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EvidenceID = " " + model.PassClosureManifest.EvidenceID + " "
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest evidence hash drift blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EvidenceHash = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest policy version padding blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.PolicyVersion = " " + model.PassClosureManifest.PolicyVersion + " "
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest engine version drift blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EngineVersion = "engine:foreign-version"
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest schema version tab newline blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.SchemaVersion = "\t" + model.PassClosureManifest.SchemaVersion + "\n"
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest evidence identity extra key blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EvidenceIdentity += " extra=authority"
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"self consistent foreign manifest identity blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.EvidenceID = "evidence:foreign-tenant"
+			model.PassClosureManifest.EvidenceHash = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+			model.PassClosureManifest.PolicyVersion = "policy:foreign-version"
+			model.PassClosureManifest.EngineVersion = "engine:foreign-version"
+			model.PassClosureManifest.SchemaVersion = "schema:foreign-version"
+			model.PassClosureManifest.TenantScope = "tenant:foreign-scope"
+			model.PassClosureManifest.EvidenceIdentity = point15ValEManifestEvidenceIdentity(
+				model.PassClosureManifest.EvidenceID,
+				model.PassClosureManifest.EvidenceHash,
+				model.PassClosureManifest.PolicyVersion,
+				model.PassClosureManifest.EngineVersion,
+				model.PassClosureManifest.SchemaVersion,
+				model.PassClosureManifest.TenantScope,
+			)
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"padded freshness check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.FreshnessTaxonomyClosureCheck.CheckID = " " + model.FreshnessTaxonomyClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"freshness_taxonomy"}},
+		{"padded freshness tenant scope blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.FreshnessTaxonomyClosureCheck.TenantScope = " " + model.FreshnessTaxonomyClosureCheck.TenantScope + " "
+		}, Point15ValEStateBlocked, []string{"freshness_taxonomy"}},
+		{"padded downgrade trigger check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.DowngradeTriggerClosureCheck.CheckID = " " + model.DowngradeTriggerClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"downgrade_trigger"}},
+		{"padded scheduled revalidation check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.ScheduledRevalidationClosureCheck.CheckID = " " + model.ScheduledRevalidationClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"scheduled_revalidation"}},
+		{"padded enforcement check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.EnforcementClosureCheck.CheckID = " " + model.EnforcementClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"enforcement"}},
+		{"padded projection check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.ProjectionClosureCheck.CheckID = " " + model.ProjectionClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"projection"}},
+		{"padded replay proof history check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.ReplayProofHistoryClosureCheck.CheckID = " " + model.ReplayProofHistoryClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"replay_proof_history"}},
+		{"padded tenant privacy check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TenantPrivacyClosureCheck.CheckID = " " + model.TenantPrivacyClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"tenant_privacy"}},
+		{"tab newline tenant privacy tenant scope blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TenantPrivacyClosureCheck.TenantScope = "\t" + model.TenantPrivacyClosureCheck.TenantScope + "\n"
+		}, Point15ValEStateBlocked, []string{"tenant_privacy"}},
+		{"padded timestamp integrity check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.CheckID = " " + model.TimestampIntegrityClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"padded timestamp integrity tenant scope blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.TenantScope = " " + model.TimestampIntegrityClosureCheck.TenantScope + " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"whitespace source event timestamp blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.SourceEventAt = " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"padded source event time source blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.SourceEventAt = "2026-05-07T10:29:00Z"
+			model.TimestampIntegrityClosureCheck.SourceEventTimeSource = " " + model.TimestampIntegrityClosureCheck.SourceEventTimeSource + " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"tab newline source event time source blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.SourceEventAt = "2026-05-07T10:29:00Z"
+			model.TimestampIntegrityClosureCheck.SourceEventTimeSource = "\t" + model.TimestampIntegrityClosureCheck.SourceEventTimeSource + "\n"
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"whitespace revalidation completed timestamp blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.RevalidationCompletedAt = " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"whitespace revalidation due timestamp blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.TimestampIntegrityClosureCheck.RevalidationRequired = true
+			model.TimestampIntegrityClosureCheck.RevalidationDueAt = " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"upstream whitespace enforcement timestamp blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.TimestampDiscipline.EnforcedAt = " "
+		}, Point15ValEStateBlocked, []string{"timestamp_integrity"}},
+		{"padded authority boundary check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.AuthorityBoundaryClosureCheck.CheckID = " " + model.AuthorityBoundaryClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"authority_boundary"}},
+		{"tab newline authority boundary tenant scope blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.AuthorityBoundaryClosureCheck.TenantScope = "\t" + model.AuthorityBoundaryClosureCheck.TenantScope + "\n"
+		}, Point15ValEStateBlocked, []string{"authority_boundary"}},
+		{"padded no mutation check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.NoMutationClosureCheck.CheckID = " " + model.NoMutationClosureCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"no_mutation"}},
+		{"padded clb check id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.CLBFinalCheck.CheckID = " " + model.CLBFinalCheck.CheckID + " "
+		}, Point15ValEStateBlocked, []string{"clb"}},
+		{"padded closure evaluator id blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.ClosureEvaluator.ClosureEvaluatorID = " " + model.ClosureEvaluator.ClosureEvaluatorID + " "
+		}, Point15ValEStateBlocked, []string{"closure_evaluator"}},
+		{"non utc generated at offset blocks aggregate final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			offsetTime := "2026-05-07T10:30:00+01:00"
+			model.Dependency.Point15ValD.TimestampDisplayDiscipline.ReferenceNow = offsetTime
+			model.TimestampIntegrityClosureCheck.ReferenceNow = offsetTime
+			model.PassClosureManifest.GeneratedAt = offsetTime
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
+		{"manifest generated at must bind dependency reference now", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.PassClosureManifest.GeneratedAt = "2026-05-07T11:01:00Z"
+		}, Point15ValEStateBlocked, []string{"pass_closure_manifest"}},
 		{"missing trusted timestamp keeps final closure incomplete", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.TimestampIntegrityClosureCheck.ProjectionDisplayedAt = ""
-		}, Point15ValEStateIncomplete},
+		}, Point15ValEStateIncomplete, nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -734,6 +1233,11 @@ func TestPoint15ValEFoundationState(t *testing.T) {
 					result.ClosureEvaluatorState,
 					result.PassClosureManifestState,
 				)
+			}
+			for _, expected := range tc.wantReasons {
+				if !point15ValEStringSliceContains(result.BlockingReasons, expected) {
+					t.Fatalf("expected exact blocking reason %q, got %#v", expected, result.BlockingReasons)
+				}
 			}
 			if tc.want == Point15ValEStatePassConfirmed {
 				if !result.PassClosureManifest.Point15PassAllowed || result.PassClosureManifest.Point15PassToken != point15Val0BlockedPassToken {

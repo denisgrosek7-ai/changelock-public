@@ -55,9 +55,25 @@ func assertPoint12ValENoPass(t *testing.T, model Point12ValEFoundation) {
 	if model.Point12PassToken != "" {
 		t.Fatalf("expected empty point_12_pass token, got %#v", model)
 	}
+	if model.PassClosureManifest.Point12PassAllowed {
+		t.Fatalf("expected nested pass closure manifest to disallow point_12_pass, got %#v", model.PassClosureManifest)
+	}
+	if model.PassClosureManifest.Point12PassToken != "" {
+		t.Fatalf("expected nested pass closure manifest token to be cleared, got %#v", model.PassClosureManifest)
+	}
 	if model.CurrentState == Point12ValEStatePassConfirmed {
 		t.Fatalf("expected state other than pass_confirmed, got %#v", model)
 	}
+}
+
+func assertPoint12ValEReason(t *testing.T, reasons []string, want string) {
+	t.Helper()
+	for _, reason := range reasons {
+		if reason == want {
+			return
+		}
+	}
+	t.Fatalf("expected exact reason %q, got %#v", want, reasons)
 }
 
 func TestPoint12ValEFoundationFixtureIsolation(t *testing.T) {
@@ -120,6 +136,15 @@ func TestPoint12ValEDependencyState(t *testing.T) {
 		{name: "external api use blocks", mutate: func(model *Point12ValEDependencySnapshot) { model.ValDExternalAPIUsed = true }, want: Point12ValEStateBlocked},
 		{name: "premature point12 pass blocks", mutate: func(model *Point12ValEDependencySnapshot) { model.ValDPrematurePoint12PassSeen = true }, want: Point12ValEStateBlocked},
 		{name: "wrong point id blocks", mutate: func(model *Point12ValEDependencySnapshot) { model.ValDPointID = "point_11" }, want: Point12ValEStateBlocked},
+		{name: "whitespace retagged vald point id blocks", mutate: func(model *Point12ValEDependencySnapshot) {
+			model.ValDPointID = " " + point12Val0PointID + " "
+		}, want: Point12ValEStateBlocked},
+		{name: "tab newline retagged vald active state blocks", mutate: func(model *Point12ValEDependencySnapshot) {
+			model.ValDCurrentState = "\t" + Point12ValDStateActive + "\n"
+		}, want: Point12ValEStateBlocked},
+		{name: "padded vald proof chain state blocks", mutate: func(model *Point12ValEDependencySnapshot) {
+			model.ValDProofChainState = Point12ValDProofChainStateActive + " "
+		}, want: Point12ValEStateBlocked},
 		{name: "point12 pass as input proof blocks", mutate: func(model *Point12ValEDependencySnapshot) {
 			model.ValD.Query.RequestedExplanation = point12ValEPoint12PassToken
 		}, want: Point12ValEStateBlocked},
@@ -327,6 +352,56 @@ func TestPoint12ValEFinalReplayInvariantState(t *testing.T) {
 		})
 	}
 
+	t.Run("tab newline replay mode retag fails closed with exact reason", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.ReplayInvariants.ReplayMode = "\t" + foundation.ReplayInvariants.ReplayMode + "\n"
+		got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked replay invariant for raw retag, got %#v", foundation.ReplayInvariants)
+		}
+		found := false
+		for _, reason := range reasons {
+			if reason == "replay_invariant_identity_or_metadata_invalid" || reason == "replay_invariant_dependency_semantics_mismatch:replay_mode" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected exact replay-mode raw mismatch reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("padded replay review id fails raw exact identity", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.ReplayInvariants.ReviewID = " " + foundation.ReplayInvariants.ReviewID + " "
+		got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked replay invariant for padded review id, got %#v", foundation.ReplayInvariants)
+		}
+		assertPoint12ValEReason(t, reasons, "replay_invariant_identity_or_metadata_invalid")
+	})
+
+	t.Run("padded dependency replay taxonomy fails raw exact semantics", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.Dependency.ValB.ReplayResult.ReplayResultTaxonomy = foundation.Dependency.ValB.ReplayResult.ReplayResultTaxonomy + " "
+		got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked replay invariant for padded taxonomy, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_semantics_mismatch:replay_result_taxonomy")
+	})
+
+	t.Run("tab newline dependency replay state fails raw exact semantics", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.Dependency.ValB.ReplayResult.ReplayState = foundation.Dependency.ValB.ReplayResult.ReplayState + "\n"
+		got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked replay invariant for retagged replay state, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_semantics_mismatch:blocked_replay")
+		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_blocked_replay")
+	})
+
 	t.Run("same decision dependency replay with matching semantics remains active", func(t *testing.T) {
 		foundation := activePoint12ValEFoundation()
 		if got, _ := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency); got != Point12ValEStateActive {
@@ -390,6 +465,66 @@ func TestPoint12ValEEvidenceQualityState(t *testing.T) {
 			t.Fatalf("expected unsupported evidence quality state, got %#v", model.EvidenceQualityMap)
 		}
 	})
+
+	t.Run("padded dependency policy hash fails exact evidence binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValA.Manifest.PolicyHash = model.EvidenceQualityMap.PolicyHash + " "
+		got, reasons := point12ValEEvidenceQualityStateAndReasons(model.EvidenceQualityMap, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked evidence quality state for padded policy hash, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "evidence_quality_map_binding_mismatch")
+	})
+
+	t.Run("tab newline dependency artifact ref fails exact evidence binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValD.ProofChain.ArtifactRef = model.EvidenceQualityMap.ArtifactRef + "\n"
+		got, reasons := point12ValEEvidenceQualityStateAndReasons(model.EvidenceQualityMap, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked evidence quality state for retagged artifact ref, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "evidence_quality_map_binding_mismatch")
+	})
+
+	t.Run("padded evidence tenant scope fails raw exact identity", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.EvidenceQualityMap.TenantScope = " " + model.EvidenceQualityMap.TenantScope + " "
+		got, reasons := point12ValEEvidenceQualityStateAndReasons(model.EvidenceQualityMap, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked evidence quality state for padded tenant scope, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "evidence_quality_map_identity_or_metadata_invalid")
+	})
+
+	t.Run("tab newline dependency tenant scope fails exact evidence binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValD.ProofChain.TenantScope = model.EvidenceQualityMap.TenantScope + "\n"
+		got, reasons := point12ValEEvidenceQualityStateAndReasons(model.EvidenceQualityMap, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked evidence quality state for retagged tenant scope, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "evidence_quality_map_binding_mismatch")
+	})
+
+	t.Run("padded manifest tenant scope fails sibling evidence binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValA.Manifest.TenantScope = model.EvidenceQualityMap.TenantScope + " "
+		got, reasons := point12ValEEvidenceQualityStateAndReasons(model.EvidenceQualityMap, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked evidence quality state for padded manifest tenant scope, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "evidence_quality_map_binding_mismatch")
+	})
+
+	t.Run("padded evidence quality state fails exact state validation", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.EvidenceQualityMap.QualityState = Point12ValEStateActive + " "
+		got, reasons := point12ValEEvidenceQualityStateAndReasons(model.EvidenceQualityMap, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked evidence quality state for padded state, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "evidence_quality_map_identity_or_metadata_invalid")
+	})
 }
 
 func TestPoint12ValEBindingMutationClosure(t *testing.T) {
@@ -398,6 +533,16 @@ func TestPoint12ValEBindingMutationClosure(t *testing.T) {
 		if got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency); got != Point12ValEStateActive {
 			t.Fatalf("expected active binding mutation state, got %s reasons=%v model=%#v", got, reasons, model.BindingMutationClosure)
 		}
+	})
+
+	t.Run("padded binding mutation review id blocks raw exact metadata", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.BindingMutationClosure.ReviewID = " " + model.BindingMutationClosure.ReviewID + " "
+		got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded binding mutation review id to block, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "binding_mutation_identity_or_metadata_invalid")
 	})
 
 	t.Run("vala schema drift plus recomputed payload hash still blocks", func(t *testing.T) {
@@ -450,6 +595,65 @@ func TestPoint12ValEBindingMutationClosure(t *testing.T) {
 			t.Fatalf("expected blocked binding mutation state, got %#v", model.Dependency.ValD.BindingMatrix)
 		}
 	})
+
+	t.Run("padded valb request manifest binding fails raw exact", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValB.ReplayRequest.ProofPackID = model.Dependency.ValA.Manifest.ProofPackID + " "
+		got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked binding mutation state for padded proof pack, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "binding_mutation_valb_request_manifest_binding_invalid")
+	})
+
+	t.Run("tab newline valb result binding fails raw exact", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValB.ReplayResult.ReplayRequestID = model.Dependency.ValB.ReplayRequest.ReplayRequestID + "\n"
+		got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked binding mutation state for retagged replay result, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "binding_mutation_valb_result_request_binding_invalid")
+	})
+
+	t.Run("padded valc export binding fails raw exact", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValC.ExportBundle.ManifestID = model.Dependency.ValB.ReplayRequest.ManifestID + " "
+		got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked binding mutation state for padded export manifest, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "binding_mutation_valc_export_binding_invalid")
+	})
+
+	t.Run("tab newline valc offline binding fails raw exact", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValC.OfflineBundle.ArtifactHash = model.Dependency.ValB.ReplayRequest.ArtifactHash + "\t"
+		got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked binding mutation state for retagged offline artifact hash, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "binding_mutation_valc_offline_binding_invalid")
+	})
+
+	t.Run("padded binding matrix field name no longer satisfies required field", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		mutated := false
+		for idx := range model.Dependency.ValD.BindingMatrix.BoundFields {
+			if model.Dependency.ValD.BindingMatrix.BoundFields[idx].FieldName == "export_id" {
+				model.Dependency.ValD.BindingMatrix.BoundFields[idx].FieldName = " export_id "
+				mutated = true
+			}
+		}
+		if !mutated {
+			t.Fatalf("expected fixture to contain export_id binding field")
+		}
+		got, reasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked binding mutation state for padded binding field name, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "binding_mutation_required_vald_field_missing:export_id")
+	})
 }
 
 func TestPoint12ValEProjectionBoundaryState(t *testing.T) {
@@ -485,11 +689,443 @@ func TestPoint12ValENoOverclaimState(t *testing.T) {
 		}
 	})
 
+	t.Run("padded no overclaim review id blocks raw exact metadata", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ReviewID = " " + model.NoOverclaimReview.ReviewID + " "
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded no-overclaim review id to block, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_identity_or_metadata_invalid")
+	})
+
 	t.Run("forbidden customer wording blocks", func(t *testing.T) {
 		model := activePoint12ValEFoundation()
 		model.NoOverclaimReview.ObservedCustomerTexts = []string{"regulator-approved deployment approved"}
 		if got, _ := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview); got != Point12ValEStateBlocked {
 			t.Fatalf("expected blocked no-overclaim state, got %#v", model.NoOverclaimReview)
+		}
+	})
+
+	t.Run("unhyphenated regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"regulator approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected unhyphenated regulator approval to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("unicode dash regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"regulator\u2011approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected unicode dash regulator approval to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("slash regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"regulator/approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected slash-separated regulator approval to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("dot production approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"production.approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected dot-separated production approval to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("inherited point10 readiness overclaim wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"marketplace production ready"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited readiness overclaim to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("split forbidden export wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"deployment", "approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected split forbidden export wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("slash split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"deployment/", "approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected slash split forbidden export wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("unicode dash split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"deployment\u2013", "approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected unicode dash split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("confusable split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"pr\u0254duction", "approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected confusable split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("zero width production approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"production appro\u200dved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected zero-width production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("zero width separator production approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"production\u200bapproved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected zero-width separator production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("greek nu production approval wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"production appro\u03bded"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected greek nu production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("greek upsilon production wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"prod\u03c5ction approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected greek upsilon production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("small cap u production wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"prod\U00001d1cction approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected small-cap u production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin upsilon production wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"prod\u028action approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin upsilon production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("greek delta approved wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"production approve\u03b4"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected greek delta production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("small cap t official authority wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"official au\U00001d1bhority"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected small-cap t official authority wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin alpha global truth wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"glob\u0251l truth"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin alpha global truth wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin iota official authority wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"off\u0269cial authority"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin iota official authority wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("dental click public badge wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"pub\u01c0ic badge"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected dental-click public badge wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("armenian oh compliance guarantee wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"c\u0585mpliance guaranteed"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected armenian-oh compliance guarantee wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("greek eta production wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"productio\u03b7 approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected greek eta production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin eng production wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"productio\u014b approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin eng production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("cyrillic pe production wording blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"productio\u043f approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected cyrillic pe production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("zero width split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"deployment", "appro\u2060ved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected zero-width split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("math bold split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{
+			"\U0001d41d\U0001d41e\U0001d429\U0001d425\U0001d428\U0001d432\U0001d426\U0001d41e\U0001d427\U0001d42d",
+			"\U0001d41a\U0001d429\U0001d429\U0001d42b\U0001d428\U0001d42f\U0001d41e\U0001d41d",
+		}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected math bold split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("word fragment split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"produc", "tion approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected word-fragment split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("right leg u split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"prod\uab4e", "ction approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected right-leg u split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin upsilon split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"prod\u028a", "ction approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin upsilon split production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("greek nu split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"production", "appro\u03bded"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected greek nu split production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("greek delta split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"production", "approve\u03b4"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected greek delta split production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("small cap t split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"official au", "\U00001d1bhority"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected small-cap t split official authority wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin alpha split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"glob\u0251l", "truth"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin alpha split global truth wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin iota split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"off\u0269cial", "authority"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin iota split official authority wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("dental click split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"pub\u01c0ic", "badge"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected dental-click split public badge wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("armenian oh split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"c\u0585mpliance", "guaranteed"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected armenian-oh split compliance guarantee wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("armenian vo split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"productio\u0578", "approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected armenian vo split production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("latin n with long right leg split forbidden wording across buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"productio\u019e", "approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected latin n with long right leg split production approved wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("underscore machine token remains non-boundary safe wording", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.InternalDiagnosticTexts = []string{"internal_production_approved_metric"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateActive {
+			t.Fatalf("expected underscore machine token not to become a forbidden phrase, got %#v reasons %#v", model.NoOverclaimReview, reasons)
+		}
+	})
+
+	t.Run("split forbidden wording across customer and export buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"deployment"}
+		model.NoOverclaimReview.ObservedExportTexts = []string{"approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected cross-surface split forbidden wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("split regulator approval across customer and export buckets blocks", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedCustomerTexts = []string{"regulator"}
+		model.NoOverclaimReview.ObservedExportTexts = []string{"approved"}
+		got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected split regulator approval wording to block, got %#v", model.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, reasons, "no_overclaim_customer_or_export_overclaim_detected")
+	})
+
+	t.Run("all allowed disclaimer only split context remains active", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"not deployment approval", "not production approval"}
+		if got, reasons := point12ValENoOverclaimStateAndReasons(model.NoOverclaimReview); got != Point12ValEStateActive {
+			t.Fatalf("expected allowed disclaimer-only export wording to remain active, got %s reasons=%v", got, reasons)
 		}
 	})
 
@@ -519,6 +1155,16 @@ func TestPoint12ValECleanRoomIPState(t *testing.T) {
 		}
 	})
 
+	t.Run("padded clean room review id blocks raw exact metadata", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.CleanRoomIPReview.ReviewID = " " + model.CleanRoomIPReview.ReviewID + " "
+		got, reasons := point12ValECleanRoomIPStateAndReasons(model.CleanRoomIPReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded clean-room review id to block, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "clean_room_ip_identity_or_metadata_invalid")
+	})
+
 	t.Run("unreviewed customer facing dependency requires review", func(t *testing.T) {
 		model := activePoint12ValEFoundation()
 		model.CleanRoomIPReview.UnreviewedCustomerFacingDependency = true
@@ -534,6 +1180,46 @@ func TestPoint12ValECleanRoomIPState(t *testing.T) {
 			t.Fatalf("expected blocked clean-room state, got %#v", model.CleanRoomIPReview)
 		}
 	})
+
+	t.Run("padded third party ref blocks raw exact clean room review", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.CleanRoomIPReview.ThirdPartyRefs[0] = " " + model.CleanRoomIPReview.ThirdPartyRefs[0] + " "
+		got, reasons := point12ValECleanRoomIPStateAndReasons(model.CleanRoomIPReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded third-party ref to block clean-room review, got %#v", model.CleanRoomIPReview)
+		}
+		assertPoint12ValEReason(t, reasons, "clean_room_ip_identity_or_metadata_invalid")
+	})
+
+	t.Run("padded license review ref blocks raw exact clean room review", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.CleanRoomIPReview.LicenseReviewRefs[0] = " " + model.CleanRoomIPReview.LicenseReviewRefs[0] + " "
+		got, reasons := point12ValECleanRoomIPStateAndReasons(model.CleanRoomIPReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded license review ref to block clean-room review, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "clean_room_ip_identity_or_metadata_invalid")
+	})
+
+	t.Run("tab newline ip review ref blocks raw exact clean room review", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.CleanRoomIPReview.IPReviewRefs[0] = "\t" + model.CleanRoomIPReview.IPReviewRefs[0] + "\n"
+		got, reasons := point12ValECleanRoomIPStateAndReasons(model.CleanRoomIPReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected retagged IP review ref to block clean-room review, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "clean_room_ip_identity_or_metadata_invalid")
+	})
+
+	t.Run("padded ai review package ref blocks raw exact clean room review", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.CleanRoomIPReview.AIReviewPackageRefs[0] = " " + model.CleanRoomIPReview.AIReviewPackageRefs[0] + " "
+		got, reasons := point12ValECleanRoomIPStateAndReasons(model.CleanRoomIPReview)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded AI review package ref to block clean-room review, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "clean_room_ip_identity_or_metadata_invalid")
+	})
 }
 
 func TestPoint12ValERetentionProvenanceState(t *testing.T) {
@@ -542,6 +1228,16 @@ func TestPoint12ValERetentionProvenanceState(t *testing.T) {
 		if got, _ := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency); got != Point12ValEStateActive {
 			t.Fatalf("expected active retention/provenance state, got %#v", model.RetentionProvenanceReview)
 		}
+	})
+
+	t.Run("padded retention review id blocks raw exact metadata", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.RetentionProvenanceReview.ReviewID = " " + model.RetentionProvenanceReview.ReviewID + " "
+		got, reasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected padded retention review id to block, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "retention_provenance_identity_or_metadata_invalid")
 	})
 
 	t.Run("missing retention class blocks", func(t *testing.T) {
@@ -567,6 +1263,56 @@ func TestPoint12ValERetentionProvenanceState(t *testing.T) {
 			t.Fatalf("expected blocked retention/provenance state, got %#v", model.RetentionProvenanceReview)
 		}
 	})
+
+	t.Run("padded dependency retention class fails raw exact binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValA.Manifest.RetentionClassRef = model.RetentionProvenanceReview.ProofPackRetentionClassRef + " "
+		got, reasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked retention/provenance state for padded retention class, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "retention_provenance_binding_mismatch")
+	})
+
+	t.Run("tab newline dependency disposal path fails raw exact binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValC.ExportBundle.DisposalPathRef = model.RetentionProvenanceReview.DisposalPathRef + "\n"
+		got, reasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked retention/provenance state for retagged disposal path, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "retention_provenance_binding_mismatch")
+	})
+
+	t.Run("padded retention tenant scope fails raw exact identity", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.RetentionProvenanceReview.TenantScope = " " + model.RetentionProvenanceReview.TenantScope + " "
+		got, reasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked retention/provenance state for padded tenant scope, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "retention_provenance_identity_or_metadata_invalid")
+	})
+
+	t.Run("tab newline proof chain tenant scope fails retention binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValD.ProofChain.TenantScope = model.RetentionProvenanceReview.TenantScope + "\n"
+		got, reasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked retention/provenance state for retagged tenant scope, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "retention_provenance_binding_mismatch")
+	})
+
+	t.Run("padded export tenant scope fails sibling retention binding", func(t *testing.T) {
+		model := activePoint12ValEFoundation()
+		model.Dependency.ValC.ExportBundle.TenantScope = model.RetentionProvenanceReview.TenantScope + " "
+		got, reasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked retention/provenance state for padded export tenant scope, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "retention_provenance_binding_mismatch")
+	})
 }
 
 func TestPoint12ValEPassClosureManifestState(t *testing.T) {
@@ -578,15 +1324,54 @@ func TestPoint12ValEPassClosureManifestState(t *testing.T) {
 	})
 
 	cases := []struct {
-		name     string
-		expected bool
-		mutate   func(*Point12ValEPassClosureManifest)
-		want     string
+		name       string
+		expected   bool
+		mutate     func(*Point12ValEPassClosureManifest)
+		want       string
+		wantReason string
 	}{
 		{name: "missing closure manifest id blocks", expected: true, mutate: func(model *Point12ValEPassClosureManifest) { model.ClosureManifestID = "" }, want: Point12ValEStateBlocked},
 		{name: "wrong point id blocks", expected: true, mutate: func(model *Point12ValEPassClosureManifest) { model.PointID = "point_11" }, want: Point12ValEStateBlocked},
+		{name: "padded point id blocks", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.PointID = " " + model.PointID + " "
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_identity_or_metadata_invalid"},
+		{name: "tab newline wave id blocks", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.WaveID = "\t" + model.WaveID + "\n"
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_identity_or_metadata_invalid"},
 		{name: "missing dependency refs block", expected: true, mutate: func(model *Point12ValEPassClosureManifest) { model.ValDSnapshotRef = "" }, want: Point12ValEStateBlocked},
 		{name: "commit sha present before commit blocks", expected: true, mutate: func(model *Point12ValEPassClosureManifest) { model.CommitSHAIfAvailable = "abc123" }, want: Point12ValEStateBlocked},
+		{name: "padded final point12 token blocks", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.Point12PassToken = point12ValEPoint12PassToken + " "
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_token_invalid"},
+		{name: "padded generated timestamp blocks raw exact closure manifest", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.GeneratedAt = " " + model.GeneratedAt + " "
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "fake prefix-shaped gate refs cannot replace canonical run evidence", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.CommandsRun = []string{"command_run_point12_vale_fake_001", "command_run_point12_vale_fake_002", "command_run_point12_vale_fake_003"}
+			model.TestsRun = []string{"test_run_point12_vale_fake_001", "test_run_point12_vale_fake_002", "test_run_point12_vale_fake_003"}
+			model.NegativeFixturesRun = []string{"negative_fixture_point12_vale_fake_001", "negative_fixture_point12_vale_fake_002", "negative_fixture_point12_vale_fake_003"}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "duplicate command run cannot satisfy missing canonical command run", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			expected := point12ValECommandsRun()
+			model.CommandsRun = []string{expected[0], expected[0], expected[2]}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "duplicate test run cannot satisfy missing canonical test run", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			expected := point12ValETestsRun()
+			model.TestsRun = []string{expected[0], expected[0], expected[2]}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "duplicate negative fixture cannot satisfy missing canonical negative fixture", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			expected := point12ValENegativeFixturesRun()
+			model.NegativeFixturesRun = []string{expected[0], expected[0], expected[2]}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "zero width fake command run blocks raw exact gate refs", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.CommandsRun = []string{"command_run_point12_vale_\u200dfake_001", "command_run_point12_vale_go_test_formal_001", "command_run_point12_vale_go_test_all_001"}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "zero width fake test run blocks raw exact gate refs", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.TestsRun = []string{"test_run_point12_vale_\u200dfake_001", "test_run_point12_vale_point11_regressions_001", "test_run_point12_vale_go_test_all_001"}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
+		{name: "zero width fake negative fixture blocks raw exact gate refs", expected: true, mutate: func(model *Point12ValEPassClosureManifest) {
+			model.NegativeFixturesRun = []string{"negative_fixture_point12_vale_\u200dfake_001", "negative_fixture_point12_vale_no_overclaim_001", "negative_fixture_point12_vale_binding_mutation_001"}
+		}, want: Point12ValEStateBlocked, wantReason: "pass_closure_manifest_required_fields_invalid"},
 		{name: "point12 token present before final path blocks", expected: false, mutate: func(model *Point12ValEPassClosureManifest) {}, want: Point12ValEStateBlocked},
 	}
 
@@ -594,11 +1379,61 @@ func TestPoint12ValEPassClosureManifestState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			foundation := activePoint12ValEFoundation()
 			tc.mutate(&foundation.PassClosureManifest)
-			if got, _ := point12ValEPassClosureManifestStateAndReasons(foundation.PassClosureManifest, foundation, tc.expected); got != tc.want {
+			got, reasons := point12ValEPassClosureManifestStateAndReasons(foundation.PassClosureManifest, foundation, tc.expected)
+			if got != tc.want {
 				t.Fatalf("expected %s, got %#v", tc.want, foundation.PassClosureManifest)
+			}
+			if tc.wantReason != "" {
+				found := false
+				for _, reason := range reasons {
+					if reason == tc.wantReason {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Fatalf("expected exact reason %q, got %#v", tc.wantReason, reasons)
+				}
 			}
 		})
 	}
+
+	t.Run("polluted dependency and manifest val0 snapshot ref still blocks", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		polluted := " " + foundation.Dependency.Val0SnapshotRef + " "
+		foundation.Dependency.Val0SnapshotRef = polluted
+		foundation.PassClosureManifest.Val0SnapshotRef = polluted
+		got, reasons := point12ValEPassClosureManifestStateAndReasons(foundation.PassClosureManifest, foundation, true)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected polluted dependency-bound val0 snapshot ref to block, got %s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "pass_closure_manifest_required_fields_invalid")
+	})
+
+	t.Run("polluted dependency and manifest tenant scope still blocks", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		polluted := foundation.Dependency.ValD.ProofChain.TenantScope + "\n"
+		foundation.Dependency.ValD.ProofChain.TenantScope = polluted
+		foundation.PassClosureManifest.TenantScope = polluted
+		got, reasons := point12ValEPassClosureManifestStateAndReasons(foundation.PassClosureManifest, foundation, true)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected polluted dependency-bound tenant scope to block, got %s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "pass_closure_manifest_required_fields_invalid")
+	})
+
+	t.Run("review required cannot mask malformed manifest", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.PassClosureManifest.ReviewerResult = point12ValEReviewerResultReviewRequired
+		foundation.PassClosureManifest.Point12PassAllowed = false
+		foundation.PassClosureManifest.Point12PassToken = ""
+		foundation.PassClosureManifest.ClosureManifestID = ""
+		got, reasons := point12ValEPassClosureManifestStateAndReasons(foundation.PassClosureManifest, foundation, true)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected malformed review-required manifest to block, got %s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "pass_closure_manifest_identity_or_metadata_invalid")
+	})
 }
 
 func TestPoint12ValEAggregateState(t *testing.T) {
@@ -622,6 +1457,20 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 		if computed.CurrentState != Point12ValEStateActive {
 			t.Fatalf("expected active aggregate state without final pass token, got %#v", computed)
 		}
+	})
+
+	t.Run("malformed review required manifest stays blocked in aggregate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.PassClosureManifest.ReviewerResult = point12ValEReviewerResultReviewRequired
+		model.PassClosureManifest.Point12PassAllowed = false
+		model.PassClosureManifest.Point12PassToken = ""
+		model.PassClosureManifest.ClosureManifestID = ""
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked || computed.PassClosureManifestState != Point12ValEStateBlocked {
+			t.Fatalf("expected malformed review-required aggregate to block, got %#v", computed)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "pass_closure_manifest:"+Point12ValEStateBlocked)
 	})
 
 	cases := []struct {
@@ -693,4 +1542,169 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 			assertPoint12ValENoPass(t, computed)
 		})
 	}
+
+	assertBlockedAggregate := func(t *testing.T, computed Point12ValEFoundation, componentState, reason string) {
+		t.Helper()
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked || componentState != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked aggregate with component %s, got state=%s component=%s model=%#v", reason, computed.CurrentState, componentState, computed)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, reason)
+	}
+
+	t.Run("long filler no overclaim failure blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.NoOverclaimReview.ObservedExportTexts = []string{"production is now fully globally approved"}
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.NoOverclaimState, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded binding mutation review id blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.BindingMutationClosure.ReviewID = " " + model.BindingMutationClosure.ReviewID + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded no overclaim review id blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.NoOverclaimReview.ReviewID = " " + model.NoOverclaimReview.ReviewID + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.NoOverclaimState, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded clean room review id blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.CleanRoomIPReview.ReviewID = " " + model.CleanRoomIPReview.ReviewID + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.CleanRoomIPState, "clean_room_ip:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded clean room license review ref blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.CleanRoomIPReview.LicenseReviewRefs[0] = " " + model.CleanRoomIPReview.LicenseReviewRefs[0] + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.CleanRoomIPState, "clean_room_ip:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("tab newline clean room ip review ref blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.CleanRoomIPReview.IPReviewRefs[0] = "\t" + model.CleanRoomIPReview.IPReviewRefs[0] + "\n"
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.CleanRoomIPState, "clean_room_ip:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded clean room ai review package ref blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.CleanRoomIPReview.AIReviewPackageRefs[0] = " " + model.CleanRoomIPReview.AIReviewPackageRefs[0] + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.CleanRoomIPState, "clean_room_ip:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded retention review id blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.RetentionProvenanceReview.ReviewID = " " + model.RetentionProvenanceReview.ReviewID + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.RetentionProvenanceState, "retention_provenance:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("retagged vald query generated at blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Query.GeneratedAt = "\t" + model.Dependency.ValD.Query.GeneratedAt + "\n"
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("padded vald binding matrix generated at blocks exact aggregate state", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.BindingMatrix.GeneratedAt = " " + model.Dependency.ValD.BindingMatrix.GeneratedAt + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+}
+
+func TestPoint12ValEDependencyDerivedBoundaryRecomputedBeforePass(t *testing.T) {
+	t.Run("stale clean projection review cannot hide unsafe dependency projection", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.ExportBundle.AdvisoryOnly = false
+		model.ProjectionBoundary = point12ValEProjectionBoundaryModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected stale clean projection review to block from dependency recomputation, got %#v", computed)
+		}
+		if computed.ProjectionBoundaryState != Point12ValEStateBlocked {
+			t.Fatalf("expected projection boundary state blocked, got %#v", computed.ProjectionBoundary)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "projection_boundary:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide unsafe dependency wording", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.ExportBundle.CustomerVisibleSummary = "deployment approved"
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected stale clean no-overclaim review to block from dependency recomputation, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide split unsafe dependency wording", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.ExportBundle.CustomerVisibleSummary = "deployment"
+		model.Dependency.ValC.OfflineBundle.CustomerVisibleExplanation = "approved"
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected split dependency no-overclaim wording to block from recomputation, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide cross-surface dependency split wording", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.CustomerVisibleStatement = "deployment"
+		model.Dependency.ValC.ExportBundle.CustomerVisibleSummary = "approved"
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected cross-surface split dependency no-overclaim wording to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited point10 readiness overclaim wording", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.OfflineBundle.CustomerVisibleExplanation = "marketplace production ready"
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited readiness overclaim dependency wording to block, got %#v", computed)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
 }

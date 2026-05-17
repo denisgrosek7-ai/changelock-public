@@ -28,6 +28,15 @@ func clonePoint13Val0Foundation(payload []byte) Point13Val0Foundation {
 	return clone
 }
 
+func point13Val0StringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func uncachedActivePoint13Val0Foundation() Point13Val0Foundation {
 	return ComputePoint13Val0Foundation(Point13Val0FoundationModel())
 }
@@ -133,6 +142,36 @@ func TestPoint13Val0DependencyState(t *testing.T) {
 			t.Fatalf("expected point12 pass token to exist only as dependency evidence, got %#v", model.Dependency)
 		}
 	})
+
+	t.Run("padded inherited point12 pass token fails raw exact dependency gate", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		padded := " " + point12ValEPoint12PassToken + " "
+		model.Dependency.Point12PassToken = padded
+		model.Dependency.Point12.Point12PassToken = padded
+		got, reasons := point13Val0DependencyStateAndReasons(model.Dependency)
+		if got != Point13Val0StateBlocked || !point13Val0StringSliceContains(reasons, "point12_pass_evidence_missing") {
+			t.Fatalf("expected padded point12 pass token to block with exact reason, got state=%s reasons=%v", got, reasons)
+		}
+		model = ComputePoint13Val0Foundation(model)
+		if model.DependencyState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected padded inherited point12 pass token to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("tab newline inherited point12 tenant scope fails raw exact dependency gate", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		retagged := model.Dependency.Point12TenantScope + "\n"
+		model.Dependency.Point12TenantScope = retagged
+		model.Dependency.Point12.PassClosureManifest.TenantScope = retagged
+		got, reasons := point13Val0DependencyStateAndReasons(model.Dependency)
+		if got != Point13Val0StateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected retagged tenant scope to block with exact reason, got state=%s reasons=%v", got, reasons)
+		}
+		model = ComputePoint13Val0Foundation(model)
+		if model.DependencyState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected retagged inherited tenant scope to block foundation, got %#v", model)
+		}
+	})
 }
 
 func TestPoint13Val0PilotReadinessState(t *testing.T) {
@@ -176,6 +215,18 @@ func TestPoint13Val0PilotReadinessState(t *testing.T) {
 			t.Fatalf("expected intake boundary mismatch to block, got %#v", model)
 		}
 	})
+
+	t.Run("padded pilot tenant scope blocks raw exact sibling path", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.PilotReadiness.PilotTenantScope = model.Dependency.Point12TenantScope + " "
+		model = ComputePoint13Val0Foundation(model)
+		if model.PilotReadinessState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected padded pilot tenant scope to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "pilot_readiness:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact pilot readiness blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint13Val0CustomerOnboardingBoundaryState(t *testing.T) {
@@ -203,6 +254,18 @@ func TestPoint13Val0CustomerOnboardingBoundaryState(t *testing.T) {
 		model = ComputePoint13Val0Foundation(model)
 		if model.CustomerOnboardingState != Point13Val0StateBlocked {
 			t.Fatalf("expected evidence identity bypass to block, got %#v", model)
+		}
+	})
+
+	t.Run("leading whitespace intake boundary blocks raw exact sibling path", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.CustomerOnboardingBoundary.FirstRepoIntakeBoundary = " " + model.PilotReadiness.EvidenceHandlingBoundary
+		model = ComputePoint13Val0Foundation(model)
+		if model.CustomerOnboardingState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected whitespace retagged intake boundary to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "customer_onboarding:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact customer onboarding blocking reason, got %#v", model.BlockingReasons)
 		}
 	})
 }
@@ -244,6 +307,18 @@ func TestPoint13Val0SupportEscalationBoundaryState(t *testing.T) {
 			t.Fatalf("expected missing support owner and audit event to block, got %#v", model)
 		}
 	})
+
+	t.Run("tab newline support tenant scope blocks raw exact sibling path", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.SupportEscalationBoundary.TenantScope = model.Dependency.Point12TenantScope + "\t"
+		model = ComputePoint13Val0Foundation(model)
+		if model.SupportEscalationState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected tab retagged support tenant scope to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "support_escalation:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact support escalation blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint13Val0OffboardingRetentionBoundaryState(t *testing.T) {
@@ -283,6 +358,18 @@ func TestPoint13Val0OffboardingRetentionBoundaryState(t *testing.T) {
 			t.Fatalf("expected canonical promotion without governance event to block, got %#v", model)
 		}
 	})
+
+	t.Run("newline offboarding tenant scope blocks raw exact sibling path", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.OffboardingRetentionBoundary.TenantScope = model.Dependency.Point12TenantScope + "\n"
+		model = ComputePoint13Val0Foundation(model)
+		if model.OffboardingRetentionState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected newline retagged offboarding tenant scope to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "offboarding_retention:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact offboarding retention blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint13Val0NoOverclaimCustomerWordingState(t *testing.T) {
@@ -310,6 +397,502 @@ func TestPoint13Val0NoOverclaimCustomerWordingState(t *testing.T) {
 		}
 	})
 
+	t.Run("unhyphenated regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulator approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected unhyphenated regulator approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("unicode dash regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulator\u2011approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected unicode dash regulator approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("slash regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulator/approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected slash-separated regulator approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("dot production approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production.approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected dot-separated production approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("underscore production approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production_approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected underscore production approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("intra bucket filler production approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production is approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected filler production approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("confusable regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulat\u043er approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected confusable regulator approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("zero width regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulator appro\u200dved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected zero-width regulator approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("zero width separator production approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production\u200bapproved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected zero-width separator production approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("math bold production approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"\U0001d429\U0001d42b\U0001d428\U0001d41d\U0001d42e\U0001d41c\U0001d42d\U0001d422\U0001d428\U0001d427 \U0001d41a\U0001d429\U0001d429\U0001d42b\U0001d428\U0001d42f\U0001d41e\U0001d41d"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected math bold production approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("greek nu regulator approval wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulator appro\u03bded"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected greek nu regulator approval wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("greek upsilon production wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"prod\u03c5ction approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected greek upsilon production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("small cap u production wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"prod\U00001d1cction approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected small-cap u production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin upsilon production wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"prod\u028action approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin upsilon production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("greek delta approved wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production approve\u03b4"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected greek delta production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("small cap t global truth wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"global \U00001d1bruth"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected small-cap t global truth wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin alpha global truth wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"glob\u0251l truth"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin alpha global truth wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin iota official authority wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"off\u0269cial authority"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin iota official authority wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("dental click global truth wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"g\u01c0obal truth"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected dental-click global truth wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("armenian oh official authority wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"\u0585fficial authority"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected armenian-oh official authority wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("greek eta production wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"productio\u03b7 approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected greek eta production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin eng production wording blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"productio\u014b approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin eng production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("underscore machine token remains non-boundary safe wording", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.InternalDiagnosticTexts = []string{"internal_production_approved_metric"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateActive ||
+			point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected underscore machine token not to become a forbidden phrase, got %#v", model)
+		}
+	})
+
+	t.Run("zero width split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"deployment"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"appro\u2060ved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected zero-width split deployment approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("word fragment split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"produc"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"tion approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected word-fragment split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("right leg u split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"prod\uab4e"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"ction approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected right-leg u split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin upsilon split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"prod\u028a"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"ction approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin upsilon split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("greek nu split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"appro\u03bded"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected greek nu split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("greek delta split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"production"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"approve\u03b4"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected greek delta split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("small cap t split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"global"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"\U00001d1bruth"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected small-cap t split global truth wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin alpha split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"glob\u0251l"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"truth"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin alpha split global truth wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin iota split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"off\u0269cial"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"authority"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin iota split official authority wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("dental click split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"g\u01c0obal"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"truth"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected dental-click split global truth wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("armenian oh split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"\u0585fficial"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"authority"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected armenian-oh split official authority wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("armenian vo split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"productio\u0578"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected armenian vo split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("latin n with long right leg split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"productio\u019e"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected latin n with long right leg split production approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("split forbidden wording across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"deployment"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected split deployment approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("split regulator approval across customer export surfaces blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"regulator"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected split regulator approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("split forbidden wording involving support surface blocks", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"deployment"}
+		model.NoOverclaimCustomerWording.ObservedSupportFacingTexts = []string{"approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected support-involved split deployment approved wording to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("all allowed split safe wording does not false positive", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.ObservedCustomerFacingTexts = []string{"pilot readiness support"}
+		model.NoOverclaimCustomerWording.ObservedExportFacingTexts = []string{"evidence candidate"}
+		model.NoOverclaimCustomerWording.ObservedSupportFacingTexts = []string{"operational onboarding boundary"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateActive {
+			t.Fatalf("expected allowed split-safe wording to remain active, got %#v", model)
+		}
+		if point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected no no-overclaim blocking reason for allowed split-safe wording, got %#v", model.BlockingReasons)
+		}
+	})
+
 	t.Run("forbidden wording allowed only in classified internal diagnostics", func(t *testing.T) {
 		model := activePoint13Val0Foundation()
 		model.NoOverclaimCustomerWording.InternalDiagnosticTexts = []string{"blocked phrase: production approved"}
@@ -317,6 +900,28 @@ func TestPoint13Val0NoOverclaimCustomerWordingState(t *testing.T) {
 		model = ComputePoint13Val0Foundation(model)
 		if model.NoOverclaimState != Point13Val0StateActive {
 			t.Fatalf("expected classified internal diagnostics to remain active, got %#v", model)
+		}
+	})
+}
+
+func TestPoint13Val0AggregateStateRawExactComponents(t *testing.T) {
+	t.Run("padded component state blocks aggregate", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.PilotReadinessState = " " + Point13Val0StateActive + " "
+		if got := EvaluatePoint13Val0State(model); got != Point13Val0StateBlocked {
+			t.Fatalf("expected padded component state to block aggregate, got %s", got)
+		}
+		reasons := point13Val0BlockingReasons(model)
+		if !point13Val0StringSliceContains(reasons, "pilot_readiness:invalid_state") {
+			t.Fatalf("expected invalid pilot readiness state reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("non dependency review required propagates review required", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.SupportEscalationState = Point13Val0StateReviewRequired
+		if got := EvaluatePoint13Val0State(model); got != Point13Val0StateReviewRequired {
+			t.Fatalf("expected support review state to propagate, got %s", got)
 		}
 	})
 }

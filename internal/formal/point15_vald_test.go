@@ -15,6 +15,15 @@ func point15ValDCloneStrings(values []string) []string {
 	return append([]string(nil), values...)
 }
 
+func point15ValDStringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func clonePoint15ValDFoundation(model Point15ValDAssuranceProjectionFoundation) Point15ValDAssuranceProjectionFoundation {
 	model.BlockingReasons = point15ValDCloneStrings(model.BlockingReasons)
 	model.ReviewPrerequisites = point15ValDCloneStrings(model.ReviewPrerequisites)
@@ -116,6 +125,18 @@ func TestPoint15ValDDependencyState(t *testing.T) {
 		{"blocks when valc not reviewed on main", func(model *Point15ValDDependencySnapshot) {
 			model.Point15ValCReviewedOnMain = false
 		}, Point15ValDStateBlocked},
+		{"blocks whitespace retagged valc current state", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValCCurrentState = " " + Point15ValCStateActive + " "
+		}, Point15ValDStateBlocked},
+		{"blocks tab newline retagged inherited point14 state", func(model *Point15ValDDependencySnapshot) {
+			model.InheritedPoint14ValECurrentState = "\t" + Point14ValEStatePassConfirmed + "\n"
+		}, Point15ValDStateBlocked},
+		{"blocks padded inherited tenant scope", func(model *Point15ValDDependencySnapshot) {
+			model.InheritedTenantScope = " " + model.InheritedTenantScope + " "
+		}, Point15ValDStateBlocked},
+		{"blocks embedded valc state laundering behind clean flat fields", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.CurrentState = Point15ValCStateBlocked
+		}, Point15ValDStateBlocked},
 		{"blocks on point15 pass token", func(model *Point15ValDDependencySnapshot) {
 			model.Point15PassSeen = true
 		}, Point15ValDStateBlocked},
@@ -154,9 +175,48 @@ func TestPoint15ValDAssuranceTimelineState(t *testing.T) {
 			model.DecisiveEvidenceVisible = false
 			return model
 		}, Point15ValDStateReviewRequired},
+		{"padded review current state blocks instead of laundering review path", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.CurrentState = " " + Point15Val0StateReviewRequired + " "
+			model.EnforcementReason = point15ValCReasonStale
+			model.DecisiveEvidenceVisible = false
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline prior state blocks raw exact timeline state", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.PriorState = "\t" + model.PriorState + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded tenant scope blocks raw exact timeline scope", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.TenantScope = " " + model.TenantScope + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded evidence id blocks raw exact timeline identity", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.EvidenceID = " " + model.EvidenceID + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded downgrade reason blocks raw exact timeline reason", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.CurrentState = Point15Val0StateReviewRequired
+			model.DowngradeReason = " " + point15ValATriggerStale + " "
+			model.EnforcementReason = ""
+			return model
+		}, Point15ValDStateBlocked},
 		{"timeline cannot create validity by ordering", func() Point15ValDAssuranceTimelineEntry {
 			model := point15ValDValidTimelineModel()
 			model.TimelineCreatesValidity = true
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset event time blocks raw exact timeline", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.EventAt = "2026-05-07T10:00:00+01:00"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset displayed time blocks raw exact timeline", func() Point15ValDAssuranceTimelineEntry {
+			model := point15ValDValidTimelineModel()
+			model.DisplayedAt = "2026-05-07T10:00:00+01:00"
 			return model
 		}, Point15ValDStateBlocked},
 		{"timeline cannot hide prior pass or later downgrade", func() Point15ValDAssuranceTimelineEntry {
@@ -183,6 +243,21 @@ func TestPoint15ValDDashboardSummaryState(t *testing.T) {
 		{"summary is display only", func() Point15ValDDashboardSummary {
 			return point15ValDValidDashboardModel()
 		}, Point15ValDStateActive},
+		{"padded dashboard projection mode blocks raw exact discriminator", func() Point15ValDDashboardSummary {
+			model := point15ValDValidDashboardModel()
+			model.ProjectionMode = " " + model.ProjectionMode + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline dashboard action blocks raw exact discriminator", func() Point15ValDDashboardSummary {
+			model := point15ValDValidDashboardModel()
+			model.ProjectionAction = "\t" + model.ProjectionAction + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded dashboard visibility blocks raw exact discriminator", func() Point15ValDDashboardSummary {
+			model := point15ValDValidDashboardModel()
+			model.Visibility = " " + model.Visibility + " "
+			return model
+		}, Point15ValDStateBlocked},
 		{"blocked count cannot be hidden", func() Point15ValDDashboardSummary {
 			model := point15ValDValidDashboardModel()
 			model.HiddenBlockedCount = true
@@ -203,6 +278,11 @@ func TestPoint15ValDDashboardSummaryState(t *testing.T) {
 			model.TenantScope = ""
 			return model
 		}, Point15ValDStateIncomplete},
+		{"padded tenant scope blocks raw exact dashboard scope", func() Point15ValDDashboardSummary {
+			model := point15ValDValidDashboardModel()
+			model.TenantScope = " " + model.TenantScope + " "
+			return model
+		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -243,6 +323,41 @@ func TestPoint15ValDQueryProjectionState(t *testing.T) {
 			model.StrengthensClaims = true
 			return model
 		}, Point15ValDStateBlocked},
+		{"padded result state blocks raw exact query status", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.ResultState = " " + model.ResultState + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded public forbidden visibility blocks instead of bypassing public guard", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.Visibility = " " + point15ValDVisibilityPublicBlocked + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline query filter blocks raw exact query discriminator", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.Filters[0] = "\t" + model.Filters[0] + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline result state blocks raw exact query status", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.ResultState = "\t" + model.ResultState + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded redaction state blocks raw exact query status", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.RedactionState = " " + model.RedactionState + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded query tenant scope blocks raw exact query boundary", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.TenantScope = " " + model.TenantScope + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline query viewer scope blocks raw exact query boundary", func() Point15ValDQueryProjection {
+			model := point15ValDValidQueryModel()
+			model.ViewerScope = "\t" + model.ViewerScope + "\n"
+			return model
+		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -275,6 +390,26 @@ func TestPoint15ValDEvidenceDetailProjectionState(t *testing.T) {
 		{"missing hash blocks", func() Point15ValDEvidenceDetailProjection {
 			model := point15ValDValidEvidenceDetailModel()
 			model.EvidenceHash = ""
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded enforcement status blocks raw exact evidence detail state", func() Point15ValDEvidenceDetailProjection {
+			model := point15ValDValidEvidenceDetailModel()
+			model.EnforcementStatus = " " + model.EnforcementStatus + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded freshness status blocks raw exact evidence detail status", func() Point15ValDEvidenceDetailProjection {
+			model := point15ValDValidEvidenceDetailModel()
+			model.FreshnessStatus = " " + model.FreshnessStatus + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline lifecycle status blocks raw exact evidence detail status", func() Point15ValDEvidenceDetailProjection {
+			model := point15ValDValidEvidenceDetailModel()
+			model.LifecycleStatus = "\t" + model.LifecycleStatus + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded tenant scope blocks raw exact evidence detail boundary", func() Point15ValDEvidenceDetailProjection {
+			model := point15ValDValidEvidenceDetailModel()
+			model.TenantScope = " " + model.TenantScope + " "
 			return model
 		}, Point15ValDStateBlocked},
 	}
@@ -314,6 +449,22 @@ func TestPoint15ValDRevalidationDetailProjectionState(t *testing.T) {
 		{"cannot mark fresh or restore active", func() Point15ValDRevalidationDetailProjection {
 			model := point15ValDValidRevalidationDetailModel()
 			model.MarksFresh = true
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded scheduled status blocks raw exact revalidation detail", func() Point15ValDRevalidationDetailProjection {
+			model := point15ValDValidRevalidationDetailModel()
+			model.ScheduledStatus = " " + model.ScheduledStatus + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline run result blocks raw exact revalidation detail", func() Point15ValDRevalidationDetailProjection {
+			model := point15ValDValidRevalidationDetailModel()
+			model.RunResult = "\t" + model.RunResult + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded retry and throttle statuses block raw exact revalidation detail", func() Point15ValDRevalidationDetailProjection {
+			model := point15ValDValidRevalidationDetailModel()
+			model.RetryStatus = " " + model.RetryStatus + " "
+			model.ThrottleStatus = " " + model.ThrottleStatus + " "
 			return model
 		}, Point15ValDStateBlocked},
 	}
@@ -359,6 +510,34 @@ func TestPoint15ValDEnforcementDetailProjectionState(t *testing.T) {
 			model.BlockedReasonVisible = false
 			return model
 		}, Point15ValDStateBlocked},
+		{"padded target state blocks raw exact enforcement detail state", func() Point15ValDEnforcementDetailProjection {
+			model := point15ValDValidEnforcementDetailModel()
+			model.TargetState = " " + model.TargetState + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline prior state blocks raw exact enforcement detail state", func() Point15ValDEnforcementDetailProjection {
+			model := point15ValDValidEnforcementDetailModel()
+			model.PriorState = "\t" + model.PriorState + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded current state blocks raw exact enforcement detail state", func() Point15ValDEnforcementDetailProjection {
+			model := point15ValDValidEnforcementDetailModel()
+			model.CurrentState = " " + model.CurrentState + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded enforcement action blocks raw exact enforcement detail action", func() Point15ValDEnforcementDetailProjection {
+			model := point15ValDValidEnforcementDetailModel()
+			model.EnforcementAction = " " + model.EnforcementAction + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded enforcement reason blocks raw exact enforcement detail reason", func() Point15ValDEnforcementDetailProjection {
+			model := point15ValDValidEnforcementDetailModel()
+			model.EnforcementAction = point15ValCActionReview
+			model.EnforcementReason = " " + point15ValCReasonStale + " "
+			model.TargetState = Point15Val0StateReviewRequired
+			model.CurrentState = Point15Val0StateReviewRequired
+			return model
+		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -381,6 +560,16 @@ func TestPoint15ValDReplayProofHistoryProjectionState(t *testing.T) {
 		{"replay refs required", func() Point15ValDReplayProofHistoryProjection {
 			model := point15ValDValidReplayHistoryModel()
 			model.ReplayRef = ""
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded replay ref blocks raw exact replay binding", func() Point15ValDReplayProofHistoryProjection {
+			model := point15ValDValidReplayHistoryModel()
+			model.ReplayRef = " " + model.ReplayRef + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline proof pack ref blocks raw exact replay binding", func() Point15ValDReplayProofHistoryProjection {
+			model := point15ValDValidReplayHistoryModel()
+			model.ProofPackRef = "\t" + model.ProofPackRef + "\n"
 			return model
 		}, Point15ValDStateBlocked},
 		{"decisive evidence visible required", func() Point15ValDReplayProofHistoryProjection {
@@ -432,12 +621,37 @@ func TestPoint15ValDAccessTenantPrivacyBoundaryState(t *testing.T) {
 			model.Visibility = point15ValDVisibilityPublicBlocked
 			return model
 		}, Point15ValDStateBlocked},
+		{"padded public visibility blocks raw exact access boundary", func() Point15ValDAccessTenantPrivacyBoundary {
+			model := point15ValDValidAccessTenantModel()
+			model.Visibility = " " + point15ValDVisibilityPublicBlocked + " "
+			return model
+		}, Point15ValDStateBlocked},
 		{"redaction cannot hide decisive failure without review", func() Point15ValDAccessTenantPrivacyBoundary {
 			model := point15ValDValidAccessTenantModel()
 			model.DecisiveFailureHidden = true
 			model.RedactionState = point15ValDRedactionLimited
 			return model
 		}, Point15ValDStateReviewRequired},
+		{"padded access redaction state blocks raw exact boundary", func() Point15ValDAccessTenantPrivacyBoundary {
+			model := point15ValDValidAccessTenantModel()
+			model.RedactionState = " " + model.RedactionState + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline access redaction state blocks raw exact boundary", func() Point15ValDAccessTenantPrivacyBoundary {
+			model := point15ValDValidAccessTenantModel()
+			model.RedactionState = "\t" + model.RedactionState + "\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded access tenant scope blocks raw exact boundary", func() Point15ValDAccessTenantPrivacyBoundary {
+			model := point15ValDValidAccessTenantModel()
+			model.TenantScope = " " + model.TenantScope + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline access viewer scope blocks raw exact boundary", func() Point15ValDAccessTenantPrivacyBoundary {
+			model := point15ValDValidAccessTenantModel()
+			model.ViewerScope = "\t" + model.ViewerScope + "\n"
+			return model
+		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -457,6 +671,16 @@ func TestPoint15ValDTimestampDisplayDisciplineState(t *testing.T) {
 		{"trusted display timing active", func() Point15ValDTimestampDisplayDiscipline {
 			return point15ValDValidTimestampDisplayModel()
 		}, Point15ValDStateActive},
+		{"padded timestamp projection mode blocks raw exact discriminator", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ProjectionMode = " " + model.ProjectionMode + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline timestamp projection mode blocks raw exact discriminator", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ProjectionMode = "\t" + model.ProjectionMode + "\n"
+			return model
+		}, Point15ValDStateBlocked},
 		{"client local display time cannot create canonical validity", func() Point15ValDTimestampDisplayDiscipline {
 			model := point15ValDValidTimestampDisplayModel()
 			model.ClientLocalCreatesCanonical = true
@@ -472,6 +696,54 @@ func TestPoint15ValDTimestampDisplayDisciplineState(t *testing.T) {
 			model := point15ValDValidTimestampDisplayModel()
 			model.DisplayedAt = "2026-05-07T07:00:00Z"
 			model.EventAt = "2026-05-07T08:00:00Z"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset reference time blocks raw exact timestamp display", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ReferenceNow = "2026-05-07T12:00:00+01:00"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset displayed time blocks raw exact timestamp display", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.DisplayedAt = "2026-05-07T12:00:00+01:00"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset source event time blocks raw exact timestamp display", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.SourceEventAt = "2026-05-07T08:00:00+01:00"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset validated time blocks raw exact timestamp display", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ValidatedAt = "2026-05-07T09:00:00+01:00"
+			model.EnforcedAt = "2026-05-07T10:00:00Z"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset enforced time blocks raw exact timestamp display", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ValidatedAt = "2026-05-07T09:00:00Z"
+			model.EnforcedAt = "2026-05-07T10:00:00+01:00"
+			return model
+		}, Point15ValDStateBlocked},
+		{"non UTC offset received time blocks raw exact timestamp display", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ReceivedAt = "2026-05-07T08:00:00+01:00"
+			model.ValidatedAt = "2026-05-07T09:00:00Z"
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded tenant scope blocks raw exact timestamp display boundary", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.TenantScope = " " + model.TenantScope + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"whitespace only optional source event blocks instead of becoming absent", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.SourceEventAt = " \t\n"
+			return model
+		}, Point15ValDStateBlocked},
+		{"whitespace only optional validated time blocks instead of becoming absent", func() Point15ValDTimestampDisplayDiscipline {
+			model := point15ValDValidTimestampDisplayModel()
+			model.ValidatedAt = " \t\n"
 			return model
 		}, Point15ValDStateBlocked},
 		{"enforced before validated requires review", func() Point15ValDTimestampDisplayDiscipline {
@@ -565,6 +837,11 @@ func TestPoint15ValDAuthorityBoundaryState(t *testing.T) {
 			model.AgentAuthorityGranted = true
 			return model
 		}, Point15ValDStateBlocked},
+		{"padded authority tenant scope blocks raw exact boundary", func() Point15ValDAuthorityBoundary {
+			model := point15ValDValidAuthorityModel()
+			model.TenantScope = " " + model.TenantScope + " "
+			return model
+		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -587,6 +864,226 @@ func TestPoint15ValDNoOverclaimGuardState(t *testing.T) {
 		{"forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
 			model := point15ValDValidNoOverclaimModel()
 			model.ObservedTexts = []string{"continuous assurance guaranteed"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"inherited point10 readiness overclaim wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"marketplace production ready"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"unhyphenated inherited readiness overclaim wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"air gapped certified"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"unicode dash forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"deployment\u2011approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"slash separator forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"deployment/approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"dot separator forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production.approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"underscore separator forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production_approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"intra bucket filler forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production is approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"confusable forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"de\u1d18loyment approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"zero width forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"deployment appro\u200dved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"zero width separator forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production\u200bapproved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"math bold forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"\U0001d429\U0001d42b\U0001d428\U0001d41d\U0001d42e\U0001d41c\U0001d42d\U0001d422\U0001d428\U0001d427 \U0001d41a\U0001d429\U0001d429\U0001d42b\U0001d428\U0001d42f\U0001d41e\U0001d41d"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"greek nu forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"deployment appro\u03bded"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"greek upsilon forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"prod\u03c5ction approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"small cap u forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"prod\U00001d1cction approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin upsilon forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"prod\u028action approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"greek delta forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production approve\u03b4"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"small cap t forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"global \U00001d1bruth"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin alpha forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"glob\u0251l truth"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin iota forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"off\u0269cial authority"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"dental click forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"comp\u01c0iance guaranteed"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"armenian oh forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"c\u0585mpliance guaranteed"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"greek eta forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"productio\u03b7 approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin eng forbidden wording blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"productio\u014b approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"internal underscore machine token remains non-boundary safe wording", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.InternalDiagnosticTexts = append(model.InternalDiagnosticTexts, "internal_production_approved_metric")
+			return model
+		}, Point15ValDStateActive},
+		{"split forbidden wording across observed corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"deployment", "approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"split unhyphenated inherited readiness overclaim blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"air gapped", "certified"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline forbidden wording blocks after normalized token scan", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"deployment\tapproved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"unicode dash split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production\u2013", "approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"slash split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production/", "approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"zero width split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production", "appro\u2060ved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"word fragment split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"produc", "tion approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"right leg u split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"prod\uab4e", "ction approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin upsilon split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"prod\u028a", "ction approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"greek nu split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production", "appro\u03bded"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"greek delta split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"production", "approve\u03b4"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"small cap t split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"global", "\U00001d1bruth"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin alpha split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"glob\u0251l", "truth"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin iota split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"off\u0269cial", "authority"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"dental click split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"comp\u01c0iance", "guaranteed"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"armenian oh split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"c\u0585mpliance", "guaranteed"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"armenian vo split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"productio\u0578", "approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"latin n with long right leg split forbidden wording across corpus blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ObservedTexts = []string{"productio\u019e", "approved"}
+			return model
+		}, Point15ValDStateBlocked},
+		{"padded projection disclaimer blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ProjectionDisclaimer = " " + model.ProjectionDisclaimer + " "
+			return model
+		}, Point15ValDStateBlocked},
+		{"tab newline projection disclaimer blocks", func() Point15ValDNoOverclaimGuard {
+			model := point15ValDValidNoOverclaimModel()
+			model.ProjectionDisclaimer = "\t" + model.ProjectionDisclaimer + "\n"
 			return model
 		}, Point15ValDStateBlocked},
 		{"classified internal blocked diagnostics allowed", func() Point15ValDNoOverclaimGuard {
@@ -632,6 +1129,24 @@ func TestPoint15ValDAssuranceProjectionFoundationState(t *testing.T) {
 		{"timeline source valc ref mismatch blocks", func(model *Point15ValDAssuranceProjectionFoundation) {
 			model.Timeline.SourceValCRef = "wrong_enforcement_ref"
 		}, Point15ValDStateBlocked},
+		{"padded dashboard projection mode blocks foundation before vale", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.Dashboard.ProjectionMode = " " + model.Dashboard.ProjectionMode + " "
+		}, Point15ValDStateBlocked},
+		{"tab newline query projection action blocks foundation before vale", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.Query.ProjectionAction = "\t" + model.Query.ProjectionAction + "\n"
+		}, Point15ValDStateBlocked},
+		{"padded evidence detail id blocks raw exact projection", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.EvidenceDetail.EvidenceID = " " + model.EvidenceDetail.EvidenceID + " "
+		}, Point15ValDStateBlocked},
+		{"tab newline tenant scope blocks raw exact projection", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.Timeline.TenantScope = "\t" + model.Timeline.TenantScope + "\n"
+		}, Point15ValDStateBlocked},
+		{"padded timestamp projection mode blocks foundation before vale", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.TimestampDisplayDiscipline.ProjectionMode = " " + model.TimestampDisplayDiscipline.ProjectionMode + " "
+		}, Point15ValDStateBlocked},
+		{"split no overclaim wording blocks full ValD foundation", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.NoOverclaimGuard.ObservedTexts = []string{"deployment", "approved"}
+		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -639,6 +1154,59 @@ func TestPoint15ValDAssuranceProjectionFoundationState(t *testing.T) {
 			tc.mutate(&model)
 			if got := ComputePoint15ValDAssuranceProjectionFoundation(model).CurrentState; got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
+			}
+		})
+	}
+
+	t.Run("split no overclaim wording records exact blocking reason", func(t *testing.T) {
+		model := point15ValDValidFoundationModel()
+		model.NoOverclaimGuard.ObservedTexts = []string{"deployment", "approved"}
+		computed := ComputePoint15ValDAssuranceProjectionFoundation(model)
+		if computed.CurrentState != Point15ValDStateBlocked {
+			t.Fatalf("expected split no-overclaim wording to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "no_overclaim") {
+			t.Fatalf("expected exact no_overclaim blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
+}
+
+func TestPoint15ValDAggregateRawExact(t *testing.T) {
+	tests := []struct {
+		name   string
+		states []string
+		want   string
+	}{
+		{
+			name:   "happy path exact active states remain active",
+			states: []string{Point15ValDStateActive, Point15ValDStateActive},
+			want:   Point15ValDStateActive,
+		},
+		{
+			name:   "direct exploit padded active aggregate state blocks",
+			states: []string{" " + Point15ValDStateActive + " ", Point15ValDStateActive},
+			want:   Point15ValDStateBlocked,
+		},
+		{
+			name:   "hard invalid tab newline active aggregate state blocks",
+			states: []string{Point15ValDStateActive, "\t" + Point15ValDStateActive + "\n"},
+			want:   Point15ValDStateBlocked,
+		},
+		{
+			name:   "unknown aggregate state fails closed",
+			states: []string{Point15ValDStateActive, "point15_vald_unknown_active"},
+			want:   Point15ValDStateBlocked,
+		},
+		{
+			name:   "exact review state preserves review precedence",
+			states: []string{Point15ValDStateActive, Point15ValDStateReviewRequired},
+			want:   Point15ValDStateReviewRequired,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := point15ValDAggregate(tc.states...); got != tc.want {
+				t.Fatalf("expected aggregate %s, got %s", tc.want, got)
 			}
 		})
 	}

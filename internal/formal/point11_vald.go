@@ -451,92 +451,108 @@ func point11ValDContainsForbiddenText(values ...string) bool {
 	return point11ValCContainsForbiddenText(values...)
 }
 
+func point11ValDRawExactNonEmpty(value string) bool {
+	return value != "" && value == strings.TrimSpace(value) && !strings.ContainsAny(value, "\t\r\n")
+}
+
+func point11ValDRawCanonicalRefWithPrefixes(value string, prefixes []string) bool {
+	return point11ValDRawExactNonEmpty(value) && point11Val0CanonicalRefWithPrefixes(value, prefixes)
+}
+
+func point11ValDRawTimestampValid(value string) bool {
+	if !point11ValDRawExactNonEmpty(value) {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	return err == nil && parsed.UTC().Format(time.RFC3339) == value
+}
+
 func point11ValDClosureRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"closure_", "point11_closure_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"closure_", "point11_closure_"})
 }
 
 func point11ValDManifestRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"manifest_", "point11_manifest_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"manifest_", "point11_manifest_"})
 }
 
 func point11ValDQualityMapRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"quality_map_", "point11_quality_map_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"quality_map_", "point11_quality_map_"})
 }
 
 func point11ValDPublicationReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"publication_review_", "point11_publication_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"publication_review_", "point11_publication_review_"})
 }
 
 func point11ValDNoOverclaimReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"no_overclaim_review_", "point11_no_overclaim_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"no_overclaim_review_", "point11_no_overclaim_review_"})
 }
 
 func point11ValDCleanRoomReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"clean_room_review_", "point11_clean_room_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"clean_room_review_", "point11_clean_room_review_"})
 }
 
 func point11ValDCLBClosureRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"clb_closure_", "point11_clb_closure_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"clb_closure_", "point11_clb_closure_"})
 }
 
 func point11ValDFinalGateRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"final_gate_", "point11_final_gate_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{"final_gate_", "point11_final_gate_"})
 }
 
 func point11ValDDependencyRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDDependencyRefPrefix, "point11_dependency_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDDependencyRefPrefix, "point11_dependency_review_"})
 }
 
 func point11ValDThirdPartyRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDThirdPartyRefPrefix, "point11_third_party_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDThirdPartyRefPrefix, "point11_third_party_"})
 }
 
 func point11ValDLicenseReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDLicenseReviewRefPrefix, "point11_license_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDLicenseReviewRefPrefix, "point11_license_review_"})
 }
 
 func point11ValDIPReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDIPReviewRefPrefix, "point11_ip_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDIPReviewRefPrefix, "point11_ip_review_"})
 }
 
 func point11ValDExternalLegalReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDExternalLegalReviewRefPrefix, "point11_external_legal_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDExternalLegalReviewRefPrefix, "point11_external_legal_review_"})
 }
 
 func point11ValDExternalFTOReviewRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDExternalFTOReviewRefPrefix, "point11_external_fto_review_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDExternalFTOReviewRefPrefix, "point11_external_fto_review_"})
 }
 
 func point11ValDCommandRunRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDCommandRunRefPrefix, "point11_command_run_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDCommandRunRefPrefix, "point11_command_run_"})
 }
 
 func point11ValDTestRunRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDTestRunRefPrefix, "point11_test_run_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDTestRunRefPrefix, "point11_test_run_"})
 }
 
 func point11ValDGrepRunRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDGrepRunRefPrefix, "point11_grep_run_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDGrepRunRefPrefix, "point11_grep_run_"})
 }
 
 func point11ValDNegativeFixtureRunRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDNegativeFixtureRunRefPrefix, "point11_negative_fixture_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDNegativeFixtureRunRefPrefix, "point11_negative_fixture_"})
 }
 
 func point11ValDFindingRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDFindingRefPrefix, "point11_finding_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDFindingRefPrefix, "point11_finding_"})
 }
 
 func point11ValDAcceptedRiskRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDAcceptedRiskRefPrefix, "point11_accepted_risk_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDAcceptedRiskRefPrefix, "point11_accepted_risk_"})
 }
 
 func point11ValDDeferredItemRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDDeferredItemRefPrefix, "point11_deferred_item_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDDeferredItemRefPrefix, "point11_deferred_item_"})
 }
 
 func point11ValDResolvedFindingRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{point11ValDResolvedFindingRefPrefix, "point11_resolved_finding_"})
+	return point11ValDRawCanonicalRefWithPrefixes(value, []string{point11ValDResolvedFindingRefPrefix, "point11_resolved_finding_"})
 }
 
 func point11ValDStringListValid(values []string, validator func(string) bool) bool {
@@ -545,14 +561,13 @@ func point11ValDStringListValid(values []string, validator func(string) bool) bo
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !validator(trimmed) {
+		if !point11ValDRawExactNonEmpty(value) || !validator(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -571,14 +586,13 @@ func point11ValDPublicationSurfacesValid(values []string) bool {
 	seen := map[string]struct{}{}
 	allowed := append([]string{point11ValDPublicationSurfaceAgentOutput}, point11Val0PublicationSurfaces()...)
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11Val0ContainsTrimmed(allowed, trimmed) {
+		if !point11ValDRawExactNonEmpty(value) || !point11Val0ContainsTrimmed(allowed, value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -588,7 +602,10 @@ func point11ValDEvidenceRefsValid(values []string) bool {
 		return false
 	}
 	for _, value := range values {
-		lower := strings.ToLower(strings.TrimSpace(value))
+		if !point11ValDRawExactNonEmpty(value) {
+			return false
+		}
+		lower := strings.ToLower(value)
 		for _, blocked := range []string{
 			"unknown",
 			"unsupported",
@@ -628,7 +645,7 @@ func point11ValDAnyPublicFacingSurfaces(surfaceLists ...[]string) bool {
 
 func point11ValDAnySurface(values []string, target string) bool {
 	for _, value := range values {
-		if strings.TrimSpace(value) == target {
+		if value == target {
 			return true
 		}
 	}
@@ -636,7 +653,7 @@ func point11ValDAnySurface(values []string, target string) bool {
 }
 
 func point11ValDGenericCheckStateActive(value string) bool {
-	return strings.TrimSpace(value) == point11ValDCheckStateActive
+	return value == point11ValDCheckStateActive
 }
 
 func point11ValDNoOverclaimDenylist() []string {
@@ -813,43 +830,43 @@ func point11ValDVal0SnapshotStateAndReasons(model Point11ValDVal0DependencySnaps
 	if model.Point11PassEmitted {
 		reasons = append(reasons, "val0_point11_pass_emitted")
 	}
-	if strings.TrimSpace(model.PolicyContractState) != Point11Val0PolicyContractStateActive {
+	if model.PolicyContractState != Point11Val0PolicyContractStateActive {
 		reasons = append(reasons, "val0_policy_contract_not_active")
 	}
-	if strings.TrimSpace(model.ClaimGovernanceState) != Point11Val0ClaimGovernanceStateActive {
+	if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
 		reasons = append(reasons, "val0_claim_governance_not_active")
 	}
-	if strings.TrimSpace(model.AuthorityMatrixState) != Point11Val0AuthorityMatrixStateActive {
+	if model.AuthorityMatrixState != Point11Val0AuthorityMatrixStateActive {
 		reasons = append(reasons, "val0_authority_matrix_not_active")
 	}
-	if strings.TrimSpace(model.ExceptionGovernanceState) != Point11Val0ExceptionGovernanceStateActive {
+	if model.ExceptionGovernanceState != Point11Val0ExceptionGovernanceStateActive {
 		reasons = append(reasons, "val0_exception_governance_not_active")
 	}
-	if strings.TrimSpace(model.ABACState) != Point11Val0ABACStateActive {
+	if model.ABACState != Point11Val0ABACStateActive {
 		reasons = append(reasons, "val0_abac_not_active")
 	}
-	if strings.TrimSpace(model.DecisionBindingState) != Point11Val0DecisionBindingStateActive {
+	if model.DecisionBindingState != Point11Val0DecisionBindingStateActive {
 		reasons = append(reasons, "val0_decision_binding_not_active")
 	}
-	if strings.TrimSpace(model.NoOverclaimState) != Point11Val0NoOverclaimStateActive {
+	if model.NoOverclaimState != Point11Val0NoOverclaimStateActive {
 		reasons = append(reasons, "val0_no_overclaim_not_active")
 	}
-	if strings.TrimSpace(model.CrossDomainCompatibilityState) == Point11Val0CrossDomainCompatibilityStateBlocked {
+	if model.CrossDomainCompatibilityState == Point11Val0CrossDomainCompatibilityStateBlocked {
 		reasons = append(reasons, "val0_cross_domain_compatibility_blocked")
 	}
 	if len(reasons) > 0 {
 		return Point11ValDDependencyStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.CurrentState) == Point11Val0StateActive &&
-		strings.TrimSpace(model.DependencyState) == Point11Val0DependencyStateActive &&
-		strings.TrimSpace(model.CrossDomainCompatibilityState) == Point11Val0CrossDomainCompatibilityStateActive &&
+	if model.CurrentState == Point11Val0StateActive &&
+		model.DependencyState == Point11Val0DependencyStateActive &&
+		model.CrossDomainCompatibilityState == Point11Val0CrossDomainCompatibilityStateActive &&
 		len(model.ReviewPrerequisites) == 0 {
 		return Point11ValDDependencyStateActive, nil
 	}
 	if len(model.ReviewPrerequisites) > 0 ||
-		strings.TrimSpace(model.CurrentState) == Point11Val0StateReviewRequired ||
-		strings.TrimSpace(model.DependencyState) == Point11Val0DependencyStateReviewRequired ||
-		strings.TrimSpace(model.CrossDomainCompatibilityState) == Point11Val0CrossDomainCompatibilityStateReviewRequired {
+		model.CurrentState == Point11Val0StateReviewRequired ||
+		model.DependencyState == Point11Val0DependencyStateReviewRequired ||
+		model.CrossDomainCompatibilityState == Point11Val0CrossDomainCompatibilityStateReviewRequired {
 		return Point11ValDDependencyStateReviewRequired, []string{"val0_dependency_review_required"}
 	}
 	return Point11ValDDependencyStateBlocked, []string{"val0_dependency_not_active"}
@@ -890,35 +907,35 @@ func point11ValDValASnapshotStateAndReasons(model Point11ValDValADependencySnaps
 	if model.OpenCLB2Findings > 0 {
 		reasons = append(reasons, "vala_open_clb2_findings")
 	}
-	if strings.TrimSpace(model.RegistryState) != Point11ValARegistryStateActive {
+	if model.RegistryState != Point11ValARegistryStateActive {
 		reasons = append(reasons, "vala_registry_not_active")
 	}
-	if strings.TrimSpace(model.SignatureState) != Point11ValASignatureStateActive {
+	if model.SignatureState != Point11ValASignatureStateActive {
 		reasons = append(reasons, "vala_signature_not_active")
 	}
-	if strings.TrimSpace(model.AnchorState) != Point11ValAAnchorStateActive {
+	if model.AnchorState != Point11ValAAnchorStateActive {
 		reasons = append(reasons, "vala_anchor_not_active")
 	}
-	if strings.TrimSpace(model.LifecycleTransitionState) != Point11ValALifecycleTransitionStateActive {
+	if model.LifecycleTransitionState != Point11ValALifecycleTransitionStateActive {
 		reasons = append(reasons, "vala_lifecycle_transition_not_active")
 	}
-	if strings.TrimSpace(model.PolicyUseState) != Point11ValAPolicyUseStateActive {
+	if model.PolicyUseState != Point11ValAPolicyUseStateActive {
 		reasons = append(reasons, "vala_policy_use_not_active")
 	}
-	if strings.TrimSpace(model.GraphState) != Point11ValAGraphStateActive {
+	if model.GraphState != Point11ValAGraphStateActive {
 		reasons = append(reasons, "vala_graph_not_active")
 	}
 	if len(reasons) > 0 {
 		return Point11ValDDependencyStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.CurrentState) == Point11ValAStateActive &&
-		strings.TrimSpace(model.DependencyState) == Point11ValADependencyStateActive &&
+	if model.CurrentState == Point11ValAStateActive &&
+		model.DependencyState == Point11ValADependencyStateActive &&
 		len(model.ReviewPrerequisites) == 0 {
 		return Point11ValDDependencyStateActive, nil
 	}
 	if len(model.ReviewPrerequisites) > 0 ||
-		strings.TrimSpace(model.CurrentState) == Point11ValAStateReviewRequired ||
-		strings.TrimSpace(model.DependencyState) == Point11ValADependencyStateReviewRequired {
+		model.CurrentState == Point11ValAStateReviewRequired ||
+		model.DependencyState == Point11ValADependencyStateReviewRequired {
 		return Point11ValDDependencyStateReviewRequired, []string{"vala_dependency_review_required"}
 	}
 	return Point11ValDDependencyStateBlocked, []string{"vala_dependency_not_active"}
@@ -959,37 +976,37 @@ func point11ValDValBSnapshotStateAndReasons(model Point11ValDValBDependencySnaps
 	if model.OpenCLB2Findings > 0 {
 		reasons = append(reasons, "valb_open_clb2_findings")
 	}
-	if strings.TrimSpace(model.ClaimTypeState) != Point11ValBClaimTypeStateActive {
+	if model.ClaimTypeState != Point11ValBClaimTypeStateActive {
 		reasons = append(reasons, "valb_claim_type_not_active")
 	}
-	if strings.TrimSpace(model.IssuanceRequestState) != Point11ValBIssuanceRequestStateActive {
+	if model.IssuanceRequestState != Point11ValBIssuanceRequestStateActive {
 		reasons = append(reasons, "valb_issuance_request_not_active")
 	}
-	if strings.TrimSpace(model.IssuedClaimState) != Point11ValBIssuedClaimStateActive {
+	if model.IssuedClaimState != Point11ValBIssuedClaimStateActive {
 		reasons = append(reasons, "valb_issued_claim_not_active")
 	}
-	if strings.TrimSpace(model.RegistryState) != Point11ValBRegistryStateActive {
+	if model.RegistryState != Point11ValBRegistryStateActive {
 		reasons = append(reasons, "valb_registry_not_active")
 	}
-	if strings.TrimSpace(model.VerificationState) != Point11ValBVerificationStateActive {
+	if model.VerificationState != Point11ValBVerificationStateActive {
 		reasons = append(reasons, "valb_verification_not_active")
 	}
-	if strings.TrimSpace(model.CrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateBlocked {
+	if model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateBlocked {
 		reasons = append(reasons, "valb_cross_domain_intake_blocked")
 	}
 	if len(reasons) > 0 {
 		return Point11ValDDependencyStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.CurrentState) == Point11ValBStateActive &&
-		strings.TrimSpace(model.DependencyState) == Point11ValBDependencyStateActive &&
-		strings.TrimSpace(model.CrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateActive &&
+	if model.CurrentState == Point11ValBStateActive &&
+		model.DependencyState == Point11ValBDependencyStateActive &&
+		model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateActive &&
 		len(model.ReviewPrerequisites) == 0 {
 		return Point11ValDDependencyStateActive, nil
 	}
 	if len(model.ReviewPrerequisites) > 0 ||
-		strings.TrimSpace(model.CurrentState) == Point11ValBStateReviewRequired ||
-		strings.TrimSpace(model.DependencyState) == Point11ValBDependencyStateReviewRequired ||
-		strings.TrimSpace(model.CrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateReviewRequired {
+		model.CurrentState == Point11ValBStateReviewRequired ||
+		model.DependencyState == Point11ValBDependencyStateReviewRequired ||
+		model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateReviewRequired {
 		return Point11ValDDependencyStateReviewRequired, []string{"valb_dependency_review_required"}
 	}
 	return Point11ValDDependencyStateBlocked, []string{"valb_dependency_not_active"}
@@ -1030,46 +1047,46 @@ func point11ValDValCSnapshotStateAndReasons(model Point11ValDValCDependencySnaps
 	if model.OpenCLB2Findings > 0 {
 		reasons = append(reasons, "valc_open_clb2_findings")
 	}
-	if strings.TrimSpace(model.EnforcementInputState) != Point11ValCEnforcementInputStateActive {
+	if model.EnforcementInputState != Point11ValCEnforcementInputStateActive {
 		reasons = append(reasons, "valc_enforcement_input_not_active")
 	}
-	if strings.TrimSpace(model.EnforcementResultState) == Point11ValCEnforcementResultStateBlocked {
+	if model.EnforcementResultState == Point11ValCEnforcementResultStateBlocked {
 		reasons = append(reasons, "valc_enforcement_result_blocked")
 	}
-	if strings.TrimSpace(model.ABACDecisionState) != Point11ValCABACDecisionStateActive {
+	if model.ABACDecisionState != Point11ValCABACDecisionStateActive {
 		reasons = append(reasons, "valc_abac_not_active")
 	}
-	if strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateBlocked {
+	if model.ExceptionDecisionState == Point11ValCExceptionDecisionStateBlocked {
 		reasons = append(reasons, "valc_exception_decision_blocked")
 	}
-	if strings.TrimSpace(model.PrecedenceState) == Point11ValCPrecedenceStateBlocked {
+	if model.PrecedenceState == Point11ValCPrecedenceStateBlocked {
 		reasons = append(reasons, "valc_precedence_blocked")
 	}
-	if strings.TrimSpace(model.MonitoringState) == Point11ValCMonitoringStateBlocked {
+	if model.MonitoringState == Point11ValCMonitoringStateBlocked {
 		reasons = append(reasons, "valc_monitoring_blocked")
 	}
-	if strings.TrimSpace(model.DashboardState) != Point11ValCDashboardStateActive {
+	if model.DashboardState != Point11ValCDashboardStateActive {
 		reasons = append(reasons, "valc_dashboard_not_active")
 	}
 	if len(reasons) > 0 {
 		return Point11ValDDependencyStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.CurrentState) == Point11ValCStateActive &&
-		strings.TrimSpace(model.DependencyState) == Point11ValCDependencyStateActive &&
-		strings.TrimSpace(model.EnforcementResultState) == Point11ValCEnforcementResultStateActive &&
-		strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateActive &&
-		strings.TrimSpace(model.PrecedenceState) == Point11ValCPrecedenceStateActive &&
-		strings.TrimSpace(model.MonitoringState) == Point11ValCMonitoringStateActive &&
+	if model.CurrentState == Point11ValCStateActive &&
+		model.DependencyState == Point11ValCDependencyStateActive &&
+		model.EnforcementResultState == Point11ValCEnforcementResultStateActive &&
+		model.ExceptionDecisionState == Point11ValCExceptionDecisionStateActive &&
+		model.PrecedenceState == Point11ValCPrecedenceStateActive &&
+		model.MonitoringState == Point11ValCMonitoringStateActive &&
 		len(model.ReviewPrerequisites) == 0 {
 		return Point11ValDDependencyStateActive, nil
 	}
 	if len(model.ReviewPrerequisites) > 0 ||
-		strings.TrimSpace(model.CurrentState) == Point11ValCStateReviewRequired ||
-		strings.TrimSpace(model.DependencyState) == Point11ValCDependencyStateReviewRequired ||
-		strings.TrimSpace(model.EnforcementResultState) == Point11ValCEnforcementResultStateReviewRequired ||
-		strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateReviewRequired ||
-		strings.TrimSpace(model.PrecedenceState) == Point11ValCPrecedenceStateReviewRequired ||
-		strings.TrimSpace(model.MonitoringState) == Point11ValCMonitoringStateReviewRequired {
+		model.CurrentState == Point11ValCStateReviewRequired ||
+		model.DependencyState == Point11ValCDependencyStateReviewRequired ||
+		model.EnforcementResultState == Point11ValCEnforcementResultStateReviewRequired ||
+		model.ExceptionDecisionState == Point11ValCExceptionDecisionStateReviewRequired ||
+		model.PrecedenceState == Point11ValCPrecedenceStateReviewRequired ||
+		model.MonitoringState == Point11ValCMonitoringStateReviewRequired {
 		return Point11ValDDependencyStateReviewRequired, []string{"valc_dependency_review_required"}
 	}
 	return Point11ValDDependencyStateBlocked, []string{"valc_dependency_not_active"}
@@ -1203,25 +1220,25 @@ func point11ValDQualityMapStateAndReasons(model Point11ValDEvidenceGovernanceQua
 	if !point11ValDStringListValid(model.CleanRoomIPReviewRefs, point11ValBCleanRoomReviewRefValid) {
 		reasons = append(reasons, "quality_map_clean_room_ip_review_refs_invalid")
 	}
-	if strings.TrimSpace(model.FreshnessState) != point11ValDFreshnessStateActive {
+	if model.FreshnessState != point11ValDFreshnessStateActive {
 		reasons = append(reasons, "quality_map_freshness_blocked")
 	}
-	if strings.TrimSpace(model.RevocationState) != point11ValDRevocationStateActive {
+	if model.RevocationState != point11ValDRevocationStateActive {
 		reasons = append(reasons, "quality_map_revocation_blocked")
 	}
-	if strings.TrimSpace(model.SupersessionState) != point11ValDSupersessionStateActive {
+	if model.SupersessionState != point11ValDSupersessionStateActive {
 		reasons = append(reasons, "quality_map_supersession_blocked")
 	}
-	if strings.TrimSpace(model.DuplicateState) != point11ValDDuplicateStateActive {
+	if model.DuplicateState != point11ValDDuplicateStateActive {
 		reasons = append(reasons, "quality_map_duplicate_blocked")
 	}
-	if strings.TrimSpace(model.ConflictState) != point11ValDConflictStateActive {
+	if model.ConflictState != point11ValDConflictStateActive {
 		reasons = append(reasons, "quality_map_conflict_blocked")
 	}
-	if strings.TrimSpace(model.UnrelatedState) != point11ValDUnrelatedStateActive {
+	if model.UnrelatedState != point11ValDUnrelatedStateActive {
 		reasons = append(reasons, "quality_map_unrelated_blocked")
 	}
-	if strings.TrimSpace(model.TenantScopeState) != point11ValDTenantScopeStateActive {
+	if model.TenantScopeState != point11ValDTenantScopeStateActive {
 		reasons = append(reasons, "quality_map_tenant_scope_blocked")
 	}
 	if point11ValDContainsForbiddenText(strings.Join(model.Diagnostics, " ")) {
@@ -1317,8 +1334,8 @@ func point11ValDNoOverclaimReviewStateAndReasons(model Point11ValDFinalNoOvercla
 	if len(model.Denylist) == 0 || len(model.SafeWordingExamples) == 0 {
 		reasons = append(reasons, "no_overclaim_reference_sets_missing")
 	}
-	if strings.TrimSpace(model.ReviewState) == Point11ValDNoOverclaimReviewStateBlocked {
-		reasons = append(reasons, "no_overclaim_review_state_blocked")
+	if model.ReviewState != Point11ValDNoOverclaimReviewStateActive {
+		reasons = append(reasons, "no_overclaim_review_state_invalid")
 	}
 	if point11ValDContainsForbiddenText(model.ObservedClaims...) ||
 		point11ValDContainsForbiddenText(model.ObservedDiagnostics...) ||
@@ -1454,17 +1471,17 @@ func point11ValDCLBClosureStateAndReasons(model Point11ValDCLBClosureLedger) (st
 			!point11ValDEvidenceRefsValid([]string{risk.EvidenceRef}) ||
 			!point11Val0ScopeValid(risk.Scope) ||
 			!point11ValCActorRefValid(risk.OwnerRef) ||
-			!point11Val0ValidTimestamp(risk.Expiry) {
+			!point11ValDRawTimestampValid(risk.Expiry) {
 			reasons = append(reasons, "accepted_risk_missing_required_fields")
 			break
 		}
-		expiry, _ := time.Parse(time.RFC3339, strings.TrimSpace(risk.Expiry))
+		expiry, _ := time.Parse(time.RFC3339, risk.Expiry)
 		if expiry.Before(time.Now().UTC()) {
 			reasons = append(reasons, "accepted_risk_expired")
 			break
 		}
 	}
-	if strings.TrimSpace(model.ReviewerResult) != point11ValDReviewerResultPassConfirmed {
+	if model.ReviewerResult != point11ValDReviewerResultPassConfirmed {
 		reasons = append(reasons, "clb_ledger_reviewer_not_pass_confirmed")
 	}
 	if point11ValDContainsForbiddenText(strings.Join(model.Diagnostics, " ")) {
@@ -1489,34 +1506,34 @@ func point11ValDPassClosureManifestStateAndReasons(model Point11ValDPassClosureM
 	if !point11ValDManifestRefValid(model.ManifestID) {
 		reasons = append(reasons, "manifest_id_invalid")
 	}
-	if strings.TrimSpace(model.PointID) != point11ValDPointID {
+	if model.PointID != point11ValDPointID {
 		reasons = append(reasons, "manifest_point_id_invalid")
 	}
-	if strings.TrimSpace(model.WaveID) != point11ValDWaveID {
+	if model.WaveID != point11ValDWaveID {
 		reasons = append(reasons, "manifest_wave_id_invalid")
 	}
-	if strings.TrimSpace(model.Scope) == "" {
+	if model.Scope != point11ValDScope {
 		reasons = append(reasons, "manifest_scope_missing")
 	}
-	if strings.TrimSpace(model.DependencyGateResult) != Point11ValDDependencyStateActive {
+	if model.DependencyGateResult != Point11ValDDependencyStateActive {
 		reasons = append(reasons, "manifest_dependency_gate_result_invalid")
 	}
-	if strings.TrimSpace(model.IntegratedInvariantResult) != Point11ValDIntegratedInvariantStateActive {
+	if model.IntegratedInvariantResult != Point11ValDIntegratedInvariantStateActive {
 		reasons = append(reasons, "manifest_integrated_invariant_result_invalid")
 	}
-	if strings.TrimSpace(model.EvidenceGovernanceQualityResult) != Point11ValDQualityMapStateActive {
+	if model.EvidenceGovernanceQualityResult != Point11ValDQualityMapStateActive {
 		reasons = append(reasons, "manifest_quality_result_invalid")
 	}
-	if strings.TrimSpace(model.PublicationBoundaryResult) != Point11ValDPublicationReviewStateActive {
+	if model.PublicationBoundaryResult != Point11ValDPublicationReviewStateActive {
 		reasons = append(reasons, "manifest_publication_result_invalid")
 	}
-	if strings.TrimSpace(model.NoOverclaimResult) != Point11ValDNoOverclaimReviewStateActive {
+	if model.NoOverclaimResult != Point11ValDNoOverclaimReviewStateActive {
 		reasons = append(reasons, "manifest_no_overclaim_result_invalid")
 	}
-	if strings.TrimSpace(model.CleanRoomIPResult) != Point11ValDCleanRoomIPReviewStateActive {
+	if model.CleanRoomIPResult != Point11ValDCleanRoomIPReviewStateActive {
 		reasons = append(reasons, "manifest_clean_room_ip_result_invalid")
 	}
-	if strings.TrimSpace(model.CLBClosureResult) != Point11ValDCLBClosureStateActive {
+	if model.CLBClosureResult != Point11ValDCLBClosureStateActive {
 		reasons = append(reasons, "manifest_clb_closure_result_invalid")
 	}
 	if !point11ValDStringListValid(model.CommandsRun, point11ValDCommandRunRefValid) {
@@ -1538,28 +1555,28 @@ func point11ValDPassClosureManifestStateAndReasons(model Point11ValDPassClosureM
 		!point11Val0IdentityValueValid(model.DashboardProjectionSummary) {
 		reasons = append(reasons, "manifest_summaries_missing")
 	}
-	if strings.TrimSpace(model.ProjectionBoundaryResultToken) != point11ValDProjectionBoundaryResultActive {
+	if model.ProjectionBoundaryResultToken != point11ValDProjectionBoundaryResultActive {
 		reasons = append(reasons, "manifest_projection_boundary_result_invalid")
 	}
-	if strings.TrimSpace(model.ReviewerResult) != point11ValDReviewerResultPassConfirmed {
+	if model.ReviewerResult != point11ValDReviewerResultPassConfirmed {
 		reasons = append(reasons, "manifest_reviewer_not_pass_confirmed")
 	}
 	if !model.Point11PassAllowed {
 		reasons = append(reasons, "manifest_point11_pass_not_allowed")
 	}
-	if strings.TrimSpace(model.Point11PassToken) != point11ValDPoint11PassToken {
+	if model.Point11PassToken != point11ValDPoint11PassToken {
 		reasons = append(reasons, "manifest_point11_pass_token_invalid")
 	}
 	if point11ValDContainsForbiddenText(strings.Join(model.Diagnostics, " ")) {
 		reasons = append(reasons, "manifest_overclaim_detected")
 	}
-	if strings.TrimSpace(foundation.DependencyState) != Point11ValDDependencyStateActive ||
-		strings.TrimSpace(foundation.IntegratedInvariantState) != Point11ValDIntegratedInvariantStateActive ||
-		strings.TrimSpace(foundation.QualityMapState) != Point11ValDQualityMapStateActive ||
-		strings.TrimSpace(foundation.PublicationReviewState) != Point11ValDPublicationReviewStateActive ||
-		strings.TrimSpace(foundation.NoOverclaimReviewState) != Point11ValDNoOverclaimReviewStateActive ||
-		strings.TrimSpace(foundation.CleanRoomIPReviewState) != Point11ValDCleanRoomIPReviewStateActive ||
-		strings.TrimSpace(foundation.CLBClosureState) != Point11ValDCLBClosureStateActive {
+	if foundation.DependencyState != Point11ValDDependencyStateActive ||
+		foundation.IntegratedInvariantState != Point11ValDIntegratedInvariantStateActive ||
+		foundation.QualityMapState != Point11ValDQualityMapStateActive ||
+		foundation.PublicationReviewState != Point11ValDPublicationReviewStateActive ||
+		foundation.NoOverclaimReviewState != Point11ValDNoOverclaimReviewStateActive ||
+		foundation.CleanRoomIPReviewState != Point11ValDCleanRoomIPReviewStateActive ||
+		foundation.CLBClosureState != Point11ValDCLBClosureStateActive {
 		reasons = append(reasons, "manifest_foundation_gates_not_active")
 	}
 	if len(reasons) > 0 {
@@ -1581,28 +1598,28 @@ func point11ValDFinalPassGateStateAndReasons(model Point11ValDFinalPoint11PassGa
 	if !point11ValDFinalGateRefValid(model.FinalGateID) {
 		reasons = append(reasons, "final_pass_gate_id_invalid")
 	}
-	if strings.TrimSpace(model.DependencyState) != Point11ValDDependencyStateActive {
+	if model.DependencyState != Point11ValDDependencyStateActive {
 		reasons = append(reasons, "final_pass_gate_dependency_state_invalid")
 	}
-	if strings.TrimSpace(model.InvariantState) != Point11ValDIntegratedInvariantStateActive {
+	if model.InvariantState != Point11ValDIntegratedInvariantStateActive {
 		reasons = append(reasons, "final_pass_gate_invariant_state_invalid")
 	}
-	if strings.TrimSpace(model.QualityState) != Point11ValDQualityMapStateActive {
+	if model.QualityState != Point11ValDQualityMapStateActive {
 		reasons = append(reasons, "final_pass_gate_quality_state_invalid")
 	}
-	if strings.TrimSpace(model.PublicationState) != Point11ValDPublicationReviewStateActive {
+	if model.PublicationState != Point11ValDPublicationReviewStateActive {
 		reasons = append(reasons, "final_pass_gate_publication_state_invalid")
 	}
-	if strings.TrimSpace(model.NoOverclaimState) != Point11ValDNoOverclaimReviewStateActive {
+	if model.NoOverclaimState != Point11ValDNoOverclaimReviewStateActive {
 		reasons = append(reasons, "final_pass_gate_no_overclaim_state_invalid")
 	}
-	if strings.TrimSpace(model.CleanRoomIPState) != Point11ValDCleanRoomIPReviewStateActive {
+	if model.CleanRoomIPState != Point11ValDCleanRoomIPReviewStateActive {
 		reasons = append(reasons, "final_pass_gate_clean_room_ip_state_invalid")
 	}
-	if strings.TrimSpace(model.CLBClosureState) != Point11ValDCLBClosureStateActive {
+	if model.CLBClosureState != Point11ValDCLBClosureStateActive {
 		reasons = append(reasons, "final_pass_gate_clb_closure_state_invalid")
 	}
-	if strings.TrimSpace(model.ManifestState) != Point11ValDPassClosureManifestStateActive {
+	if model.ManifestState != Point11ValDPassClosureManifestStateActive {
 		reasons = append(reasons, "final_pass_gate_manifest_state_invalid")
 	}
 	if !model.Point11PassAllowed {
@@ -1611,7 +1628,7 @@ func point11ValDFinalPassGateStateAndReasons(model Point11ValDFinalPoint11PassGa
 	if !model.Point11PassEmitted {
 		reasons = append(reasons, "final_pass_gate_point11_pass_not_emitted")
 	}
-	if strings.TrimSpace(model.Point11PassToken) != point11ValDPoint11PassToken {
+	if model.Point11PassToken != point11ValDPoint11PassToken {
 		reasons = append(reasons, "final_pass_gate_point11_pass_token_invalid")
 	}
 	if model.Point11PassObservedOutsideFinalClosure {
@@ -1620,14 +1637,14 @@ func point11ValDFinalPassGateStateAndReasons(model Point11ValDFinalPoint11PassGa
 	if point11ValDContainsForbiddenText(strings.Join(model.Diagnostics, " ")) {
 		reasons = append(reasons, "final_pass_gate_overclaim_detected")
 	}
-	if strings.TrimSpace(foundation.DependencyState) != Point11ValDDependencyStateActive ||
-		strings.TrimSpace(foundation.IntegratedInvariantState) != Point11ValDIntegratedInvariantStateActive ||
-		strings.TrimSpace(foundation.QualityMapState) != Point11ValDQualityMapStateActive ||
-		strings.TrimSpace(foundation.PublicationReviewState) != Point11ValDPublicationReviewStateActive ||
-		strings.TrimSpace(foundation.NoOverclaimReviewState) != Point11ValDNoOverclaimReviewStateActive ||
-		strings.TrimSpace(foundation.CleanRoomIPReviewState) != Point11ValDCleanRoomIPReviewStateActive ||
-		strings.TrimSpace(foundation.CLBClosureState) != Point11ValDCLBClosureStateActive ||
-		strings.TrimSpace(foundation.PassClosureManifestState) != Point11ValDPassClosureManifestStateActive {
+	if foundation.DependencyState != Point11ValDDependencyStateActive ||
+		foundation.IntegratedInvariantState != Point11ValDIntegratedInvariantStateActive ||
+		foundation.QualityMapState != Point11ValDQualityMapStateActive ||
+		foundation.PublicationReviewState != Point11ValDPublicationReviewStateActive ||
+		foundation.NoOverclaimReviewState != Point11ValDNoOverclaimReviewStateActive ||
+		foundation.CleanRoomIPReviewState != Point11ValDCleanRoomIPReviewStateActive ||
+		foundation.CLBClosureState != Point11ValDCLBClosureStateActive ||
+		foundation.PassClosureManifestState != Point11ValDPassClosureManifestStateActive {
 		reasons = append(reasons, "final_pass_gate_foundation_gates_not_active")
 	}
 	if len(reasons) > 0 {
@@ -1740,6 +1757,8 @@ func point11ValDDiagnosticsModel(
 }
 
 func EvaluatePoint11ValDFoundationState(model Point11ValDFoundation) string {
+	dependencyActive := model.DependencyState == Point11ValDDependencyStateActive
+	dependencyReviewRequired := model.DependencyState == Point11ValDDependencyStateReviewRequired
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		model.CreatesAuthorityClaims ||
 		model.CreatesPublicationSideEffects ||
@@ -1747,18 +1766,18 @@ func EvaluatePoint11ValDFoundationState(model Point11ValDFoundation) string {
 		model.CreatesAnchoringSideEffects ||
 		model.CreatesExternalAPISideEffects ||
 		model.CreatesProductionSideEffects ||
-		strings.TrimSpace(model.DependencyState) == Point11ValDDependencyStateBlocked ||
-		strings.TrimSpace(model.IntegratedInvariantState) == Point11ValDIntegratedInvariantStateBlocked ||
-		strings.TrimSpace(model.QualityMapState) == Point11ValDQualityMapStateBlocked ||
-		strings.TrimSpace(model.PublicationReviewState) == Point11ValDPublicationReviewStateBlocked ||
-		strings.TrimSpace(model.NoOverclaimReviewState) == Point11ValDNoOverclaimReviewStateBlocked ||
-		strings.TrimSpace(model.CleanRoomIPReviewState) == Point11ValDCleanRoomIPReviewStateBlocked ||
-		strings.TrimSpace(model.CLBClosureState) == Point11ValDCLBClosureStateBlocked ||
-		strings.TrimSpace(model.PassClosureManifestState) == Point11ValDPassClosureManifestStateBlocked ||
-		strings.TrimSpace(model.FinalPassGateState) == Point11ValDFinalPassGateStateBlocked {
+		(!dependencyActive && !dependencyReviewRequired) ||
+		model.IntegratedInvariantState != Point11ValDIntegratedInvariantStateActive ||
+		model.QualityMapState != Point11ValDQualityMapStateActive ||
+		model.PublicationReviewState != Point11ValDPublicationReviewStateActive ||
+		model.NoOverclaimReviewState != Point11ValDNoOverclaimReviewStateActive ||
+		model.CleanRoomIPReviewState != Point11ValDCleanRoomIPReviewStateActive ||
+		model.CLBClosureState != Point11ValDCLBClosureStateActive ||
+		model.PassClosureManifestState != Point11ValDPassClosureManifestStateActive ||
+		model.FinalPassGateState != Point11ValDFinalPassGateStateActive {
 		return Point11ValDStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point11ValDDependencyStateReviewRequired {
+	if dependencyReviewRequired {
 		return Point11ValDStateReviewRequired
 	}
 	return Point11ValDStateActive

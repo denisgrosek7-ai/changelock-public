@@ -432,6 +432,9 @@ func deploymentMultiTenantValEValueIsValid(value string) bool {
 }
 
 func deploymentMultiTenantValEIdentityValueIsValid(value string) bool {
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
+		return false
+	}
 	if !deploymentMultiTenantValEValueIsValid(value) {
 		return false
 	}
@@ -443,6 +446,59 @@ func deploymentMultiTenantValEIdentityValueIsValid(value string) bool {
 		}
 	}
 	return true
+}
+
+func deploymentMultiTenantValEEvidenceIdentityBoundarySafe(entry DeploymentMultiTenantValEEvidenceQualityEntry) bool {
+	values := []string{
+		entry.EvidenceID,
+		entry.Source,
+		entry.Surface,
+		entry.EvidenceHash,
+		entry.ArtifactHash,
+	}
+	for _, value := range values {
+		if deploymentMultiTenantValEEvidenceIdentityHasBoundaryLaunderingMarker(value, entry.CrossTenant) {
+			return false
+		}
+	}
+	return true
+}
+
+func deploymentMultiTenantValEEvidenceIdentityHasBoundaryLaunderingMarker(value string, crossTenantDeclared bool) bool {
+	compact := deploymentMultiTenantVal0CompactClaimText(value)
+	for _, blocked := range []string{
+		"tenantbeta",
+		"tenantbravo",
+		"tenantgamma",
+		"tenantdelta",
+		"tenantomega",
+		"tenantforeign",
+		"tenantmismatch",
+		"othertenant",
+		"foreigntenant",
+		"siblingboundary",
+		"companyprofile",
+		"tenantprofile",
+		"profilelike",
+		"unrelatedprofile",
+		"customprofile",
+		"companytenant",
+		"globaladminscope",
+		"globalscope",
+	} {
+		if strings.Contains(compact, blocked) {
+			return true
+		}
+	}
+	if crossTenantDeclared {
+		return false
+	}
+	for _, blocked := range []string{"crosstenant", "crossboundary", "crossscope"} {
+		if strings.Contains(compact, blocked) {
+			return true
+		}
+	}
+	return false
 }
 
 func deploymentMultiTenantValEExpectedPolicyVersion() string {
@@ -532,6 +588,18 @@ func deploymentMultiTenantValEClosureSurfaces() []string {
 		DeploymentMultiTenantValEClosureSurfaceCleanRoomIP,
 		DeploymentMultiTenantValEClosureSurfaceNoOverclaim,
 	}
+}
+
+func deploymentMultiTenantValERawExactValueInSet(value string, allowed []string) bool {
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
+		return false
+	}
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func deploymentMultiTenantValEProjectionSurfaces() []string {
@@ -929,8 +997,6 @@ func EvaluateDeploymentMultiTenantValEIntegratedInvariantState(model DeploymentM
 }
 
 func deploymentMultiTenantValEEvidenceEntryValid(entry DeploymentMultiTenantValEEvidenceQualityEntry) bool {
-	trimmedEvidenceHash := strings.TrimSpace(entry.EvidenceHash)
-	trimmedArtifactHash := strings.TrimSpace(entry.ArtifactHash)
 	hasEvidenceHash := deploymentMultiTenantValEIdentityValueIsValid(entry.EvidenceHash)
 	hasArtifactHash := deploymentMultiTenantValEIdentityValueIsValid(entry.ArtifactHash)
 	if !deploymentMultiTenantValEIdentityValueIsValid(entry.EvidenceID) ||
@@ -940,13 +1006,14 @@ func deploymentMultiTenantValEEvidenceEntryValid(entry DeploymentMultiTenantValE
 		entry.TenantScope != deploymentMultiTenantValEExpectedTenantScope() ||
 		entry.DeploymentProfile != deploymentMultiTenantValEExpectedDeploymentProfile() ||
 		!deploymentMultiTenantValEIdentityValueIsValid(entry.Surface) ||
+		!deploymentMultiTenantValEEvidenceIdentityBoundarySafe(entry) ||
 		!deploymentMultiTenantVal0FreshnessIsFresh(entry.FreshnessState) ||
 		!deploymentMultiTenantValETwitter(entry.Timestamp) ||
 		!deploymentMultiTenantValEHasExactEvidenceIdentityVersions(entry.PolicyVersion, entry.EngineVersion, entry.SchemaVersion) ||
 		entry.ValidationState != deploymentMultiTenantValEEvidenceValidationExact ||
-		(trimmedEvidenceHash != "" && !hasEvidenceHash) ||
-		(trimmedArtifactHash != "" && !hasArtifactHash) ||
-		(trimmedEvidenceHash == "" && trimmedArtifactHash == "") ||
+		(entry.EvidenceHash != "" && !hasEvidenceHash) ||
+		(entry.ArtifactHash != "" && !hasArtifactHash) ||
+		(entry.EvidenceHash == "" && entry.ArtifactHash == "") ||
 		!containsTrimmedString(deploymentMultiTenantValERequiredEvidenceCategories(), entry.RelatedWave) ||
 		!deploymentMultiTenantValEIdentityValueIsValid(entry.RelatedWave) ||
 		entry.ProjectionBoundary != deploymentMultiTenantValEEvidenceProjectionBoundary ||
@@ -961,7 +1028,7 @@ func deploymentMultiTenantValEEvidenceEntryValid(entry DeploymentMultiTenantValE
 		entry.SamePackageNameIdentity {
 		return false
 	}
-	if entry.CrossTenant && !deploymentMultiTenantValEValueIsValid(entry.ScopedAuditedException) {
+	if entry.CrossTenant && !deploymentMultiTenantValEIdentityValueIsValid(entry.ScopedAuditedException) {
 		return false
 	}
 	return true
@@ -980,13 +1047,13 @@ func EvaluateDeploymentMultiTenantValEEvidenceQualityState(model DeploymentMulti
 		if !deploymentMultiTenantValEEvidenceEntryValid(entry) {
 			return DeploymentMultiTenantValEEvidenceQualityStateBlocked
 		}
-		evidenceID := strings.TrimSpace(entry.EvidenceID)
-		evidenceHash := strings.TrimSpace(entry.EvidenceHash)
-		artifactHash := strings.TrimSpace(entry.ArtifactHash)
-		tenantScope := strings.TrimSpace(entry.TenantScope)
-		deploymentProfile := strings.TrimSpace(entry.DeploymentProfile)
-		relatedWave := strings.TrimSpace(entry.RelatedWave)
-		surface := strings.TrimSpace(entry.Surface)
+		evidenceID := entry.EvidenceID
+		evidenceHash := entry.EvidenceHash
+		artifactHash := entry.ArtifactHash
+		tenantScope := entry.TenantScope
+		deploymentProfile := entry.DeploymentProfile
+		relatedWave := entry.RelatedWave
+		surface := entry.Surface
 		compound := strings.Join([]string{evidenceID, tenantScope, deploymentProfile, relatedWave, surface}, "|")
 		scopeKey := strings.Join([]string{tenantScope, deploymentProfile}, "|")
 		if _, exists := compoundIdentities[compound]; exists {
@@ -1018,7 +1085,7 @@ func EvaluateDeploymentMultiTenantValEEvidenceQualityState(model DeploymentMulti
 			}
 			artifactHashes[artifactHash] = scopeKey
 		}
-		if entry.CrossTenant && !deploymentMultiTenantValEValueIsValid(entry.ScopedAuditedException) {
+		if entry.CrossTenant && !deploymentMultiTenantValEIdentityValueIsValid(entry.ScopedAuditedException) {
 			return DeploymentMultiTenantValEEvidenceQualityStateBlocked
 		}
 		categories[relatedWave] = true
@@ -1032,34 +1099,35 @@ func EvaluateDeploymentMultiTenantValEEvidenceQualityState(model DeploymentMulti
 }
 
 func deploymentMultiTenantValECLBFindingValid(finding DeploymentMultiTenantValECLBFinding) bool {
-	level := strings.TrimSpace(finding.BlockerLevel)
-	if len(level) == 2 && level[0] == 'P' && level[1] >= '0' && level[1] <= '9' {
+	if len(finding.BlockerLevel) == 2 && finding.BlockerLevel[0] == 'P' && finding.BlockerLevel[1] >= '0' && finding.BlockerLevel[1] <= '9' {
 		return false
 	}
-	if !containsTrimmedString(deploymentMultiTenantValEClosureLevels(), level) ||
-		!containsTrimmedString(deploymentMultiTenantValEClosureSurfaces(), strings.TrimSpace(finding.Surface)) ||
-		strings.TrimSpace(finding.Reason) == "" {
+	if !deploymentMultiTenantValERawExactValueInSet(finding.BlockerLevel, deploymentMultiTenantValEClosureLevels()) ||
+		!deploymentMultiTenantValERawExactValueInSet(finding.Surface, deploymentMultiTenantValEClosureSurfaces()) ||
+		!deploymentMultiTenantValEIdentityValueIsValid(finding.Reason) {
 		return false
 	}
-	if level == DeploymentMultiTenantValEBlockerLevelCLB1 || level == DeploymentMultiTenantValEBlockerLevelCLB2 || level == DeploymentMultiTenantValEBlockerLevelCLB3 {
-		return strings.TrimSpace(finding.RequiredFollowup) != ""
+	if finding.BlockerLevel == DeploymentMultiTenantValEBlockerLevelCLB1 ||
+		finding.BlockerLevel == DeploymentMultiTenantValEBlockerLevelCLB2 ||
+		finding.BlockerLevel == DeploymentMultiTenantValEBlockerLevelCLB3 {
+		return deploymentMultiTenantValEIdentityValueIsValid(finding.RequiredFollowup)
 	}
 	return true
 }
 
 func deploymentMultiTenantValERiskExceptionValid(exception DeploymentMultiTenantValERiskException) bool {
-	if !deploymentMultiTenantValEValueIsValid(exception.ExceptionID) ||
-		!deploymentMultiTenantValEValueIsValid(exception.Owner) ||
-		!deploymentMultiTenantValEValueIsValid(exception.Scope) ||
-		!deploymentMultiTenantValEValueIsValid(exception.Reason) ||
-		!deploymentMultiTenantValEValueIsValid(exception.RequiredFollowupRef) ||
+	if !deploymentMultiTenantValEIdentityValueIsValid(exception.ExceptionID) ||
+		!deploymentMultiTenantValEIdentityValueIsValid(exception.Owner) ||
+		!deploymentMultiTenantValEIdentityValueIsValid(exception.Scope) ||
+		!deploymentMultiTenantValEIdentityValueIsValid(exception.Reason) ||
+		!deploymentMultiTenantValEIdentityValueIsValid(exception.RequiredFollowupRef) ||
 		!deploymentMultiTenantValETwitter(exception.Expiry) {
 		return false
 	}
-	if exception.Permanent && !deploymentMultiTenantValEValueIsValid(exception.GovernanceEvent) {
+	if exception.Permanent && !deploymentMultiTenantValEIdentityValueIsValid(exception.GovernanceEvent) {
 		return false
 	}
-	if exception.IPLegalException && !deploymentMultiTenantValEValueIsValid(exception.ExternalReviewPlan) {
+	if exception.IPLegalException && !deploymentMultiTenantValEIdentityValueIsValid(exception.ExternalReviewPlan) {
 		return false
 	}
 	return true
@@ -1075,34 +1143,34 @@ func EvaluateDeploymentMultiTenantValECLBClosureState(model DeploymentMultiTenan
 		return DeploymentMultiTenantValECLBClosureStateBlocked
 	}
 	for _, finding := range model.CLB0OpenFindings {
-		if !deploymentMultiTenantValECLBFindingValid(finding) || strings.TrimSpace(finding.BlockerLevel) != DeploymentMultiTenantValEBlockerLevelCLB0 {
+		if !deploymentMultiTenantValECLBFindingValid(finding) || finding.BlockerLevel != DeploymentMultiTenantValEBlockerLevelCLB0 {
 			return DeploymentMultiTenantValECLBClosureStateBlocked
 		}
 	}
 	for _, finding := range model.CLB1OpenFindings {
-		if !deploymentMultiTenantValECLBFindingValid(finding) || strings.TrimSpace(finding.BlockerLevel) != DeploymentMultiTenantValEBlockerLevelCLB1 {
+		if !deploymentMultiTenantValECLBFindingValid(finding) || finding.BlockerLevel != DeploymentMultiTenantValEBlockerLevelCLB1 {
 			return DeploymentMultiTenantValECLBClosureStateBlocked
 		}
 	}
 	for _, finding := range model.CLB2OpenFindings {
-		if !deploymentMultiTenantValECLBFindingValid(finding) || strings.TrimSpace(finding.BlockerLevel) != DeploymentMultiTenantValEBlockerLevelCLB2 {
+		if !deploymentMultiTenantValECLBFindingValid(finding) || finding.BlockerLevel != DeploymentMultiTenantValEBlockerLevelCLB2 {
 			return DeploymentMultiTenantValECLBClosureStateBlocked
 		}
 	}
 	for _, finding := range model.CLB3AdvisoryFindings {
 		if !deploymentMultiTenantValECLBFindingValid(finding) ||
-			strings.TrimSpace(finding.BlockerLevel) != DeploymentMultiTenantValEBlockerLevelCLB3 ||
+			finding.BlockerLevel != DeploymentMultiTenantValEBlockerLevelCLB3 ||
 			finding.BlocksCurrentWave {
 			return DeploymentMultiTenantValECLBClosureStateBlocked
 		}
 	}
 	for _, ref := range model.RiskExceptionRefs {
-		if !deploymentMultiTenantValEValueIsValid(ref) {
+		if !deploymentMultiTenantValEIdentityValueIsValid(ref) {
 			return DeploymentMultiTenantValECLBClosureStateBlocked
 		}
 	}
 	for _, ref := range model.RequiredFollowupRefs {
-		if !deploymentMultiTenantValEValueIsValid(ref) {
+		if !deploymentMultiTenantValEIdentityValueIsValid(ref) {
 			return DeploymentMultiTenantValECLBClosureStateBlocked
 		}
 	}
@@ -1374,6 +1442,11 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		"msp certified",
 		"regulator-approved",
 		"compliance guaranteed",
+		"public badge",
+		"global truth",
+		"official authority",
+		"legal proof",
+		"financial guarantee",
 		"compliant by default",
 		"one-click secure",
 		"zero-risk deployment",
@@ -1438,6 +1511,7 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 		"production autopatch",
 		"agent guaranteed tenant isolation",
 		"agent proves compliance",
+		"point 10 pass",
 		"point 10 pass by agent",
 		"agent is source of truth",
 		"external ai verified",
@@ -1520,30 +1594,41 @@ func deploymentMultiTenantValEForbiddenPhraseAcrossValues(values []string, allow
 	if len(phraseTokens) < 2 {
 		return false
 	}
-	matched := 0
-	distinctBuckets := 0
-	lastBucket := -1
-	matchedIncludesNonAllowed := false
+	type tokenBucket struct {
+		token  string
+		bucket int
+	}
+	flat := []tokenBucket{}
 	for bucketIndex, value := range values {
-		bucketTokens := strings.Fields(value)
-		if len(bucketTokens) == 0 {
-			continue
+		for _, token := range strings.Fields(value) {
+			flat = append(flat, tokenBucket{token: token, bucket: bucketIndex})
 		}
-		for _, token := range bucketTokens {
-			if token != phraseTokens[matched] {
+	}
+	var search func(nextIndex, phraseIndex, lastBucket, distinctBuckets int, includesNonAllowed bool) bool
+	search = func(nextIndex, phraseIndex, lastBucket, distinctBuckets int, includesNonAllowed bool) bool {
+		if phraseIndex == len(phraseTokens) {
+			return distinctBuckets > 1 && includesNonAllowed
+		}
+		for i := nextIndex; i < len(flat); i++ {
+			if flat[i].token != phraseTokens[phraseIndex] {
 				continue
 			}
-			if bucketIndex != lastBucket {
-				distinctBuckets++
-				lastBucket = bucketIndex
+			nextDistinctBuckets := distinctBuckets
+			if flat[i].bucket != lastBucket {
+				nextDistinctBuckets++
 			}
-			if !allowed[bucketIndex] {
-				matchedIncludesNonAllowed = true
+			if search(i+1, phraseIndex+1, flat[i].bucket, nextDistinctBuckets, includesNonAllowed || !allowed[flat[i].bucket]) {
+				return true
 			}
-			matched++
-			if matched == len(phraseTokens) {
-				return distinctBuckets > 1 && matchedIncludesNonAllowed
-			}
+		}
+		return false
+	}
+	for i, token := range flat {
+		if token.token != phraseTokens[0] {
+			continue
+		}
+		if search(i+1, 1, token.bucket, 1, !allowed[token.bucket]) {
+			return true
 		}
 	}
 	return false

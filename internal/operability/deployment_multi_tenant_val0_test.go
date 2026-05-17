@@ -22,6 +22,15 @@ func assertDeploymentMultiTenantVal0NoPoint10Pass(t *testing.T, model Deployment
 	}
 }
 
+func deploymentMultiTenantVal0ExactReasonPresent(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDeploymentMultiTenantVal0AggregateProjectionDisclaimerBlocks(t *testing.T) {
 	model := activeDeploymentMultiTenantVal0Model()
 	model.ProjectionDisclaimer = "canonical_truth"
@@ -50,6 +59,28 @@ func TestDeploymentMultiTenantVal0CanonicalTenantTokenValueRequiresExactSingleTo
 		if deploymentMultiTenantVal0CanonicalTenantTokenValueIsValid(value) {
 			t.Fatalf("expected non-exact tenant token %q to be invalid", value)
 		}
+	}
+}
+
+func TestDeploymentMultiTenantVal0ExactValueRejectsRawRetags(t *testing.T) {
+	valid := "tenant scoped validation evidence"
+	if !deploymentMultiTenantVal0ExactValueIsValid(valid) {
+		t.Fatalf("expected canonical exact value to be valid")
+	}
+	invalid := []string{
+		" " + valid,
+		valid + " ",
+		"\t" + valid + "\n",
+		"tenant scoped\tvalidation evidence",
+		"Tenant scoped validation evidence",
+	}
+	for _, value := range invalid {
+		if deploymentMultiTenantVal0ExactValueIsValid(value) {
+			t.Fatalf("expected raw-retagged exact value %q to be invalid", value)
+		}
+	}
+	if deploymentMultiTenantVal0AllValuesValid([]string{valid, "tenant scoped\nvalidation evidence"}) {
+		t.Fatalf("expected caller list validation to reject internal newline retag")
 	}
 }
 
@@ -739,7 +770,11 @@ func TestDeploymentMultiTenantVal0ScopeVariantRegressionBlockers(t *testing.T) {
 func TestDeploymentMultiTenantVal0NoOverclaimBlockers(t *testing.T) {
 	blockedClaims := []string{
 		"production approved",
+		"production approval",
 		"deployment approved",
+		"deployment approval",
+		"point 10 pass",
+		"point_10_pass",
 		"marketplace certified",
 		"msp certified",
 		"regulator-approved",
@@ -803,6 +838,9 @@ func TestDeploymentMultiTenantVal0NoOverclaimBlockers(t *testing.T) {
 		model = ComputeDeploymentMultiTenantVal0Foundation(model)
 		if model.CurrentState != DeploymentMultiTenantVal0StateBlocked || model.NoOverclaimState != DeploymentMultiTenantVal0NoOverclaimStateBlocked {
 			t.Fatalf("expected blocked no-overclaim for %q, got %#v", claim, model)
+		}
+		if !deploymentMultiTenantVal0ExactReasonPresent(model.BlockingReasons, "no_overclaim") {
+			t.Fatalf("expected exact no_overclaim blocking reason for %q, got %#v", claim, model.BlockingReasons)
 		}
 	}
 
@@ -1364,6 +1402,9 @@ func TestDeploymentMultiTenantVal0NoOverclaimAdversarialBlockers(t *testing.T) {
 		}
 		if model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 			t.Fatalf("%s: expected point 10 to remain not complete, got %#v", tc.name, model)
+		}
+		if !deploymentMultiTenantVal0ExactReasonPresent(model.BlockingReasons, "no_overclaim") {
+			t.Fatalf("%s: expected exact no_overclaim blocking reason, got %#v", tc.name, model.BlockingReasons)
 		}
 		payload, err := json.Marshal(model)
 		if err != nil {

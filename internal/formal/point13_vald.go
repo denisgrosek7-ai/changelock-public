@@ -253,7 +253,7 @@ func point13ValDStates() []string {
 }
 
 func point13ValDStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValDStates(), value)
+	return point13Val0RawExactOneOf(value, point13ValDStates())
 }
 
 func point13ValDTimelineRefValid(value string) bool {
@@ -305,7 +305,7 @@ func point13ValDTimelineEventKinds() []string {
 }
 
 func point13ValDTimelineEventKindValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValDTimelineEventKinds(), value)
+	return point13Val0RawExactOneOf(value, point13ValDTimelineEventKinds())
 }
 
 func point13ValDQueryKinds() []string {
@@ -320,7 +320,7 @@ func point13ValDQueryKinds() []string {
 }
 
 func point13ValDQueryKindValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValDQueryKinds(), value)
+	return point13Val0RawExactOneOf(value, point13ValDQueryKinds())
 }
 
 func point13ValDExplanationKinds() []string {
@@ -334,7 +334,7 @@ func point13ValDExplanationKinds() []string {
 }
 
 func point13ValDExplanationKindValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValDExplanationKinds(), value)
+	return point13Val0RawExactOneOf(value, point13ValDExplanationKinds())
 }
 
 func point13ValDAudienceTypes() []string {
@@ -345,7 +345,7 @@ func point13ValDAudienceTypes() []string {
 }
 
 func point13ValDAudienceTypeValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValDAudienceTypes(), value)
+	return point13Val0RawExactOneOf(value, point13ValDAudienceTypes())
 }
 
 func point13ValDCanonicalTimeSources() []string {
@@ -356,7 +356,19 @@ func point13ValDCanonicalTimeSources() []string {
 }
 
 func point13ValDCanonicalTimeSourceValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValDCanonicalTimeSources(), value)
+	return point13Val0RawExactOneOf(value, point13ValDCanonicalTimeSources())
+}
+
+func point13ValDRawStringInSet(values []string, target string) bool {
+	if !formalRawExactNonEmpty(target) {
+		return false
+	}
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func point13ValDTimelineEventListValid(values []Point13ValDTimelineEvent) bool {
@@ -368,7 +380,7 @@ func point13ValDTimelineEventListValid(values []Point13ValDTimelineEvent) bool {
 		if !point13ValDTimelineEventRefValid(value.EventID) || !point13ValDTimelineEventKindValid(value.EventKind) {
 			return false
 		}
-		key := strings.TrimSpace(value.EventID)
+		key := value.EventID
 		if _, exists := seen[key]; exists {
 			return false
 		}
@@ -384,13 +396,13 @@ func point13ValDQueryFilterRefsValid(values []string) bool {
 func point13ValDAuditorAnnotationsValid(values []Point13ValDAuditorAnnotation) bool {
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		if !point13ValDAuditorAnnotationRefValid(value.AnnotationID) ||
-			!point13ValAOwnerRefValid(value.AnnotatorRef) ||
+		if !formalRawExactTokenValid(value.AnnotationID, point13ValDAuditorAnnotationRefValid) ||
+			!point13Val0RawOwnerRefValid(value.AnnotatorRef) ||
 			strings.TrimSpace(value.Text) == "" ||
 			!point12Val0AuditRefValid(value.AuditEventRef) {
 			return false
 		}
-		key := strings.TrimSpace(value.AnnotationID)
+		key := value.AnnotationID
 		if _, exists := seen[key]; exists {
 			return false
 		}
@@ -406,27 +418,27 @@ func point13ValDComputedBindingHash(parts ...string) string {
 
 func point13ValDComputedTimelineHash(model Point13ValDCustomerAuditorOperationalTimeline) string {
 	parts := []string{
-		strings.TrimSpace(model.TimelineID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.ExportPackageRef),
-		strings.TrimSpace(model.HandoffChecklistRef),
-		strings.TrimSpace(model.CustomerAcceptanceRef),
-		strings.TrimSpace(model.SupportOffboardingRef),
-		strings.TrimSpace(model.AITimelineSummaryRef),
+		model.TimelineID,
+		model.TenantScope,
+		model.ExportPackageRef,
+		model.HandoffChecklistRef,
+		model.CustomerAcceptanceRef,
+		model.SupportOffboardingRef,
+		model.AITimelineSummaryRef,
 		strconv.FormatBool(model.TimelineReadOnly),
 		strconv.FormatBool(model.TimelineCannotMutateState),
 		strconv.FormatBool(model.RedactionLimitationsVisible),
 	}
 	for _, entry := range model.TimelineEntries {
 		parts = append(parts,
-			strings.TrimSpace(entry.EventID),
-			strings.TrimSpace(entry.EventKind),
-			strings.TrimSpace(entry.SourceRef),
-			strings.TrimSpace(entry.AuditEventRef),
-			strings.TrimSpace(entry.CanonicalOccurredAt),
-			strings.TrimSpace(entry.TimeSource),
-			strings.TrimSpace(entry.ClientReportedAt),
-			strings.TrimSpace(entry.SourceMetadataRef),
+			entry.EventID,
+			entry.EventKind,
+			entry.SourceRef,
+			entry.AuditEventRef,
+			entry.CanonicalOccurredAt,
+			entry.TimeSource,
+			entry.ClientReportedAt,
+			entry.SourceMetadataRef,
 			strconv.FormatBool(entry.ReadOnly),
 		)
 	}
@@ -435,14 +447,14 @@ func point13ValDComputedTimelineHash(model Point13ValDCustomerAuditorOperational
 
 func point13ValDComputedQueryHash(model Point13ValDHandoffTraceQueryProjection) string {
 	return point13ValDComputedBindingHash(
-		strings.TrimSpace(model.QueryProjectionID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.TimelineRef),
-		strings.TrimSpace(model.ExportPackageRef),
-		strings.TrimSpace(model.HandoffChecklistRef),
-		strings.TrimSpace(model.QueryKind),
+		model.QueryProjectionID,
+		model.TenantScope,
+		model.TimelineRef,
+		model.ExportPackageRef,
+		model.HandoffChecklistRef,
+		model.QueryKind,
 		strings.Join(model.FilterRefs, ","),
-		strings.TrimSpace(model.AuditEventRef),
+		model.AuditEventRef,
 		strconv.FormatBool(model.ReadOnly),
 		strconv.FormatBool(model.MutationRequested),
 		strconv.FormatBool(model.WriteRequested),
@@ -451,15 +463,15 @@ func point13ValDComputedQueryHash(model Point13ValDHandoffTraceQueryProjection) 
 
 func point13ValDComputedExportReadHash(model Point13ValDExportPackageReadProjection) string {
 	return point13ValDComputedBindingHash(
-		strings.TrimSpace(model.ReadProjectionID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.ExportPackageRef),
-		strings.TrimSpace(model.RedactionBoundaryRef),
+		model.ReadProjectionID,
+		model.TenantScope,
+		model.ExportPackageRef,
+		model.RedactionBoundaryRef,
 		strings.Join(model.ExportedEvidenceRefs, ","),
 		strings.Join(model.ExportedEvidenceHashes, ","),
-		strings.TrimSpace(model.ExportManifestHash),
-		strings.TrimSpace(model.RetentionClassRef),
-		strings.TrimSpace(model.AuditEventRef),
+		model.ExportManifestHash,
+		model.RetentionClassRef,
+		model.AuditEventRef,
 		strconv.FormatBool(model.ReadOnly),
 		strconv.FormatBool(model.CannotOverwriteHashes),
 		strconv.FormatBool(model.LimitationsVisible),
@@ -469,15 +481,15 @@ func point13ValDComputedExportReadHash(model Point13ValDExportPackageReadProject
 
 func point13ValDComputedExplanationHash(model Point13ValDCustomerAuditorExplanationProjection) string {
 	parts := []string{
-		strings.TrimSpace(model.ExplanationProjectionID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.TimelineRef),
-		strings.TrimSpace(model.QueryProjectionRef),
-		strings.TrimSpace(model.ExportReadProjectionRef),
-		strings.TrimSpace(model.ExplanationKind),
-		strings.TrimSpace(model.ExplanationText),
+		model.ExplanationProjectionID,
+		model.TenantScope,
+		model.TimelineRef,
+		model.QueryProjectionRef,
+		model.ExportReadProjectionRef,
+		model.ExplanationKind,
+		model.ExplanationText,
 		strings.Join(model.VisibleLimitations, ","),
-		strings.TrimSpace(model.AuditEventRef),
+		model.AuditEventRef,
 		strconv.FormatBool(model.AdvisoryOnly),
 		strconv.FormatBool(model.ExplanationCannotStrengthenClaims),
 		strconv.FormatBool(model.ExplanationCannotApproveProduction),
@@ -485,10 +497,10 @@ func point13ValDComputedExplanationHash(model Point13ValDCustomerAuditorExplanat
 	}
 	for _, annotation := range model.AuditorAnnotations {
 		parts = append(parts,
-			strings.TrimSpace(annotation.AnnotationID),
-			strings.TrimSpace(annotation.AnnotatorRef),
-			strings.TrimSpace(annotation.Text),
-			strings.TrimSpace(annotation.AuditEventRef),
+			annotation.AnnotationID,
+			annotation.AnnotatorRef,
+			annotation.Text,
+			annotation.AuditEventRef,
 			strconv.FormatBool(annotation.AnnotationOnly),
 			strconv.FormatBool(annotation.ApprovesProduction),
 			strconv.FormatBool(annotation.ChangesExportState),
@@ -567,25 +579,25 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 	if !model.SnapshotFromComputedOutput || !model.ValCDependencyComputedFromUpstream {
 		blockedReasons = append(blockedReasons, "valc_dependency_not_computed_from_upstream")
 	}
-	if !point13ValCStateValid(model.ValCCurrentState) ||
-		!point13ValCStateValid(model.ValCDependencyState) ||
-		!point13ValCStateValid(model.ValCCustomerEvidenceExportPackageState) ||
-		!point13ValCStateValid(model.ValCRedactionSafeDisclosureState) ||
-		!point13ValCStateValid(model.ValCOperationalHandoffChecklistState) ||
-		!point13ValCStateValid(model.ValCCustomerAcceptanceTraceState) ||
-		!point13ValCStateValid(model.ValCSupportOffboardingHandoffState) ||
-		!point13ValCStateValid(model.ValCAIEvidenceExportLineageState) ||
-		!point13ValCStateValid(model.ValCNoOverclaimState) ||
-		strings.TrimSpace(model.ValCPointID) != point13Val0PointID ||
-		strings.TrimSpace(model.ValCWaveID) != point13ValCWaveID ||
-		!point13ValBStateValid(model.InheritedValBCurrentState) ||
-		!point13ValAStateValid(model.InheritedValACurrentState) ||
-		!point13Val0StateValid(model.InheritedVal0CurrentState) ||
+	if !point13Val0RawExactOneOf(model.ValCCurrentState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCDependencyState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCCustomerEvidenceExportPackageState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCRedactionSafeDisclosureState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCOperationalHandoffChecklistState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCCustomerAcceptanceTraceState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCSupportOffboardingHandoffState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCAIEvidenceExportLineageState, point13ValCStates()) ||
+		!point13Val0RawExactOneOf(model.ValCNoOverclaimState, point13ValCStates()) ||
+		model.ValCPointID != point13Val0PointID ||
+		model.ValCWaveID != point13ValCWaveID ||
+		!point13Val0RawExactOneOf(model.InheritedValBCurrentState, point13ValBStates()) ||
+		!point13Val0RawExactOneOf(model.InheritedValACurrentState, point13ValAStates()) ||
+		!point13Val0RawExactOneOf(model.InheritedVal0CurrentState, point13Val0States()) ||
 		!point12ValEStateValid(model.InheritedPoint12CurrentState) ||
 		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
 		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
-		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
-		!point11Val0ScopeValid(model.InheritedTenantScope) ||
+		!point13Val0RawExactOneOf(model.InheritedPoint12ReviewerResult, []string{point12ValEReviewerResultPassConfirmed, point12ValEReviewerResultPass, point12ValEReviewerResultReviewRequired}) ||
+		!point13Val0RawScopeValid(model.InheritedTenantScope) ||
 		!point12Val0VersionRefValid(model.InheritedAIModelOrRuleVersionRef) ||
 		!point12Val0PermissionManifestHashValid(model.InheritedAIPermissionManifestHash) {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_identity_invalid")
@@ -593,26 +605,26 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 	if model.ValCPoint13PassSeen {
 		blockedReasons = append(blockedReasons, "valc_point13_pass_seen")
 	}
-	if strings.TrimSpace(model.ValCCurrentState) != strings.TrimSpace(model.ValC.CurrentState) ||
-		strings.TrimSpace(model.ValCDependencyState) != strings.TrimSpace(model.ValC.DependencyState) ||
-		strings.TrimSpace(model.ValCCustomerEvidenceExportPackageState) != strings.TrimSpace(model.ValC.CustomerEvidenceExportPackageState) ||
-		strings.TrimSpace(model.ValCRedactionSafeDisclosureState) != strings.TrimSpace(model.ValC.RedactionSafeDisclosureState) ||
-		strings.TrimSpace(model.ValCOperationalHandoffChecklistState) != strings.TrimSpace(model.ValC.OperationalHandoffChecklistState) ||
-		strings.TrimSpace(model.ValCCustomerAcceptanceTraceState) != strings.TrimSpace(model.ValC.CustomerAcceptanceTraceState) ||
-		strings.TrimSpace(model.ValCSupportOffboardingHandoffState) != strings.TrimSpace(model.ValC.SupportOffboardingHandoffState) ||
-		strings.TrimSpace(model.ValCAIEvidenceExportLineageState) != strings.TrimSpace(model.ValC.AIEvidenceExportLineageState) ||
-		strings.TrimSpace(model.ValCNoOverclaimState) != strings.TrimSpace(model.ValC.NoOverclaimState) ||
+	if model.ValCCurrentState != model.ValC.CurrentState ||
+		model.ValCDependencyState != model.ValC.DependencyState ||
+		model.ValCCustomerEvidenceExportPackageState != model.ValC.CustomerEvidenceExportPackageState ||
+		model.ValCRedactionSafeDisclosureState != model.ValC.RedactionSafeDisclosureState ||
+		model.ValCOperationalHandoffChecklistState != model.ValC.OperationalHandoffChecklistState ||
+		model.ValCCustomerAcceptanceTraceState != model.ValC.CustomerAcceptanceTraceState ||
+		model.ValCSupportOffboardingHandoffState != model.ValC.SupportOffboardingHandoffState ||
+		model.ValCAIEvidenceExportLineageState != model.ValC.AIEvidenceExportLineageState ||
+		model.ValCNoOverclaimState != model.ValC.NoOverclaimState ||
 		model.ValCDependencyComputedFromUpstream != model.ValC.Dependency.SnapshotFromComputedOutput ||
-		strings.TrimSpace(model.InheritedValBCurrentState) != strings.TrimSpace(model.ValC.Dependency.ValBCurrentState) ||
-		strings.TrimSpace(model.InheritedValACurrentState) != strings.TrimSpace(model.ValC.Dependency.InheritedValACurrentState) ||
-		strings.TrimSpace(model.InheritedVal0CurrentState) != strings.TrimSpace(model.ValC.Dependency.InheritedVal0CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12CurrentState) != strings.TrimSpace(model.ValC.Dependency.InheritedPoint12CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12DependencyState) != strings.TrimSpace(model.ValC.Dependency.InheritedPoint12DependencyState) ||
-		strings.TrimSpace(model.InheritedPoint12PassClosureState) != strings.TrimSpace(model.ValC.Dependency.InheritedPoint12PassClosureState) ||
-		strings.TrimSpace(model.InheritedPoint12ReviewerResult) != strings.TrimSpace(model.ValC.Dependency.InheritedPoint12ReviewerResult) ||
-		strings.TrimSpace(model.InheritedTenantScope) != strings.TrimSpace(model.ValC.Dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.InheritedAIModelOrRuleVersionRef) != strings.TrimSpace(model.ValC.Dependency.InheritedAIModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.InheritedAIPermissionManifestHash) != strings.TrimSpace(model.ValC.Dependency.InheritedAIPermissionManifestHash) {
+		model.InheritedValBCurrentState != model.ValC.Dependency.ValBCurrentState ||
+		model.InheritedValACurrentState != model.ValC.Dependency.InheritedValACurrentState ||
+		model.InheritedVal0CurrentState != model.ValC.Dependency.InheritedVal0CurrentState ||
+		model.InheritedPoint12CurrentState != model.ValC.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != model.ValC.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != model.ValC.Dependency.InheritedPoint12PassClosureState ||
+		model.InheritedPoint12ReviewerResult != model.ValC.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedTenantScope != model.ValC.Dependency.InheritedTenantScope ||
+		model.InheritedAIModelOrRuleVersionRef != model.ValC.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.InheritedAIPermissionManifestHash != model.ValC.Dependency.InheritedAIPermissionManifestHash {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_binding_mismatch")
 	}
 	for _, state := range []string{
@@ -626,7 +638,7 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 		model.ValCAIEvidenceExportLineageState,
 		model.ValCNoOverclaimState,
 	} {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13ValCStateBlocked:
 			blockedReasons = append(blockedReasons, "valc_component_blocked")
 		case Point13ValCStateReviewRequired:
@@ -640,7 +652,7 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 		model.InheritedValACurrentState,
 		model.InheritedVal0CurrentState,
 	} {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13ValBStateBlocked, Point13ValAStateBlocked, Point13Val0StateBlocked:
 			blockedReasons = append(blockedReasons, "inherited_val_component_blocked")
 		case Point13ValBStateReviewRequired, Point13ValAStateReviewRequired, Point13Val0StateReviewRequired:
@@ -649,7 +661,7 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 			incompleteReasons = append(incompleteReasons, "inherited_val_component_incomplete")
 		}
 	}
-	switch strings.TrimSpace(model.InheritedPoint12CurrentState) {
+	switch model.InheritedPoint12CurrentState {
 	case Point12ValEStateBlocked:
 		blockedReasons = append(blockedReasons, "point12_inherited_blocked")
 	case Point12ValEStateReviewRequired:
@@ -657,10 +669,10 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 	case Point12ValEStateIncomplete:
 		incompleteReasons = append(incompleteReasons, "point12_inherited_incomplete")
 	}
-	if strings.TrimSpace(model.InheritedPoint12CurrentState) == Point12ValEStatePassConfirmed &&
-		(strings.TrimSpace(model.InheritedPoint12DependencyState) != Point12ValEStateActive ||
-			strings.TrimSpace(model.InheritedPoint12PassClosureState) != Point12ValEStateActive ||
-			strings.TrimSpace(model.InheritedPoint12ReviewerResult) != point12ValEReviewerResultPassConfirmed) {
+	if model.InheritedPoint12CurrentState == Point12ValEStatePassConfirmed &&
+		(model.InheritedPoint12DependencyState != Point12ValEStateActive ||
+			model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
+			model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed) {
 		blockedReasons = append(blockedReasons, "point12_inherited_not_pass_confirmed")
 	}
 	if len(blockedReasons) > 0 {
@@ -860,11 +872,31 @@ func point13ValDTimelineEventKindsFromEntries(entries []Point13ValDTimelineEvent
 
 func point13ValDTimelineEventsOrdered(entries []Point13ValDTimelineEvent) bool {
 	for i := 1; i < len(entries); i++ {
-		if strings.TrimSpace(entries[i-1].CanonicalOccurredAt) > strings.TrimSpace(entries[i].CanonicalOccurredAt) {
+		comparison, ok := point13ValDTimelineTimestampCompare(entries[i-1].CanonicalOccurredAt, entries[i].CanonicalOccurredAt)
+		if !ok || comparison > 0 {
 			return false
 		}
 	}
 	return true
+}
+
+func point13ValDTimelineTimestampCompare(left, right string) (int, bool) {
+	if !point12Val0RawTimestampValid(left) || !point12Val0RawTimestampValid(right) {
+		return 0, false
+	}
+	leftTime, leftOK := point14Val0ParsedTime(left)
+	rightTime, rightOK := point14Val0ParsedTime(right)
+	if !leftOK || !rightOK {
+		return 0, false
+	}
+	switch {
+	case leftTime.Before(rightTime):
+		return -1, true
+	case leftTime.After(rightTime):
+		return 1, true
+	default:
+		return 0, true
+	}
 }
 
 func point13ValDTimelineAcceptanceBackdated(entries []Point13ValDTimelineEvent) bool {
@@ -872,19 +904,31 @@ func point13ValDTimelineAcceptanceBackdated(entries []Point13ValDTimelineEvent) 
 	handoffAckAt := ""
 	acceptanceAt := ""
 	for _, entry := range entries {
-		switch strings.TrimSpace(entry.EventKind) {
+		switch entry.EventKind {
 		case point13ValDTimelineKindExportCreated:
-			exportAt = strings.TrimSpace(entry.CanonicalOccurredAt)
+			exportAt = entry.CanonicalOccurredAt
 		case point13ValDTimelineKindHandoffAcknowledged:
-			handoffAckAt = strings.TrimSpace(entry.CanonicalOccurredAt)
+			handoffAckAt = entry.CanonicalOccurredAt
 		case point13ValDTimelineKindCustomerAcceptanceRecorded:
-			acceptanceAt = strings.TrimSpace(entry.CanonicalOccurredAt)
+			acceptanceAt = entry.CanonicalOccurredAt
 		}
 	}
 	if acceptanceAt == "" {
 		return false
 	}
-	return (exportAt != "" && acceptanceAt < exportAt) || (handoffAckAt != "" && acceptanceAt < handoffAckAt)
+	if exportAt != "" {
+		comparison, ok := point13ValDTimelineTimestampCompare(acceptanceAt, exportAt)
+		if !ok || comparison < 0 {
+			return true
+		}
+	}
+	if handoffAckAt != "" {
+		comparison, ok := point13ValDTimelineTimestampCompare(acceptanceAt, handoffAckAt)
+		if !ok || comparison < 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func point13ValDAllowedQueryFilterRefs(timeline Point13ValDCustomerAuditorOperationalTimeline, dependency Point13ValDDependencySnapshot) []string {
@@ -901,7 +945,7 @@ func point13ValDAllowedQueryFilterRefs(timeline Point13ValDCustomerAuditorOperat
 func point13ValDQueryFilterRefsWithinScope(values []string, timeline Point13ValDCustomerAuditorOperationalTimeline, dependency Point13ValDDependencySnapshot) bool {
 	allowed := point13ValDAllowedQueryFilterRefs(timeline, dependency)
 	for _, value := range values {
-		if !point11Val0ContainsTrimmed(allowed, value) {
+		if !point13ValDRawStringInSet(allowed, value) {
 			return false
 		}
 	}
@@ -909,25 +953,25 @@ func point13ValDQueryFilterRefsWithinScope(values []string, timeline Point13ValD
 }
 
 func point13ValDTimelineEventSourceMatches(entry Point13ValDTimelineEvent, dependency Point13ValDDependencySnapshot) bool {
-	switch strings.TrimSpace(entry.EventKind) {
+	switch entry.EventKind {
 	case point13ValDTimelineKindExportCreated:
-		return strings.TrimSpace(entry.SourceRef) == strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID) &&
-			strings.TrimSpace(entry.AuditEventRef) == strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.AuditEventRef)
+		return entry.SourceRef == dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID &&
+			entry.AuditEventRef == dependency.ValC.CustomerEvidenceExportPackage.AuditEventRef
 	case point13ValDTimelineKindRedactionApplied:
-		return strings.TrimSpace(entry.SourceRef) == strings.TrimSpace(dependency.ValC.RedactionSafeDisclosureBoundary.RedactionBoundaryID) &&
-			strings.TrimSpace(entry.AuditEventRef) == strings.TrimSpace(dependency.ValC.RedactionSafeDisclosureBoundary.RedactionAuditEventRef)
+		return entry.SourceRef == dependency.ValC.RedactionSafeDisclosureBoundary.RedactionBoundaryID &&
+			entry.AuditEventRef == dependency.ValC.RedactionSafeDisclosureBoundary.RedactionAuditEventRef
 	case point13ValDTimelineKindHandoffStarted, point13ValDTimelineKindHandoffAcknowledged:
-		return strings.TrimSpace(entry.SourceRef) == strings.TrimSpace(dependency.ValC.OperationalHandoffChecklist.HandoffChecklistID) &&
-			point11Val0ContainsTrimmed(dependency.ValC.OperationalHandoffChecklist.AuditEventRefs, entry.AuditEventRef)
+		return entry.SourceRef == dependency.ValC.OperationalHandoffChecklist.HandoffChecklistID &&
+			point13ValDRawStringInSet(dependency.ValC.OperationalHandoffChecklist.AuditEventRefs, entry.AuditEventRef)
 	case point13ValDTimelineKindCustomerAcceptanceRecorded:
-		return strings.TrimSpace(entry.SourceRef) == strings.TrimSpace(dependency.ValC.CustomerAcceptanceTrace.AcceptanceTraceID) &&
-			point11Val0ContainsTrimmed(dependency.ValC.CustomerAcceptanceTrace.AuditEventRefs, entry.AuditEventRef)
+		return entry.SourceRef == dependency.ValC.CustomerAcceptanceTrace.AcceptanceTraceID &&
+			point13ValDRawStringInSet(dependency.ValC.CustomerAcceptanceTrace.AuditEventRefs, entry.AuditEventRef)
 	case point13ValDTimelineKindSupportOffboardingPrepared:
-		return strings.TrimSpace(entry.SourceRef) == strings.TrimSpace(dependency.ValC.SupportOffboardingHandoffPacket.SupportOffboardingPacketID) &&
-			point11Val0ContainsTrimmed(dependency.ValC.SupportOffboardingHandoffPacket.AuditEventRefs, entry.AuditEventRef)
+		return entry.SourceRef == dependency.ValC.SupportOffboardingHandoffPacket.SupportOffboardingPacketID &&
+			point13ValDRawStringInSet(dependency.ValC.SupportOffboardingHandoffPacket.AuditEventRefs, entry.AuditEventRef)
 	case point13ValDTimelineKindAILineageIncluded:
-		return strings.TrimSpace(entry.SourceRef) == strings.TrimSpace(dependency.ValC.AIEvidenceExportLineageSummary.AIExportSummaryID) &&
-			strings.TrimSpace(entry.AuditEventRef) == strings.TrimSpace(dependency.ValC.AIEvidenceExportLineageSummary.AuditEventRef)
+		return entry.SourceRef == dependency.ValC.AIEvidenceExportLineageSummary.AIExportSummaryID &&
+			entry.AuditEventRef == dependency.ValC.AIEvidenceExportLineageSummary.AuditEventRef
 	default:
 		return false
 	}
@@ -935,33 +979,33 @@ func point13ValDTimelineEventSourceMatches(entry Point13ValDTimelineEvent, depen
 
 func EvaluatePoint13ValDCustomerAuditorOperationalTimelineState(model Point13ValDCustomerAuditorOperationalTimeline, dependency Point13ValDDependencySnapshot) string {
 	if !point13ValDTimelineRefValid(model.TimelineID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!point13Val0RawScopeValid(model.TenantScope) ||
 		!point13ValCExportPackageRefValid(model.ExportPackageRef) ||
 		!point13ValCHandoffChecklistRefValid(model.HandoffChecklistRef) ||
 		!point13ValCAcceptanceTraceRefValid(model.CustomerAcceptanceRef) ||
 		!point13ValCSupportOffboardingPacketRefValid(model.SupportOffboardingRef) ||
 		!point13ValDAITimelineProjectionRefValid(model.AITimelineSummaryRef) ||
 		!point13ValDTimelineEventListValid(model.TimelineEntries) ||
-		strings.TrimSpace(model.TimelineHash) != point13ValDComputedTimelineHash(model) ||
+		model.TimelineHash != point13ValDComputedTimelineHash(model) ||
 		!model.TimelineReadOnly ||
 		!model.TimelineCannotMutateState ||
 		!model.RedactionLimitationsVisible {
 		return Point13ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.HandoffChecklistRef) != strings.TrimSpace(dependency.ValC.OperationalHandoffChecklist.HandoffChecklistID) ||
-		strings.TrimSpace(model.CustomerAcceptanceRef) != strings.TrimSpace(dependency.ValC.CustomerAcceptanceTrace.AcceptanceTraceID) ||
-		strings.TrimSpace(model.SupportOffboardingRef) != strings.TrimSpace(dependency.ValC.SupportOffboardingHandoffPacket.SupportOffboardingPacketID) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.ExportPackageRef != dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID ||
+		model.HandoffChecklistRef != dependency.ValC.OperationalHandoffChecklist.HandoffChecklistID ||
+		model.CustomerAcceptanceRef != dependency.ValC.CustomerAcceptanceTrace.AcceptanceTraceID ||
+		model.SupportOffboardingRef != dependency.ValC.SupportOffboardingHandoffPacket.SupportOffboardingPacketID ||
 		!point12Val0ExactStringSetMatch(point13ValDTimelineEventKindsFromEntries(model.TimelineEntries), point13ValDTimelineEventKinds()) {
 		return Point13ValDStateBlocked
 	}
 	for _, entry := range model.TimelineEntries {
-		if !point11Val0IdentityValueValid(strings.TrimSpace(entry.SourceRef)) ||
+		if !point13Val0RawIdentityValueValid(entry.SourceRef) ||
 			!point12Val0AuditRefValid(entry.AuditEventRef) ||
-			!point11Val0ValidTimestamp(entry.CanonicalOccurredAt) ||
+			!point12Val0RawTimestampValid(entry.CanonicalOccurredAt) ||
 			!point13ValDCanonicalTimeSourceValid(entry.TimeSource) ||
-			(entry.ClientReportedAt != "" && !point11Val0ValidTimestamp(entry.ClientReportedAt)) ||
+			(entry.ClientReportedAt != "" && !point12Val0RawTimestampValid(entry.ClientReportedAt)) ||
 			!point13ValDSourceMetadataRefValid(entry.SourceMetadataRef) ||
 			!entry.ReadOnly {
 			return Point13ValDStateBlocked
@@ -978,24 +1022,24 @@ func EvaluatePoint13ValDCustomerAuditorOperationalTimelineState(model Point13Val
 
 func EvaluatePoint13ValDHandoffTraceQueryProjectionState(model Point13ValDHandoffTraceQueryProjection, dependency Point13ValDDependencySnapshot, timeline Point13ValDCustomerAuditorOperationalTimeline, timelineState string) string {
 	if !point13ValDQueryProjectionRefValid(model.QueryProjectionID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!point13Val0RawScopeValid(model.TenantScope) ||
 		!point13ValDTimelineRefValid(model.TimelineRef) ||
 		!point13ValCExportPackageRefValid(model.ExportPackageRef) ||
 		!point13ValCHandoffChecklistRefValid(model.HandoffChecklistRef) ||
 		!point13ValDQueryFilterRefsValid(model.FilterRefs) ||
 		!point13ValDQueryKindValid(model.QueryKind) ||
 		!point12Val0AuditRefValid(model.AuditEventRef) ||
-		strings.TrimSpace(model.ProjectionHash) != point13ValDComputedQueryHash(model) ||
+		model.ProjectionHash != point13ValDComputedQueryHash(model) ||
 		!model.ReadOnly ||
 		model.MutationRequested ||
 		model.WriteRequested {
 		return Point13ValDStateBlocked
 	}
-	if strings.TrimSpace(timelineState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.TimelineRef) != strings.TrimSpace(timeline.TimelineID) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.HandoffChecklistRef) != strings.TrimSpace(dependency.ValC.OperationalHandoffChecklist.HandoffChecklistID) ||
+	if timelineState != Point13ValDStateActive ||
+		model.TenantScope != dependency.InheritedTenantScope ||
+		model.TimelineRef != timeline.TimelineID ||
+		model.ExportPackageRef != dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID ||
+		model.HandoffChecklistRef != dependency.ValC.OperationalHandoffChecklist.HandoffChecklistID ||
 		point13ValAContainsCrossTenantArtifact(model.FilterRefs) ||
 		!point13ValDQueryFilterRefsWithinScope(model.FilterRefs, timeline, dependency) {
 		return Point13ValDStateBlocked
@@ -1005,7 +1049,7 @@ func EvaluatePoint13ValDHandoffTraceQueryProjectionState(model Point13ValDHandof
 
 func EvaluatePoint13ValDExportPackageReadProjectionState(model Point13ValDExportPackageReadProjection, dependency Point13ValDDependencySnapshot) string {
 	if !point13ValDExportReadProjectionRefValid(model.ReadProjectionID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!point13Val0RawScopeValid(model.TenantScope) ||
 		!point13ValCExportPackageRefValid(model.ExportPackageRef) ||
 		!point13ValCRedactionBoundaryRefValid(model.RedactionBoundaryRef) ||
 		!point13ValBEvidenceRefsValid(model.ExportedEvidenceRefs) ||
@@ -1014,20 +1058,20 @@ func EvaluatePoint13ValDExportPackageReadProjectionState(model Point13ValDExport
 		!point12Val0HashValid(model.ExportManifestHash) ||
 		!point12Val0RetentionClassRefValid(model.RetentionClassRef) ||
 		!point12Val0AuditRefValid(model.AuditEventRef) ||
-		strings.TrimSpace(model.ProjectionHash) != point13ValDComputedExportReadHash(model) ||
+		model.ProjectionHash != point13ValDComputedExportReadHash(model) ||
 		!model.ReadOnly ||
 		!model.CannotOverwriteHashes ||
 		!model.LimitationsVisible ||
 		!point13ValCTextListValid(model.VisibleLimitations) {
 		return Point13ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.RedactionBoundaryRef) != strings.TrimSpace(dependency.ValC.RedactionSafeDisclosureBoundary.RedactionBoundaryID) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.ExportPackageRef != dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID ||
+		model.RedactionBoundaryRef != dependency.ValC.RedactionSafeDisclosureBoundary.RedactionBoundaryID ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceRefs, dependency.ValC.CustomerEvidenceExportPackage.ExportedEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceHashes, dependency.ValC.CustomerEvidenceExportPackage.ExportedEvidenceHashRefs) ||
-		strings.TrimSpace(model.ExportManifestHash) != strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.ExportManifestHash) ||
-		strings.TrimSpace(model.RetentionClassRef) != strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.RetentionClassRef) ||
+		model.ExportManifestHash != dependency.ValC.CustomerEvidenceExportPackage.ExportManifestHash ||
+		model.RetentionClassRef != dependency.ValC.CustomerEvidenceExportPackage.RetentionClassRef ||
 		!point12Val0ExactStringSetMatch(model.VisibleLimitations, point13ValDExpectedVisibleLimitations(dependency.ValC)) {
 		return Point13ValDStateBlocked
 	}
@@ -1036,7 +1080,7 @@ func EvaluatePoint13ValDExportPackageReadProjectionState(model Point13ValDExport
 
 func EvaluatePoint13ValDCustomerAuditorExplanationProjectionState(model Point13ValDCustomerAuditorExplanationProjection, dependency Point13ValDDependencySnapshot, timeline Point13ValDCustomerAuditorOperationalTimeline, query Point13ValDHandoffTraceQueryProjection, exportRead Point13ValDExportPackageReadProjection, exportReadState string) string {
 	if !point13ValDExplanationProjectionRefValid(model.ExplanationProjectionID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!point13Val0RawScopeValid(model.TenantScope) ||
 		!point13ValDTimelineRefValid(model.TimelineRef) ||
 		!point13ValDQueryProjectionRefValid(model.QueryProjectionRef) ||
 		!point13ValDExportReadProjectionRefValid(model.ExportReadProjectionRef) ||
@@ -1045,18 +1089,18 @@ func EvaluatePoint13ValDCustomerAuditorExplanationProjectionState(model Point13V
 		!point13ValCTextListValid(model.VisibleLimitations) ||
 		!point13ValDAuditorAnnotationsValid(model.AuditorAnnotations) ||
 		!point12Val0AuditRefValid(model.AuditEventRef) ||
-		strings.TrimSpace(model.ProjectionHash) != point13ValDComputedExplanationHash(model) ||
+		model.ProjectionHash != point13ValDComputedExplanationHash(model) ||
 		!model.AdvisoryOnly ||
 		!model.ExplanationCannotStrengthenClaims ||
 		!model.ExplanationCannotApproveProduction ||
 		!model.ExplanationCannotCreatePass {
 		return Point13ValDStateBlocked
 	}
-	if strings.TrimSpace(exportReadState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.TimelineRef) != strings.TrimSpace(timeline.TimelineID) ||
-		strings.TrimSpace(model.QueryProjectionRef) != strings.TrimSpace(query.QueryProjectionID) ||
-		strings.TrimSpace(model.ExportReadProjectionRef) != strings.TrimSpace(exportRead.ReadProjectionID) ||
+	if exportReadState != Point13ValDStateActive ||
+		model.TenantScope != dependency.InheritedTenantScope ||
+		model.TimelineRef != timeline.TimelineID ||
+		model.QueryProjectionRef != query.QueryProjectionID ||
+		model.ExportReadProjectionRef != exportRead.ReadProjectionID ||
 		!point12Val0ExactStringSetMatch(model.VisibleLimitations, exportRead.VisibleLimitations) {
 		return Point13ValDStateBlocked
 	}
@@ -1073,7 +1117,7 @@ func EvaluatePoint13ValDCustomerAuditorExplanationProjectionState(model Point13V
 
 func EvaluatePoint13ValDTimelineAccessBoundaryState(model Point13ValDTimelineAccessBoundary, dependency Point13ValDDependencySnapshot, timeline Point13ValDCustomerAuditorOperationalTimeline, query Point13ValDHandoffTraceQueryProjection, exportRead Point13ValDExportPackageReadProjection) string {
 	if !point13ValDTimelineAccessBoundaryRefValid(model.AccessBoundaryID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!point13Val0RawScopeValid(model.TenantScope) ||
 		!point13ValDAudienceTypeValid(model.AudienceType) ||
 		!point13ValAOwnerRefValid(model.AudienceRef) ||
 		!point13ValAOwnerRefValid(model.CustomerOwnerRef) ||
@@ -1087,20 +1131,20 @@ func EvaluatePoint13ValDTimelineAccessBoundaryState(model Point13ValDTimelineAcc
 		model.CrossTenantAccessRequested {
 		return Point13ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(dependency.ValC.CustomerEvidenceExportPackage.CustomerOwnerRef) ||
-		strings.TrimSpace(model.TimelineRef) != strings.TrimSpace(timeline.TimelineID) ||
-		strings.TrimSpace(model.QueryProjectionRef) != strings.TrimSpace(query.QueryProjectionID) ||
-		strings.TrimSpace(model.ExportReadProjectionRef) != strings.TrimSpace(exportRead.ReadProjectionID) {
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.CustomerOwnerRef != dependency.ValC.CustomerEvidenceExportPackage.CustomerOwnerRef ||
+		model.TimelineRef != timeline.TimelineID ||
+		model.QueryProjectionRef != query.QueryProjectionID ||
+		model.ExportReadProjectionRef != exportRead.ReadProjectionID {
 		return Point13ValDStateBlocked
 	}
-	switch strings.TrimSpace(model.AudienceType) {
+	switch model.AudienceType {
 	case point13ValDAudienceCustomer:
-		if strings.TrimSpace(model.AudienceRef) != strings.TrimSpace(model.CustomerOwnerRef) {
+		if model.AudienceRef != model.CustomerOwnerRef {
 			return Point13ValDStateBlocked
 		}
 	case point13ValDAudienceAuditor:
-		if strings.TrimSpace(model.AudienceRef) != strings.TrimSpace(model.AuditorOwnerRef) {
+		if model.AudienceRef != model.AuditorOwnerRef {
 			return Point13ValDStateBlocked
 		}
 	default:
@@ -1110,12 +1154,12 @@ func EvaluatePoint13ValDTimelineAccessBoundaryState(model Point13ValDTimelineAcc
 }
 
 func EvaluatePoint13ValDAITimelineLineageProjectionState(model Point13ValDAITimelineLineageProjection, dependency Point13ValDDependencySnapshot, timeline Point13ValDCustomerAuditorOperationalTimeline, timelineState string) string {
-	if point11Val0ContainsTrimmed(point12Val0BlockedAIEvidenceCandidateTypes(), model.AIOutputType) {
+	if point13ValDRawStringInSet(point12Val0BlockedAIEvidenceCandidateTypes(), model.AIOutputType) {
 		return Point13ValDStateBlocked
 	}
 	ai := dependency.ValC.AIEvidenceExportLineageSummary
 	if !point13ValDAITimelineProjectionRefValid(model.AIProjectionID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!point13Val0RawScopeValid(model.TenantScope) ||
 		!point13ValDTimelineRefValid(model.TimelineRef) ||
 		!point13ValCAIExportSummaryRefValid(model.AIExportSummaryRef) ||
 		!point12Val0AIEvidenceCandidateTypeValid(model.AIOutputType) ||
@@ -1139,16 +1183,16 @@ func EvaluatePoint13ValDAITimelineLineageProjectionState(model Point13ValDAITime
 		model.CanSatisfyAcceptanceByItself {
 		return Point13ValDStateBlocked
 	}
-	if strings.TrimSpace(timelineState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.TimelineRef) != strings.TrimSpace(timeline.TimelineID) ||
-		strings.TrimSpace(model.AIExportSummaryRef) != strings.TrimSpace(ai.AIExportSummaryID) ||
-		strings.TrimSpace(model.EvidenceCandidateRef) != strings.TrimSpace(ai.EvidenceCandidateRef) ||
+	if timelineState != Point13ValDStateActive ||
+		model.TenantScope != dependency.InheritedTenantScope ||
+		model.TimelineRef != timeline.TimelineID ||
+		model.AIExportSummaryRef != ai.AIExportSummaryID ||
+		model.EvidenceCandidateRef != ai.EvidenceCandidateRef ||
 		!point12Val0ExactStringSetMatch(model.InputEvidenceRefs, ai.InputEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.InputEvidenceHashRefs, ai.InputEvidenceHashRefs) ||
-		strings.TrimSpace(model.ModelOrRuleVersionRef) != strings.TrimSpace(ai.ModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.PermissionManifestHash) != strings.TrimSpace(ai.PermissionManifestHash) ||
-		strings.TrimSpace(model.AuditEventRef) != strings.TrimSpace(ai.AuditEventRef) ||
+		model.ModelOrRuleVersionRef != ai.ModelOrRuleVersionRef ||
+		model.PermissionManifestHash != ai.PermissionManifestHash ||
+		model.AuditEventRef != ai.AuditEventRef ||
 		point13ValAContainsCrossTenantArtifact(model.InputEvidenceRefs) {
 		return Point13ValDStateBlocked
 	}
@@ -1175,7 +1219,7 @@ func EvaluatePoint13ValDNoOverclaimState(model Point13ValDNoOverclaimProjectionW
 	}
 	if !point12Val0ExactStringSetMatch(model.AllowedSafeWording, point13ValDAllowedSafeWording()) ||
 		!point12Val0ExactStringSetMatch(model.BlockedWording, point13Val0ForbiddenClaims()) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValDProjectionDisclaimerBaseline {
+		model.ProjectionDisclaimer != point13ValDProjectionDisclaimerBaseline {
 		return Point13ValDStateBlocked
 	}
 	if point13Val0ContainsForbiddenClaim(
@@ -1209,7 +1253,7 @@ func point13ValDComponentStates(model Point13ValDFoundation) []string {
 func point13ValDBlockingReasons(model Point13ValDFoundation) []string {
 	reasons := []string{}
 	for _, state := range point13ValDComponentStates(model) {
-		if strings.TrimSpace(state) == Point13ValDStateBlocked {
+		if state == Point13ValDStateBlocked {
 			reasons = append(reasons, "component_blocked")
 			break
 		}
@@ -1224,7 +1268,7 @@ func EvaluatePoint13ValDState(model Point13ValDFoundation) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range point13ValDComponentStates(model) {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13ValDStateBlocked:
 			return Point13ValDStateBlocked
 		case Point13ValDStateReviewRequired:

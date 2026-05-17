@@ -19,6 +19,15 @@ func mustMarshalDeploymentMultiTenantValEJSON(t *testing.T, value any) string {
 	return string(data)
 }
 
+func deploymentMultiTenantValEExactReasonPresent(reasons []string, expected string) bool {
+	for _, reason := range reasons {
+		if reason == expected {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDeploymentMultiTenantValEHappyPathFinalPass(t *testing.T) {
 	model := activeDeploymentMultiTenantValEModel()
 	if model.CurrentState != DeploymentMultiTenantValEStatePass {
@@ -512,6 +521,19 @@ func TestDeploymentMultiTenantValEEvidenceQualityBlockers(t *testing.T) {
 		{name: "unrelated evidence blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].EvidenceHash = "unrelated_hash"
 		}},
+		{name: "cross tenant marker in source with cross tenant flag false blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Source = "computed_val0_output_cross_tenant"
+			model.EvidenceQualityMap.Entries[0].CrossTenant = false
+		}},
+		{name: "tenant beta marker in evidence id blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].EvidenceID = "evidence:vale-tenant-beta-foundation"
+		}},
+		{name: "sibling boundary marker in surface blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Surface = "deployment_sibling_boundary_surface"
+		}},
+		{name: "profile-like substitution marker in evidence hash blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].EvidenceHash = "company_profile_hash_v1"
+		}},
 		{name: "dashboard summary inferred identity blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].DashboardSummaryOnly = true
 		}},
@@ -542,6 +564,12 @@ func TestDeploymentMultiTenantValEEvidenceQualityBlockers(t *testing.T) {
 		{name: "cross tenant evidence without exception blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].CrossTenant = true
 		}},
+		{name: "padded evidence id blocks raw exact identity", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].EvidenceID = " " + model.EvidenceQualityMap.Entries[0].EvidenceID + " "
+		}},
+		{name: "tenant gamma evidence id blocks profile-like boundary laundering", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].EvidenceID = "evidence:vale-tenant-gamma-foundation"
+		}},
 	}
 	for _, tc := range testCases {
 		model := activeDeploymentMultiTenantValEModel()
@@ -549,6 +577,14 @@ func TestDeploymentMultiTenantValEEvidenceQualityBlockers(t *testing.T) {
 		model = ComputeDeploymentMultiTenantValEFoundation(model)
 		if model.EvidenceQualityState != DeploymentMultiTenantValEEvidenceQualityStateBlocked {
 			t.Fatalf("%s: expected blocked evidence quality state, got %#v", tc.name, model)
+		}
+		if model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected exact blocked top-level state and no point_10_pass, got %#v", tc.name, model)
+		}
+		for _, expected := range []string{"evidence_quality_blocked", "point_10_not_passed"} {
+			if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
+				t.Fatalf("%s: expected exact blocking reason %q, got %#v", tc.name, expected, model.BlockingReasons)
+			}
 		}
 	}
 }
@@ -606,6 +642,14 @@ func TestDeploymentMultiTenantValEEvidenceQualityDuplicateBlockers(t *testing.T)
 			model.EvidenceQualityMap.Entries[0].CrossTenant = true
 			model.EvidenceQualityMap.Entries[0].ScopedAuditedException = ""
 		}},
+		{name: "cross tenant evidence with padded scoped exception blocks raw exact boundary", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].CrossTenant = true
+			model.EvidenceQualityMap.Entries[0].ScopedAuditedException = " evidence:scoped-audited-exception-1 "
+		}},
+		{name: "cross tenant evidence with tab newline scoped exception blocks raw exact boundary", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].CrossTenant = true
+			model.EvidenceQualityMap.Entries[0].ScopedAuditedException = "\tevidence:scoped-audited-exception-1\n"
+		}},
 	}
 
 	for _, tc := range testCases {
@@ -615,6 +659,14 @@ func TestDeploymentMultiTenantValEEvidenceQualityDuplicateBlockers(t *testing.T)
 		if model.EvidenceQualityState != DeploymentMultiTenantValEEvidenceQualityStateBlocked {
 			t.Fatalf("%s: expected blocked evidence quality state, got %#v", tc.name, model)
 		}
+		if model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+			t.Fatalf("%s: expected exact blocked top-level state and no point_10_pass, got %#v", tc.name, model)
+		}
+		for _, expected := range []string{"evidence_quality_blocked", "point_10_not_passed"} {
+			if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
+				t.Fatalf("%s: expected exact blocking reason %q, got %#v", tc.name, expected, model.BlockingReasons)
+			}
+		}
 	}
 
 	model := activeDeploymentMultiTenantValEModel()
@@ -623,6 +675,14 @@ func TestDeploymentMultiTenantValEEvidenceQualityDuplicateBlockers(t *testing.T)
 	model = ComputeDeploymentMultiTenantValEFoundation(model)
 	if model.EvidenceQualityState != DeploymentMultiTenantValEEvidenceQualityStateActive {
 		t.Fatalf("expected exact cross-tenant evidence with scoped audited exception to remain active, got %#v", model)
+	}
+	if model.CurrentState != DeploymentMultiTenantValEStatePass || model.Point10State != DeploymentMultiTenantPoint10StatePass {
+		t.Fatalf("expected exact scoped audited exception happy path to preserve final pass, got %#v", model)
+	}
+	for _, forbidden := range []string{"evidence_quality_blocked", "point_10_not_passed"} {
+		if deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, forbidden) {
+			t.Fatalf("expected exact scoped audited exception happy path to exclude reason %q, got %#v", forbidden, model.BlockingReasons)
+		}
 	}
 }
 
@@ -663,6 +723,60 @@ func TestDeploymentMultiTenantValECLBClosureLedgerBlockers(t *testing.T) {
 		{name: "legacy priority two blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.CLBClosureLedger.CLB2OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: deploymentMultiTenantLegacyPriority("2"), Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: "legacy", BlocksCurrentWave: true, RequiredFollowup: "remove"}}
 		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "padded CLB1 level blocks raw exact taxonomy", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB1OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: " " + DeploymentMultiTenantValEBlockerLevelCLB1 + " ", Surface: DeploymentMultiTenantValEClosureSurfaceEvidenceQuality, Reason: "clb1_open", BlocksCurrentWave: true, RequiredFollowup: "close_finding"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "tab newline CLB2 surface blocks raw exact taxonomy", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB2OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: DeploymentMultiTenantValEBlockerLevelCLB2, Surface: "\t" + DeploymentMultiTenantValEClosureSurfacePassClosureManifest + "\n", Reason: "clb2_open", BlocksCurrentWave: true, RequiredFollowup: "close_finding"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "padded CLB3 followup blocks raw exact advisory metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB3AdvisoryFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: DeploymentMultiTenantValEBlockerLevelCLB3, Surface: DeploymentMultiTenantValEClosureSurfaceNoOverclaim, Reason: "advisory_only", BlocksCurrentWave: false, RequiredFollowup: " record_advisory "}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "whitespace only CLB0 reason blocks raw exact closure finding", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.CLB0OpenFindings = []DeploymentMultiTenantValECLBFinding{{BlockerLevel: DeploymentMultiTenantValEBlockerLevelCLB0, Surface: DeploymentMultiTenantValEClosureSurfaceDependencyGate, Reason: " \t\n", BlocksCurrentWave: true}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "exact risk exception ref remains active", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptionRefs = []string{"risk_exception_ref"}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateActive},
+		{name: "padded risk exception ref blocks raw exact ledger metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptionRefs = []string{" risk_exception_ref "}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "exact followup ref remains active", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RequiredFollowupRefs = []string{"followup_ref"}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateActive},
+		{name: "tab newline followup ref blocks raw exact ledger metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RequiredFollowupRefs = []string{"\tfollowup_ref\n"}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "exact temporary risk exception remains active", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateActive},
+		{name: "padded risk exception id blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: " risk_exception_1 ", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "padded risk exception owner blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: " owner_a ", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "tab newline risk exception scope blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "\ttenant_scope\n", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "padded risk exception reason blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: " need_review ", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "tab newline risk exception followup ref blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "\tfollowup_ref\n"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "exact permanent risk exception governance event remains active", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref", Permanent: true, GovernanceEvent: "governance_event_1"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateActive},
+		{name: "padded permanent risk exception governance event blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref", Permanent: true, GovernanceEvent: " governance_event_1 "}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
+		{name: "exact ip legal risk exception external review plan remains active", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref", IPLegalException: true, ExternalReviewPlan: "external_review_plan_1"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateActive},
+		{name: "tab newline ip legal risk exception external review plan blocks raw exact metadata", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Owner: "owner_a", Scope: "tenant_scope", Reason: "need_review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref", IPLegalException: true, ExternalReviewPlan: "\texternal_review_plan_1\n"}}
+		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
 		{name: "risk exception missing owner blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.CLBClosureLedger.RiskExceptions = []DeploymentMultiTenantValERiskException{{ExceptionID: "risk_exception_1", Scope: "tenant_scope", Reason: "need review", Expiry: deploymentMultiTenantValEManifestTimestampActive, RequiredFollowupRef: "followup_ref"}}
 		}, expectedState: DeploymentMultiTenantValECLBClosureStateBlocked},
@@ -691,6 +805,23 @@ func TestDeploymentMultiTenantValECLBClosureLedgerBlockers(t *testing.T) {
 		model = ComputeDeploymentMultiTenantValEFoundation(model)
 		if model.CLBClosureState != tc.expectedState {
 			t.Fatalf("%s: expected %q, got %#v", tc.name, tc.expectedState, model)
+		}
+		if tc.expectedState == DeploymentMultiTenantValECLBClosureStateBlocked {
+			if model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
+				t.Fatalf("%s: expected top-level fail closed, got state=%q point10=%q model=%#v", tc.name, model.CurrentState, model.Point10State, model)
+			}
+			for _, expected := range []string{"clb_closure_blocked", "point_10_not_passed"} {
+				if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
+					t.Fatalf("%s: expected exact blocking reason %q, got %#v", tc.name, expected, model.BlockingReasons)
+				}
+			}
+			continue
+		}
+		if model.CurrentState != DeploymentMultiTenantValEStatePass || model.Point10State != DeploymentMultiTenantPoint10StatePass {
+			t.Fatalf("%s: expected CL-B3 advisory happy path to preserve final pass, got state=%q point10=%q model=%#v", tc.name, model.CurrentState, model.Point10State, model)
+		}
+		if deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, "clb_closure_blocked") {
+			t.Fatalf("%s: expected CL-B3 advisory happy path to exclude clb_closure_blocked, got %#v", tc.name, model.BlockingReasons)
 		}
 	}
 
@@ -1034,6 +1165,8 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		"production autopatch",
 		"agent guaranteed tenant isolation",
 		"agent proves compliance",
+		"point 10 pass",
+		"point_" + "10_pass",
 		"point_" + "10_pass by agent",
 		"point 10 pass by agent",
 		"point 10 audit pass by agent",
@@ -1073,6 +1206,26 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		"production approval",
 		"deployment approval",
 		"not production approval production approved",
+		"\U0001d429\U0001d42b\U0001d428\U0001d41d\U0001d42e\U0001d41c\U0001d42d\U0001d422\U0001d428\U0001d427 \U0001d41a\U0001d429\U0001d429\U0001d42b\U0001d428\U0001d42f\U0001d41e\U0001d41d",
+		"ρroduction approved",
+		"pгoduction approved",
+		"produсtion approved",
+		"producτion approved",
+		"productιon approved",
+		"production αpproved",
+		"production appro\u03bded",
+		"production approvεd",
+		"prod\u03c5ction approved",
+		"prod\U00001d1cction approved",
+		"prod\uab4ection approved",
+		"prod\u028action approved",
+		"production approve\u03b4",
+		"productio\u03b7 approved",
+		"productio\u043f approved",
+		"productio\u014b approved",
+		"pub\u01c0ic badge",
+		"comp\u01c0iance guaranteed",
+		"c\u0585mpliance guaranteed",
 	}
 	for _, claim := range blockedClaims {
 		model := activeDeploymentMultiTenantValEModel()
@@ -1081,15 +1234,39 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		if model.NoOverclaimState != DeploymentMultiTenantValENoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 			t.Fatalf("expected blocked no-overclaim for %q, got %#v", claim, model)
 		}
+		for _, expected := range []string{"no_overclaim_blocked", "point_10_not_passed"} {
+			if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
+				t.Fatalf("expected blocked no-overclaim for %q to include reason %q, got %#v", claim, expected, model.BlockingReasons)
+			}
+		}
 	}
 
 	splitBlockedClaims := [][]string{
 		{"production", "approved"},
 		{"not production approval", "approved"},
+		{"not production approval", "human-approved action required", "approved"},
 		{"not production approval", "apprоved"},
 		{"point 10 pass", "by agent"},
 		{"connector", "is source of truth"},
 		{"learned output", "is canonical truth"},
+		{
+			"\U0001d41d\U0001d41e\U0001d429\U0001d425\U0001d428\U0001d432\U0001d426\U0001d41e\U0001d427\U0001d42d",
+			"\U0001d41a\U0001d429\U0001d429\U0001d42b\U0001d428\U0001d42f\U0001d41e\U0001d41d",
+		},
+		{"production", "αpproved"},
+		{"production", "appro\u03bded"},
+		{"production", "approvεd"},
+		{"prod\u03c5c", "tion approved"},
+		{"prod\U00001d1cc", "tion approved"},
+		{"prod\uab4e", "ction approved"},
+		{"prod\u028a", "ction approved"},
+		{"production", "approve\u03b4"},
+		{"productio\u0578", "approved"},
+		{"productio\u019e", "approved"},
+		{"pub\u01c0ic", "badge"},
+		{"comp\u01c0iance", "guaranteed"},
+		{"c\u0585mpliance", "guaranteed"},
+		{"produc", "tion approved"},
 	}
 	for _, claims := range splitBlockedClaims {
 		model := activeDeploymentMultiTenantValEModel()
@@ -1097,6 +1274,11 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		model = ComputeDeploymentMultiTenantValEFoundation(model)
 		if model.NoOverclaimState != DeploymentMultiTenantValENoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 			t.Fatalf("expected blocked split no-overclaim for %q, got %#v", claims, model)
+		}
+		for _, expected := range []string{"no_overclaim_blocked", "point_10_not_passed"} {
+			if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
+				t.Fatalf("expected blocked split no-overclaim for %q to include reason %q, got %#v", claims, expected, model.BlockingReasons)
+			}
 		}
 	}
 
@@ -1110,10 +1292,8 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		if model.NoOverclaimState != DeploymentMultiTenantValENoOverclaimStateActive || model.CurrentState != DeploymentMultiTenantValEStatePass || model.Point10State != DeploymentMultiTenantPoint10StatePass {
 			t.Fatalf("expected allowed split no-overclaim for %q to preserve active/pass closure, got %#v", claims, model)
 		}
-		for _, reason := range model.BlockingReasons {
-			if reason == "no_overclaim_blocked" {
-				t.Fatalf("expected allowed split no-overclaim for %q not to include no_overclaim_blocked reason, got %#v", claims, model.BlockingReasons)
-			}
+		if deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected allowed split no-overclaim for %q not to include no_overclaim_blocked reason, got %#v", claims, model.BlockingReasons)
 		}
 	}
 
@@ -1124,12 +1304,8 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		if model.NoOverclaimState != DeploymentMultiTenantValENoOverclaimStateBlocked || model.CurrentState != DeploymentMultiTenantValEStateBlocked || model.Point10State != DeploymentMultiTenantPoint10StateNotComplete {
 			t.Fatalf("expected blocked split exploit to fail closed, got %#v", model)
 		}
-		reasons := map[string]bool{}
-		for _, reason := range model.BlockingReasons {
-			reasons[reason] = true
-		}
 		for _, expected := range []string{"no_overclaim_blocked", "point_10_not_passed"} {
-			if !reasons[expected] {
+			if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
 				t.Fatalf("expected split exploit to include reason %q, got %#v", expected, model.BlockingReasons)
 			}
 		}

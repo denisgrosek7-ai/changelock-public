@@ -62,6 +62,24 @@ func point13ValDRecomputeExplanationHash(model *Point13ValDFoundation) {
 	model.CustomerAuditorExplanationProjection.ProjectionHash = point13ValDComputedExplanationHash(model.CustomerAuditorExplanationProjection)
 }
 
+func requirePoint13ValDTopLevelBlockedReason(t *testing.T, model Point13ValDFoundation, reason string) {
+	t.Helper()
+	if model.CurrentState != Point13ValDStateBlocked {
+		t.Fatalf("expected top-level blocked state, got %#v", model)
+	}
+	if !point13Val0StringSliceContains(model.BlockingReasons, reason) {
+		t.Fatalf("expected top-level blocking reason %q, got %#v", reason, model.BlockingReasons)
+	}
+}
+
+func requirePoint13ValDDependencyReason(t *testing.T, model Point13ValDFoundation, reason string) {
+	t.Helper()
+	_, reasons := point13ValDDependencyStateAndReasons(model.Dependency)
+	if !point13Val0StringSliceContains(reasons, reason) {
+		t.Fatalf("expected dependency reason %q, got %#v", reason, reasons)
+	}
+}
+
 func TestPoint13ValDFoundationFixtureIsolation(t *testing.T) {
 	t.Run("raw production path still computes", func(t *testing.T) {
 		model := uncachedActivePoint13ValDFoundation()
@@ -87,11 +105,22 @@ func TestPoint13ValDFoundationFixtureIsolation(t *testing.T) {
 
 func TestPoint13ValDDependencyState(t *testing.T) {
 	testCases := []struct {
-		name          string
-		mutate        func(*Point13ValDDependencySnapshot)
-		expectedState string
+		name                     string
+		mutate                   func(*Point13ValDDependencySnapshot)
+		expectedState            string
+		expectedDependencyReason string
 	}{
 		{name: "valid valc dependency active", mutate: func(*Point13ValDDependencySnapshot) {}, expectedState: Point13ValDStateActive},
+		{name: "padded copied valc state blocks raw exact dependency binding", mutate: func(model *Point13ValDDependencySnapshot) {
+			padded := " " + model.ValCCurrentState + " "
+			model.ValCCurrentState = padded
+			model.ValC.CurrentState = padded
+		}, expectedState: Point13ValDStateBlocked, expectedDependencyReason: "dependency_snapshot_identity_invalid"},
+		{name: "tab newline inherited tenant scope blocks raw exact dependency binding", mutate: func(model *Point13ValDDependencySnapshot) {
+			padded := "\t" + model.InheritedTenantScope + "\n"
+			model.InheritedTenantScope = padded
+			model.ValC.Dependency.InheritedTenantScope = padded
+		}, expectedState: Point13ValDStateBlocked, expectedDependencyReason: "dependency_snapshot_identity_invalid"},
 		{name: "missing valc dependency blocks", mutate: func(model *Point13ValDDependencySnapshot) {
 			model.SnapshotFromComputedOutput = false
 		}, expectedState: Point13ValDStateBlocked},
@@ -140,6 +169,10 @@ func TestPoint13ValDDependencyState(t *testing.T) {
 			model = ComputePoint13ValDFoundation(model)
 			if model.DependencyState != tc.expectedState {
 				t.Fatalf("expected dependency state %q, got %#v", tc.expectedState, model)
+			}
+			if tc.expectedDependencyReason != "" {
+				requirePoint13ValDDependencyReason(t, model, tc.expectedDependencyReason)
+				requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
 			}
 		})
 	}
@@ -199,8 +232,20 @@ func TestPoint13ValDCustomerAuditorOperationalTimelineState(t *testing.T) {
 			model.CustomerAuditorOperationalTimeline.TimelineEntries[0].SourceRef = ""
 			point13ValDRecomputeTimelineHash(model)
 		}, expectedState: Point13ValDStateBlocked},
+		{name: "padded source ref with recomputed hash blocks raw exact timeline binding", mutate: func(model *Point13ValDFoundation) {
+			model.CustomerAuditorOperationalTimeline.TimelineEntries[0].SourceRef = " " + model.CustomerAuditorOperationalTimeline.TimelineEntries[0].SourceRef + " "
+			point13ValDRecomputeTimelineHash(model)
+		}, expectedState: Point13ValDStateBlocked},
 		{name: "missing audit ref blocks", mutate: func(model *Point13ValDFoundation) {
 			model.CustomerAuditorOperationalTimeline.TimelineEntries[0].AuditEventRef = ""
+			point13ValDRecomputeTimelineHash(model)
+		}, expectedState: Point13ValDStateBlocked},
+		{name: "tab newline audit ref with recomputed hash blocks raw exact timeline binding", mutate: func(model *Point13ValDFoundation) {
+			model.CustomerAuditorOperationalTimeline.TimelineEntries[0].AuditEventRef = "\t" + model.CustomerAuditorOperationalTimeline.TimelineEntries[0].AuditEventRef + "\n"
+			point13ValDRecomputeTimelineHash(model)
+		}, expectedState: Point13ValDStateBlocked},
+		{name: "padded event kind with recomputed hash blocks raw exact timeline enum", mutate: func(model *Point13ValDFoundation) {
+			model.CustomerAuditorOperationalTimeline.TimelineEntries[0].EventKind = " " + model.CustomerAuditorOperationalTimeline.TimelineEntries[0].EventKind + " "
 			point13ValDRecomputeTimelineHash(model)
 		}, expectedState: Point13ValDStateBlocked},
 		{name: "missing timestamp blocks", mutate: func(model *Point13ValDFoundation) {
@@ -219,10 +264,10 @@ func TestPoint13ValDCustomerAuditorOperationalTimelineState(t *testing.T) {
 			model.CustomerAuditorOperationalTimeline.TimelineEntries[4].CanonicalOccurredAt = "2026-05-05T05:59:00Z"
 			point13ValDRecomputeTimelineHash(model)
 		}, expectedState: Point13ValDStateReviewRequired},
-		{name: "backdated acceptance with timezone offset requires review", mutate: func(model *Point13ValDFoundation) {
+		{name: "backdated acceptance with timezone offset blocks raw exact timeline", mutate: func(model *Point13ValDFoundation) {
 			model.CustomerAuditorOperationalTimeline.TimelineEntries[4].CanonicalOccurredAt = "2026-05-05T08:00:00+02:00"
 			point13ValDRecomputeTimelineHash(model)
-		}, expectedState: Point13ValDStateReviewRequired},
+		}, expectedState: Point13ValDStateBlocked},
 		{name: "redacted limitations remain visible", mutate: func(model *Point13ValDFoundation) {
 			model.CustomerAuditorOperationalTimeline.RedactionLimitationsVisible = false
 			point13ValDRecomputeTimelineHash(model)
@@ -236,6 +281,9 @@ func TestPoint13ValDCustomerAuditorOperationalTimelineState(t *testing.T) {
 			model = ComputePoint13ValDFoundation(model)
 			if model.CustomerAuditorOperationalTimelineState != tc.expectedState {
 				t.Fatalf("expected timeline state %q, got %#v", tc.expectedState, model)
+			}
+			if tc.expectedState == Point13ValDStateBlocked {
+				requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
 			}
 		})
 	}
@@ -265,6 +313,10 @@ func TestPoint13ValDHandoffTraceQueryProjectionState(t *testing.T) {
 			model.HandoffTraceQueryProjection.FilterRefs = append(model.HandoffTraceQueryProjection.FilterRefs, "export_package_point13_vald_unrelated_001")
 			point13ValDRecomputeQueryHash(model)
 		}},
+		{name: "padded allowed filter ref with recomputed hash blocks raw exact query scope", mutate: func(model *Point13ValDFoundation) {
+			model.HandoffTraceQueryProjection.FilterRefs[0] = " " + model.HandoffTraceQueryProjection.FilterRefs[0] + " "
+			point13ValDRecomputeQueryHash(model)
+		}},
 		{name: "cross tenant filter ref blocks", mutate: func(model *Point13ValDFoundation) {
 			model.HandoffTraceQueryProjection.FilterRefs = append(model.HandoffTraceQueryProjection.FilterRefs, "artifact_cross-tenant_candidate_001")
 			point13ValDRecomputeQueryHash(model)
@@ -277,6 +329,7 @@ func TestPoint13ValDHandoffTraceQueryProjectionState(t *testing.T) {
 			if model.HandoffTraceQueryProjectionState != Point13ValDStateBlocked {
 				t.Fatalf("expected blocked query projection, got %#v", model)
 			}
+			requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
 		})
 	}
 }
@@ -297,6 +350,18 @@ func TestPoint13ValDExportPackageReadProjectionState(t *testing.T) {
 		if model.ExportPackageReadProjectionState != Point13ValDStateBlocked {
 			t.Fatalf("expected export read projection hash drift to block, got %#v", model)
 		}
+		requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
+	})
+
+	t.Run("padded export package ref with recomputed hash blocks raw exact read projection", func(t *testing.T) {
+		model := activePoint13ValDFoundation(t)
+		model.ExportPackageReadProjection.ExportPackageRef = " " + model.ExportPackageReadProjection.ExportPackageRef + " "
+		point13ValDRecomputeExportReadHash(&model)
+		model = ComputePoint13ValDFoundation(model)
+		if model.ExportPackageReadProjectionState != Point13ValDStateBlocked {
+			t.Fatalf("expected padded export package ref to block, got %#v", model)
+		}
+		requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
 	})
 }
 
@@ -345,6 +410,16 @@ func TestPoint13ValDTimelineAccessBoundaryState(t *testing.T) {
 			t.Fatalf("expected cross-tenant access to block, got %#v", model)
 		}
 	})
+
+	t.Run("padded audience type blocks raw exact access discriminator", func(t *testing.T) {
+		model := activePoint13ValDFoundation(t)
+		model.TimelineAccessBoundary.AudienceType = " " + model.TimelineAccessBoundary.AudienceType + " "
+		model = ComputePoint13ValDFoundation(model)
+		if model.TimelineAccessBoundaryState != Point13ValDStateBlocked {
+			t.Fatalf("expected padded audience type to block, got %#v", model)
+		}
+		requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
+	})
 }
 
 func TestPoint13ValDAITimelineLineageProjectionState(t *testing.T) {
@@ -372,6 +447,16 @@ func TestPoint13ValDAITimelineLineageProjectionState(t *testing.T) {
 				t.Fatalf("expected AI authority flag to block, got %#v", model)
 			}
 		}
+	})
+
+	t.Run("padded ai export summary ref blocks raw exact lineage binding", func(t *testing.T) {
+		model := activePoint13ValDFoundation(t)
+		model.AITimelineLineageProjection.AIExportSummaryRef = " " + model.AITimelineLineageProjection.AIExportSummaryRef + " "
+		model = ComputePoint13ValDFoundation(model)
+		if model.AITimelineLineageProjectionState != Point13ValDStateBlocked {
+			t.Fatalf("expected padded AI export summary ref to block, got %#v", model)
+		}
+		requirePoint13ValDTopLevelBlockedReason(t, model, "component_blocked")
 	})
 }
 

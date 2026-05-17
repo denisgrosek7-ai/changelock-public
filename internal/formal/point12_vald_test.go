@@ -187,6 +187,15 @@ func TestPoint12ValDDependencyState(t *testing.T) {
 		}, want: Point12ValDDependencyStateBlocked},
 		{name: "offline external api blocks", mutate: func(model *Point12ValDDependencySnapshot) { model.ValCExternalAPIUsed = true }, want: Point12ValDDependencyStateBlocked},
 		{name: "premature point12 pass blocks", mutate: func(model *Point12ValDDependencySnapshot) { model.ValCPrematurePoint12PassSeen = true }, want: Point12ValDDependencyStateBlocked},
+		{name: "padded point id blocks raw exact dependency", mutate: func(model *Point12ValDDependencySnapshot) {
+			model.ValCPointID = " " + model.ValCPointID + " "
+		}, want: Point12ValDDependencyStateBlocked},
+		{name: "tab newline active valc state blocks raw exact dependency", mutate: func(model *Point12ValDDependencySnapshot) {
+			model.ValCCurrentState = "\t" + model.ValCCurrentState + "\n"
+		}, want: Point12ValDDependencyStateBlocked},
+		{name: "padded valc export ready state blocks raw exact dependency", mutate: func(model *Point12ValDDependencySnapshot) {
+			model.ValCExportState = model.ValCExportState + " "
+		}, want: Point12ValDDependencyStateBlocked},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -197,6 +206,24 @@ func TestPoint12ValDDependencyState(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPoint12ValDAggregateStateRawExact(t *testing.T) {
+	t.Run("padded active dependency state blocks aggregate", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.DependencyState = " " + model.DependencyState + " "
+		if got := EvaluatePoint12ValDState(model); got != Point12ValDStateBlocked {
+			t.Fatalf("expected padded aggregate dependency state to block, got %s for %#v", got, model)
+		}
+	})
+
+	t.Run("tab newline active portal state blocks aggregate", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.PortalCompatibilityState = "\t" + model.PortalCompatibilityState + "\n"
+		if got := EvaluatePoint12ValDState(model); got != Point12ValDStateBlocked {
+			t.Fatalf("expected tab/newline aggregate portal state to block, got %s for %#v", got, model)
+		}
+	})
 }
 
 func TestPoint12ValDBindingMatrixState(t *testing.T) {
@@ -319,6 +346,54 @@ func TestPoint12ValDBindingMatrixState(t *testing.T) {
 			t.Fatalf("expected review required when compatibility-allowed reason missing, got %#v", model.BindingMatrix)
 		}
 	})
+
+	t.Run("raw exact point id padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.BindingMatrix.PointID = " " + model.BindingMatrix.PointID + " "
+		if got := EvaluatePoint12ValDBindingMatrixState(model.BindingMatrix); got != Point12ValDBindingMatrixStateBlocked {
+			t.Fatalf("expected padded binding matrix point id to block, got %#v", model.BindingMatrix)
+		}
+	})
+
+	t.Run("raw exact binding class padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.BindingMatrix.BoundFields[0].BindingClass = "\t" + model.BindingMatrix.BoundFields[0].BindingClass + "\n"
+		if got := EvaluatePoint12ValDBindingMatrixState(model.BindingMatrix); got != Point12ValDBindingMatrixStateBlocked {
+			t.Fatalf("expected padded binding class to block, got %#v", model.BindingMatrix)
+		}
+	})
+
+	t.Run("raw exact field name padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.BindingMatrix.BoundFields[0].FieldName = model.BindingMatrix.BoundFields[0].FieldName + " "
+		if got := EvaluatePoint12ValDBindingMatrixState(model.BindingMatrix); got != Point12ValDBindingMatrixStateBlocked {
+			t.Fatalf("expected padded binding field name to block, got %#v", model.BindingMatrix)
+		}
+	})
+
+	t.Run("raw exact generated at padding blocks binding matrix", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.BindingMatrix.GeneratedAt = " " + model.BindingMatrix.GeneratedAt + " "
+		state, reasons := point12ValDBindingMatrixStateAndReasons(model.BindingMatrix)
+		if state != Point12ValDBindingMatrixStateBlocked {
+			t.Fatalf("expected padded binding matrix generated_at to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "binding_matrix_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact binding matrix identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact generated at non UTC offset blocks binding matrix", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.BindingMatrix.GeneratedAt = "2026-05-04T09:02:00+01:00"
+		state, reasons := point12ValDBindingMatrixStateAndReasons(model.BindingMatrix)
+		if state != Point12ValDBindingMatrixStateBlocked {
+			t.Fatalf("expected offset binding matrix generated_at to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "binding_matrix_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact binding matrix identity invalid reason, got %#v", reasons)
+		}
+	})
 }
 
 func TestPoint12ValDLineageEdgeState(t *testing.T) {
@@ -350,6 +425,15 @@ func TestPoint12ValDLineageEdgeState(t *testing.T) {
 		{name: "support profile state rejected as lineage edge state", mutate: func(model *Point12ValDLineageEdge) { model.EdgeState = Point12ValDSupportProfileStateActive }, want: Point12ValDLineageEdgeStateBlocked},
 		{name: "portal compatibility state rejected as lineage edge state", mutate: func(model *Point12ValDLineageEdge) { model.EdgeState = Point12ValDPortalCompatibilityStateActive }, want: Point12ValDLineageEdgeStateBlocked},
 		{name: "canonical looking junk state rejected as lineage edge state", mutate: func(model *Point12ValDLineageEdge) { model.EdgeState = "point12_vald_lineage_edge_active_but_wrong" }, want: Point12ValDLineageEdgeStateBlocked},
+		{name: "padded edge type blocks raw exact lineage type", mutate: func(model *Point12ValDLineageEdge) {
+			model.EdgeType = " " + model.EdgeType + " "
+		}, want: Point12ValDLineageEdgeStateBlocked},
+		{name: "tab newline active edge state blocks raw exact lineage state", mutate: func(model *Point12ValDLineageEdge) {
+			model.EdgeState = "\t" + model.EdgeState + "\n"
+		}, want: Point12ValDLineageEdgeStateBlocked},
+		{name: "tenant scope trailing space blocks raw exact cross-tenant binding", mutate: func(model *Point12ValDLineageEdge) {
+			model.TenantScope += " "
+		}, want: Point12ValDLineageEdgeStateBlocked},
 		{name: "inferred decisive edge blocks", mutate: func(model *Point12ValDLineageEdge) { model.Inferred = true; model.Decisive = true }, want: Point12ValDLineageEdgeStateBlocked},
 		{name: "advisory inferred non decisive edge review", mutate: func(model *Point12ValDLineageEdge) {
 			model.Inferred = true
@@ -364,6 +448,50 @@ func TestPoint12ValDLineageEdgeState(t *testing.T) {
 			tc.mutate(&edge)
 			if got := EvaluatePoint12ValDLineageEdgeState(edge, base.ProofChain); got != tc.want {
 				t.Fatalf("expected %s, got %s for %#v", tc.want, got, edge)
+			}
+		})
+	}
+
+	rawExactEdgeCases := []struct {
+		name       string
+		mutate     func(*Point12ValDLineageEdge)
+		wantReason string
+	}{
+		{name: "tenant scope leading space blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.TenantScope = " " + edge.TenantScope
+		}, wantReason: "lineage_edge_cross_tenant_mismatch"},
+		{name: "tenant scope tab newline retag blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.TenantScope = "\t" + edge.TenantScope + "\n"
+		}, wantReason: "lineage_edge_cross_tenant_mismatch"},
+		{name: "from ref leading space blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.FromRef = " " + edge.FromRef
+		}, wantReason: "lineage_edge_identity_or_metadata_invalid"},
+		{name: "source timestamp tab newline retag blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.SourceTimestamp = "\t" + edge.SourceTimestamp + "\n"
+		}, wantReason: "lineage_edge_identity_or_metadata_invalid"},
+		{name: "source timestamp non UTC offset blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.SourceTimestamp = "2026-05-04T09:00:22+01:00"
+		}, wantReason: "lineage_edge_identity_or_metadata_invalid"},
+		{name: "target timestamp trailing space blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.TargetTimestamp = edge.TargetTimestamp + " "
+		}, wantReason: "lineage_edge_identity_or_metadata_invalid"},
+		{name: "from hash padding blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.FromHash = edge.FromHash + " "
+		}, wantReason: "lineage_edge_hash_missing"},
+		{name: "to hash tab retag blocks with exact reason", mutate: func(edge *Point12ValDLineageEdge) {
+			edge.ToHash = "\t" + edge.ToHash
+		}, wantReason: "lineage_edge_hash_missing"},
+	}
+	for _, tc := range rawExactEdgeCases {
+		t.Run("raw exact lineage edge "+tc.name, func(t *testing.T) {
+			edge := base.ProofChain.LineageEdges[0]
+			tc.mutate(&edge)
+			state, reasons := point12ValDLineageEdgeStateAndReasons(edge, base.ProofChain)
+			if state != Point12ValDLineageEdgeStateBlocked {
+				t.Fatalf("expected raw-exact lineage edge retag to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, tc.wantReason) {
+				t.Fatalf("expected exact lineage edge reason %q, got %#v", tc.wantReason, reasons)
 			}
 		})
 	}
@@ -427,6 +555,38 @@ func TestPoint12ValDLineageEdgeState(t *testing.T) {
 		}
 	})
 
+	t.Run("ai advisory raw exact permission hash padding blocks", func(t *testing.T) {
+		expectedLineage := point12Val0DefaultAgentLineageRecord()
+		edge := Point12ValDLineageEdge{
+			EdgeID:                 "lineage_edge_point12_vald_agent_raw_exact_001",
+			EdgeType:               point12ValDLineageEdgeTypeAgentFindingAdvisory,
+			FromRef:                "agent_lineage_point12_vald_raw_exact_001",
+			ToRef:                  base.ProofChain.ArtifactRef,
+			FromHash:               base.ProofChain.ArtifactHash,
+			ToHash:                 base.ProofChain.ArtifactHash,
+			TenantScope:            base.ProofChain.TenantScope,
+			EvidenceSpineRef:       base.ProofChain.EvidenceRefs[0],
+			SourceTimestamp:        "2026-05-04T08:20:08Z",
+			TargetTimestamp:        "2026-05-04T08:20:09Z",
+			AdvisoryOnly:           true,
+			EdgeState:              Point12ValDLineageEdgeStateActive,
+			AgentID:                expectedLineage.AgentID,
+			AgentType:              "AI_RECOMMENDATION",
+			PermissionManifestHash: expectedLineage.PermissionManifestHash + " ",
+			InputEvidenceRefs:      append([]string{}, expectedLineage.InputEvidenceRefs...),
+			AuditID:                expectedLineage.AuditID,
+			RecommendationID:       expectedLineage.RecommendationID,
+			LineageInputOnly:       true,
+		}
+		state, reasons := point12ValDLineageEdgeStateAndReasons(edge, base.ProofChain)
+		if state != Point12ValDLineageEdgeStateBlocked {
+			t.Fatalf("expected padded advisory permission hash to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "lineage_edge_agent_advisory_binding_mismatch") {
+			t.Fatalf("expected exact advisory binding mismatch reason, got %#v", reasons)
+		}
+	})
+
 	t.Run("blocked ai pass agent type is rejected", func(t *testing.T) {
 		edge := Point12ValDLineageEdge{
 			EdgeID:                 "lineage_edge_point12_vald_agent_003",
@@ -451,6 +611,66 @@ func TestPoint12ValDLineageEdgeState(t *testing.T) {
 		}
 		if got := EvaluatePoint12ValDLineageEdgeState(edge, base.ProofChain); got != Point12ValDLineageEdgeStateBlocked {
 			t.Fatalf("expected blocked AI_PASS advisory edge, got %#v", edge)
+		}
+	})
+
+	t.Run("agent advisory exact binding retags fail closed with exact reasons", func(t *testing.T) {
+		expectedLineage := point12Val0DefaultAgentLineageRecord()
+		baseEdge := Point12ValDLineageEdge{
+			EdgeID:                 "lineage_edge_point12_vald_agent_004",
+			EdgeType:               point12ValDLineageEdgeTypeAgentFindingAdvisory,
+			FromRef:                "agent_lineage_point12_vald_004",
+			ToRef:                  base.ProofChain.ArtifactRef,
+			FromHash:               base.ProofChain.ArtifactHash,
+			ToHash:                 base.ProofChain.ArtifactHash,
+			TenantScope:            base.ProofChain.TenantScope,
+			EvidenceSpineRef:       base.ProofChain.EvidenceRefs[0],
+			SourceTimestamp:        "2026-05-04T08:20:06Z",
+			TargetTimestamp:        "2026-05-04T08:20:07Z",
+			AdvisoryOnly:           true,
+			EdgeState:              Point12ValDLineageEdgeStateActive,
+			AgentID:                expectedLineage.AgentID,
+			AgentType:              "AI_RECOMMENDATION",
+			PermissionManifestHash: expectedLineage.PermissionManifestHash,
+			InputEvidenceRefs:      append([]string{}, expectedLineage.InputEvidenceRefs...),
+			AuditID:                expectedLineage.AuditID,
+			RecommendationID:       expectedLineage.RecommendationID,
+			LineageInputOnly:       true,
+		}
+		cases := []struct {
+			name       string
+			mutate     func(*Point12ValDLineageEdge)
+			wantReason string
+		}{
+			{name: "agent id leading space", mutate: func(edge *Point12ValDLineageEdge) {
+				edge.AgentID = " " + edge.AgentID
+			}, wantReason: "lineage_edge_agent_advisory_binding_mismatch"},
+			{name: "permission hash trailing space", mutate: func(edge *Point12ValDLineageEdge) {
+				edge.PermissionManifestHash += " "
+			}, wantReason: "lineage_edge_agent_advisory_binding_mismatch"},
+			{name: "input evidence tab retag", mutate: func(edge *Point12ValDLineageEdge) {
+				edge.InputEvidenceRefs[0] = "\t" + edge.InputEvidenceRefs[0]
+			}, wantReason: "lineage_edge_agent_advisory_binding_mismatch"},
+			{name: "evidence spine newline retag", mutate: func(edge *Point12ValDLineageEdge) {
+				edge.EvidenceSpineRef += "\n"
+			}, wantReason: "lineage_edge_agent_advisory_projection_binding_mismatch"},
+			{name: "to ref trailing space", mutate: func(edge *Point12ValDLineageEdge) {
+				edge.ToRef += " "
+			}, wantReason: "lineage_edge_agent_advisory_projection_binding_mismatch"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				edge := baseEdge
+				edge.InputEvidenceRefs = append([]string{}, baseEdge.InputEvidenceRefs...)
+				tc.mutate(&edge)
+				state, reasons := point12ValDLineageEdgeStateAndReasons(edge, base.ProofChain)
+				if state != Point12ValDLineageEdgeStateBlocked {
+					t.Fatalf("expected raw-exact agent advisory retag to block, got state=%s reasons=%#v", state, reasons)
+				}
+				if !point12Val0StringSliceContains(reasons, tc.wantReason) {
+					t.Fatalf("expected exact agent advisory reason %q, got %#v", tc.wantReason, reasons)
+				}
+			})
 		}
 	})
 }
@@ -580,6 +800,83 @@ func TestPoint12ValDProofChainProjection(t *testing.T) {
 		})
 	}
 
+	rawExactDependencyCases := []struct {
+		name   string
+		mutate func(*Point12ValDDependencySnapshot)
+	}{
+		{name: "dependency proof pack trailing space blocks", mutate: func(dependency *Point12ValDDependencySnapshot) {
+			dependency.ValCAuditExportBundle.ProofPackID += " "
+		}},
+		{name: "dependency tenant tab newline retag blocks", mutate: func(dependency *Point12ValDDependencySnapshot) {
+			dependency.ValCAuditExportBundle.TenantScope = "\t" + dependency.ValCAuditExportBundle.TenantScope + "\n"
+		}},
+		{name: "dependency schema version leading space blocks", mutate: func(dependency *Point12ValDDependencySnapshot) {
+			dependency.ValCAuditExportBundle.SchemaVersion = " " + dependency.ValCAuditExportBundle.SchemaVersion
+		}},
+	}
+	for _, tc := range rawExactDependencyCases {
+		t.Run("raw exact dependency "+tc.name, func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			dependency := model.Dependency
+			tc.mutate(&dependency)
+			state, reasons := point12ValDProofChainProjectionStateAndReasons(model.ProofChain, dependency)
+			if state != Point12ValDProofChainStateBlocked {
+				t.Fatalf("expected raw-exact proof-chain dependency mismatch to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "proof_chain_dependency_binding_mismatch") {
+				t.Fatalf("expected exact proof-chain dependency binding mismatch reason, got %#v", reasons)
+			}
+		})
+	}
+
+	rawExactLineageBindingCases := []struct {
+		name       string
+		mutate     func(*Point12ValDProofChainProjection)
+		wantReason string
+	}{
+		{name: "source edge type leading space cannot satisfy required edge", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.LineageEdges[0].EdgeType = " " + proofChain.LineageEdges[0].EdgeType
+		}, wantReason: "proof_chain_required_lineage_edge_missing:" + point12ValDLineageEdgeTypeSourceToEvidence},
+		{name: "source edge to ref trailing space cannot satisfy binding", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.LineageEdges[0].ToRef += " "
+		}, wantReason: "proof_chain_required_lineage_edge_binding_mismatch:" + point12ValDLineageEdgeTypeSourceToEvidence},
+		{name: "evidence edge from hash tab retag cannot satisfy binding", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.LineageEdges[1].FromHash = "\t" + proofChain.LineageEdges[1].FromHash
+		}, wantReason: "proof_chain_required_lineage_edge_binding_mismatch:" + point12ValDLineageEdgeTypeEvidenceToArtifact},
+		{name: "evidence spine newline retag cannot satisfy allowed evidence binding", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.LineageEdges[1].EvidenceSpineRef += "\n"
+		}, wantReason: "proof_chain_required_lineage_edge_binding_mismatch:" + point12ValDLineageEdgeTypeEvidenceToArtifact},
+	}
+	for _, tc := range rawExactLineageBindingCases {
+		t.Run("raw exact lineage binding "+tc.name, func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			proofChain := model.ProofChain
+			tc.mutate(&proofChain)
+			proofChain.ProjectionHash = point12ValDComputedProjectionHash(proofChain)
+			state, reasons := point12ValDProofChainProjectionStateAndReasons(proofChain, model.Dependency)
+			if state != Point12ValDProofChainStateBlocked {
+				t.Fatalf("expected raw-exact lineage binding retag to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, tc.wantReason) {
+				t.Fatalf("expected exact lineage binding reason %q, got %#v", tc.wantReason, reasons)
+			}
+		})
+	}
+
+	t.Run("raw exact projection state padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		proofChain := model.ProofChain
+		proofChain.ProjectionState = " " + proofChain.ProjectionState + " "
+		proofChain.ProjectionHash = point12ValDComputedProjectionHash(proofChain)
+		state, reasons := point12ValDProofChainProjectionStateAndReasons(proofChain, model.Dependency)
+		if state != Point12ValDProofChainStateBlocked {
+			t.Fatalf("expected padded projection state to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact proof-chain identity invalid reason, got %#v", reasons)
+		}
+	})
+
 	t.Run("projection hash recomputation cannot hide upstream drift", func(t *testing.T) {
 		model := Point12ValDFoundationModel()
 		model.ProofChain.SchemaHash = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
@@ -624,9 +921,12 @@ func TestPoint12ValDProofChainProjection(t *testing.T) {
 		model := Point12ValDFoundationModel()
 		addPoint12ValDSecondEvidencePair(&model, false)
 		recomputePoint12ValDLocalHashes(&model)
-		model = ComputePoint12ValDFoundation(model)
-		if model.ProofChainState == Point12ValDProofChainStateActive || model.CurrentState == Point12ValDStateActive {
-			t.Fatalf("expected missing second evidence edge coverage to fail closed, got %#v", model)
+		state, reasons := point12ValDProofChainProjectionStateAndReasons(model.ProofChain, model.Dependency)
+		if state != Point12ValDProofChainStateBlocked {
+			t.Fatalf("expected missing second evidence edge coverage to fail closed, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_required_lineage_edge_binding_mismatch:"+point12ValDLineageEdgeTypeSourceToEvidence) {
+			t.Fatalf("expected exact missing source-to-evidence lineage reason, got %#v", reasons)
 		}
 	})
 
@@ -666,15 +966,18 @@ func TestPoint12ValDProofChainProjection(t *testing.T) {
 			},
 		)
 		recomputePoint12ValDLocalHashes(&model)
-		model = ComputePoint12ValDFoundation(model)
-		if model.ProofChainState == Point12ValDProofChainStateActive || model.CurrentState == Point12ValDStateActive {
-			t.Fatalf("expected duplicate evidence edges to fail closed for missing second evidence binding, got %#v", model)
+		state, reasons := point12ValDProofChainProjectionStateAndReasons(model.ProofChain, model.Dependency)
+		if state != Point12ValDProofChainStateBlocked {
+			t.Fatalf("expected duplicate evidence edges to fail closed for missing second evidence binding, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_required_lineage_edge_binding_mismatch:"+point12ValDLineageEdgeTypeSourceToEvidence) {
+			t.Fatalf("expected exact duplicate source-to-evidence lineage reason, got %#v", reasons)
 		}
 	})
 
 	t.Run("unrelated evidence edge with correct edge type cannot satisfy required evidence binding", func(t *testing.T) {
 		model := Point12ValDFoundationModel()
-		addPoint12ValDSecondEvidencePair(&model, true)
+		addPoint12ValDSecondEvidencePair(&model, false)
 		model.ProofChain.LineageEdges = append(model.ProofChain.LineageEdges, Point12ValDLineageEdge{
 			EdgeID:           "lineage_edge_point12_vald_artifact_unrelated_003",
 			EdgeType:         point12ValDLineageEdgeTypeEvidenceToArtifact,
@@ -691,9 +994,12 @@ func TestPoint12ValDProofChainProjection(t *testing.T) {
 			Explanation:      "unrelated edge cannot satisfy canonical evidence binding",
 		})
 		recomputePoint12ValDLocalHashes(&model)
-		model = ComputePoint12ValDFoundation(model)
-		if model.ProofChainState == Point12ValDProofChainStateActive || model.CurrentState == Point12ValDStateActive {
-			t.Fatalf("expected unrelated evidence edge to fail closed or remain non-satisfying, got %#v", model)
+		state, reasons := point12ValDProofChainProjectionStateAndReasons(model.ProofChain, model.Dependency)
+		if state != Point12ValDProofChainStateBlocked {
+			t.Fatalf("expected unrelated evidence edge to fail closed or remain non-satisfying, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_required_lineage_edge_binding_mismatch:"+point12ValDLineageEdgeTypeSourceToEvidence) {
+			t.Fatalf("expected exact unrelated source-to-evidence lineage reason, got %#v", reasons)
 		}
 	})
 }
@@ -765,6 +1071,100 @@ func TestPoint12ValDProofChainQueryState(t *testing.T) {
 			}
 		})
 	}
+
+	rawExactBindingCases := []struct {
+		name   string
+		mutate func(*Point12ValDProofChainProjection)
+	}{
+		{name: "proof chain id leading space blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ProofChainID = " " + proofChain.ProofChainID
+		}},
+		{name: "proof pack id tab newline retag blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ProofPackID = "\t" + proofChain.ProofPackID + "\n"
+		}},
+		{name: "artifact ref trailing space blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ArtifactRef += " "
+		}},
+	}
+	for _, tc := range rawExactBindingCases {
+		t.Run("raw exact projection "+tc.name, func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			proofChain := model.ProofChain
+			tc.mutate(&proofChain)
+			state, reasons := point12ValDProofChainQueryStateAndReasons(model.Query, proofChain, model.Dependency)
+			if state != Point12ValDQueryStateBlocked {
+				t.Fatalf("expected raw-exact query projection binding mismatch to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "proof_chain_query_projection_binding_mismatch") {
+				t.Fatalf("expected exact query projection binding mismatch reason, got %#v", reasons)
+			}
+		})
+	}
+
+	t.Run("raw exact query state padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		query := model.Query
+		query.QueryState = " " + query.QueryState + " "
+		state, reasons := point12ValDProofChainQueryStateAndReasons(query, model.ProofChain, model.Dependency)
+		if state != Point12ValDQueryStateBlocked {
+			t.Fatalf("expected padded query state to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_query_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact query identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact query id padding blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		query := model.Query
+		query.QueryID = " " + query.QueryID + " "
+		state, reasons := point12ValDProofChainQueryStateAndReasons(query, model.ProofChain, model.Dependency)
+		if state != Point12ValDQueryStateBlocked {
+			t.Fatalf("expected padded query id to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_query_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact query identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact generated at tab newline blocks query with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		query := model.Query
+		query.GeneratedAt = "\t" + query.GeneratedAt + "\n"
+		state, reasons := point12ValDProofChainQueryStateAndReasons(query, model.ProofChain, model.Dependency)
+		if state != Point12ValDQueryStateBlocked {
+			t.Fatalf("expected retagged query generated_at to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_query_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact query identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact generated at non UTC offset blocks query with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		query := model.Query
+		query.GeneratedAt = "2026-05-04T09:02:00+01:00"
+		state, reasons := point12ValDProofChainQueryStateAndReasons(query, model.ProofChain, model.Dependency)
+		if state != Point12ValDQueryStateBlocked {
+			t.Fatalf("expected offset query generated_at to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_query_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact query identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("zero width premature point12 pass token blocks query with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		query := model.Query
+		query.RequestedExplanation = "point_12_pa\u200dss"
+		state, reasons := point12ValDProofChainQueryStateAndReasons(query, model.ProofChain, model.Dependency)
+		if state != Point12ValDQueryStateBlocked {
+			t.Fatalf("expected zero-width premature point12 pass token to block query, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_query_premature_point12_pass") {
+			t.Fatalf("expected exact premature point12 pass query reason, got %#v", reasons)
+		}
+	})
 }
 
 func TestPoint12ValDExplanationState(t *testing.T) {
@@ -832,6 +1232,62 @@ func TestPoint12ValDExplanationState(t *testing.T) {
 			t.Fatalf("expected active explanation with internal diagnostic wording, got %#v", model)
 		}
 	})
+
+	rawExactBindingCases := []struct {
+		name   string
+		mutate func(*Point12ValDProofChainQuery, *Point12ValDProofChainProjection)
+	}{
+		{name: "query id leading space blocks", mutate: func(query *Point12ValDProofChainQuery, _ *Point12ValDProofChainProjection) {
+			query.QueryID = " " + query.QueryID
+		}},
+		{name: "query kind tab newline retag blocks", mutate: func(query *Point12ValDProofChainQuery, _ *Point12ValDProofChainProjection) {
+			query.QueryKind = "\t" + query.QueryKind + "\n"
+		}},
+		{name: "proof chain tenant trailing space blocks", mutate: func(_ *Point12ValDProofChainQuery, proofChain *Point12ValDProofChainProjection) {
+			proofChain.TenantScope += " "
+		}},
+	}
+	for _, tc := range rawExactBindingCases {
+		t.Run("raw exact explanation "+tc.name, func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			query := model.Query
+			proofChain := model.ProofChain
+			tc.mutate(&query, &proofChain)
+			state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, query, proofChain, model.Dependency)
+			if state != Point12ValDExplanationStateBlocked {
+				t.Fatalf("expected raw-exact explanation binding mismatch to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "explanation_query_or_projection_binding_mismatch") {
+				t.Fatalf("expected exact explanation binding mismatch reason, got %#v", reasons)
+			}
+		})
+	}
+
+	t.Run("raw exact explanation no-overclaim state padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		explanation := model.Explanation
+		explanation.NoOverclaimState = " " + explanation.NoOverclaimState + " "
+		state, reasons := point12ValDExplanationStateAndReasons(explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected padded no-overclaim state to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact explanation identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact explanation id padding blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		explanation := model.Explanation
+		explanation.ExplanationID = " " + explanation.ExplanationID + " "
+		state, reasons := point12ValDExplanationStateAndReasons(explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected padded explanation id to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact explanation identity invalid reason, got %#v", reasons)
+		}
+	})
 }
 
 func TestPoint12ValDSupportProfileState(t *testing.T) {
@@ -884,6 +1340,61 @@ func TestPoint12ValDSupportProfileState(t *testing.T) {
 		})
 	}
 
+	rawExactBindingCases := []struct {
+		name   string
+		mutate func(*Point12ValDProofChainProjection)
+	}{
+		{name: "proof chain id leading space blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ProofChainID = " " + proofChain.ProofChainID
+		}},
+		{name: "export id trailing space blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ExportID += " "
+		}},
+		{name: "tenant scope tab newline retag blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.TenantScope = "\t" + proofChain.TenantScope + "\n"
+		}},
+	}
+	for _, tc := range rawExactBindingCases {
+		t.Run("raw exact support profile "+tc.name, func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			proofChain := model.ProofChain
+			tc.mutate(&proofChain)
+			state, reasons := point12ValDSupportProfileStateAndReasons(model.SupportProfile, proofChain)
+			if state != Point12ValDSupportProfileStateBlocked {
+				t.Fatalf("expected raw-exact support profile binding mismatch to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "support_profile_projection_binding_mismatch") {
+				t.Fatalf("expected exact support profile projection binding mismatch reason, got %#v", reasons)
+			}
+		})
+	}
+
+	t.Run("raw exact support profile state padding blocks", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		profile := model.SupportProfile
+		profile.ProfileState = " " + profile.ProfileState + " "
+		state, reasons := point12ValDSupportProfileStateAndReasons(profile, model.ProofChain)
+		if state != Point12ValDSupportProfileStateBlocked {
+			t.Fatalf("expected padded support profile state to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "support_profile_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact support profile identity invalid reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact support profile id padding blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		profile := model.SupportProfile
+		profile.ProfileID = " " + profile.ProfileID + " "
+		state, reasons := point12ValDSupportProfileStateAndReasons(profile, model.ProofChain)
+		if state != Point12ValDSupportProfileStateBlocked {
+			t.Fatalf("expected padded support profile id to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "support_profile_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact support profile identity invalid reason, got %#v", reasons)
+		}
+	})
+
 	t.Run("blocked wording refs may contain forbidden wording", func(t *testing.T) {
 		model := activePoint12ValDFoundation()
 		model.SupportProfile.BlockedWordingRefs = []string{"production approved", "financial guarantee"}
@@ -925,6 +1436,73 @@ func TestPoint12ValDPortalCompatibilityState(t *testing.T) {
 			}
 		})
 	}
+
+	rawExactBindingCases := []struct {
+		name   string
+		mutate func(*Point12ValDProofChainProjection)
+	}{
+		{name: "proof chain id leading space blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ProofChainID = " " + proofChain.ProofChainID
+		}},
+		{name: "proof pack id trailing space blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ProofPackID += " "
+		}},
+		{name: "manifest id tab retag blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ManifestID = "\t" + proofChain.ManifestID
+		}},
+		{name: "replay result id newline retag blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ReplayResultID += "\n"
+		}},
+		{name: "export id padded blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ExportID = " " + proofChain.ExportID + " "
+		}},
+		{name: "tenant scope tab newline retag blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.TenantScope = "\t" + proofChain.TenantScope + "\n"
+		}},
+		{name: "projection disclaimer padded blocks", mutate: func(proofChain *Point12ValDProofChainProjection) {
+			proofChain.ProjectionDisclaimer = " " + proofChain.ProjectionDisclaimer + " "
+		}},
+	}
+	for _, tc := range rawExactBindingCases {
+		t.Run("raw exact upstream "+tc.name, func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			proofChain := model.ProofChain
+			tc.mutate(&proofChain)
+			state, reasons := point12ValDPortalCompatibilityStateAndReasons(model.PortalCompatibility, proofChain)
+			if state != Point12ValDPortalCompatibilityStateBlocked {
+				t.Fatalf("expected raw-exact portal binding mismatch to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "portal_compatibility_projection_binding_mismatch") {
+				t.Fatalf("expected exact portal projection binding mismatch reason, got %#v", reasons)
+			}
+		})
+	}
+
+	t.Run("raw exact downstream proof pack padding blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		portal := model.PortalCompatibility
+		portal.ProofPackID = " " + portal.ProofPackID + " "
+		state, reasons := point12ValDPortalCompatibilityStateAndReasons(portal, model.ProofChain)
+		if state != Point12ValDPortalCompatibilityStateBlocked {
+			t.Fatalf("expected padded downstream portal proof pack to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "portal_compatibility_projection_binding_mismatch") {
+			t.Fatalf("expected exact portal projection binding mismatch reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("raw exact portal contract id padding blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		portal := model.PortalCompatibility
+		portal.PortalContractID = " " + portal.PortalContractID + " "
+		state, reasons := point12ValDPortalCompatibilityStateAndReasons(portal, model.ProofChain)
+		if state != Point12ValDPortalCompatibilityStateBlocked {
+			t.Fatalf("expected padded portal contract id to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "portal_compatibility_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact portal identity invalid reason, got %#v", reasons)
+		}
+	})
 }
 
 func TestPoint12ValDMutationClosure(t *testing.T) {

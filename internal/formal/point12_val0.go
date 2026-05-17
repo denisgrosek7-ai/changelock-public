@@ -1,6 +1,12 @@
 package formal
 
-import "strings"
+import (
+	"strings"
+	"time"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
+)
 
 const (
 	Point12Val0StateActive         = "point12_val0_replay_discipline_foundation_active"
@@ -321,9 +327,13 @@ func point12Val0PrematurePassToken() string {
 }
 
 func point12Val0ContainsPrematurePassToken(values ...string) bool {
-	token := point12Val0PrematurePassToken()
+	normalizedToken := formalNoOverclaimNormalizePublicText(point12Val0PrematurePassToken())
 	for _, value := range values {
-		if strings.Contains(strings.TrimSpace(value), token) {
+		normalized := formalNoOverclaimNormalizePublicText(value)
+		if normalized == "" {
+			continue
+		}
+		if formalNoOverclaimContainsForbidden(normalized, normalizedToken) {
 			return true
 		}
 	}
@@ -366,11 +376,10 @@ func point12Val0ReplayResults() []string {
 }
 
 func point12Val0HashValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || strings.Contains(trimmed, " ") || !strings.HasPrefix(trimmed, "sha256:") {
+	if !formalRawExactNonEmpty(value) || strings.Contains(value, " ") || !strings.HasPrefix(value, "sha256:") {
 		return false
 	}
-	digest := strings.TrimPrefix(trimmed, "sha256:")
+	digest := strings.TrimPrefix(value, "sha256:")
 	if len(digest) != 64 {
 		return false
 	}
@@ -386,7 +395,7 @@ func point12Val0HashValid(value string) bool {
 }
 
 func point12Val0VersionIdentityValid(value string) bool {
-	return point11Val0IdentityValueValid(value) && !strings.Contains(strings.TrimSpace(value), "/")
+	return formalRawExactNonEmpty(value) && point11Val0IdentityValueValid(value) && !strings.Contains(value, "/")
 }
 
 func point12Val0StringListValid(values []string, validator func(string) bool) bool {
@@ -395,14 +404,13 @@ func point12Val0StringListValid(values []string, validator func(string) bool) bo
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !validator(trimmed) {
+		if !formalRawExactNonEmpty(value) || !validator(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -423,7 +431,7 @@ func point12Val0PrimaryAuthorityContextRefValid(primary string, values []string)
 		return false
 	}
 	for _, value := range values {
-		if strings.TrimSpace(value) == strings.TrimSpace(primary) {
+		if value == primary {
 			return true
 		}
 	}
@@ -436,14 +444,19 @@ func point12Val0ExactStringSetMatch(left, right []string) bool {
 	}
 	seen := map[string]int{}
 	for _, value := range left {
-		seen[strings.TrimSpace(value)]++
-	}
-	for _, value := range right {
-		trimmed := strings.TrimSpace(value)
-		if seen[trimmed] == 0 {
+		if !formalRawExactNonEmpty(value) {
 			return false
 		}
-		seen[trimmed]--
+		seen[value]++
+	}
+	for _, value := range right {
+		if !formalRawExactNonEmpty(value) {
+			return false
+		}
+		if seen[value] == 0 {
+			return false
+		}
+		seen[value]--
 	}
 	for _, count := range seen {
 		if count != 0 {
@@ -451,6 +464,18 @@ func point12Val0ExactStringSetMatch(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+func point12Val0ExactOneOf(value string, allowed []string) bool {
+	if !formalRawExactNonEmpty(value) {
+		return false
+	}
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func point12Val0FirstValue(values []string) string {
@@ -462,40 +487,55 @@ func point12Val0FirstValue(values []string) string {
 	return ""
 }
 
+func point12Val0RawCanonicalRefWithPrefixes(value string, prefixes []string) bool {
+	return formalRawExactNonEmpty(value) && point11Val0CanonicalRefWithPrefixes(value, prefixes)
+}
+
+func point12Val0RawTimestampValid(value string) bool {
+	if !formalRawExactNonEmpty(value) {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return false
+	}
+	return parsed.UTC().Format(time.RFC3339) == value
+}
+
 func point12Val0ProofPackRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"proof_pack_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"proof_pack_"})
 }
 
 func point12Val0DecisionRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"decision_", "enforcement_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"decision_", "enforcement_"})
 }
 
 func point12Val0ArtifactRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"artifact_", "sbom_", "package_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"artifact_", "sbom_", "package_"})
 }
 
 func point12Val0PolicyRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"policy_", "point11_policy_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"policy_", "point11_policy_"})
 }
 
 func point12Val0ClaimRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"claim_", "claim:"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"claim_", "claim:"})
 }
 
 func point12Val0GovernanceEventRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"governance_event_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"governance_event_"})
 }
 
 func point12Val0ClosureManifestRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"manifest_", "closure_manifest_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"manifest_", "closure_manifest_"})
 }
 
 func point12Val0DependencySnapshotRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"dependency_snapshot_", "dependency_review_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"dependency_snapshot_", "dependency_review_"})
 }
 
 func point12Val0AuthorityContextRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{
 		"policy_",
 		"claim_",
 		"governance_event_",
@@ -504,27 +544,27 @@ func point12Val0AuthorityContextRefValid(value string) bool {
 }
 
 func point12Val0CompatibilityProfileRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"compatibility_profile_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"compatibility_profile_"})
 }
 
 func point12Val0RedactionManifestRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"redaction_manifest_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"redaction_manifest_"})
 }
 
 func point12Val0RetentionClassRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"retention_class_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"retention_class_"})
 }
 
 func point12Val0SigningKeyRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"signing_key_", "metadata_signing_key_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"signing_key_", "metadata_signing_key_"})
 }
 
 func point12Val0SignatureRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"signature_", "signature_metadata_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"signature_", "signature_metadata_"})
 }
 
 func point12Val0ToolchainProvenanceRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{
 		"toolchain_provenance_",
 		"ci_job_",
 		"build_tool_",
@@ -536,7 +576,7 @@ func point12Val0ToolchainProvenanceRefValid(value string) bool {
 }
 
 func point12Val0AgentLineageRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"agent_lineage_", "agent_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"agent_lineage_", "agent_"})
 }
 
 func point12Val0AllowedAIEvidenceCandidateTypes() []string {
@@ -566,7 +606,12 @@ func point12Val0BlockedAIEvidenceCandidateTypes() []string {
 }
 
 func point12Val0AIEvidenceCandidateTypeValid(value string) bool {
-	return point11Val0ContainsTrimmed(point12Val0AllowedAIEvidenceCandidateTypes(), value)
+	for _, allowed := range point12Val0AllowedAIEvidenceCandidateTypes() {
+		if value == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func point12Val0DefaultAgentLineageRecord() Point12Val0AgentLineageRecord {
@@ -630,8 +675,12 @@ func point12Val0AgentLineageBindingMatrixValid(record Point12Val0AgentLineageRec
 		"claims_source_of_truth_false": false,
 		"emits_premature_pass_false":   false,
 	}
-	for _, field := range point12Val0AgentLineageBindingFields(record) {
-		switch strings.TrimSpace(field.BindingClass) {
+	return point12Val0AgentLineageBindingFieldsValid(point12Val0AgentLineageBindingFields(record), requiredExact)
+}
+
+func point12Val0AgentLineageBindingFieldsValid(fields []point12Val0AIEvidenceCandidateBindingField, requiredExact map[string]bool) bool {
+	for _, field := range fields {
+		switch field.BindingClass {
 		case point12ValDBindingClassExactRequired:
 			if !field.ValidationRequired || !field.MutationTestRequired {
 				return false
@@ -661,15 +710,16 @@ func point12Val0PrimaryExpectedAgentLineageRecord() Point12Val0AgentLineageRecor
 
 func point12Val0AgentLineageExactBindingValid(record Point12Val0AgentLineageRecord) bool {
 	expected := point12Val0PrimaryExpectedAgentLineageRecord()
-	if strings.TrimSpace(expected.AgentID) == "" {
+	if !formalRawExactNonEmpty(expected.AgentID) {
 		return false
 	}
-	return strings.TrimSpace(record.AgentID) == strings.TrimSpace(expected.AgentID) &&
-		strings.TrimSpace(record.ModelOrRuleVersionRef) == strings.TrimSpace(expected.ModelOrRuleVersionRef) &&
-		strings.TrimSpace(record.PermissionManifestHash) == strings.TrimSpace(expected.PermissionManifestHash) &&
+	return record.AgentID == expected.AgentID &&
+		record.AgentType == expected.AgentType &&
+		record.ModelOrRuleVersionRef == expected.ModelOrRuleVersionRef &&
+		record.PermissionManifestHash == expected.PermissionManifestHash &&
 		point12Val0ExactStringSetMatch(record.InputEvidenceRefs, expected.InputEvidenceRefs) &&
-		strings.TrimSpace(record.AuditID) == strings.TrimSpace(expected.AuditID) &&
-		strings.TrimSpace(record.RecommendationID) == strings.TrimSpace(expected.RecommendationID) &&
+		record.AuditID == expected.AuditID &&
+		record.RecommendationID == expected.RecommendationID &&
 		record.LineageInputOnly == expected.LineageInputOnly &&
 		record.ClaimsCertification == expected.ClaimsCertification &&
 		record.ClaimsSourceOfTruth == expected.ClaimsSourceOfTruth &&
@@ -677,20 +727,19 @@ func point12Val0AgentLineageExactBindingValid(record Point12Val0AgentLineageReco
 }
 
 func point12Val0EvidenceRefValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if !point11Val0IdentityValueValid(trimmed) {
+	if !formalRawExactNonEmpty(value) || !point11Val0IdentityValueValid(value) {
 		return false
 	}
-	if strings.Contains(trimmed, " ") || strings.Contains(trimmed, "/") {
+	if strings.Contains(value, " ") || strings.Contains(value, "/") {
 		return false
 	}
-	normalized := point11Val0NormalizeText(trimmed)
+	normalized := point11Val0NormalizeText(value)
 	for _, blocked := range []string{"cross-tenant", "other-tenant", "global", "unscoped", "wildcard", "all-tenants"} {
 		if strings.Contains(normalized, blocked) {
 			return false
 		}
 	}
-	return strings.HasPrefix(trimmed, "evidence:") || strings.HasPrefix(trimmed, "evidence_")
+	return strings.HasPrefix(value, "evidence:") || strings.HasPrefix(value, "evidence_")
 }
 
 func point12Val0EvidenceRefsValid(values []string) bool {
@@ -698,15 +747,15 @@ func point12Val0EvidenceRefsValid(values []string) bool {
 }
 
 func point12Val0EvidenceHashRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"evidence_hash_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"evidence_hash_"})
 }
 
 func point12Val0AuditRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"audit_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"audit_"})
 }
 
 func point12Val0RecommendationRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"recommendation_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"recommendation_"})
 }
 
 func point12Val0PermissionManifestHashValid(value string) bool {
@@ -714,15 +763,15 @@ func point12Val0PermissionManifestHashValid(value string) bool {
 }
 
 func point12Val0HumanFeedbackRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"feedback_", "human_feedback_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"feedback_", "human_feedback_"})
 }
 
 func point12Val0CIJobRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"ci_job_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"ci_job_"})
 }
 
 func point12Val0VersionRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{
 		"build_tool_",
 		"scanner_",
 		"sbom_generator_",
@@ -736,11 +785,11 @@ func point12Val0VersionRefValid(value string) bool {
 }
 
 func point12Val0ExecutionEnvironmentClassRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"execution_environment_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"execution_environment_"})
 }
 
 func point12Val0ReplayAssessmentRefValid(value string) bool {
-	return point11Val0CanonicalRefWithPrefixes(value, []string{"replay_assessment_"})
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"replay_assessment_"})
 }
 
 func point12Val0RedactionFieldValuesValid(values []string) bool {
@@ -749,14 +798,13 @@ func point12Val0RedactionFieldValuesValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11Val0IdentityValueValid(trimmed) || strings.Contains(trimmed, "/") {
+		if !formalRawExactTokenValid(value, point11Val0IdentityValueValid) || strings.Contains(value, "/") {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -805,27 +853,27 @@ func point12Val0ClaimTextOverlap(left []string, right []string) bool {
 }
 
 func point12Val0CompatibilityValueValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12Val0CompatibilityExactRequired,
 		point12Val0CompatibilityCompatibleAllowed,
 		point12Val0CompatibilityBlocked,
-	}, value)
+	})
 }
 
 func point12Val0ReplayModeValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12Val0ReplayModeOriginalContext,
 		point12Val0ReplayModeCurrentPolicyContext,
 		point12Val0ReplayModeComparisonMode,
-	}, value)
+	})
 }
 
 func point12Val0ProfileTypeValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12Val0ProfileTypeFinancialReview,
 		point12Val0ProfileTypeInsuranceReview,
 		point12Val0ProfileTypeAuditReview,
-	}, value)
+	})
 }
 
 func point12Val0ForbiddenClaims() []string {
@@ -880,19 +928,255 @@ func point12Val0AllowedClaims() []string {
 	}
 }
 
+func formalNoOverclaimNormalizeText(value string) string {
+	return formalNoOverclaimNormalizeTextWithOptions(value, false)
+}
+
+func formalNoOverclaimNormalizePublicText(value string) string {
+	return formalNoOverclaimNormalizeTextWithOptions(value, true)
+}
+
+func formalNoOverclaimNormalizeTextWithOptions(value string, underscoreBoundary bool) string {
+	compatible := norm.NFKD.String(value)
+	folded := strings.Map(func(r rune) rune {
+		if formalNoOverclaimIgnorableFormat(r) {
+			return -1
+		}
+		if formalNoOverclaimBoundarySeparator(r, underscoreBoundary) {
+			return ' '
+		}
+		return formalNoOverclaimConfusableLetter(r)
+	}, strings.ToLower(strings.TrimSpace(compatible)))
+	return strings.Join(strings.Fields(folded), " ")
+}
+
+func formalNoOverclaimIgnorableFormat(r rune) bool {
+	return unicode.Is(unicode.Cf, r) || unicode.IsMark(r)
+}
+
+func formalNoOverclaimBoundarySeparator(r rune, underscoreBoundary bool) bool {
+	if r == '_' && !underscoreBoundary {
+		return false
+	}
+	if formalNoOverclaimDashSeparator(r) {
+		return true
+	}
+	return unicode.IsPunct(r) || unicode.IsSymbol(r)
+}
+
+func formalNoOverclaimDashSeparator(r rune) bool {
+	switch r {
+	case '-', '\u00ad', '\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2015', '\u2043', '\u2212', '\ufe58', '\ufe63', '\uff0d':
+		return true
+	default:
+		return false
+	}
+}
+
+func formalNoOverclaimConfusableLetter(r rune) rune {
+	if r >= '\uff41' && r <= '\uff5a' {
+		return 'a' + (r - '\uff41')
+	}
+	switch r {
+	case '\u0430', '\u03b1', '\u0251', '\u1d00': // Cyrillic/Greek/Latin/small-cap a
+		return 'a'
+	case '\u0432', '\u0299': // Cyrillic/small-cap b
+		return 'b'
+	case '\u0441', '\u03f2', '\u1d04': // Cyrillic/Greek/small-cap c
+		return 'c'
+	case '\u0501', '\u03b4', '\u1d05', '\u217e': // Cyrillic/Greek/small-cap d
+		return 'd'
+	case '\u0435', '\u0454', '\u03b5', '\u025b', '\u04bd', '\u212e', '\u212f', '\u1d07': // Cyrillic/Greek/Latin/small-cap e
+		return 'e'
+	case '\ua730': // small-cap f
+		return 'f'
+	case '\u0261', '\u0262': // Latin/small-cap g
+		return 'g'
+	case '\u04bb', '\u029c': // Cyrillic/small-cap h
+		return 'h'
+	case '\u0456', '\u03b9', '\u026a', '\u0269', '\u0131': // Cyrillic/Greek/Latin/small-cap i
+		return 'i'
+	case '\u0458', '\u1d0a': // Cyrillic/small-cap j
+		return 'j'
+	case '\u043a', '\u03ba', '\u1d0b': // Cyrillic/Greek/small-cap k
+		return 'k'
+	case '\u217c', '\u04cf', '\u01c0', '\u026d', '\u026b', '\u0142', '\u019a', '\u1e37', '\u029f': // Roman/Cyrillic/Latin/small-cap l
+		return 'l'
+	case '\u043c', '\u1d0d': // Cyrillic/small-cap m
+		return 'm'
+	case '\u043d', '\u043f', '\u03b7', '\u0578', '\u0272', '\u0273', '\u0274', '\u014b', '\u019e', '\ua791': // Cyrillic/Greek/Armenian/Latin/small-cap n
+		return 'n'
+	case '\u043e', '\u03bf', '\u0585', '\u0254', '\u1d0f': // Cyrillic/Greek/Armenian/Latin o
+		return 'o'
+	case '\u0440', '\u03c1', '\u1d18': // Cyrillic/Greek/small-cap p
+		return 'p'
+	case '\u051b': // Cyrillic qa
+		return 'q'
+	case '\u0433', '\u0280': // Cyrillic/small-cap r
+		return 'r'
+	case '\u0455', '\ua731': // Cyrillic/small-cap s
+		return 's'
+	case '\u0442', '\u03c4', '\u1d1b': // Cyrillic/Greek/small-cap t
+		return 't'
+	case '\u03c5', '\u1d1c', '\uab4e', '\u028a': // Greek/Latin/small-cap U confusables
+		return 'u'
+	case '\u0445', '\u03c7': // Cyrillic/Greek x
+		return 'x'
+	case '\u0443', '\u028f': // Cyrillic/small-cap y
+		return 'y'
+	case '\u03bd', '\u0475', '\u1d20', '\u2174': // Greek/Cyrillic/small-cap v
+		return 'v'
+	case '\u1d21': // small-cap w
+		return 'w'
+	case '\u1d22': // small-cap z
+		return 'z'
+	default:
+		return r
+	}
+}
+
+func formalNoOverclaimContainsForbidden(normalized, forbidden string) bool {
+	if strings.Contains(normalized, forbidden) {
+		return true
+	}
+	if formalNoOverclaimContainsForbiddenTokenSequence(normalized, forbidden) {
+		return true
+	}
+	compactNormalized := formalNoOverclaimCompact(normalized)
+	compactForbidden := formalNoOverclaimCompact(forbidden)
+	return compactForbidden != "" && strings.Contains(compactNormalized, compactForbidden)
+}
+
+func formalNoOverclaimContainsForbiddenTokenSequence(normalized, forbidden string) bool {
+	valueTokens := strings.Fields(normalized)
+	phraseTokens := strings.Fields(forbidden)
+	if len(valueTokens) == 0 || len(phraseTokens) < 2 || len(valueTokens) < len(phraseTokens) {
+		return false
+	}
+	for start, token := range valueTokens {
+		if token != phraseTokens[0] {
+			continue
+		}
+		matched := 1
+		for idx := start + 1; idx < len(valueTokens) && matched < len(phraseTokens); idx++ {
+			if valueTokens[idx] != phraseTokens[matched] {
+				continue
+			}
+			matched++
+		}
+		if matched == len(phraseTokens) {
+			return true
+		}
+	}
+	return false
+}
+
+func formalNoOverclaimCompact(value string) string {
+	return strings.Join(strings.Fields(value), "")
+}
+
+func formalNoOverclaimForbiddenCompactAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	compactPhrase := formalNoOverclaimCompact(phrase)
+	if compactPhrase == "" {
+		return false
+	}
+	for start := range values {
+		var compact strings.Builder
+		allAllowed := true
+		parts := 0
+		for end := start; end < len(values); end++ {
+			part := formalNoOverclaimCompact(values[end])
+			if part == "" {
+				continue
+			}
+			compact.WriteString(part)
+			allAllowed = allAllowed && allowed[end]
+			parts++
+			if parts > 1 && !allAllowed && strings.Contains(compact.String(), compactPhrase) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func point12Val0ContainsForbiddenClaim(values ...string) bool {
+	return point12Val0ContainsForbiddenClaimWithNormalizer(formalNoOverclaimNormalizePublicText, values...)
+}
+
+func point12Val0ContainsForbiddenInternalClaim(values ...string) bool {
+	return point12Val0ContainsForbiddenClaimWithNormalizer(formalNoOverclaimNormalizeText, values...)
+}
+
+func point12Val0ContainsForbiddenClaimWithNormalizer(normalize func(string) string, values ...string) bool {
 	allowed := map[string]struct{}{}
 	for _, value := range point12Val0AllowedClaims() {
-		allowed[point11Val0NormalizeText(value)] = struct{}{}
+		allowed[normalize(value)] = struct{}{}
 	}
+	crossNormalizedParts := make([]string, 0, len(values))
+	crossPartAllowed := make([]bool, 0, len(values))
 	for _, value := range values {
-		normalized := point11Val0NormalizeText(value)
+		normalized := normalize(value)
+		if normalized == "" {
+			continue
+		}
+		_, isAllowed := allowed[normalized]
+		crossNormalizedParts = append(crossNormalizedParts, normalized)
+		crossPartAllowed = append(crossPartAllowed, isAllowed)
 		if _, ok := allowed[normalized]; ok {
 			continue
 		}
 		for _, forbidden := range point12Val0ForbiddenClaims() {
-			if strings.Contains(normalized, point11Val0NormalizeText(forbidden)) {
+			if formalNoOverclaimContainsForbidden(normalized, normalize(forbidden)) {
 				return true
+			}
+		}
+	}
+	for _, forbidden := range point12Val0ForbiddenClaims() {
+		if point12Val0ForbiddenPhraseAcrossValues(crossNormalizedParts, crossPartAllowed, normalize(forbidden)) {
+			return true
+		}
+	}
+	return false
+}
+
+func point12Val0ForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	if formalNoOverclaimForbiddenCompactAcrossValues(values, allowed, phrase) {
+		return true
+	}
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	matched := 0
+	distinctBuckets := 0
+	lastBucket := -1
+	matchedIncludesNonAllowed := false
+	for bucketIndex, value := range values {
+		bucketTokens := strings.Fields(value)
+		if len(bucketTokens) == 0 {
+			continue
+		}
+		for _, token := range bucketTokens {
+			if token != phraseTokens[matched] {
+				continue
+			}
+			if bucketIndex != lastBucket {
+				distinctBuckets++
+				lastBucket = bucketIndex
+			}
+			if !allowed[bucketIndex] {
+				matchedIncludesNonAllowed = true
+			}
+			matched++
+			if matched == len(phraseTokens) {
+				return distinctBuckets > 1 && matchedIncludesNonAllowed
 			}
 		}
 	}
@@ -946,48 +1230,48 @@ func EvaluatePoint12Val0DependencyState(model Point12Val0DependencySnapshot) str
 		!point12Val0PrimaryAuthorityContextRefValid(model.ClaimAuthorityContextRef, model.ClaimAuthorityContextRefs) ||
 		!point12Val0PrimaryAuthorityContextRefValid(model.GovernanceAuthorityContextRef, model.GovernanceAuthorityContextRefs) ||
 		model.UpstreamPoint11PassObservedOutsideFinalPath ||
-		strings.TrimSpace(model.UpstreamPointID) != point11ValDPointID ||
-		strings.TrimSpace(model.UpstreamWaveID) != point11ValDWaveID {
+		model.UpstreamPointID != point11ValDPointID ||
+		model.UpstreamWaveID != point11ValDWaveID {
 		return Point12Val0DependencyStateBlocked
 	}
-	if strings.TrimSpace(model.UpstreamCurrentState) == Point11ValDStateBlocked ||
-		strings.TrimSpace(model.UpstreamDependencyState) == Point11ValDDependencyStateBlocked {
+	if model.UpstreamCurrentState == Point11ValDStateBlocked ||
+		model.UpstreamDependencyState == Point11ValDDependencyStateBlocked {
 		return Point12Val0DependencyStateBlocked
 	}
-	if strings.TrimSpace(model.UpstreamPassClosureManifestState) == Point11ValDPassClosureManifestStateBlocked ||
-		strings.TrimSpace(model.UpstreamFinalPassGateState) == Point11ValDFinalPassGateStateBlocked {
-		if strings.TrimSpace(model.UpstreamCurrentState) == Point11ValDStateReviewRequired ||
-			strings.TrimSpace(model.UpstreamDependencyState) == Point11ValDDependencyStateReviewRequired ||
+	if model.UpstreamPassClosureManifestState == Point11ValDPassClosureManifestStateBlocked ||
+		model.UpstreamFinalPassGateState == Point11ValDFinalPassGateStateBlocked {
+		if model.UpstreamCurrentState == Point11ValDStateReviewRequired ||
+			model.UpstreamDependencyState == Point11ValDDependencyStateReviewRequired ||
 			len(model.ReviewPrerequisites) > 0 {
 			return Point12Val0DependencyStateReviewRequired
 		}
 		return Point12Val0DependencyStateBlocked
 	}
-	if strings.TrimSpace(model.UpstreamCurrentState) == Point11ValDStateReviewRequired ||
-		strings.TrimSpace(model.UpstreamDependencyState) == Point11ValDDependencyStateReviewRequired ||
+	if model.UpstreamCurrentState == Point11ValDStateReviewRequired ||
+		model.UpstreamDependencyState == Point11ValDDependencyStateReviewRequired ||
 		len(model.ReviewPrerequisites) > 0 {
 		return Point12Val0DependencyStateReviewRequired
 	}
-	if strings.TrimSpace(model.UpstreamCurrentState) != Point11ValDStateActive ||
-		strings.TrimSpace(model.UpstreamDependencyState) != Point11ValDDependencyStateActive ||
-		strings.TrimSpace(model.UpstreamPassClosureManifestState) != Point11ValDPassClosureManifestStateActive ||
-		strings.TrimSpace(model.UpstreamFinalPassGateState) != Point11ValDFinalPassGateStateActive ||
+	if model.UpstreamCurrentState != Point11ValDStateActive ||
+		model.UpstreamDependencyState != Point11ValDDependencyStateActive ||
+		model.UpstreamPassClosureManifestState != Point11ValDPassClosureManifestStateActive ||
+		model.UpstreamFinalPassGateState != Point11ValDFinalPassGateStateActive ||
 		!model.UpstreamPoint11PassAllowed ||
-		strings.TrimSpace(model.UpstreamPoint11PassToken) != point11ValDPoint11PassToken {
+		model.UpstreamPoint11PassToken != point11ValDPoint11PassToken {
 		return Point12Val0DependencyStateBlocked
 	}
 	return Point12Val0DependencyStateActive
 }
 
 func EvaluatePoint12Val0DeterminismContractState(model Point12Val0ReplayDeterminismContract) string {
-	if !point12Val0ReplayModeValid(model.ReplayMode) ||
-		!point11Val0ContainsTrimmed([]string{
+	if !formalRawExactValid(model.ReplayMode, point12Val0ReplayModeValid) ||
+		!point12Val0ExactOneOf(model.UnsupportedBehavior, []string{
 			point12Val0UnsupportedBehaviorBlockedReplay,
 			point12Val0UnsupportedBehaviorUnsupportedVersion,
-		}, model.UnsupportedBehavior) {
+		}) {
 		return Point12Val0DeterminismContractStateBlocked
 	}
-	if strings.TrimSpace(model.ReplayMode) == point12Val0ReplayModeOriginalContext {
+	if model.ReplayMode == point12Val0ReplayModeOriginalContext {
 		if !model.StableEvidenceIdentityRequired ||
 			!model.StablePolicyIdentityRequired ||
 			!model.StableEngineIdentityRequired ||
@@ -997,7 +1281,7 @@ func EvaluatePoint12Val0DeterminismContractState(model Point12Val0ReplayDetermin
 			return Point12Val0DeterminismContractStateBlocked
 		}
 	}
-	if strings.TrimSpace(model.ReplayMode) == point12Val0ReplayModeComparisonMode && !model.DriftExplanationRequired {
+	if model.ReplayMode == point12Val0ReplayModeComparisonMode && !model.DriftExplanationRequired {
 		return Point12Val0DeterminismContractStateBlocked
 	}
 	return Point12Val0DeterminismContractStateActive
@@ -1005,28 +1289,28 @@ func EvaluatePoint12Val0DeterminismContractState(model Point12Val0ReplayDetermin
 
 func EvaluatePoint12Val0CompatibilityProfileState(model Point12Val0ProofPackCompatibilityProfile) string {
 	if !point12Val0CompatibilityProfileRefValid(model.CompatibilityProfileRef) ||
-		!point12Val0ReplayModeValid(model.ReplayMode) ||
-		!point12Val0CompatibilityValueValid(model.PolicyCompatibility) ||
-		!point12Val0CompatibilityValueValid(model.EngineCompatibility) ||
-		!point12Val0CompatibilityValueValid(model.SchemaCompatibility) ||
-		strings.TrimSpace(model.EvidenceCompatibility) != point12Val0EvidenceCompatibilityExactHashRequired ||
-		!point11Val0ContainsTrimmed([]string{
+		!formalRawExactValid(model.ReplayMode, point12Val0ReplayModeValid) ||
+		!formalRawExactValid(model.PolicyCompatibility, point12Val0CompatibilityValueValid) ||
+		!formalRawExactValid(model.EngineCompatibility, point12Val0CompatibilityValueValid) ||
+		!formalRawExactValid(model.SchemaCompatibility, point12Val0CompatibilityValueValid) ||
+		model.EvidenceCompatibility != point12Val0EvidenceCompatibilityExactHashRequired ||
+		!point12Val0ExactOneOf(model.ToolchainCompatibility, []string{
 			point12Val0ToolchainCompatibilityRequiredIfDecisive,
 			point12Val0ToolchainCompatibilityNotRequired,
-		}, model.ToolchainCompatibility) ||
-		!point11Val0ContainsTrimmed([]string{
+		}) ||
+		!point12Val0ExactOneOf(model.UnsupportedBehavior, []string{
 			point12Val0UnsupportedBehaviorBlockedReplay,
 			point12Val0UnsupportedBehaviorUnsupportedVersion,
-		}, model.UnsupportedBehavior) {
+		}) {
 		return Point12Val0CompatibilityProfileStateBlocked
 	}
-	if (strings.TrimSpace(model.PolicyCompatibility) == point12Val0CompatibilityCompatibleAllowed ||
-		strings.TrimSpace(model.EngineCompatibility) == point12Val0CompatibilityCompatibleAllowed ||
-		strings.TrimSpace(model.SchemaCompatibility) == point12Val0CompatibilityCompatibleAllowed) &&
+	if (model.PolicyCompatibility == point12Val0CompatibilityCompatibleAllowed ||
+		model.EngineCompatibility == point12Val0CompatibilityCompatibleAllowed ||
+		model.SchemaCompatibility == point12Val0CompatibilityCompatibleAllowed) &&
 		!point12Val0EvidenceRefsValid(model.CompatibilityEvidenceRefs) {
 		return Point12Val0CompatibilityProfileStateBlocked
 	}
-	if strings.TrimSpace(model.ReplayMode) == point12Val0ReplayModeComparisonMode && !model.DecisionDriftExplanationRequired {
+	if model.ReplayMode == point12Val0ReplayModeComparisonMode && !model.DecisionDriftExplanationRequired {
 		return Point12Val0CompatibilityProfileStateBlocked
 	}
 	return Point12Val0CompatibilityProfileStateActive
@@ -1035,10 +1319,10 @@ func EvaluatePoint12Val0CompatibilityProfileState(model Point12Val0ProofPackComp
 func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) string {
 	if !point12Val0ProofPackRefValid(model.ProofPackID) ||
 		!point12Val0DecisionRefValid(model.DecisionID) ||
-		strings.TrimSpace(model.PointID) != point12Val0PointID ||
-		strings.TrimSpace(model.WaveID) != point12Val0WaveID ||
-		!point11Val0ContainsTrimmed(point12Val0ProofPackStates(), model.ProofPackState) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		model.PointID != point12Val0PointID ||
+		model.WaveID != point12Val0WaveID ||
+		!point12Val0ExactOneOf(model.ProofPackState, point12Val0ProofPackStates()) ||
+		!formalRawExactTokenValid(model.TenantScope, point11Val0ScopeValid) ||
 		!point12Val0ArtifactRefValid(model.ArtifactRef) ||
 		!point12Val0HashValid(model.ArtifactHash) ||
 		!point12Val0EvidenceRefsValid(model.EvidenceRefs) ||
@@ -1058,7 +1342,7 @@ func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) 
 		!point12Val0AuthorityContextRefValid(model.ClaimAuthorityContextRef) ||
 		!point12Val0AuthorityContextRefValid(model.GovernanceAuthorityContextRef) ||
 		!point12Val0CompatibilityProfileRefValid(model.CompatibilityProfileRef) ||
-		!point11Val0ValidTimestamp(model.GeneratedAt) ||
+		!point12Val0RawTimestampValid(model.GeneratedAt) ||
 		!point12Val0VersionIdentityValid(model.FreshnessWindow) ||
 		!point12Val0SigningKeyRefValid(model.SigningKeyRef) ||
 		!point12Val0SignatureRefValid(model.SignatureRef) ||
@@ -1075,7 +1359,7 @@ func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) 
 		) {
 		return Point12Val0ManifestStateBlocked
 	}
-	switch strings.TrimSpace(model.ProofPackState) {
+	switch model.ProofPackState {
 	case Point12Val0ProofPackStateTampered,
 		Point12Val0ProofPackStateUnsupported,
 		Point12Val0ProofPackStateExpired,
@@ -1091,7 +1375,7 @@ func point12Val0MismatchNeedsSpecificResult(actual bool, result, expected string
 	if !actual {
 		return false
 	}
-	return strings.TrimSpace(result) != expected
+	return result != expected
 }
 
 func point12Val0ReplayAssessmentStateAndReasons(
@@ -1103,8 +1387,8 @@ func point12Val0ReplayAssessmentStateAndReasons(
 ) (string, []string) {
 	reasons := []string{}
 	if !point12Val0ReplayAssessmentRefValid(model.ReplayAssessmentID) ||
-		!point11Val0ContainsTrimmed(point12Val0ProofPackStates(), model.ProofPackState) ||
-		!point11Val0ContainsTrimmed(point12Val0ReplayResults(), model.ReplayResult) ||
+		!point12Val0ExactOneOf(model.ProofPackState, point12Val0ProofPackStates()) ||
+		!point12Val0ExactOneOf(model.ReplayResult, point12Val0ReplayResults()) ||
 		!point12Val0DependencySnapshotRefValid(model.DeterminismContractRef) ||
 		!point12Val0CompatibilityProfileRefValid(model.CompatibilityProfileRef) ||
 		!point12Val0PolicyRefValid(model.OriginalPolicyRef) ||
@@ -1127,7 +1411,7 @@ func point12Val0ReplayAssessmentStateAndReasons(
 		reasons = append(reasons, "replay_assessment_identity_invalid")
 	}
 
-	if strings.TrimSpace(contract.ReplayMode) == point12Val0ReplayModeComparisonMode &&
+	if contract.ReplayMode == point12Val0ReplayModeComparisonMode &&
 		contract.DriftExplanationRequired &&
 		!point11Val0IdentityValueValid(model.DriftExplanation) {
 		reasons = append(reasons, "replay_assessment_missing_drift_explanation")
@@ -1146,56 +1430,56 @@ func point12Val0ReplayAssessmentStateAndReasons(
 	governanceMismatch := !point12Val0ExactStringSetMatch(model.GovernanceEventRefs, model.ReplayGovernanceRefs)
 
 	if !model.DecisiveEvidencePresent &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultInsufficientEvidence &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+		model.ReplayResult != Point12Val0ReplayResultInsufficientEvidence &&
+		model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 		reasons = append(reasons, "replay_assessment_missing_decisive_evidence")
 	}
 	if redaction.RedactionAffectsReplay &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultRedactedLimitations &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultInsufficientEvidence &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+		model.ReplayResult != Point12Val0ReplayResultRedactedLimitations &&
+		model.ReplayResult != Point12Val0ReplayResultInsufficientEvidence &&
+		model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 		reasons = append(reasons, "replay_assessment_redaction_limitation_missing")
 	}
 
-	switch strings.TrimSpace(model.ProofPackState) {
+	switch model.ProofPackState {
 	case Point12Val0ProofPackStateTampered:
-		if strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultTamperDetected &&
-			strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+		if model.ReplayResult != Point12Val0ReplayResultTamperDetected &&
+			model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 			reasons = append(reasons, "replay_assessment_tamper_result_invalid")
 		}
 	case Point12Val0ProofPackStateUnsupported:
-		if strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultUnsupportedVersion &&
-			strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+		if model.ReplayResult != Point12Val0ReplayResultUnsupportedVersion &&
+			model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 			reasons = append(reasons, "replay_assessment_unsupported_result_invalid")
 		}
 	case Point12Val0ProofPackStateExpired, Point12Val0ProofPackStateRevoked, Point12Val0ProofPackStateSuperseded:
-		if strings.TrimSpace(model.ReplayResult) == Point12Val0ReplayResultSameDecision {
+		if model.ReplayResult == Point12Val0ReplayResultSameDecision {
 			reasons = append(reasons, "replay_assessment_invalidated_pack_cannot_replay_same_decision")
 		}
 	}
 
-	if strings.TrimSpace(compat.PolicyCompatibility) == point12Val0CompatibilityBlocked &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+	if compat.PolicyCompatibility == point12Val0CompatibilityBlocked &&
+		model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 		reasons = append(reasons, "replay_assessment_policy_compatibility_blocked")
 	}
-	if strings.TrimSpace(compat.EngineCompatibility) == point12Val0CompatibilityBlocked &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+	if compat.EngineCompatibility == point12Val0CompatibilityBlocked &&
+		model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 		reasons = append(reasons, "replay_assessment_engine_compatibility_blocked")
 	}
-	if strings.TrimSpace(compat.SchemaCompatibility) == point12Val0CompatibilityBlocked &&
-		strings.TrimSpace(model.ReplayResult) != Point12Val0ReplayResultBlockedReplay {
+	if compat.SchemaCompatibility == point12Val0CompatibilityBlocked &&
+		model.ReplayResult != Point12Val0ReplayResultBlockedReplay {
 		reasons = append(reasons, "replay_assessment_schema_compatibility_blocked")
 	}
-	if point12Val0MismatchNeedsSpecificResult(strings.TrimSpace(compat.PolicyCompatibility) == point12Val0CompatibilityExactRequired && policyMismatch, model.ReplayResult, Point12Val0ReplayResultPolicyMismatch) {
+	if point12Val0MismatchNeedsSpecificResult(compat.PolicyCompatibility == point12Val0CompatibilityExactRequired && policyMismatch, model.ReplayResult, Point12Val0ReplayResultPolicyMismatch) {
 		reasons = append(reasons, "replay_assessment_policy_mismatch_result_invalid")
 	}
-	if point12Val0MismatchNeedsSpecificResult(strings.TrimSpace(compat.EngineCompatibility) == point12Val0CompatibilityExactRequired && engineMismatch, model.ReplayResult, Point12Val0ReplayResultEngineMismatch) {
+	if point12Val0MismatchNeedsSpecificResult(compat.EngineCompatibility == point12Val0CompatibilityExactRequired && engineMismatch, model.ReplayResult, Point12Val0ReplayResultEngineMismatch) {
 		reasons = append(reasons, "replay_assessment_engine_mismatch_result_invalid")
 	}
-	if point12Val0MismatchNeedsSpecificResult(strings.TrimSpace(compat.SchemaCompatibility) == point12Val0CompatibilityExactRequired && schemaMismatch, model.ReplayResult, Point12Val0ReplayResultSchemaMismatch) {
+	if point12Val0MismatchNeedsSpecificResult(compat.SchemaCompatibility == point12Val0CompatibilityExactRequired && schemaMismatch, model.ReplayResult, Point12Val0ReplayResultSchemaMismatch) {
 		reasons = append(reasons, "replay_assessment_schema_mismatch_result_invalid")
 	}
-	if point12Val0MismatchNeedsSpecificResult(policyMismatch && strings.TrimSpace(contract.ReplayMode) == point12Val0ReplayModeOriginalContext, model.ReplayResult, Point12Val0ReplayResultPolicyMismatch) {
+	if point12Val0MismatchNeedsSpecificResult(policyMismatch && contract.ReplayMode == point12Val0ReplayModeOriginalContext, model.ReplayResult, Point12Val0ReplayResultPolicyMismatch) {
 		reasons = append(reasons, "replay_assessment_original_context_requires_policy_mismatch_result")
 	}
 	if point12Val0MismatchNeedsSpecificResult(evidenceMismatch, model.ReplayResult, Point12Val0ReplayResultEvidenceMismatch) {
@@ -1207,11 +1491,11 @@ func point12Val0ReplayAssessmentStateAndReasons(
 	if point12Val0MismatchNeedsSpecificResult(governanceMismatch, model.ReplayResult, Point12Val0ReplayResultGovernanceMismatch) {
 		reasons = append(reasons, "replay_assessment_governance_mismatch_result_invalid")
 	}
-	if strings.TrimSpace(model.ReplayResult) == Point12Val0ReplayResultSameDecision &&
+	if model.ReplayResult == Point12Val0ReplayResultSameDecision &&
 		(policyMismatch || engineMismatch || schemaMismatch || evidenceMismatch || claimMismatch || governanceMismatch || redaction.RedactionAffectsReplay || !model.DecisiveEvidencePresent) {
 		reasons = append(reasons, "replay_assessment_same_decision_overclaims_replay")
 	}
-	if strings.TrimSpace(model.ReplayResult) == Point12Val0ReplayResultDifferentDecision &&
+	if model.ReplayResult == Point12Val0ReplayResultDifferentDecision &&
 		contract.DriftExplanationRequired &&
 		!point11Val0IdentityValueValid(model.DriftExplanation) {
 		reasons = append(reasons, "replay_assessment_different_decision_requires_explanation")
@@ -1235,21 +1519,21 @@ func EvaluatePoint12Val0RedactionBoundaryState(model Point12Val0RedactionBoundar
 		!point12Val0OptionalClaimTextListValid(model.CustomerVisibleClaimsAfterRedaction) ||
 		!point12Val0OptionalClaimTextListValid(model.ExportedClaimsAfterRedaction) ||
 		!point12Val0OptionalClaimTextListValid(model.ReplayResultClaims) ||
-		!point11Val0ContainsTrimmed(point12Val0ReplayResults(), model.PostRedactionResult) {
+		!point12Val0ExactOneOf(model.PostRedactionResult, point12Val0ReplayResults()) {
 		return Point12Val0RedactionBoundaryStateBlocked
 	}
 	if len(model.RedactedFields) > 0 {
 		if !point12Val0StringListValid(model.RedactionReasons, point11Val0IdentityValueValid) ||
-			!point11Val0IdentityValueValid(model.RedactionApproverRef) ||
+			!formalRawExactTokenValid(model.RedactionApproverRef, point11Val0IdentityValueValid) ||
 			!point12Val0GovernanceEventRefValid(model.RedactionApprovalEventRef) ||
 			!model.PartialOrAdvisoryOnly {
 			return Point12Val0RedactionBoundaryStateBlocked
 		}
 	}
 	if (model.RedactionAffectsDecision || model.RedactionAffectsReplay) &&
-		strings.TrimSpace(model.PostRedactionResult) != Point12Val0ReplayResultInsufficientEvidence &&
-		strings.TrimSpace(model.PostRedactionResult) != Point12Val0ReplayResultBlockedReplay &&
-		strings.TrimSpace(model.PostRedactionResult) != Point12Val0ReplayResultRedactedLimitations {
+		model.PostRedactionResult != Point12Val0ReplayResultInsufficientEvidence &&
+		model.PostRedactionResult != Point12Val0ReplayResultBlockedReplay &&
+		model.PostRedactionResult != Point12Val0ReplayResultRedactedLimitations {
 		return Point12Val0RedactionBoundaryStateBlocked
 	}
 	if (model.RedactionAffectsDecision || model.RedactionAffectsReplay) && !model.PartialOrAdvisoryOnly {
@@ -1319,6 +1603,28 @@ func point12Val0AgentLineageState(record Point12Val0AgentLineageRecord) string {
 	return Point12Val0ProvenanceStateActive
 }
 
+func point12Val0ToolchainProvenanceMissing(model Point12Val0ToolchainAgentProvenanceProfile) bool {
+	return model.CIJobIDRef == "" ||
+		model.RunnerImageHash == "" ||
+		model.BuildToolVersionRef == "" ||
+		model.ScannerVersionRef == "" ||
+		model.SBOMGeneratorVersionRef == "" ||
+		model.SigningToolVersionRef == "" ||
+		model.PolicyEngineBuildHash == "" ||
+		model.ExecutionEnvironmentClassRef == ""
+}
+
+func point12Val0ToolchainProvenanceInvalid(model Point12Val0ToolchainAgentProvenanceProfile) bool {
+	return (model.CIJobIDRef != "" && !point12Val0CIJobRefValid(model.CIJobIDRef)) ||
+		(model.RunnerImageHash != "" && !point12Val0HashValid(model.RunnerImageHash)) ||
+		(model.BuildToolVersionRef != "" && !point12Val0VersionRefValid(model.BuildToolVersionRef)) ||
+		(model.ScannerVersionRef != "" && !point12Val0VersionRefValid(model.ScannerVersionRef)) ||
+		(model.SBOMGeneratorVersionRef != "" && !point12Val0VersionRefValid(model.SBOMGeneratorVersionRef)) ||
+		(model.SigningToolVersionRef != "" && !point12Val0VersionRefValid(model.SigningToolVersionRef)) ||
+		(model.PolicyEngineBuildHash != "" && !point12Val0HashValid(model.PolicyEngineBuildHash)) ||
+		(model.ExecutionEnvironmentClassRef != "" && !point12Val0ExecutionEnvironmentClassRefValid(model.ExecutionEnvironmentClassRef))
+}
+
 func EvaluatePoint12Val0ProvenanceState(model Point12Val0ToolchainAgentProvenanceProfile) string {
 	if model.IntroducesNetworkCallPath {
 		return Point12Val0ProvenanceStateBlocked
@@ -1334,14 +1640,10 @@ func EvaluatePoint12Val0ProvenanceState(model Point12Val0ToolchainAgentProvenanc
 		}
 		return Point12Val0ProvenanceStateActive
 	}
-	if !point12Val0CIJobRefValid(model.CIJobIDRef) ||
-		!point12Val0HashValid(model.RunnerImageHash) ||
-		!point12Val0VersionRefValid(model.BuildToolVersionRef) ||
-		!point12Val0VersionRefValid(model.ScannerVersionRef) ||
-		!point12Val0VersionRefValid(model.SBOMGeneratorVersionRef) ||
-		!point12Val0VersionRefValid(model.SigningToolVersionRef) ||
-		!point12Val0HashValid(model.PolicyEngineBuildHash) ||
-		!point12Val0ExecutionEnvironmentClassRefValid(model.ExecutionEnvironmentClassRef) {
+	if point12Val0ToolchainProvenanceInvalid(model) {
+		return Point12Val0ProvenanceStateBlocked
+	}
+	if point12Val0ToolchainProvenanceMissing(model) {
 		return Point12Val0ProvenanceStateReviewRequired
 	}
 	if len(model.AgentLineages) == 0 {
@@ -1356,10 +1658,10 @@ func EvaluatePoint12Val0NoOverclaimState(model Point12Val0NoOverclaimReview) str
 		!point12Val0StringListValid(model.BlockedWording, point11Val0IdentityValueValid) {
 		return Point12Val0NoOverclaimStateBlocked
 	}
-	values := append([]string{}, model.ObservedCustomerFacingTexts...)
-	values = append(values, model.ObservedExportFacingTexts...)
-	values = append(values, model.ObservedDiagnostics...)
-	if point12Val0ContainsForbiddenClaim(values...) {
+	observedValues := append([]string{}, model.ObservedCustomerFacingTexts...)
+	observedValues = append(observedValues, model.ObservedExportFacingTexts...)
+	if point12Val0ContainsForbiddenClaim(observedValues...) ||
+		point12Val0ContainsForbiddenInternalClaim(model.ObservedDiagnostics...) {
 		return Point12Val0NoOverclaimStateBlocked
 	}
 	return Point12Val0NoOverclaimStateActive
@@ -1367,22 +1669,55 @@ func EvaluatePoint12Val0NoOverclaimState(model Point12Val0NoOverclaimReview) str
 
 func EvaluatePoint12Val0State(model Point12Val0Foundation) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		strings.TrimSpace(model.DependencyState) == Point12Val0DependencyStateBlocked ||
-		strings.TrimSpace(model.DeterminismContractState) == Point12Val0DeterminismContractStateBlocked ||
-		strings.TrimSpace(model.CompatibilityProfileState) == Point12Val0CompatibilityProfileStateBlocked ||
-		strings.TrimSpace(model.ManifestState) == Point12Val0ManifestStateBlocked ||
-		strings.TrimSpace(model.ReplayAssessmentState) == Point12Val0ReplayAssessmentStateBlocked ||
-		strings.TrimSpace(model.RedactionBoundaryState) == Point12Val0RedactionBoundaryStateBlocked ||
-		strings.TrimSpace(model.FinancialEvidenceSupportState) == Point12Val0FinancialEvidenceSupportStateBlocked ||
-		strings.TrimSpace(model.ProvenanceState) == Point12Val0ProvenanceStateBlocked ||
-		strings.TrimSpace(model.NoOverclaimState) == Point12Val0NoOverclaimStateBlocked {
+		len(point12Val0InvalidComponentStateReasons(model)) > 0 ||
+		model.DependencyState == Point12Val0DependencyStateBlocked ||
+		model.DeterminismContractState == Point12Val0DeterminismContractStateBlocked ||
+		model.CompatibilityProfileState == Point12Val0CompatibilityProfileStateBlocked ||
+		model.ManifestState == Point12Val0ManifestStateBlocked ||
+		model.ReplayAssessmentState == Point12Val0ReplayAssessmentStateBlocked ||
+		model.RedactionBoundaryState == Point12Val0RedactionBoundaryStateBlocked ||
+		model.FinancialEvidenceSupportState == Point12Val0FinancialEvidenceSupportStateBlocked ||
+		model.ProvenanceState == Point12Val0ProvenanceStateBlocked ||
+		model.NoOverclaimState == Point12Val0NoOverclaimStateBlocked {
 		return Point12Val0StateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point12Val0DependencyStateReviewRequired ||
-		strings.TrimSpace(model.ProvenanceState) == Point12Val0ProvenanceStateReviewRequired {
+	if model.DependencyState == Point12Val0DependencyStateReviewRequired ||
+		model.ProvenanceState == Point12Val0ProvenanceStateReviewRequired {
 		return Point12Val0StateReviewRequired
 	}
 	return Point12Val0StateActive
+}
+
+func point12Val0InvalidComponentStateReasons(model Point12Val0Foundation) []string {
+	reasons := []string{}
+	if !point12Val0ExactOneOf(model.DependencyState, []string{Point12Val0DependencyStateActive, Point12Val0DependencyStateBlocked, Point12Val0DependencyStateReviewRequired}) {
+		reasons = append(reasons, "dependency_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.DeterminismContractState, []string{Point12Val0DeterminismContractStateActive, Point12Val0DeterminismContractStateBlocked}) {
+		reasons = append(reasons, "determinism_contract_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.CompatibilityProfileState, []string{Point12Val0CompatibilityProfileStateActive, Point12Val0CompatibilityProfileStateBlocked}) {
+		reasons = append(reasons, "compatibility_profile_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.ManifestState, []string{Point12Val0ManifestStateActive, Point12Val0ManifestStateBlocked}) {
+		reasons = append(reasons, "manifest_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.ReplayAssessmentState, []string{Point12Val0ReplayAssessmentStateActive, Point12Val0ReplayAssessmentStateBlocked}) {
+		reasons = append(reasons, "replay_assessment_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.RedactionBoundaryState, []string{Point12Val0RedactionBoundaryStateActive, Point12Val0RedactionBoundaryStateBlocked}) {
+		reasons = append(reasons, "redaction_boundary_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.FinancialEvidenceSupportState, []string{Point12Val0FinancialEvidenceSupportStateActive, Point12Val0FinancialEvidenceSupportStateBlocked}) {
+		reasons = append(reasons, "financial_evidence_support_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.ProvenanceState, []string{Point12Val0ProvenanceStateActive, Point12Val0ProvenanceStateBlocked, Point12Val0ProvenanceStateReviewRequired}) {
+		reasons = append(reasons, "provenance_state_invalid")
+	}
+	if !point12Val0ExactOneOf(model.NoOverclaimState, []string{Point12Val0NoOverclaimStateActive, Point12Val0NoOverclaimStateBlocked}) {
+		reasons = append(reasons, "no_overclaim_state_invalid")
+	}
+	return reasons
 }
 
 func point12Val0BlockingReasons(model Point12Val0Foundation) []string {
@@ -1390,6 +1725,7 @@ func point12Val0BlockingReasons(model Point12Val0Foundation) []string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
 		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
 	}
+	reasons = append(reasons, point12Val0InvalidComponentStateReasons(model)...)
 	if model.DependencyState == Point12Val0DependencyStateBlocked {
 		reasons = append(reasons, "point11_vald_dependency_blocked")
 	}

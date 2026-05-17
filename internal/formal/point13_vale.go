@@ -273,51 +273,106 @@ func point13ValEStates() []string {
 }
 
 func point13ValEStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValEStates(), value)
+	return point12ValDExactOneOf(value, point13ValEStates()...)
 }
 
 func point13ValEClosureEvaluatorRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "closure_evaluator_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "closure_evaluator_point13_vale_")
+	})
 }
 
 func point13ValENoOverclaimCheckRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "no_overclaim_check_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "no_overclaim_check_point13_vale_")
+	})
 }
 
 func point13ValEAuthorityBoundaryCheckRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "authority_boundary_check_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "authority_boundary_check_point13_vale_")
+	})
 }
 
 func point13ValETimestampIntegrityCheckRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "timestamp_integrity_check_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "timestamp_integrity_check_point13_vale_")
+	})
 }
 
 func point13ValETwitterIsolationCheckRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "tenant_isolation_check_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "tenant_isolation_check_point13_vale_")
+	})
 }
 
 func point13ValEEvidenceIntegrityCheckRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "evidence_integrity_check_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "evidence_integrity_check_point13_vale_")
+	})
 }
 
 func point13ValEClosureManifestRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "closure_manifest_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "closure_manifest_point13_vale_")
+	})
 }
 
 func point13ValECommandRunRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "command_run_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "command_run_point13_vale_")
+	})
+}
+
+func point13ValECommandsRun() []string {
+	return []string{
+		"command_run_point13_vale_gofmt_001",
+		"command_run_point13_vale_go_test_formal_001",
+		"command_run_point13_vale_go_test_all_001",
+	}
 }
 
 func point13ValETestRunRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "test_run_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "test_run_point13_vale_")
+	})
+}
+
+func point13ValETestsRun() []string {
+	return []string{
+		"test_run_point13_vale_internal_formal_001",
+		"test_run_point13_vale_point13_regressions_001",
+		"test_run_point13_vale_go_test_all_001",
+	}
 }
 
 func point13ValEGrepRunRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "grep_run_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "grep_run_point13_vale_")
+	})
+}
+
+func point13ValEGrepsRun() []string {
+	return []string{
+		"grep_run_point13_vale_pass_token_001",
+		"grep_run_point13_vale_ai_authority_001",
+		"grep_run_point13_vale_forbidden_wording_001",
+		"grep_run_point13_vale_mutation_flags_001",
+	}
 }
 
 func point13ValENegativeFixtureRunRefValid(value string) bool {
-	return point13Val0OperationalRefValid(value, "negative_fixture_point13_vale_")
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point13Val0OperationalRefValid(candidate, "negative_fixture_point13_vale_")
+	})
+}
+
+func point13ValENegativeFixturesRun() []string {
+	return []string{
+		"negative_fixture_point13_vale_dependency_gate_001",
+		"negative_fixture_point13_vale_authority_boundary_001",
+		"negative_fixture_point13_vale_timestamp_integrity_001",
+	}
 }
 
 func point13ValEAllowedSafeWording() []string {
@@ -393,6 +448,18 @@ func point13ValETimelineClientReportedAts(entries []Point13ValDTimelineEvent) []
 	return values
 }
 
+func point13ValEExactStringSequenceMatch(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func point13ValETimelineSourceRefs(entries []Point13ValDTimelineEvent) []string {
 	values := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -401,12 +468,23 @@ func point13ValETimelineSourceRefs(entries []Point13ValDTimelineEvent) []string 
 	return values
 }
 
+func point13ValERawTimestampValid(value string) bool {
+	if !formalRawExactNonEmpty(value) {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return false
+	}
+	return parsed.UTC().Format(time.RFC3339) == value
+}
+
 func point13ValETwitterIsolationRefListValid(values []string) bool {
 	if len(values) == 0 {
 		return false
 	}
 	for _, value := range values {
-		if !point11Val0IdentityValueValid(strings.TrimSpace(value)) {
+		if !formalRawExactNonEmpty(value) || !point11Val0IdentityValueValid(value) {
 			return false
 		}
 	}
@@ -418,11 +496,10 @@ func point13ValETwitterValueListValid(values []string, validator func(string) bo
 		return false
 	}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
+		if !formalRawExactNonEmpty(value) {
 			return false
 		}
-		if validator != nil && !validator(trimmed) {
+		if validator != nil && !validator(value) {
 			return false
 		}
 	}
@@ -454,7 +531,7 @@ func point13ValETwitterClientMetadataOnly(values []string) bool {
 		if value == "" {
 			continue
 		}
-		if !point11Val0ValidTimestamp(value) {
+		if !point13ValERawTimestampValid(value) {
 			return false
 		}
 	}
@@ -462,11 +539,14 @@ func point13ValETwitterClientMetadataOnly(values []string) bool {
 }
 
 func point13ValETwitterCompare(left, right string) (int, bool) {
-	leftTime, err := time.Parse(time.RFC3339, strings.TrimSpace(left))
+	if !point13ValERawTimestampValid(left) || !point13ValERawTimestampValid(right) {
+		return 0, false
+	}
+	leftTime, err := time.Parse(time.RFC3339, left)
 	if err != nil {
 		return 0, false
 	}
-	rightTime, err := time.Parse(time.RFC3339, strings.TrimSpace(right))
+	rightTime, err := time.Parse(time.RFC3339, right)
 	if err != nil {
 		return 0, false
 	}
@@ -491,10 +571,13 @@ func point13ValETwitterFutureDated(entries []Point13ValDTimelineEvent, verifiedA
 }
 
 func point13ValEAggregateDerivedStates(states ...string) string {
+	if len(states) == 0 {
+		return Point13ValEStateBlocked
+	}
 	hasReviewRequired := false
 	hasIncomplete := false
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13ValEStateBlocked:
 			return Point13ValEStateBlocked
 		case Point13ValEStateReviewRequired:
@@ -565,54 +648,75 @@ func point13ValEDependencyStateAndReasons(model Point13ValEDependencySnapshot) (
 	if !model.SnapshotFromComputedOutput || !model.ValDDependencyComputedFromUpstream {
 		reasons = append(reasons, "vald_dependency_not_computed_from_upstream")
 	}
-	if !point13ValDStateValid(model.ValDCurrentState) ||
-		!point13ValDStateValid(model.ValDDependencyState) ||
-		!point13ValDStateValid(model.ValDCustomerAuditorOperationalTimelineState) ||
-		!point13ValDStateValid(model.ValDHandoffTraceQueryProjectionState) ||
-		!point13ValDStateValid(model.ValDExportPackageReadProjectionState) ||
-		!point13ValDStateValid(model.ValDCustomerAuditorExplanationProjectionState) ||
-		!point13ValDStateValid(model.ValDTimelineAccessBoundaryState) ||
-		!point13ValDStateValid(model.ValDAITimelineLineageProjectionState) ||
-		!point13ValDStateValid(model.ValDNoOverclaimState) ||
-		strings.TrimSpace(model.ValDPointID) != point13Val0PointID ||
-		strings.TrimSpace(model.ValDWaveID) != point13ValDWaveID ||
-		!point13ValCStateValid(model.InheritedValCCurrentState) ||
-		!point13ValBStateValid(model.InheritedValBCurrentState) ||
-		!point13ValAStateValid(model.InheritedValACurrentState) ||
-		!point13Val0StateValid(model.InheritedVal0CurrentState) ||
-		!point12ValEStateValid(model.InheritedPoint12CurrentState) ||
-		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
-		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
-		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
-		!point11Val0ScopeValid(model.InheritedTenantScope) ||
-		!point12Val0VersionRefValid(model.InheritedAIModelOrRuleVersionRef) ||
-		!point12Val0PermissionManifestHashValid(model.InheritedAIPermissionManifestHash) {
+	if !formalRawExactValid(model.ValDCurrentState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDDependencyState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDCustomerAuditorOperationalTimelineState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDHandoffTraceQueryProjectionState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDExportPackageReadProjectionState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDCustomerAuditorExplanationProjectionState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDTimelineAccessBoundaryState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDAITimelineLineageProjectionState, point13ValDStateValid) ||
+		!formalRawExactValid(model.ValDNoOverclaimState, point13ValDStateValid) ||
+		model.ValDPointID != point13Val0PointID ||
+		model.ValDWaveID != point13ValDWaveID ||
+		!formalRawExactValid(model.InheritedValCCurrentState, point13ValCStateValid) ||
+		!formalRawExactValid(model.InheritedValBCurrentState, point13ValBStateValid) ||
+		!formalRawExactValid(model.InheritedValACurrentState, point13ValAStateValid) ||
+		!formalRawExactValid(model.InheritedVal0CurrentState, point13Val0StateValid) ||
+		!formalRawExactValid(model.InheritedPoint12CurrentState, point12ValEStateValid) ||
+		!formalRawExactValid(model.InheritedPoint12DependencyState, point12ValEStateValid) ||
+		!formalRawExactValid(model.InheritedPoint12PassClosureState, point12ValEStateValid) ||
+		!formalRawExactValid(model.InheritedPoint12ReviewerResult, point12ValEReviewerResultValid) ||
+		!formalRawExactValid(model.InheritedTenantScope, point11Val0ScopeValid) ||
+		!formalRawExactValid(model.InheritedAIModelOrRuleVersionRef, point12Val0VersionRefValid) ||
+		!formalRawExactValid(model.InheritedAIPermissionManifestHash, point12Val0PermissionManifestHashValid) {
 		reasons = append(reasons, "dependency_snapshot_identity_invalid")
 	}
 	if model.ValDPoint13PassSeen {
 		reasons = append(reasons, "vald_point13_pass_seen_before_vale")
 	}
-	if strings.TrimSpace(model.ValDCurrentState) != strings.TrimSpace(model.ValD.CurrentState) ||
-		strings.TrimSpace(model.ValDDependencyState) != strings.TrimSpace(model.ValD.DependencyState) ||
-		strings.TrimSpace(model.ValDCustomerAuditorOperationalTimelineState) != strings.TrimSpace(model.ValD.CustomerAuditorOperationalTimelineState) ||
-		strings.TrimSpace(model.ValDHandoffTraceQueryProjectionState) != strings.TrimSpace(model.ValD.HandoffTraceQueryProjectionState) ||
-		strings.TrimSpace(model.ValDExportPackageReadProjectionState) != strings.TrimSpace(model.ValD.ExportPackageReadProjectionState) ||
-		strings.TrimSpace(model.ValDCustomerAuditorExplanationProjectionState) != strings.TrimSpace(model.ValD.CustomerAuditorExplanationProjectionState) ||
-		strings.TrimSpace(model.ValDTimelineAccessBoundaryState) != strings.TrimSpace(model.ValD.TimelineAccessBoundaryState) ||
-		strings.TrimSpace(model.ValDAITimelineLineageProjectionState) != strings.TrimSpace(model.ValD.AITimelineLineageProjectionState) ||
-		strings.TrimSpace(model.ValDNoOverclaimState) != strings.TrimSpace(model.ValD.NoOverclaimState) ||
+	recomputedValD := ComputePoint13ValDFoundation(model.ValD)
+	if recomputedValD.CurrentState != model.ValD.CurrentState ||
+		recomputedValD.DependencyState != model.ValD.DependencyState ||
+		recomputedValD.CustomerAuditorOperationalTimelineState != model.ValD.CustomerAuditorOperationalTimelineState ||
+		recomputedValD.HandoffTraceQueryProjectionState != model.ValD.HandoffTraceQueryProjectionState ||
+		recomputedValD.ExportPackageReadProjectionState != model.ValD.ExportPackageReadProjectionState ||
+		recomputedValD.CustomerAuditorExplanationProjectionState != model.ValD.CustomerAuditorExplanationProjectionState ||
+		recomputedValD.TimelineAccessBoundaryState != model.ValD.TimelineAccessBoundaryState ||
+		recomputedValD.AITimelineLineageProjectionState != model.ValD.AITimelineLineageProjectionState ||
+		recomputedValD.NoOverclaimState != model.ValD.NoOverclaimState ||
+		recomputedValD.CurrentState != model.ValDCurrentState ||
+		recomputedValD.DependencyState != model.ValDDependencyState ||
+		recomputedValD.CustomerAuditorOperationalTimelineState != model.ValDCustomerAuditorOperationalTimelineState ||
+		recomputedValD.HandoffTraceQueryProjectionState != model.ValDHandoffTraceQueryProjectionState ||
+		recomputedValD.ExportPackageReadProjectionState != model.ValDExportPackageReadProjectionState ||
+		recomputedValD.CustomerAuditorExplanationProjectionState != model.ValDCustomerAuditorExplanationProjectionState ||
+		recomputedValD.TimelineAccessBoundaryState != model.ValDTimelineAccessBoundaryState ||
+		recomputedValD.AITimelineLineageProjectionState != model.ValDAITimelineLineageProjectionState ||
+		recomputedValD.NoOverclaimState != model.ValDNoOverclaimState {
+		reasons = append(reasons, "dependency_snapshot_vald_recomputed_state_mismatch")
+	}
+	if model.ValDCurrentState != model.ValD.CurrentState ||
+		model.ValDDependencyState != model.ValD.DependencyState ||
+		model.ValDCustomerAuditorOperationalTimelineState != model.ValD.CustomerAuditorOperationalTimelineState ||
+		model.ValDHandoffTraceQueryProjectionState != model.ValD.HandoffTraceQueryProjectionState ||
+		model.ValDExportPackageReadProjectionState != model.ValD.ExportPackageReadProjectionState ||
+		model.ValDCustomerAuditorExplanationProjectionState != model.ValD.CustomerAuditorExplanationProjectionState ||
+		model.ValDTimelineAccessBoundaryState != model.ValD.TimelineAccessBoundaryState ||
+		model.ValDAITimelineLineageProjectionState != model.ValD.AITimelineLineageProjectionState ||
+		model.ValDNoOverclaimState != model.ValD.NoOverclaimState ||
 		model.ValDDependencyComputedFromUpstream != model.ValD.Dependency.SnapshotFromComputedOutput ||
-		strings.TrimSpace(model.InheritedValCCurrentState) != strings.TrimSpace(model.ValD.Dependency.ValCCurrentState) ||
-		strings.TrimSpace(model.InheritedValBCurrentState) != strings.TrimSpace(model.ValD.Dependency.InheritedValBCurrentState) ||
-		strings.TrimSpace(model.InheritedValACurrentState) != strings.TrimSpace(model.ValD.Dependency.InheritedValACurrentState) ||
-		strings.TrimSpace(model.InheritedVal0CurrentState) != strings.TrimSpace(model.ValD.Dependency.InheritedVal0CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12CurrentState) != strings.TrimSpace(model.ValD.Dependency.InheritedPoint12CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12DependencyState) != strings.TrimSpace(model.ValD.Dependency.InheritedPoint12DependencyState) ||
-		strings.TrimSpace(model.InheritedPoint12PassClosureState) != strings.TrimSpace(model.ValD.Dependency.InheritedPoint12PassClosureState) ||
-		strings.TrimSpace(model.InheritedPoint12ReviewerResult) != strings.TrimSpace(model.ValD.Dependency.InheritedPoint12ReviewerResult) ||
-		strings.TrimSpace(model.InheritedTenantScope) != strings.TrimSpace(model.ValD.Dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.InheritedAIModelOrRuleVersionRef) != strings.TrimSpace(model.ValD.Dependency.InheritedAIModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.InheritedAIPermissionManifestHash) != strings.TrimSpace(model.ValD.Dependency.InheritedAIPermissionManifestHash) {
+		model.InheritedValCCurrentState != model.ValD.Dependency.ValCCurrentState ||
+		model.InheritedValBCurrentState != model.ValD.Dependency.InheritedValBCurrentState ||
+		model.InheritedValACurrentState != model.ValD.Dependency.InheritedValACurrentState ||
+		model.InheritedVal0CurrentState != model.ValD.Dependency.InheritedVal0CurrentState ||
+		model.InheritedPoint12CurrentState != model.ValD.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != model.ValD.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != model.ValD.Dependency.InheritedPoint12PassClosureState ||
+		model.InheritedPoint12ReviewerResult != model.ValD.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedTenantScope != model.ValD.Dependency.InheritedTenantScope ||
+		model.InheritedAIModelOrRuleVersionRef != model.ValD.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.InheritedAIPermissionManifestHash != model.ValD.Dependency.InheritedAIPermissionManifestHash {
 		reasons = append(reasons, "dependency_snapshot_binding_mismatch")
 	}
 	for _, state := range []string{
@@ -630,19 +734,19 @@ func point13ValEDependencyStateAndReasons(model Point13ValEDependencySnapshot) (
 		model.InheritedValACurrentState,
 		model.InheritedVal0CurrentState,
 	} {
-		if strings.TrimSpace(state) != Point13ValDStateActive &&
-			strings.TrimSpace(state) != Point13ValCStateActive &&
-			strings.TrimSpace(state) != Point13ValBStateActive &&
-			strings.TrimSpace(state) != Point13ValAStateActive &&
-			strings.TrimSpace(state) != Point13Val0StateActive {
+		if state != Point13ValDStateActive &&
+			state != Point13ValCStateActive &&
+			state != Point13ValBStateActive &&
+			state != Point13ValAStateActive &&
+			state != Point13Val0StateActive {
 			reasons = append(reasons, "upstream_point13_state_not_active")
 			break
 		}
 	}
-	if strings.TrimSpace(model.InheritedPoint12CurrentState) != Point12ValEStatePassConfirmed ||
-		strings.TrimSpace(model.InheritedPoint12DependencyState) != Point12ValEStateActive ||
-		strings.TrimSpace(model.InheritedPoint12PassClosureState) != Point12ValEStateActive ||
-		strings.TrimSpace(model.InheritedPoint12ReviewerResult) != point12ValEReviewerResultPassConfirmed {
+	if model.InheritedPoint12CurrentState != Point12ValEStatePassConfirmed ||
+		model.InheritedPoint12DependencyState != Point12ValEStateActive ||
+		model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
+		model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed {
 		reasons = append(reasons, "inherited_point12_closure_not_confirmed")
 	}
 	if len(reasons) > 0 {
@@ -684,7 +788,7 @@ func EvaluatePoint13ValENoOverclaimFinalCheckState(model Point13ValENoOverclaimF
 	}
 	if !point12Val0ExactStringSetMatch(model.AllowedSafeWording, point13ValEAllowedSafeWording()) ||
 		!point12Val0ExactStringSetMatch(model.BlockedWording, point13Val0ForbiddenClaims()) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValEProjectionDisclaimerBaseline {
+		model.ProjectionDisclaimer != point13ValEProjectionDisclaimerBaseline {
 		return Point13ValEStateBlocked
 	}
 	if point13Val0ContainsForbiddenClaim(
@@ -698,7 +802,7 @@ func EvaluatePoint13ValENoOverclaimFinalCheckState(model Point13ValENoOverclaimF
 	) {
 		return Point13ValEStateBlocked
 	}
-	if point13Val0ContainsForbiddenClaim(strings.Join(model.InternalDiagnosticTexts, " ")) && !model.InternalDiagnosticsClassifiedBlocked {
+	if point13Val0ContainsForbiddenInternalClaim(strings.Join(model.InternalDiagnosticTexts, " ")) && !model.InternalDiagnosticsClassifiedBlocked {
 		return Point13ValEStateBlocked
 	}
 	return Point13ValEStateActive
@@ -802,7 +906,7 @@ func EvaluatePoint13ValEAuthorityBoundaryCheckState(model Point13ValEAuthorityBo
 		model.ValDAIProductionMutationAllowed != valD.AITimelineLineageProjection.ProductionMutationAllowed ||
 		model.ValDAICanonicalMutationAllowed != valD.AITimelineLineageProjection.CanonicalMutationAllowed ||
 		model.ValDAIExternalAPIAllowed != valD.AITimelineLineageProjection.ExternalAPIAllowed ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValEProjectionDisclaimerBaseline {
+		model.ProjectionDisclaimer != point13ValEProjectionDisclaimerBaseline {
 		return Point13ValEStateBlocked
 	}
 	if !model.ValCExportReadOnly ||
@@ -872,14 +976,14 @@ func point13ValETimestampIntegrityCheckModel(dependency Point13ValEDependencySna
 func EvaluatePoint13ValETimestampIntegrityCheckState(model Point13ValETimestampIntegrityCheck, dependency Point13ValEDependencySnapshot) string {
 	entries := dependency.ValD.CustomerAuditorOperationalTimeline.TimelineEntries
 	if !point13ValETimestampIntegrityCheckRefValid(model.CheckID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!formalRawExactValid(model.TenantScope, point11Val0ScopeValid) ||
 		!point13ValDTimelineRefValid(model.TimelineRef) ||
 		!point13ValETwitterIsolationRefListValid(model.EventRefs) ||
 		!point12Val0StringListValid(model.AuditEventRefs, point12Val0AuditRefValid) ||
-		!point13ValETwitterValueListValid(model.CanonicalOccurredAts, point11Val0ValidTimestamp) ||
+		!point13ValETwitterValueListValid(model.CanonicalOccurredAts, point13ValERawTimestampValid) ||
 		!point13ValETwitterValueListValid(model.TimeSources, point13ValDCanonicalTimeSourceValid) ||
 		!point13ValETwitterValueListValid(model.SourceMetadataRefs, point13ValDSourceMetadataRefValid) ||
-		!point11Val0ValidTimestamp(model.VerifiedAt) ||
+		!point13ValERawTimestampValid(model.VerifiedAt) ||
 		!model.ClientTimeMetadataOnly ||
 		!point13ValEStateValid(model.CurrentState) ||
 		!point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
@@ -888,15 +992,15 @@ func EvaluatePoint13ValETimestampIntegrityCheckState(model Point13ValETimestampI
 	if !point13ValETwitterClientMetadataOnly(model.ClientReportedAts) {
 		return Point13ValEStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.TimelineRef) != strings.TrimSpace(dependency.ValD.CustomerAuditorOperationalTimeline.TimelineID) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.TimelineRef != dependency.ValD.CustomerAuditorOperationalTimeline.TimelineID ||
 		!point12Val0ExactStringSetMatch(model.EventRefs, point13ValETimelineEventRefs(entries)) ||
 		!point12Val0ExactStringSetMatch(model.AuditEventRefs, point13ValETimelineAuditRefs(entries)) ||
 		!point12Val0ExactStringSetMatch(model.CanonicalOccurredAts, point13ValETimelineOccurredAts(entries)) ||
 		!point12Val0ExactStringSetMatch(model.TimeSources, point13ValETimelineTimeSources(entries)) ||
 		!point12Val0ExactStringSetMatch(model.SourceMetadataRefs, point13ValETimelineSourceMetadataRefs(entries)) ||
-		!point12Val0ExactStringSetMatch(model.ClientReportedAts, point13ValETimelineClientReportedAts(entries)) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValEProjectionDisclaimerBaseline {
+		!point13ValEExactStringSequenceMatch(model.ClientReportedAts, point13ValETimelineClientReportedAts(entries)) ||
+		model.ProjectionDisclaimer != point13ValEProjectionDisclaimerBaseline {
 		return Point13ValEStateBlocked
 	}
 	if !point13ValDTimelineEventsOrdered(entries) || point13ValDTimelineAcceptanceBackdated(entries) || point13ValETwitterFutureDated(entries, model.VerifiedAt) {
@@ -928,7 +1032,7 @@ func point13ValETwitterIsolationCheckModel(dependency Point13ValEDependencySnaps
 
 func EvaluatePoint13ValETwitterIsolationCheckState(model Point13ValETwitterIsolationCheck, dependency Point13ValEDependencySnapshot) string {
 	if !point13ValETwitterIsolationCheckRefValid(model.CheckID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!formalRawExactValid(model.TenantScope, point11Val0ScopeValid) ||
 		!point13ValCExportPackageRefValid(model.ExportPackageRef) ||
 		!point13ValDTimelineRefValid(model.TimelineRef) ||
 		!point13ValDQueryProjectionRefValid(model.QueryProjectionRef) ||
@@ -945,27 +1049,27 @@ func EvaluatePoint13ValETwitterIsolationCheckState(model Point13ValETwitterIsola
 		!point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return Point13ValEStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(dependency.ValD.Dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.TimelineRef) != strings.TrimSpace(dependency.ValD.CustomerAuditorOperationalTimeline.TimelineID) ||
-		strings.TrimSpace(model.QueryProjectionRef) != strings.TrimSpace(dependency.ValD.HandoffTraceQueryProjection.QueryProjectionID) ||
-		strings.TrimSpace(model.ExportReadProjectionRef) != strings.TrimSpace(dependency.ValD.ExportPackageReadProjection.ReadProjectionID) ||
-		strings.TrimSpace(model.AccessBoundaryRef) != strings.TrimSpace(dependency.ValD.TimelineAccessBoundary.AccessBoundaryID) ||
-		strings.TrimSpace(model.AudienceType) != strings.TrimSpace(dependency.ValD.TimelineAccessBoundary.AudienceType) ||
-		strings.TrimSpace(model.AudienceRef) != strings.TrimSpace(dependency.ValD.TimelineAccessBoundary.AudienceRef) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(dependency.ValD.TimelineAccessBoundary.CustomerOwnerRef) ||
-		strings.TrimSpace(model.AuditorOwnerRef) != strings.TrimSpace(dependency.ValD.TimelineAccessBoundary.AuditorOwnerRef) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.ExportPackageRef != dependency.ValD.Dependency.ValC.CustomerEvidenceExportPackage.ExportPackageID ||
+		model.TimelineRef != dependency.ValD.CustomerAuditorOperationalTimeline.TimelineID ||
+		model.QueryProjectionRef != dependency.ValD.HandoffTraceQueryProjection.QueryProjectionID ||
+		model.ExportReadProjectionRef != dependency.ValD.ExportPackageReadProjection.ReadProjectionID ||
+		model.AccessBoundaryRef != dependency.ValD.TimelineAccessBoundary.AccessBoundaryID ||
+		model.AudienceType != dependency.ValD.TimelineAccessBoundary.AudienceType ||
+		model.AudienceRef != dependency.ValD.TimelineAccessBoundary.AudienceRef ||
+		model.CustomerOwnerRef != dependency.ValD.TimelineAccessBoundary.CustomerOwnerRef ||
+		model.AuditorOwnerRef != dependency.ValD.TimelineAccessBoundary.AuditorOwnerRef ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceRefs, dependency.ValD.ExportPackageReadProjection.ExportedEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.TimelineSourceRefs, point13ValETimelineSourceRefs(dependency.ValD.CustomerAuditorOperationalTimeline.TimelineEntries)) ||
 		!point12Val0ExactStringSetMatch(model.QueryFilterRefs, dependency.ValD.HandoffTraceQueryProjection.FilterRefs) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValEProjectionDisclaimerBaseline {
+		model.ProjectionDisclaimer != point13ValEProjectionDisclaimerBaseline {
 		return Point13ValEStateBlocked
 	}
 	if point13ValETwitterIsolationCrossTenant(model.ExportedEvidenceRefs, model.TimelineSourceRefs, model.QueryFilterRefs) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValD.TimelineAccessBoundary.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValD.ExportPackageReadProjection.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValD.HandoffTraceQueryProjection.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValD.CustomerAuditorOperationalTimeline.TenantScope) {
+		model.TenantScope != dependency.ValD.TimelineAccessBoundary.TenantScope ||
+		model.TenantScope != dependency.ValD.ExportPackageReadProjection.TenantScope ||
+		model.TenantScope != dependency.ValD.HandoffTraceQueryProjection.TenantScope ||
+		model.TenantScope != dependency.ValD.CustomerAuditorOperationalTimeline.TenantScope {
 		return Point13ValEStateBlocked
 	}
 	return Point13ValEStateActive
@@ -997,7 +1101,7 @@ func EvaluatePoint13ValEEvidenceIntegrityCheckState(model Point13ValEEvidenceInt
 	valC := dependency.ValD.Dependency.ValC
 	valD := dependency.ValD
 	if !point13ValEEvidenceIntegrityCheckRefValid(model.CheckID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
+		!formalRawExactValid(model.TenantScope, point11Val0ScopeValid) ||
 		!point13ValCExportPackageRefValid(model.ExportPackageRef) ||
 		!point13ValDExportReadProjectionRefValid(model.ReadProjectionRef) ||
 		!point13ValDAITimelineProjectionRefValid(model.AIProjectionRef) ||
@@ -1017,20 +1121,20 @@ func EvaluatePoint13ValEEvidenceIntegrityCheckState(model Point13ValEEvidenceInt
 	if !model.LineageComplete {
 		return Point13ValEStateIncomplete
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(valC.CustomerEvidenceExportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.ReadProjectionRef) != strings.TrimSpace(valD.ExportPackageReadProjection.ReadProjectionID) ||
-		strings.TrimSpace(model.AIProjectionRef) != strings.TrimSpace(valD.AITimelineLineageProjection.AIProjectionID) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.ExportPackageRef != valC.CustomerEvidenceExportPackage.ExportPackageID ||
+		model.ReadProjectionRef != valD.ExportPackageReadProjection.ReadProjectionID ||
+		model.AIProjectionRef != valD.AITimelineLineageProjection.AIProjectionID ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceRefs, valC.CustomerEvidenceExportPackage.ExportedEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceHashes, valC.CustomerEvidenceExportPackage.ExportedEvidenceHashRefs) ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceRefs, valD.ExportPackageReadProjection.ExportedEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceHashes, valD.ExportPackageReadProjection.ExportedEvidenceHashes) ||
-		strings.TrimSpace(model.ExportManifestHash) != strings.TrimSpace(valC.CustomerEvidenceExportPackage.ExportManifestHash) ||
-		strings.TrimSpace(model.ExportManifestHash) != strings.TrimSpace(valD.ExportPackageReadProjection.ExportManifestHash) ||
-		strings.TrimSpace(model.AIEvidenceCandidateRef) != strings.TrimSpace(valD.AITimelineLineageProjection.EvidenceCandidateRef) ||
+		model.ExportManifestHash != valC.CustomerEvidenceExportPackage.ExportManifestHash ||
+		model.ExportManifestHash != valD.ExportPackageReadProjection.ExportManifestHash ||
+		model.AIEvidenceCandidateRef != valD.AITimelineLineageProjection.EvidenceCandidateRef ||
 		!point12Val0ExactStringSetMatch(model.AIInputEvidenceRefs, valD.AITimelineLineageProjection.InputEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.AIInputEvidenceHashes, valD.AITimelineLineageProjection.InputEvidenceHashRefs) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValEProjectionDisclaimerBaseline {
+		model.ProjectionDisclaimer != point13ValEProjectionDisclaimerBaseline {
 		return Point13ValEStateBlocked
 	}
 	return Point13ValEStateActive
@@ -1049,59 +1153,46 @@ func point13ValEClosureEvaluatorModel(dependency Point13ValEDependencySnapshot) 
 		ReadOnlyProjectionOnly:   true,
 		NoMutationPathsDetected:  true,
 		NoPrematurePoint13Pass:   true,
-		CommandsRun: []string{
-			"command_run_point13_vale_gofmt_001",
-			"command_run_point13_vale_go_test_formal_001",
-			"command_run_point13_vale_go_test_all_001",
-		},
-		TestsRun: []string{
-			"test_run_point13_vale_internal_formal_001",
-			"test_run_point13_vale_point13_regressions_001",
-			"test_run_point13_vale_go_test_all_001",
-		},
-		GrepsRun: []string{
-			"grep_run_point13_vale_pass_token_001",
-			"grep_run_point13_vale_ai_authority_001",
-			"grep_run_point13_vale_forbidden_wording_001",
-			"grep_run_point13_vale_mutation_flags_001",
-		},
-		NegativeFixturesRun: []string{
-			"negative_fixture_point13_vale_dependency_gate_001",
-			"negative_fixture_point13_vale_authority_boundary_001",
-			"negative_fixture_point13_vale_tenant_isolation_001",
-		},
-		ReviewerResult:       point12ValEReviewerResultPassConfirmed,
-		CurrentState:         Point13ValEStateActive,
-		ProjectionDisclaimer: point13ValEProjectionDisclaimerBaseline,
+		CommandsRun:              point13ValECommandsRun(),
+		TestsRun:                 point13ValETestsRun(),
+		GrepsRun:                 point13ValEGrepsRun(),
+		NegativeFixturesRun:      point13ValENegativeFixturesRun(),
+		ReviewerResult:           point12ValEReviewerResultPassConfirmed,
+		CurrentState:             Point13ValEStateActive,
+		ProjectionDisclaimer:     point13ValEProjectionDisclaimerBaseline,
 	}
 }
 
 func EvaluatePoint13ValEClosureEvaluatorState(model Point13ValEClosureEvaluator, foundation Point13ValEFoundation) string {
 	if !point13ValEClosureEvaluatorRefValid(model.ClosureEvaluatorID) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
-		!point13ValEStateValid(model.DependencyGateResult) ||
-		!point13ValEStateValid(model.NoOverclaimResult) ||
-		!point13ValEStateValid(model.AuthorityBoundaryResult) ||
-		!point13ValEStateValid(model.TimestampIntegrityResult) ||
-		!point13ValEStateValid(model.TenantIsolationResult) ||
-		!point13ValEStateValid(model.EvidenceIntegrityResult) ||
+		!formalRawExactValid(model.TenantScope, point11Val0ScopeValid) ||
+		!formalRawExactValid(model.DependencyGateResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.NoOverclaimResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.AuthorityBoundaryResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.TimestampIntegrityResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.TenantIsolationResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.EvidenceIntegrityResult, point13ValEStateValid) ||
 		!point12Val0StringListValid(model.CommandsRun, point13ValECommandRunRefValid) ||
 		!point12Val0StringListValid(model.TestsRun, point13ValETestRunRefValid) ||
 		!point12Val0StringListValid(model.GrepsRun, point13ValEGrepRunRefValid) ||
 		!point12Val0StringListValid(model.NegativeFixturesRun, point13ValENegativeFixtureRunRefValid) ||
-		!point12ValEReviewerResultValid(model.ReviewerResult) ||
-		!point13ValEStateValid(model.CurrentState) ||
+		!point12Val0ExactStringSetMatch(model.CommandsRun, point13ValECommandsRun()) ||
+		!point12Val0ExactStringSetMatch(model.TestsRun, point13ValETestsRun()) ||
+		!point12Val0ExactStringSetMatch(model.GrepsRun, point13ValEGrepsRun()) ||
+		!point12Val0ExactStringSetMatch(model.NegativeFixturesRun, point13ValENegativeFixturesRun()) ||
+		!formalRawExactValid(model.ReviewerResult, point12ValEReviewerResultValid) ||
+		!formalRawExactValid(model.CurrentState, point13ValEStateValid) ||
 		!point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
 		return Point13ValEStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(foundation.Dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.DependencyGateResult) != strings.TrimSpace(foundation.DependencyState) ||
-		strings.TrimSpace(model.NoOverclaimResult) != strings.TrimSpace(foundation.NoOverclaimFinalCheckState) ||
-		strings.TrimSpace(model.AuthorityBoundaryResult) != strings.TrimSpace(foundation.AuthorityBoundaryCheckState) ||
-		strings.TrimSpace(model.TimestampIntegrityResult) != strings.TrimSpace(foundation.TimestampIntegrityCheckState) ||
-		strings.TrimSpace(model.TenantIsolationResult) != strings.TrimSpace(foundation.TenantIsolationCheckState) ||
-		strings.TrimSpace(model.EvidenceIntegrityResult) != strings.TrimSpace(foundation.EvidenceIntegrityCheckState) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValEProjectionDisclaimerBaseline {
+	if model.TenantScope != foundation.Dependency.InheritedTenantScope ||
+		model.DependencyGateResult != foundation.DependencyState ||
+		model.NoOverclaimResult != foundation.NoOverclaimFinalCheckState ||
+		model.AuthorityBoundaryResult != foundation.AuthorityBoundaryCheckState ||
+		model.TimestampIntegrityResult != foundation.TimestampIntegrityCheckState ||
+		model.TenantIsolationResult != foundation.TenantIsolationCheckState ||
+		model.EvidenceIntegrityResult != foundation.EvidenceIntegrityCheckState ||
+		model.ProjectionDisclaimer != point13ValEProjectionDisclaimerBaseline {
 		return Point13ValEStateBlocked
 	}
 	componentState := point13ValEAggregateDerivedStates(
@@ -1126,7 +1217,7 @@ func EvaluatePoint13ValEClosureEvaluatorState(model Point13ValEClosureEvaluator,
 	if !model.ReadOnlyProjectionOnly || !model.NoMutationPathsDetected || !model.NoPrematurePoint13Pass {
 		return Point13ValEStateBlocked
 	}
-	switch strings.TrimSpace(model.ReviewerResult) {
+	switch model.ReviewerResult {
 	case point12ValEReviewerResultPassConfirmed:
 		return Point13ValEStateActive
 	case point12ValEReviewerResultReviewRequired:
@@ -1178,32 +1269,15 @@ func point13ValEPassClosureManifestModel(dependency Point13ValEDependencySnapsho
 		RetentionClassRef:               valC.CustomerEvidenceExportPackage.RetentionClassRef,
 		AIModelOrRuleVersionRef:         dependency.InheritedAIModelOrRuleVersionRef,
 		AIPermissionManifestHash:        dependency.InheritedAIPermissionManifestHash,
-		CommandsRun: []string{
-			"command_run_point13_vale_gofmt_001",
-			"command_run_point13_vale_go_test_formal_001",
-			"command_run_point13_vale_go_test_all_001",
-		},
-		TestsRun: []string{
-			"test_run_point13_vale_internal_formal_001",
-			"test_run_point13_vale_point13_regressions_001",
-			"test_run_point13_vale_go_test_all_001",
-		},
-		GrepsRun: []string{
-			"grep_run_point13_vale_pass_token_001",
-			"grep_run_point13_vale_ai_authority_001",
-			"grep_run_point13_vale_forbidden_wording_001",
-			"grep_run_point13_vale_mutation_flags_001",
-		},
-		NegativeFixturesRun: []string{
-			"negative_fixture_point13_vale_dependency_gate_001",
-			"negative_fixture_point13_vale_authority_boundary_001",
-			"negative_fixture_point13_vale_timestamp_integrity_001",
-		},
-		ReviewerResult:       point12ValEReviewerResultPassConfirmed,
-		GeneratedAt:          "2026-05-05T07:05:00Z",
-		Point13PassAllowed:   true,
-		Point13PassToken:     point13ValEPoint13PassToken,
-		ProjectionDisclaimer: point13ValEProjectionDisclaimerBaseline,
+		CommandsRun:                     point13ValECommandsRun(),
+		TestsRun:                        point13ValETestsRun(),
+		GrepsRun:                        point13ValEGrepsRun(),
+		NegativeFixturesRun:             point13ValENegativeFixturesRun(),
+		ReviewerResult:                  point12ValEReviewerResultPassConfirmed,
+		GeneratedAt:                     "2026-05-05T07:05:00Z",
+		Point13PassAllowed:              true,
+		Point13PassToken:                point13ValEPoint13PassToken,
+		ProjectionDisclaimer:            point13ValEProjectionDisclaimerBaseline,
 	}
 }
 
@@ -1221,78 +1295,82 @@ func point13ValEPassClosureManifestStateAndReasons(model Point13PassClosureManif
 	reasons := []string{}
 	valC := foundation.Dependency.ValD.Dependency.ValC
 	valD := foundation.Dependency.ValD
-	if !point13ValEClosureManifestRefValid(model.ClosureManifestID) ||
-		strings.TrimSpace(model.PointID) != point13Val0PointID ||
-		strings.TrimSpace(model.WaveID) != point13ValEWaveID ||
-		strings.TrimSpace(model.Scope) != point13ValEScope ||
-		!point13ValEStateValid(model.CurrentState) ||
+	if !formalRawExactValid(model.ClosureManifestID, point13ValEClosureManifestRefValid) ||
+		model.PointID != point13Val0PointID ||
+		model.WaveID != point13ValEWaveID ||
+		model.Scope != point13ValEScope ||
+		!formalRawExactValid(model.CurrentState, point13ValEStateValid) ||
 		!point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) {
 		reasons = append(reasons, "pass_closure_manifest_identity_invalid")
 	}
-	if !point13ValEStateValid(model.DependencyGateResult) ||
-		!point13ValEStateValid(model.ClosureEvaluatorResult) ||
-		!point13ValEStateValid(model.NoOverclaimResult) ||
-		!point13ValEStateValid(model.AuthorityBoundaryResult) ||
-		!point13ValEStateValid(model.TimestampIntegrityResult) ||
-		!point13ValEStateValid(model.TenantIsolationResult) ||
-		!point13ValEStateValid(model.EvidenceIntegrityResult) ||
-		strings.TrimSpace(model.ValDCurrentState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDTimelineState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDQueryProjectionState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDExportReadProjectionState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDExplanationProjectionState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDAccessBoundaryState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDAIProjectionState) != Point13ValDStateActive ||
-		strings.TrimSpace(model.ValDNoOverclaimState) != Point13ValDStateActive {
+	if !formalRawExactValid(model.DependencyGateResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.ClosureEvaluatorResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.NoOverclaimResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.AuthorityBoundaryResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.TimestampIntegrityResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.TenantIsolationResult, point13ValEStateValid) ||
+		!formalRawExactValid(model.EvidenceIntegrityResult, point13ValEStateValid) ||
+		model.ValDCurrentState != Point13ValDStateActive ||
+		model.ValDTimelineState != Point13ValDStateActive ||
+		model.ValDQueryProjectionState != Point13ValDStateActive ||
+		model.ValDExportReadProjectionState != Point13ValDStateActive ||
+		model.ValDExplanationProjectionState != Point13ValDStateActive ||
+		model.ValDAccessBoundaryState != Point13ValDStateActive ||
+		model.ValDAIProjectionState != Point13ValDStateActive ||
+		model.ValDNoOverclaimState != Point13ValDStateActive {
 		reasons = append(reasons, "pass_closure_manifest_result_state_invalid")
 	}
-	if !point13ValCExportPackageRefValid(model.ValCExportPackageRef) ||
-		!point13ValCHandoffChecklistRefValid(model.ValCHandoffChecklistRef) ||
-		!point13ValCAcceptanceTraceRefValid(model.ValCAcceptanceTraceRef) ||
-		!point13ValCSupportOffboardingPacketRefValid(model.ValCSupportOffboardingPacketRef) ||
-		!point13ValCAIExportSummaryRefValid(model.ValCAIExportSummaryRef) ||
-		!point13ValDTimelineRefValid(model.ValDTimelineRef) ||
-		!point13ValDQueryProjectionRefValid(model.ValDQueryProjectionRef) ||
-		!point13ValDExportReadProjectionRefValid(model.ValDExportReadProjectionRef) ||
-		!point13ValDExplanationProjectionRefValid(model.ValDExplanationProjectionRef) ||
-		!point13ValDTimelineAccessBoundaryRefValid(model.ValDAccessBoundaryRef) ||
-		!point13ValDAITimelineProjectionRefValid(model.ValDAIProjectionRef) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
-		!point13ValBEvidenceRefsValid(model.ExportedEvidenceRefs) ||
-		!point13ValBEvidenceHashRefsValid(model.ExportedEvidenceHashes) ||
+	if !formalRawExactTokenValid(model.ValCExportPackageRef, point13ValCExportPackageRefValid) ||
+		!formalRawExactTokenValid(model.ValCHandoffChecklistRef, point13ValCHandoffChecklistRefValid) ||
+		!formalRawExactTokenValid(model.ValCAcceptanceTraceRef, point13ValCAcceptanceTraceRefValid) ||
+		!formalRawExactTokenValid(model.ValCSupportOffboardingPacketRef, point13ValCSupportOffboardingPacketRefValid) ||
+		!formalRawExactTokenValid(model.ValCAIExportSummaryRef, point13ValCAIExportSummaryRefValid) ||
+		!formalRawExactTokenValid(model.ValDTimelineRef, point13ValDTimelineRefValid) ||
+		!formalRawExactTokenValid(model.ValDQueryProjectionRef, point13ValDQueryProjectionRefValid) ||
+		!formalRawExactTokenValid(model.ValDExportReadProjectionRef, point13ValDExportReadProjectionRefValid) ||
+		!formalRawExactTokenValid(model.ValDExplanationProjectionRef, point13ValDExplanationProjectionRefValid) ||
+		!formalRawExactTokenValid(model.ValDAccessBoundaryRef, point13ValDTimelineAccessBoundaryRefValid) ||
+		!formalRawExactTokenValid(model.ValDAIProjectionRef, point13ValDAITimelineProjectionRefValid) ||
+		!formalRawExactTokenValid(model.TenantScope, point11Val0ScopeValid) ||
+		!formalRawExactTokenListValid(model.ExportedEvidenceRefs, point13ValAOperationalEvidenceRefValid) ||
+		!formalRawExactTokenListValid(model.ExportedEvidenceHashes, point12Val0EvidenceHashRefValid) ||
 		!point13ValBEvidenceHashRefsMatchEvidenceRefs(model.ExportedEvidenceRefs, model.ExportedEvidenceHashes) ||
-		!point12Val0HashValid(model.ExportManifestHash) ||
-		!point12Val0RetentionClassRefValid(model.RetentionClassRef) ||
-		!point12Val0VersionRefValid(model.AIModelOrRuleVersionRef) ||
-		!point12Val0PermissionManifestHashValid(model.AIPermissionManifestHash) ||
-		!point12Val0StringListValid(model.CommandsRun, point13ValECommandRunRefValid) ||
-		!point12Val0StringListValid(model.TestsRun, point13ValETestRunRefValid) ||
-		!point12Val0StringListValid(model.GrepsRun, point13ValEGrepRunRefValid) ||
-		!point12Val0StringListValid(model.NegativeFixturesRun, point13ValENegativeFixtureRunRefValid) ||
-		!point11Val0ValidTimestamp(model.GeneratedAt) {
+		!formalRawExactTokenValid(model.ExportManifestHash, point12Val0HashValid) ||
+		!formalRawExactTokenValid(model.RetentionClassRef, point12Val0RetentionClassRefValid) ||
+		!formalRawExactTokenValid(model.AIModelOrRuleVersionRef, point12Val0VersionRefValid) ||
+		!formalRawExactTokenValid(model.AIPermissionManifestHash, point12Val0PermissionManifestHashValid) ||
+		!formalRawExactTokenListValid(model.CommandsRun, point13ValECommandRunRefValid) ||
+		!formalRawExactTokenListValid(model.TestsRun, point13ValETestRunRefValid) ||
+		!formalRawExactTokenListValid(model.GrepsRun, point13ValEGrepRunRefValid) ||
+		!formalRawExactTokenListValid(model.NegativeFixturesRun, point13ValENegativeFixtureRunRefValid) ||
+		!point12Val0ExactStringSetMatch(model.CommandsRun, point13ValECommandsRun()) ||
+		!point12Val0ExactStringSetMatch(model.TestsRun, point13ValETestsRun()) ||
+		!point12Val0ExactStringSetMatch(model.GrepsRun, point13ValEGrepsRun()) ||
+		!point12Val0ExactStringSetMatch(model.NegativeFixturesRun, point13ValENegativeFixturesRun()) ||
+		!point13ValERawTimestampValid(model.GeneratedAt) {
 		reasons = append(reasons, "pass_closure_manifest_required_fields_invalid")
 	}
-	if strings.TrimSpace(model.ValCExportPackageRef) != strings.TrimSpace(valC.CustomerEvidenceExportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.ValCHandoffChecklistRef) != strings.TrimSpace(valC.OperationalHandoffChecklist.HandoffChecklistID) ||
-		strings.TrimSpace(model.ValCAcceptanceTraceRef) != strings.TrimSpace(valC.CustomerAcceptanceTrace.AcceptanceTraceID) ||
-		strings.TrimSpace(model.ValCSupportOffboardingPacketRef) != strings.TrimSpace(valC.SupportOffboardingHandoffPacket.SupportOffboardingPacketID) ||
-		strings.TrimSpace(model.ValCAIExportSummaryRef) != strings.TrimSpace(valC.AIEvidenceExportLineageSummary.AIExportSummaryID) ||
-		strings.TrimSpace(model.ValDTimelineRef) != strings.TrimSpace(valD.CustomerAuditorOperationalTimeline.TimelineID) ||
-		strings.TrimSpace(model.ValDQueryProjectionRef) != strings.TrimSpace(valD.HandoffTraceQueryProjection.QueryProjectionID) ||
-		strings.TrimSpace(model.ValDExportReadProjectionRef) != strings.TrimSpace(valD.ExportPackageReadProjection.ReadProjectionID) ||
-		strings.TrimSpace(model.ValDExplanationProjectionRef) != strings.TrimSpace(valD.CustomerAuditorExplanationProjection.ExplanationProjectionID) ||
-		strings.TrimSpace(model.ValDAccessBoundaryRef) != strings.TrimSpace(valD.TimelineAccessBoundary.AccessBoundaryID) ||
-		strings.TrimSpace(model.ValDAIProjectionRef) != strings.TrimSpace(valD.AITimelineLineageProjection.AIProjectionID) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(foundation.Dependency.InheritedTenantScope) ||
+	if model.ValCExportPackageRef != valC.CustomerEvidenceExportPackage.ExportPackageID ||
+		model.ValCHandoffChecklistRef != valC.OperationalHandoffChecklist.HandoffChecklistID ||
+		model.ValCAcceptanceTraceRef != valC.CustomerAcceptanceTrace.AcceptanceTraceID ||
+		model.ValCSupportOffboardingPacketRef != valC.SupportOffboardingHandoffPacket.SupportOffboardingPacketID ||
+		model.ValCAIExportSummaryRef != valC.AIEvidenceExportLineageSummary.AIExportSummaryID ||
+		model.ValDTimelineRef != valD.CustomerAuditorOperationalTimeline.TimelineID ||
+		model.ValDQueryProjectionRef != valD.HandoffTraceQueryProjection.QueryProjectionID ||
+		model.ValDExportReadProjectionRef != valD.ExportPackageReadProjection.ReadProjectionID ||
+		model.ValDExplanationProjectionRef != valD.CustomerAuditorExplanationProjection.ExplanationProjectionID ||
+		model.ValDAccessBoundaryRef != valD.TimelineAccessBoundary.AccessBoundaryID ||
+		model.ValDAIProjectionRef != valD.AITimelineLineageProjection.AIProjectionID ||
+		model.TenantScope != foundation.Dependency.InheritedTenantScope ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceRefs, valC.CustomerEvidenceExportPackage.ExportedEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceHashes, valC.CustomerEvidenceExportPackage.ExportedEvidenceHashRefs) ||
-		strings.TrimSpace(model.ExportManifestHash) != strings.TrimSpace(valC.CustomerEvidenceExportPackage.ExportManifestHash) ||
-		strings.TrimSpace(model.RetentionClassRef) != strings.TrimSpace(valC.CustomerEvidenceExportPackage.RetentionClassRef) ||
-		strings.TrimSpace(model.AIModelOrRuleVersionRef) != strings.TrimSpace(foundation.Dependency.InheritedAIModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.AIPermissionManifestHash) != strings.TrimSpace(foundation.Dependency.InheritedAIPermissionManifestHash) {
+		model.ExportManifestHash != valC.CustomerEvidenceExportPackage.ExportManifestHash ||
+		model.RetentionClassRef != valC.CustomerEvidenceExportPackage.RetentionClassRef ||
+		model.AIModelOrRuleVersionRef != foundation.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.AIPermissionManifestHash != foundation.Dependency.InheritedAIPermissionManifestHash {
 		reasons = append(reasons, "pass_closure_manifest_binding_mismatch")
 	}
-	if !point12ValEReviewerResultValid(model.ReviewerResult) {
+	if !formalRawExactValid(model.ReviewerResult, point12ValEReviewerResultValid) {
 		reasons = append(reasons, "pass_closure_manifest_reviewer_result_invalid")
 	}
 	componentState := point13ValEAggregateDerivedStates(
@@ -1305,19 +1383,19 @@ func point13ValEPassClosureManifestStateAndReasons(model Point13PassClosureManif
 		model.EvidenceIntegrityResult,
 	)
 	reviewerState := Point13ValEStateActive
-	switch strings.TrimSpace(model.ReviewerResult) {
+	switch model.ReviewerResult {
 	case point12ValEReviewerResultPassConfirmed:
 	case point12ValEReviewerResultReviewRequired:
 		reviewerState = Point13ValEStateReviewRequired
 	default:
 		reasons = append(reasons, "pass_closure_manifest_reviewer_not_final")
 	}
-	if strings.TrimSpace(model.Point13PassToken) != "" && strings.TrimSpace(model.Point13PassToken) != point13ValEPoint13PassToken {
+	if model.Point13PassToken != "" && model.Point13PassToken != point13ValEPoint13PassToken {
 		reasons = append(reasons, "pass_closure_manifest_token_invalid")
 	}
 	aggregateState := point13ValEAggregateDerivedStates(componentState, reviewerState)
 	if aggregateState != Point13ValEStateActive {
-		if model.Point13PassAllowed || strings.TrimSpace(model.Point13PassToken) != "" {
+		if model.Point13PassAllowed || model.Point13PassToken != "" {
 			reasons = append(reasons, "pass_closure_manifest_token_present_before_final_happy_path")
 		}
 		if len(reasons) > 0 {
@@ -1332,7 +1410,7 @@ func point13ValEPassClosureManifestStateAndReasons(model Point13PassClosureManif
 			return Point13ValEStateBlocked, []string{"pass_closure_manifest_foundation_gates_not_active"}
 		}
 	}
-	if !expectedPassAllowed || !point13ValEPassCandidate(foundation) || !model.Point13PassAllowed || strings.TrimSpace(model.Point13PassToken) != point13ValEPoint13PassToken {
+	if !expectedPassAllowed || !point13ValEPassCandidate(foundation) || !model.Point13PassAllowed || model.Point13PassToken != point13ValEPoint13PassToken {
 		reasons = append(reasons, "pass_closure_manifest_pass_not_fully_authorized")
 	}
 	if len(reasons) > 0 {
@@ -1361,7 +1439,10 @@ func EvaluatePoint13ValEState(model Point13ValEFoundation) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range point13ValEComponentStates(model) {
-		switch strings.TrimSpace(state) {
+		if !formalRawExactValid(state, point13ValEStateValid) {
+			return Point13ValEStateBlocked
+		}
+		switch state {
 		case Point13ValEStateBlocked:
 			return Point13ValEStateBlocked
 		case Point13ValEStateReviewRequired:
@@ -1388,8 +1469,8 @@ func point13ValECurrentState(model Point13ValEFoundation) string {
 		return state
 	}
 	if model.Point13PassAllowed &&
-		strings.TrimSpace(model.Point13PassToken) == point13ValEPoint13PassToken &&
-		strings.TrimSpace(model.PassClosureManifest.ReviewerResult) == point12ValEReviewerResultPassConfirmed {
+		model.Point13PassToken == point13ValEPoint13PassToken &&
+		model.PassClosureManifest.ReviewerResult == point12ValEReviewerResultPassConfirmed {
 		return Point13ValEStatePassConfirmed
 	}
 	return Point13ValEStateActive
@@ -1408,12 +1489,12 @@ func point13ValEBlockingReasons(model Point13ValEFoundation) []string {
 		"pass_closure_manifest": model.PassClosureManifestState,
 	}
 	for name, state := range componentStates {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13ValEStateBlocked, Point13ValEStateIncomplete:
 			reasons = append(reasons, name+":"+state)
 		}
 	}
-	if model.Point13PassAllowed && strings.TrimSpace(model.Point13PassToken) != point13ValEPoint13PassToken {
+	if model.Point13PassAllowed && model.Point13PassToken != point13ValEPoint13PassToken {
 		reasons = append(reasons, "point13_pass_token_invalid")
 	}
 	return reasons
@@ -1461,7 +1542,8 @@ func ComputePoint13ValEFoundation(model Point13ValEFoundation) Point13ValEFounda
 	dependencyState, dependencyReasons := point13ValEDependencyStateAndReasons(model.Dependency)
 	model.DependencyState = dependencyState
 	noOverclaimState := EvaluatePoint13ValENoOverclaimFinalCheckState(model.NoOverclaimFinalCheck)
-	model.NoOverclaimFinalCheckState = noOverclaimState
+	dependencyNoOverclaimState := EvaluatePoint13ValENoOverclaimFinalCheckState(point13ValENoOverclaimFinalCheckModel(model.Dependency))
+	model.NoOverclaimFinalCheckState = point13ValEAggregateDerivedStates(noOverclaimState, dependencyNoOverclaimState)
 	authorityState := EvaluatePoint13ValEAuthorityBoundaryCheckState(model.AuthorityBoundaryCheck, model.Dependency)
 	model.AuthorityBoundaryCheckState = authorityState
 	timestampState := EvaluatePoint13ValETimestampIntegrityCheckState(model.TimestampIntegrityCheck, model.Dependency)
@@ -1497,13 +1579,17 @@ func ComputePoint13ValEFoundation(model Point13ValEFoundation) Point13ValEFounda
 	model.Point13PassAllowed = passCandidate &&
 		manifestState == Point13ValEStateActive &&
 		closureState == Point13ValEStateActive &&
-		strings.TrimSpace(model.PassClosureManifest.ReviewerResult) == point12ValEReviewerResultPassConfirmed &&
+		model.PassClosureManifest.ReviewerResult == point12ValEReviewerResultPassConfirmed &&
 		model.PassClosureManifest.Point13PassAllowed &&
-		strings.TrimSpace(model.PassClosureManifest.Point13PassToken) == point13ValEPoint13PassToken
+		model.PassClosureManifest.Point13PassToken == point13ValEPoint13PassToken
 	if model.Point13PassAllowed {
 		model.Point13PassToken = point13ValEPoint13PassToken
+		model.PassClosureManifest.Point13PassAllowed = true
+		model.PassClosureManifest.Point13PassToken = point13ValEPoint13PassToken
 	} else {
 		model.Point13PassToken = ""
+		model.PassClosureManifest.Point13PassAllowed = false
+		model.PassClosureManifest.Point13PassToken = ""
 	}
 	model.CurrentState = point13ValECurrentState(model)
 	model.BlockingReasons = point13ValEBlockingReasons(model)

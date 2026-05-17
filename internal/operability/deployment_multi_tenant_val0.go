@@ -3,6 +3,8 @@ package operability
 import (
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -500,7 +502,7 @@ func deploymentMultiTenantVal0CompatibilityFold(value string) string {
 		"ﬅ", "ft",
 		"ﬆ", "st",
 	)
-	return replacer.Replace(value)
+	return replacer.Replace(norm.NFKD.String(value))
 }
 
 func deploymentMultiTenantVal0ContainsExactStringSet(values []string, expected ...string) bool {
@@ -620,15 +622,17 @@ func deploymentMultiTenantVal0OperatorTenantTarget() string {
 }
 
 func deploymentMultiTenantVal0ExactValueIsValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || trimmed != strings.ToLower(trimmed) {
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
 		return false
 	}
-	if strings.Contains(trimmed, "*") {
+	if value != strings.ToLower(value) {
 		return false
 	}
-	normalized := deploymentMultiTenantVal0NormalizeClaimText(trimmed)
-	compact := deploymentMultiTenantVal0CompactClaimText(trimmed)
+	if strings.Contains(value, "*") {
+		return false
+	}
+	normalized := deploymentMultiTenantVal0NormalizeClaimText(value)
+	compact := deploymentMultiTenantVal0CompactClaimText(value)
 	if normalized == "" || compact == "" {
 		return false
 	}
@@ -1156,6 +1160,74 @@ func deploymentMultiTenantVal0BucketsContainForbiddenPhraseAcrossValues(values [
 	return false
 }
 
+func deploymentMultiTenantVal0ForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	if deploymentMultiTenantVal0ForbiddenCompactAcrossValues(values, allowed, phrase) {
+		return true
+	}
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	matched := 0
+	distinctBuckets := 0
+	lastBucket := -1
+	matchedIncludesNonAllowed := false
+	for bucketIndex, value := range values {
+		bucketTokens := strings.Fields(value)
+		if len(bucketTokens) == 0 {
+			continue
+		}
+		for _, token := range bucketTokens {
+			if token != phraseTokens[matched] {
+				continue
+			}
+			if bucketIndex != lastBucket {
+				distinctBuckets++
+				lastBucket = bucketIndex
+			}
+			if !allowed[bucketIndex] {
+				matchedIncludesNonAllowed = true
+			}
+			matched++
+			if matched == len(phraseTokens) {
+				return distinctBuckets > 1 && matchedIncludesNonAllowed
+			}
+		}
+	}
+	return false
+}
+
+func deploymentMultiTenantVal0ForbiddenCompactAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	compactPhrase := deploymentMultiTenantVal0CompactClaimText(phrase)
+	if compactPhrase == "" {
+		return false
+	}
+	for start := range values {
+		var compact strings.Builder
+		allAllowed := true
+		parts := 0
+		for end := start; end < len(values); end++ {
+			part := deploymentMultiTenantVal0CompactClaimText(values[end])
+			if part == "" {
+				continue
+			}
+			compact.WriteString(part)
+			allAllowed = allAllowed && allowed[end]
+			parts++
+			if parts > 1 && !allAllowed && strings.Contains(compact.String(), compactPhrase) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func deploymentMultiTenantVal0ValueContainsForbiddenPhraseTokenSequence(value, phrase string) bool {
 	phraseTokens := strings.Fields(phrase)
 	if len(phraseTokens) < 2 {
@@ -1176,47 +1248,47 @@ func deploymentMultiTenantVal0ValueContainsForbiddenPhraseTokenSequence(value, p
 
 func deploymentMultiTenantVal0ConfusableFold(char rune) rune {
 	switch unicode.ToLower(char) {
-	case 'ɛ', 'е', '℮', 'ℯ', 'ҽ', 'ᴇ':
+	case 'ɛ', 'е', 'є', 'ε', '℮', 'ℯ', 'ҽ', 'ᴇ':
 		return 'e'
-	case 'ʙ':
+	case 'ʙ', 'в':
 		return 'b'
-	case 'ᴄ', 'с':
+	case 'ᴄ', 'с', 'ϲ':
 		return 'c'
-	case 'ᴅ', 'ԁ', 'ⅾ':
+	case 'ᴅ', 'ԁ', 'ⅾ', 'δ':
 		return 'd'
 	case 'ꜰ':
 		return 'f'
-	case 'ɢ':
+	case 'ɡ', 'ɢ':
 		return 'g'
-	case 'ʜ':
+	case 'ʜ', 'һ':
 		return 'h'
-	case 'ɪ', 'і', 'ɩ', 'ı':
+	case 'ɪ', 'і', 'ι', 'ɩ', 'ı':
 		return 'i'
-	case 'ᴊ':
+	case 'ᴊ', 'ј':
 		return 'j'
-	case 'ᴋ':
+	case 'ᴋ', 'к', 'κ':
 		return 'k'
-	case 'ʟ':
+	case 'ʟ', 'ⅼ', 'ӏ', 'ǀ', 'ɭ', 'ɫ', 'ł', 'ƚ', 'ḷ':
 		return 'l'
-	case 'ᴍ':
+	case 'ᴍ', 'м':
 		return 'm'
-	case 'ɴ':
+	case 'ɴ', 'н', 'η', 'ո', 'п', 'ɲ', 'ɳ', 'ŋ', 'ƞ', 'ꞑ':
 		return 'n'
 	case 'ᴘ', 'ρ', 'р':
 		return 'p'
-	case 'ο', 'о', 'ᴏ', 'ɔ':
+	case 'ο', 'о', 'օ', 'ᴏ', 'ɔ':
 		return 'o'
-	case 'а', 'ɑ', 'ᴀ':
+	case 'а', 'α', 'ɑ', 'ᴀ':
 		return 'a'
-	case 'ʀ':
+	case 'ʀ', 'г':
 		return 'r'
-	case 'ѕ':
+	case 'ѕ', 'ꜱ':
 		return 's'
-	case 'ᴛ':
+	case 'ᴛ', 'т', 'τ':
 		return 't'
-	case 'ᴜ':
+	case 'ᴜ', 'υ', 'ꭎ', 'ʊ':
 		return 'u'
-	case 'ᴠ':
+	case 'ᴠ', 'ν', 'ѵ', 'ⅴ':
 		return 'v'
 	case 'ᴡ':
 		return 'w'
@@ -1224,7 +1296,7 @@ func deploymentMultiTenantVal0ConfusableFold(char rune) rune {
 		return 'y'
 	case 'ʏ':
 		return 'y'
-	case 'х':
+	case 'х', 'χ':
 		return 'x'
 	case 'ᴢ':
 		return 'z'
@@ -1256,11 +1328,18 @@ func deploymentMultiTenantVal0ContainsForbiddenClaim(values ...string) bool {
 	}
 	disallowed := []string{
 		"production approved",
+		"production approval",
 		"deployment approved",
+		"deployment approval",
 		"marketplace certified",
 		"msp certified",
 		"regulator-approved",
 		"compliance guaranteed",
+		"public badge",
+		"global truth",
+		"official authority",
+		"legal proof",
+		"financial guarantee",
 		"compliant by default",
 		"one-click secure",
 		"zero-risk deployment",
@@ -1304,6 +1383,7 @@ func deploymentMultiTenantVal0ContainsForbiddenClaim(values ...string) bool {
 		"healthcheck green means fully ready",
 		"sso configured means secure",
 		"air-gapped means fully offline verified",
+		"point 10 pass",
 	}
 	allowedExact := make(map[string]struct{}, len(allowed)*2)
 	for _, phrase := range allowed {
@@ -1317,36 +1397,36 @@ func deploymentMultiTenantVal0ContainsForbiddenClaim(values ...string) bool {
 		blockedCompact = append(blockedCompact, deploymentMultiTenantVal0CompactClaimText(phrase))
 	}
 	corpusNormalizedParts := make([]string, 0, len(values))
-	var corpusCompact strings.Builder
+	corpusPartAllowed := make([]bool, 0, len(values))
 	for _, value := range values {
 		normalized := deploymentMultiTenantVal0NormalizeClaimText(value)
 		compact := deploymentMultiTenantVal0CompactClaimText(value)
 		if normalized == "" && compact == "" {
 			continue
 		}
+		_, normalizedAllowed := allowedExact[normalized]
+		_, compactAllowed := allowedExact[compact]
+		isAllowed := normalizedAllowed || compactAllowed
 		if normalized != "" {
 			corpusNormalizedParts = append(corpusNormalizedParts, normalized)
+			corpusPartAllowed = append(corpusPartAllowed, isAllowed)
 		}
-		corpusCompact.WriteString(compact)
-		if _, ok := allowedExact[normalized]; ok {
+		if normalizedAllowed {
 			continue
 		}
-		if _, ok := allowedExact[compact]; ok {
+		if compactAllowed {
 			continue
 		}
 		for i := range blockedNormalized {
-			if strings.Contains(normalized, blockedNormalized[i]) || strings.Contains(compact, blockedCompact[i]) {
+			if strings.Contains(normalized, blockedNormalized[i]) ||
+				strings.Contains(compact, blockedCompact[i]) ||
+				deploymentMultiTenantVal0ValueContainsForbiddenPhraseTokenSequence(normalized, blockedNormalized[i]) {
 				return true
 			}
 		}
 	}
-	corpusNormalized := strings.Join(corpusNormalizedParts, " ")
-	corpusCompactValue := corpusCompact.String()
 	for i := range blockedNormalized {
-		if strings.Contains(corpusNormalized, blockedNormalized[i]) || strings.Contains(corpusCompactValue, blockedCompact[i]) {
-			return true
-		}
-		if deploymentMultiTenantVal0BucketsContainForbiddenPhrase(corpusNormalizedParts, blockedNormalized[i]) {
+		if deploymentMultiTenantVal0ForbiddenPhraseAcrossValues(corpusNormalizedParts, corpusPartAllowed, blockedNormalized[i]) {
 			return true
 		}
 	}

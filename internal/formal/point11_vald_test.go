@@ -39,6 +39,15 @@ func clonePoint11ValDFoundation(payload []byte) Point11ValDFoundation {
 	return clone
 }
 
+func point11ValDTestContainsExact(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
 var (
 	point11ValDActiveDependencyBundleBaselineJSON []byte
 	point11ValDActiveDependencyBundleBaselineOnce sync.Once
@@ -231,6 +240,96 @@ func TestPoint11ValDDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	rawExactTests := []struct {
+		name       string
+		mutate     func(*Point11ValDDependencyBundle)
+		wantReason string
+	}{
+		{
+			name: "padded val0 policy contract active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.Val0.PolicyContractState = " " + Point11Val0PolicyContractStateActive + " "
+			},
+			wantReason: "val0_policy_contract_not_active",
+		},
+		{
+			name: "tab newline val0 current active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.Val0.CurrentState = "\t" + Point11Val0StateActive + "\n"
+			},
+			wantReason: "val0_dependency_not_active",
+		},
+		{
+			name: "padded vala registry active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.ValA.RegistryState = " " + Point11ValARegistryStateActive + " "
+			},
+			wantReason: "vala_registry_not_active",
+		},
+		{
+			name: "tab newline vala dependency active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.ValA.DependencyState = "\t" + Point11ValADependencyStateActive + "\n"
+			},
+			wantReason: "vala_dependency_not_active",
+		},
+		{
+			name: "padded valb verification active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.ValB.VerificationState = " " + Point11ValBVerificationStateActive + " "
+			},
+			wantReason: "valb_verification_not_active",
+		},
+		{
+			name: "tab newline valb cross-domain active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.ValB.CrossDomainIntakeState = "\t" + Point11ValBCrossDomainIntakeStateActive + "\n"
+			},
+			wantReason: "valb_dependency_not_active",
+		},
+		{
+			name: "padded valc enforcement input active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.ValC.EnforcementInputState = " " + Point11ValCEnforcementInputStateActive + " "
+			},
+			wantReason: "valc_enforcement_input_not_active",
+		},
+		{
+			name: "tab newline valc monitoring active blocks raw exact inherited dependency",
+			mutate: func(model *Point11ValDDependencyBundle) {
+				model.ValC.MonitoringState = "\t" + Point11ValCMonitoringStateActive + "\n"
+			},
+			wantReason: "valc_dependency_not_active",
+		},
+	}
+
+	for _, testCase := range rawExactTests {
+		t.Run(testCase.name, func(t *testing.T) {
+			bundle := point11ValDActiveDependencyBundle()
+			testCase.mutate(&bundle)
+			state, reasons := point11ValDDependencyStateAndReasons(bundle)
+			if state != Point11ValDDependencyStateBlocked {
+				t.Fatalf("expected blocked dependency state, got state=%q reasons=%#v bundle=%#v", state, reasons, bundle)
+			}
+			if !point11ValDTestContainsExact(reasons, testCase.wantReason) {
+				t.Fatalf("expected exact reason %q, got %#v", testCase.wantReason, reasons)
+			}
+
+			foundation := activePoint11ValDFoundation()
+			foundation.Val0Dependency = bundle.Val0
+			foundation.ValADependency = bundle.ValA
+			foundation.ValBDependency = bundle.ValB
+			foundation.ValCDependency = bundle.ValC
+			foundation = ComputePoint11ValDFoundation(foundation)
+			if foundation.CurrentState != Point11ValDStateBlocked || foundation.Point11PassToken != "" {
+				t.Fatalf("expected aggregate block with no point11 pass token, got %#v", foundation)
+			}
+			if !point11ValDTestContainsExact(foundation.Diagnostics.DependencyReasons, testCase.wantReason) {
+				t.Fatalf("expected aggregate dependency reason %q, got %#v", testCase.wantReason, foundation.Diagnostics.DependencyReasons)
+			}
+		})
+	}
 }
 
 func TestPoint11ValDIntegratedInvariantState(t *testing.T) {
@@ -339,6 +438,54 @@ func TestPoint11ValDQualityMapState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded quality map policy ref records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.QualityMap.PolicyRefs[0] = " " + model.QualityMap.PolicyRefs[0] + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.QualityMapState != Point11ValDQualityMapStateBlocked {
+			t.Fatalf("expected blocked quality map state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.QualityMapReasons, "quality_map_policy_refs_invalid") {
+			t.Fatalf("expected exact policy ref invalid reason, got %#v", model.Diagnostics.QualityMapReasons)
+		}
+	})
+
+	t.Run("tab newline quality map evidence ref records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.QualityMap.EvidenceRefs[0] = "\t" + model.QualityMap.EvidenceRefs[0] + "\n"
+		model = ComputePoint11ValDFoundation(model)
+		if model.QualityMapState != Point11ValDQualityMapStateBlocked {
+			t.Fatalf("expected blocked quality map state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.QualityMapReasons, "quality_map_evidence_refs_invalid") {
+			t.Fatalf("expected exact evidence ref invalid reason, got %#v", model.Diagnostics.QualityMapReasons)
+		}
+	})
+
+	t.Run("padded quality map freshness state records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.QualityMap.FreshnessState = " " + point11ValDFreshnessStateActive + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.QualityMapState != Point11ValDQualityMapStateBlocked {
+			t.Fatalf("expected blocked quality map state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.QualityMapReasons, "quality_map_freshness_blocked") {
+			t.Fatalf("expected exact freshness blocked reason, got %#v", model.Diagnostics.QualityMapReasons)
+		}
+	})
+
+	t.Run("tab newline quality map tenant scope state records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.QualityMap.TenantScopeState = "\t" + point11ValDTenantScopeStateActive + "\n"
+		model = ComputePoint11ValDFoundation(model)
+		if model.QualityMapState != Point11ValDQualityMapStateBlocked {
+			t.Fatalf("expected blocked quality map state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.QualityMapReasons, "quality_map_tenant_scope_blocked") {
+			t.Fatalf("expected exact tenant scope blocked reason, got %#v", model.Diagnostics.QualityMapReasons)
+		}
+	})
 }
 
 func TestPoint11ValDPublicationReviewState(t *testing.T) {
@@ -377,6 +524,18 @@ func TestPoint11ValDPublicationReviewState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded publication surface records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.PublicationReview.CustomerVisibleSurfaces[0] = " " + model.PublicationReview.CustomerVisibleSurfaces[0] + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.PublicationReviewState != Point11ValDPublicationReviewStateBlocked {
+			t.Fatalf("expected blocked publication review state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.PublicationReviewReasons, "publication_review_surface_list_invalid") {
+			t.Fatalf("expected exact publication surface invalid reason, got %#v", model.Diagnostics.PublicationReviewReasons)
+		}
+	})
 }
 
 func TestPoint11ValDNoOverclaimReviewState(t *testing.T) {
@@ -413,6 +572,18 @@ func TestPoint11ValDNoOverclaimReviewState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded active review state records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.NoOverclaimReview.ReviewState = " " + Point11ValDNoOverclaimReviewStateActive + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.NoOverclaimReviewState != Point11ValDNoOverclaimReviewStateBlocked {
+			t.Fatalf("expected blocked no-overclaim review state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.NoOverclaimReasons, "no_overclaim_review_state_invalid") {
+			t.Fatalf("expected exact review state invalid reason, got %#v", model.Diagnostics.NoOverclaimReasons)
+		}
+	})
 }
 
 func TestPoint11ValDCleanRoomIPReviewState(t *testing.T) {
@@ -457,6 +628,20 @@ func TestPoint11ValDCleanRoomIPReviewState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded third party ref records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.CleanRoomIPReview.ThirdPartyRefs = []string{" " + point11ValDThirdPartyRefPrefix + "001 "}
+		model.CleanRoomIPReview.LicenseReviewRefs = []string{point11ValDLicenseReviewRefPrefix + "001"}
+		model.CleanRoomIPReview.IPReviewRefs = []string{point11ValDIPReviewRefPrefix + "001"}
+		model = ComputePoint11ValDFoundation(model)
+		if model.CleanRoomIPReviewState != Point11ValDCleanRoomIPReviewStateBlocked {
+			t.Fatalf("expected blocked clean room ip review state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.CleanRoomIPReasons, "clean_room_third_party_refs_invalid") {
+			t.Fatalf("expected exact third party ref invalid reason, got %#v", model.Diagnostics.CleanRoomIPReasons)
+		}
+	})
 }
 
 func TestPoint11ValDCLBLedgerState(t *testing.T) {
@@ -502,6 +687,18 @@ func TestPoint11ValDCLBLedgerState(t *testing.T) {
 			model.AcceptedRisks = []Point11ValDAcceptedRisk{{RiskID: "accepted_risk_point11_vald_002"}}
 		}},
 		{name: "reviewer result pass but not pass confirmed blocks", mutate: func(model *Point11ValDCLBClosureLedger) { model.ReviewerResult = point11ValDReviewerResultPass }},
+		{name: "padded reviewer result pass confirmed blocks raw exact clb closure", mutate: func(model *Point11ValDCLBClosureLedger) {
+			model.ReviewerResult = " " + point11ValDReviewerResultPassConfirmed + " "
+		}},
+		{name: "tab newline accepted risk expiry blocks raw exact clb closure", mutate: func(model *Point11ValDCLBClosureLedger) {
+			model.AcceptedRisks = []Point11ValDAcceptedRisk{{
+				RiskID:      "accepted_risk_point11_vald_003",
+				EvidenceRef: "evidence:point11-vald-risk-003",
+				Scope:       "tenant_scope_alpha",
+				OwnerRef:    "actor_point11_vald_owner",
+				Expiry:      "\t2099-01-01T00:00:00Z\n",
+			}}
+		}},
 		{name: "pass confirmed with open clb1 blocks", mutate: func(model *Point11ValDCLBClosureLedger) {
 			model.ReviewerResult = point11ValDReviewerResultPassConfirmed
 			model.CLB1Findings = []string{"finding_point11_vald_clb1_open_002"}
@@ -517,6 +714,36 @@ func TestPoint11ValDCLBLedgerState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded clb reviewer result records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.CLBLedger.ReviewerResult = " " + point11ValDReviewerResultPassConfirmed + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.CLBClosureState != Point11ValDCLBClosureStateBlocked {
+			t.Fatalf("expected blocked clb closure state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.CLBLedgerReasons, "clb_ledger_reviewer_not_pass_confirmed") {
+			t.Fatalf("expected exact reviewer invalid reason, got %#v", model.Diagnostics.CLBLedgerReasons)
+		}
+	})
+
+	t.Run("tab newline accepted risk expiry records exact reason", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.CLBLedger.AcceptedRisks = []Point11ValDAcceptedRisk{{
+			RiskID:      "accepted_risk_point11_vald_004",
+			EvidenceRef: "evidence:point11-vald-risk-004",
+			Scope:       "tenant_scope_alpha",
+			OwnerRef:    "actor_point11_vald_owner",
+			Expiry:      "\t2099-01-01T00:00:00Z\n",
+		}}
+		model = ComputePoint11ValDFoundation(model)
+		if model.CLBClosureState != Point11ValDCLBClosureStateBlocked {
+			t.Fatalf("expected blocked clb closure state, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.CLBLedgerReasons, "accepted_risk_missing_required_fields") {
+			t.Fatalf("expected exact accepted risk invalid reason, got %#v", model.Diagnostics.CLBLedgerReasons)
+		}
+	})
 }
 
 func TestPoint11ValDPassClosureManifestState(t *testing.T) {
@@ -528,19 +755,40 @@ func TestPoint11ValDPassClosureManifestState(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name   string
-		mutate func(*Point11ValDPassClosureManifest)
+		name       string
+		mutate     func(*Point11ValDPassClosureManifest)
+		wantReason string
 	}{
-		{name: "wrong point id blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.PointID = "point_10" }},
-		{name: "wrong wave id blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.WaveID = "val_c" }},
-		{name: "missing dependency gate result blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.DependencyGateResult = "" }},
-		{name: "missing tests run blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.TestsRun = nil }},
-		{name: "missing greps run blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.GrepsRun = nil }},
-		{name: "missing negative fixtures blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.NegativeFixturesRun = nil }},
-		{name: "reviewer result pass but not pass confirmed blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.ReviewerResult = point11ValDReviewerResultPass }},
-		{name: "point11 pass allowed false blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.Point11PassAllowed = false }},
-		{name: "wrong point11 pass token blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.Point11PassToken = "point_11_fail" }},
-		{name: "malformed projection disclaimer blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.ProjectionDisclaimer = "canonical_truth" }},
+		{name: "wrong point id blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.PointID = "point_10" }, wantReason: "manifest_point_id_invalid"},
+		{name: "padded point id blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) { model.PointID = " " + model.PointID + " " }, wantReason: "manifest_point_id_invalid"},
+		{name: "wrong wave id blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.WaveID = "val_c" }, wantReason: "manifest_wave_id_invalid"},
+		{name: "tab newline wave id blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) {
+			model.WaveID = "\t" + model.WaveID + "\n"
+		}, wantReason: "manifest_wave_id_invalid"},
+		{name: "padded scope blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) { model.Scope = " " + model.Scope + " " }, wantReason: "manifest_scope_missing"},
+		{name: "missing dependency gate result blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.DependencyGateResult = "" }, wantReason: "manifest_dependency_gate_result_invalid"},
+		{name: "padded dependency gate result blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) {
+			model.DependencyGateResult = " " + model.DependencyGateResult + " "
+		}, wantReason: "manifest_dependency_gate_result_invalid"},
+		{name: "tab newline projection boundary result blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) {
+			model.ProjectionBoundaryResultToken = "\t" + model.ProjectionBoundaryResultToken + "\n"
+		}, wantReason: "manifest_projection_boundary_result_invalid"},
+		{name: "padded reviewer result blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) {
+			model.ReviewerResult = " " + model.ReviewerResult + " "
+		}, wantReason: "manifest_reviewer_not_pass_confirmed"},
+		{name: "missing tests run blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.TestsRun = nil }, wantReason: "manifest_tests_run_missing"},
+		{name: "missing greps run blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.GrepsRun = nil }, wantReason: "manifest_greps_run_missing"},
+		{name: "missing negative fixtures blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.NegativeFixturesRun = nil }, wantReason: "manifest_negative_fixtures_missing"},
+		{name: "reviewer result pass but not pass confirmed blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.ReviewerResult = point11ValDReviewerResultPass }, wantReason: "manifest_reviewer_not_pass_confirmed"},
+		{name: "point11 pass allowed false blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.Point11PassAllowed = false }, wantReason: "manifest_point11_pass_not_allowed"},
+		{name: "wrong point11 pass token blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.Point11PassToken = "point_11_fail" }, wantReason: "manifest_point11_pass_token_invalid"},
+		{name: "padded point11 pass token blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) {
+			model.Point11PassToken = " " + model.Point11PassToken + " "
+		}, wantReason: "manifest_point11_pass_token_invalid"},
+		{name: "tab newline point11 pass token blocks raw exact manifest", mutate: func(model *Point11ValDPassClosureManifest) {
+			model.Point11PassToken = "\t" + model.Point11PassToken + "\n"
+		}, wantReason: "manifest_point11_pass_token_invalid"},
+		{name: "malformed projection disclaimer blocks", mutate: func(model *Point11ValDPassClosureManifest) { model.ProjectionDisclaimer = "canonical_truth" }, wantReason: "manifest_projection_disclaimer_blocked"},
 	}
 
 	for _, testCase := range testCases {
@@ -551,8 +799,50 @@ func TestPoint11ValDPassClosureManifestState(t *testing.T) {
 			if model.PassClosureManifestState != Point11ValDPassClosureManifestStateBlocked {
 				t.Fatalf("expected blocked pass closure manifest state, got %#v", model)
 			}
+			if model.Point11PassToken != "" {
+				t.Fatalf("expected no point11 pass token after blocked manifest, got %#v", model)
+			}
+			if testCase.wantReason != "" && !point11ValDTestContainsExact(model.Diagnostics.ManifestReasons, testCase.wantReason) {
+				t.Fatalf("expected exact manifest reason %q, got %#v", testCase.wantReason, model.Diagnostics.ManifestReasons)
+			}
 		})
 	}
+
+	t.Run("padded manifest point11 pass token records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.PassClosureManifest.Point11PassToken = " " + model.PassClosureManifest.Point11PassToken + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.PassClosureManifestState != Point11ValDPassClosureManifestStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact manifest token block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.ManifestReasons, "manifest_point11_pass_token_invalid") {
+			t.Fatalf("expected exact manifest pass token invalid reason, got %#v", model.Diagnostics.ManifestReasons)
+		}
+	})
+
+	t.Run("tab newline manifest point11 pass token records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.PassClosureManifest.Point11PassToken = "\t" + model.PassClosureManifest.Point11PassToken + "\n"
+		model = ComputePoint11ValDFoundation(model)
+		if model.PassClosureManifestState != Point11ValDPassClosureManifestStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact manifest token block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.ManifestReasons, "manifest_point11_pass_token_invalid") {
+			t.Fatalf("expected exact manifest pass token invalid reason, got %#v", model.Diagnostics.ManifestReasons)
+		}
+	})
+
+	t.Run("padded manifest dependency gate result records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.PassClosureManifest.DependencyGateResult = " " + model.PassClosureManifest.DependencyGateResult + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.PassClosureManifestState != Point11ValDPassClosureManifestStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact manifest dependency result block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.ManifestReasons, "manifest_dependency_gate_result_invalid") {
+			t.Fatalf("expected exact manifest dependency gate invalid reason, got %#v", model.Diagnostics.ManifestReasons)
+		}
+	})
 }
 
 func TestPoint11ValDFinalPassGateState(t *testing.T) {
@@ -602,6 +892,18 @@ func TestPoint11ValDFinalPassGateState(t *testing.T) {
 			model.CLBLedger.CLB1Findings = []string{"finding_point11_vald_clb1_003"}
 		}},
 		{name: "blocked manifest prevents point11 pass", mutate: func(model *Point11ValDFoundation) { model.PassClosureManifest.Point11PassAllowed = false }},
+		{name: "padded final gate dependency state blocks raw exact final pass", mutate: func(model *Point11ValDFoundation) {
+			model.FinalPassGate.DependencyState = " " + model.FinalPassGate.DependencyState + " "
+		}},
+		{name: "tab newline final gate manifest state blocks raw exact final pass", mutate: func(model *Point11ValDFoundation) {
+			model.FinalPassGate.ManifestState = "\t" + model.FinalPassGate.ManifestState + "\n"
+		}},
+		{name: "padded final gate point11 pass token blocks raw exact final pass", mutate: func(model *Point11ValDFoundation) {
+			model.FinalPassGate.Point11PassToken = " " + model.FinalPassGate.Point11PassToken + " "
+		}},
+		{name: "tab newline final gate point11 pass token blocks raw exact final pass", mutate: func(model *Point11ValDFoundation) {
+			model.FinalPassGate.Point11PassToken = "\t" + model.FinalPassGate.Point11PassToken + "\n"
+		}},
 		{name: "point11 pass outside val d final closure blocks", mutate: func(model *Point11ValDFoundation) { model.FinalPassGate.Point11PassObservedOutsideFinalClosure = true }},
 	}
 
@@ -618,6 +920,67 @@ func TestPoint11ValDFinalPassGateState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded final gate token records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.FinalPassGate.Point11PassToken = " " + model.FinalPassGate.Point11PassToken + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.FinalPassGateState != Point11ValDFinalPassGateStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact final gate token block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.FinalPassGateReasons, "final_pass_gate_point11_pass_token_invalid") {
+			t.Fatalf("expected exact final pass token invalid reason, got %#v", model.Diagnostics.FinalPassGateReasons)
+		}
+	})
+
+	t.Run("tab newline final gate token records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.FinalPassGate.Point11PassToken = "\t" + model.FinalPassGate.Point11PassToken + "\n"
+		model = ComputePoint11ValDFoundation(model)
+		if model.FinalPassGateState != Point11ValDFinalPassGateStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact final gate token block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.FinalPassGateReasons, "final_pass_gate_point11_pass_token_invalid") {
+			t.Fatalf("expected exact final pass token invalid reason, got %#v", model.Diagnostics.FinalPassGateReasons)
+		}
+	})
+
+	t.Run("padded final gate dependency state records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.FinalPassGate.DependencyState = " " + model.FinalPassGate.DependencyState + " "
+		model = ComputePoint11ValDFoundation(model)
+		if model.FinalPassGateState != Point11ValDFinalPassGateStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact final gate dependency state block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.FinalPassGateReasons, "final_pass_gate_dependency_state_invalid") {
+			t.Fatalf("expected exact final gate dependency state invalid reason, got %#v", model.Diagnostics.FinalPassGateReasons)
+		}
+	})
+
+	t.Run("tab newline final gate manifest state records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.FinalPassGate.ManifestState = "\t" + model.FinalPassGate.ManifestState + "\n"
+		model = ComputePoint11ValDFoundation(model)
+		if model.FinalPassGateState != Point11ValDFinalPassGateStateBlocked || model.Point11PassToken != "" {
+			t.Fatalf("expected raw-exact final gate manifest state block with no emitted pass, got %#v", model)
+		}
+		if !point11ValDTestContainsExact(model.Diagnostics.FinalPassGateReasons, "final_pass_gate_manifest_state_invalid") {
+			t.Fatalf("expected exact final gate manifest state invalid reason, got %#v", model.Diagnostics.FinalPassGateReasons)
+		}
+	})
+
+	t.Run("raw retagged foundation gate records exact reason and emits no pass", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		foundation := model
+		foundation.QualityMapState = " " + Point11ValDQualityMapStateActive + " "
+		state, reasons := point11ValDFinalPassGateStateAndReasons(model.FinalPassGate, foundation)
+		if state != Point11ValDFinalPassGateStateBlocked {
+			t.Fatalf("expected raw-retagged foundation gate to block final gate, got state=%q reasons=%#v", state, reasons)
+		}
+		if !point11ValDTestContainsExact(reasons, "final_pass_gate_foundation_gates_not_active") {
+			t.Fatalf("expected exact foundation gates reason, got %#v", reasons)
+		}
+	})
 }
 
 func TestPoint11ValDAggregateState(t *testing.T) {
@@ -632,6 +995,22 @@ func TestPoint11ValDAggregateState(t *testing.T) {
 		model := activePoint11ValDFoundation()
 		if model.Point11PassToken != point11ValDPoint11PassToken {
 			t.Fatalf("expected point11 pass token only in final happy path, got %#v", model)
+		}
+	})
+
+	t.Run("aggregate raw exact rejects padded active local component state", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.DependencyState = " " + Point11ValDDependencyStateActive + " "
+		if got := EvaluatePoint11ValDFoundationState(model); got != Point11ValDStateBlocked {
+			t.Fatalf("expected padded aggregate dependency state to block, got state=%q model=%#v", got, model)
+		}
+	})
+
+	t.Run("aggregate raw exact rejects tab newline active final gate state", func(t *testing.T) {
+		model := activePoint11ValDFoundation()
+		model.FinalPassGateState = "\t" + Point11ValDFinalPassGateStateActive + "\n"
+		if got := EvaluatePoint11ValDFoundationState(model); got != Point11ValDStateBlocked {
+			t.Fatalf("expected padded aggregate final gate state to block, got state=%q model=%#v", got, model)
 		}
 	})
 

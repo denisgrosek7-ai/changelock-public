@@ -369,8 +369,63 @@ func point15ValDModes() []string {
 	}
 }
 
+func point15ValDRawExactValueValid(value string, allowedValues []string) bool {
+	return formalRawExactValid(value, func(candidate string) bool {
+		for _, allowed := range allowedValues {
+			if candidate == allowed {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func point15ValDRawVal0StateValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15Val0States())
+}
+
+func point15ValDRawFreshnessStatusValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15Val0FreshnessStatuses())
+}
+
+func point15ValDRawDowngradeOutcomeValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15Val0DowngradeOutcomes())
+}
+
+func point15ValDRawScheduleStatusValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValBScheduleStatuses())
+}
+
+func point15ValDRawRunResultValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValBRunResults())
+}
+
+func point15ValDRawRetryStatusValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValBRetryStatuses())
+}
+
+func point15ValDRawThrottleStatusValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValBThrottleStatuses())
+}
+
+func point15ValDRawActionValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValCActions())
+}
+
+func point15ValDRawReasonValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValCReasons())
+}
+
+func point15ValDRawLifecycleStatusValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValCLifecycleStatuses())
+}
+
+func point15ValDRawTriggerValid(value string) bool {
+	return point15ValDRawExactValueValid(value, point15ValATriggers())
+}
+
 func point15ValDModeValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDModes())
+	return point15ValDRawExactValueValid(value, point15ValDModes())
 }
 
 func point15ValDVisibilities() []string {
@@ -384,7 +439,7 @@ func point15ValDVisibilities() []string {
 }
 
 func point15ValDVisibilityValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDVisibilities())
+	return point15ValDRawExactValueValid(value, point15ValDVisibilities())
 }
 
 func point15ValDActions() []string {
@@ -398,7 +453,7 @@ func point15ValDActions() []string {
 }
 
 func point15ValDActionValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDActions())
+	return point15ValDRawExactValueValid(value, point15ValDActions())
 }
 
 func point15ValDQueryResultStates() []string {
@@ -413,7 +468,14 @@ func point15ValDQueryResultStates() []string {
 }
 
 func point15ValDQueryResultStateValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDQueryResultStates())
+	return formalRawExactValid(value, func(candidate string) bool {
+		for _, allowed := range point15ValDQueryResultStates() {
+			if candidate == allowed {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func point15ValDEventTypes() []string {
@@ -429,7 +491,7 @@ func point15ValDEventTypes() []string {
 }
 
 func point15ValDEventTypeValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDEventTypes())
+	return point15ValDRawExactValueValid(value, point15ValDEventTypes())
 }
 
 func point15ValDQueryScopes() []string {
@@ -442,7 +504,7 @@ func point15ValDQueryScopes() []string {
 }
 
 func point15ValDQueryScopeValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDQueryScopes())
+	return point15ValDRawExactValueValid(value, point15ValDQueryScopes())
 }
 
 func point15ValDSortOrders() []string {
@@ -455,7 +517,7 @@ func point15ValDSortOrders() []string {
 }
 
 func point15ValDSortOrderValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDSortOrders())
+	return point15ValDRawExactValueValid(value, point15ValDSortOrders())
 }
 
 func point15ValDQueryFilters() []string {
@@ -471,7 +533,7 @@ func point15ValDQueryFilters() []string {
 }
 
 func point15ValDFilterValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDQueryFilters())
+	return point15ValDRawExactValueValid(value, point15ValDQueryFilters())
 }
 
 func point15ValDRedactionStates() []string {
@@ -484,47 +546,64 @@ func point15ValDRedactionStates() []string {
 }
 
 func point15ValDRedactionStateValid(value string) bool {
-	return point14Val0ExactValueValid(value, point15ValDRedactionStates())
+	return formalRawExactValid(value, func(candidate string) bool {
+		for _, allowed := range point15ValDRedactionStates() {
+			if candidate == allowed {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func point15ValDRefValid(value string) bool {
-	return point14Val0RefValid(value,
-		"point15_vald_",
-		"point15_valc_",
-		"point15_valb_",
-		"point15_vala_",
-		"point15_val0_",
-		"timeline_",
-		"dashboard_",
-		"query_",
-		"evidence_",
-		"schedule_",
-		"run_",
-		"budget_",
-		"retry_budget_",
-		"throttle_",
-		"binding_",
-		"decision_",
-		"lineage_",
-		"history_",
-		"replay_",
-		"proof_",
-		"proof_pack_",
-		"enforcement_",
-		"revocation_",
-		"revocation_source_",
-		"expiry_",
-		"supersession_",
-		"authority_boundary_",
-		"access_",
-		"tenant_",
-		"timestamp_",
-		"no_mutation_",
-	)
+	return formalRawExactTokenValid(value, func(candidate string) bool {
+		return point14Val0RefValid(candidate,
+			"point15_vald_",
+			"point15_valc_",
+			"point15_valb_",
+			"point15_vala_",
+			"point15_val0_",
+			"timeline_",
+			"dashboard_",
+			"query_",
+			"evidence_",
+			"schedule_",
+			"run_",
+			"budget_",
+			"retry_budget_",
+			"throttle_",
+			"binding_",
+			"decision_",
+			"lineage_",
+			"history_",
+			"replay_",
+			"proof_",
+			"proof_pack_",
+			"enforcement_",
+			"revocation_",
+			"revocation_source_",
+			"expiry_",
+			"supersession_",
+			"authority_boundary_",
+			"access_",
+			"tenant_",
+			"timestamp_",
+			"no_mutation_",
+		)
+	})
+}
+
+func point15ValDRawScopeValid(value string) bool {
+	return formalRawExactValid(value, point11Val0ScopeValid)
+}
+
+func point15ValDOptionalRawTimestampValid(value string) bool {
+	return value == "" || point12Val0RawTimestampValid(value)
 }
 
 func point15ValDForbiddenWording() []string {
-	return []string{
+	return append([]string{
 		"continuous assurance guaranteed",
 		"automatically verified forever",
 		"always fresh",
@@ -538,7 +617,7 @@ func point15ValDForbiddenWording() []string {
 		"public badge",
 		"guaranteed secure",
 		"certified secure",
-	}
+	}, inheritedDeploymentReadinessOverclaimClaims()...)
 }
 
 func point15ValDSafeWording() []string {
@@ -553,17 +632,44 @@ func point15ValDSafeWording() []string {
 }
 
 func point15ValDObservedTextContainsForbiddenWording(text string) bool {
-	normalized := strings.TrimSpace(strings.ToLower(text))
+	return point15ValDObservedTextContainsForbiddenWordingWithNormalizer(text, point15ValDNormalizedObservedText)
+}
+
+func point15ValDInternalTextContainsForbiddenWording(text string) bool {
+	return point15ValDObservedTextContainsForbiddenWordingWithNormalizer(text, point15ValDNormalizedInternalText)
+}
+
+func point15ValDObservedTextContainsForbiddenWordingWithNormalizer(text string, normalize func(string) string) bool {
+	normalized := normalize(text)
 	if normalized == "" {
 		return false
 	}
-	for _, safe := range point15ValDSafeWording() {
-		if normalized == strings.TrimSpace(strings.ToLower(safe)) {
-			return false
-		}
+	if point15ValDObservedTextAllowedSafeWithNormalizer(normalized, normalize) {
+		return false
 	}
 	for _, forbidden := range point15ValDForbiddenWording() {
-		if strings.Contains(normalized, strings.TrimSpace(strings.ToLower(forbidden))) {
+		if formalNoOverclaimContainsForbidden(normalized, normalize(forbidden)) {
+			return true
+		}
+	}
+	return false
+}
+
+func point15ValDNormalizedObservedText(text string) string {
+	return formalNoOverclaimNormalizePublicText(text)
+}
+
+func point15ValDNormalizedInternalText(text string) string {
+	return formalNoOverclaimNormalizeText(text)
+}
+
+func point15ValDObservedTextAllowedSafe(normalized string) bool {
+	return point15ValDObservedTextAllowedSafeWithNormalizer(normalized, point15ValDNormalizedObservedText)
+}
+
+func point15ValDObservedTextAllowedSafeWithNormalizer(normalized string, normalize func(string) string) bool {
+	for _, safe := range point15ValDSafeWording() {
+		if normalized == normalize(safe) {
 			return true
 		}
 	}
@@ -571,9 +677,47 @@ func point15ValDObservedTextContainsForbiddenWording(text string) bool {
 }
 
 func point15ValDObservedListContainsForbiddenWording(values []string) bool {
+	return point15ValDListContainsForbiddenWording(values, point15ValDNormalizedObservedText)
+}
+
+func point15ValDInternalListContainsForbiddenWording(values []string) bool {
+	return point15ValDListContainsForbiddenWording(values, point15ValDNormalizedInternalText)
+}
+
+func point15ValDListContainsForbiddenWording(values []string, normalize func(string) string) bool {
+	type observedPart struct {
+		normalized string
+		allowed    bool
+	}
+	parts := []observedPart{}
 	for _, value := range values {
-		if point15ValDObservedTextContainsForbiddenWording(value) {
+		if point15ValDObservedTextContainsForbiddenWordingWithNormalizer(value, normalize) {
 			return true
+		}
+		normalized := normalize(value)
+		if normalized == "" {
+			continue
+		}
+		parts = append(parts, observedPart{
+			normalized: normalized,
+			allowed:    point15ValDObservedTextAllowedSafeWithNormalizer(normalized, normalize),
+		})
+	}
+	for start := range parts {
+		combined := ""
+		allAllowed := true
+		for end := start; end < len(parts); end++ {
+			if combined == "" {
+				combined = parts[end].normalized
+			} else {
+				combined += " " + parts[end].normalized
+			}
+			allAllowed = allAllowed && parts[end].allowed
+			for _, forbidden := range point15ValDForbiddenWording() {
+				if formalNoOverclaimContainsForbidden(combined, normalize(forbidden)) && !allAllowed {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -588,7 +732,7 @@ func point15ValDValCPayloadContainsPoint15Pass(valC Point15ValCEnforcementBounda
 }
 
 func point15ValDQueryResultWaveState(state string) string {
-	switch strings.TrimSpace(state) {
+	switch state {
 	case point15ValDQueryBlocked:
 		return Point15ValDStateBlocked
 	case point15ValDQueryReviewRequired:
@@ -636,18 +780,38 @@ func point15ValDDependencyModel() Point15ValDDependencySnapshot {
 }
 
 func EvaluatePoint15ValDDependencyState(model Point15ValDDependencySnapshot) string {
-	if strings.TrimSpace(model.Point15ValCCurrentState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCDependencyState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCEnforcementActionState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCEvidenceLifecycleState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCRevocationState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCExpiryState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCSupersessionState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCReplayHistoryState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCTimestampState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCAuthorityState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCTenantState) != Point15ValCStateActive ||
-		strings.TrimSpace(model.Point15ValCNoOverclaimState) != Point15ValCStateActive {
+	if model.Point15ValCCurrentState != Point15ValCStateActive ||
+		model.Point15ValCDependencyState != Point15ValCStateActive ||
+		model.Point15ValCEnforcementActionState != Point15ValCStateActive ||
+		model.Point15ValCEvidenceLifecycleState != Point15ValCStateActive ||
+		model.Point15ValCRevocationState != Point15ValCStateActive ||
+		model.Point15ValCExpiryState != Point15ValCStateActive ||
+		model.Point15ValCSupersessionState != Point15ValCStateActive ||
+		model.Point15ValCReplayHistoryState != Point15ValCStateActive ||
+		model.Point15ValCTimestampState != Point15ValCStateActive ||
+		model.Point15ValCAuthorityState != Point15ValCStateActive ||
+		model.Point15ValCTenantState != Point15ValCStateActive ||
+		model.Point15ValCNoOverclaimState != Point15ValCStateActive {
+		return Point15ValDStateBlocked
+	}
+	if model.Point15ValCCurrentState != model.Point15ValC.CurrentState ||
+		model.Point15ValCDependencyState != model.Point15ValC.DependencyState ||
+		model.Point15ValCEnforcementActionState != model.Point15ValC.EnforcementActionState ||
+		model.Point15ValCEvidenceLifecycleState != model.Point15ValC.EvidenceLifecycleState ||
+		model.Point15ValCRevocationState != model.Point15ValC.RevocationBoundaryState ||
+		model.Point15ValCExpiryState != model.Point15ValC.ExpiryBoundaryState ||
+		model.Point15ValCSupersessionState != model.Point15ValC.SupersessionState ||
+		model.Point15ValCReplayHistoryState != model.Point15ValC.ReplayProofHistoryState ||
+		model.Point15ValCTimestampState != model.Point15ValC.TimestampDisciplineState ||
+		model.Point15ValCAuthorityState != model.Point15ValC.AuthorityBoundaryState ||
+		model.Point15ValCTenantState != model.Point15ValC.TenantBoundaryState ||
+		model.Point15ValCNoOverclaimState != model.Point15ValC.NoOverclaimState ||
+		model.Point15ValCComputedFromUpstream != model.Point15ValC.Dependency.SnapshotFromComputedOutput ||
+		model.InheritedPoint15ValBCurrentState != model.Point15ValC.Dependency.Point15ValB.CurrentState ||
+		model.InheritedPoint15ValACurrentState != model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.CurrentState ||
+		model.InheritedPoint15Val0CurrentState != model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.CurrentState ||
+		model.InheritedPoint14ValECurrentState != model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.Dependency.Point14ValE.CurrentState ||
+		model.InheritedTenantScope != model.Point15ValC.Dependency.InheritedTenantScope {
 		return Point15ValDStateBlocked
 	}
 	if !model.Point15ValCComputedFromUpstream || !model.Point15ValCMerged || !model.Point15ValCCIGreen || !model.Point15ValCReviewedOnMain || !model.SnapshotFromComputedOutput {
@@ -656,22 +820,22 @@ func EvaluatePoint15ValDDependencyState(model Point15ValDDependencySnapshot) str
 	if model.Point15PassSeen || point15ValDValCPayloadContainsPoint15Pass(model.Point15ValC) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.InheritedPoint15ValBCurrentState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.InheritedPoint15ValACurrentState) != Point15ValAStateActive ||
-		strings.TrimSpace(model.InheritedPoint15Val0CurrentState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.InheritedPoint14ValECurrentState) != Point14ValEStatePassConfirmed {
+	if model.InheritedPoint15ValBCurrentState != Point15ValBStateActive ||
+		model.InheritedPoint15ValACurrentState != Point15ValAStateActive ||
+		model.InheritedPoint15Val0CurrentState != Point15Val0StateActive ||
+		model.InheritedPoint14ValECurrentState != Point14ValEStatePassConfirmed {
 		return Point15ValDStateBlocked
 	}
-	if !point11Val0ScopeValid(model.InheritedTenantScope) {
+	if !formalRawExactValid(model.InheritedTenantScope, point11Val0ScopeValid) {
 		return Point15ValDStateBlocked
 	}
 	return Point15ValDStateActive
 }
 
 func point15ValDAssuranceTimelineModel(dependency Point15ValDDependencySnapshot) Point15ValDAssuranceTimelineEntry {
-	eventAt := strings.TrimSpace(dependency.Point15ValC.TimestampDiscipline.EvaluatedAt)
+	eventAt := dependency.Point15ValC.TimestampDiscipline.EvaluatedAt
 	if eventAt == "" {
-		eventAt = strings.TrimSpace(dependency.Point15ValC.TimestampDiscipline.ReferenceNow)
+		eventAt = dependency.Point15ValC.TimestampDiscipline.ReferenceNow
 	}
 	return Point15ValDAssuranceTimelineEntry{
 		TimelineID:              "timeline_point15_vald_001",
@@ -708,28 +872,26 @@ func EvaluatePoint15ValDAssuranceTimelineState(model Point15ValDAssuranceTimelin
 		!point15ValDModeValid(model.ProjectionMode) ||
 		!point15ValDActionValid(model.ProjectionAction) ||
 		!point15ValDVisibilityValid(model.Visibility) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
-		strings.TrimSpace(model.EvidenceID) == "" ||
+		!point15ValDRawScopeValid(model.TenantScope) ||
+		!formalRawExactNonEmpty(model.EvidenceID) ||
 		!point15ValDEventTypeValid(model.EventType) ||
-		!point15Val0StateValid(model.PriorState) ||
-		!point15Val0StateValid(model.CurrentState) ||
+		!point15ValDRawVal0StateValid(model.PriorState) ||
+		!point15ValDRawVal0StateValid(model.CurrentState) ||
 		!point15ValDRefValid(model.SourceValCRef) ||
 		!point15ValDRefValid(model.ReplayRef) ||
 		!point15ValDRefValid(model.ProofHistoryRef) ||
-		strings.TrimSpace(model.EventAt) == "" ||
-		strings.TrimSpace(model.DisplayedAt) == "" ||
+		!point12Val0RawTimestampValid(model.EventAt) ||
+		!point12Val0RawTimestampValid(model.DisplayedAt) ||
 		!point14Val0CanonicalTimeSourceValid(model.TimeSource) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ProjectionAction) != point15ValDActionDisplayOnly && strings.TrimSpace(model.ProjectionAction) != point15ValDActionExplainOnly {
+	if model.ProjectionMode != point15ValDModeTimeline ||
+		(model.ProjectionAction != point15ValDActionDisplayOnly && model.ProjectionAction != point15ValDActionExplainOnly) {
 		return Point15ValDStateBlocked
 	}
-	if _, ok := point14Val0ParsedTime(model.EventAt); !ok {
-		return Point15ValDStateBlocked
-	}
-	if displayedAt, okDisplayed := point14Val0ParsedTime(model.DisplayedAt); !okDisplayed {
-		return Point15ValDStateBlocked
-	} else if eventAt, okEvent := point14Val0ParsedTime(model.EventAt); okEvent && displayedAt.Before(eventAt) {
+	displayedAt, _ := point14Val0ParsedTime(model.DisplayedAt)
+	eventAt, _ := point14Val0ParsedTime(model.EventAt)
+	if displayedAt.Before(eventAt) {
 		return Point15ValDStateBlocked
 	}
 	if model.TimelineCreatesValidity {
@@ -739,17 +901,23 @@ func EvaluatePoint15ValDAssuranceTimelineState(model Point15ValDAssuranceTimelin
 		return Point15ValDStateBlocked
 	}
 	if !model.DecisiveEvidenceVisible {
-		if strings.TrimSpace(model.CurrentState) == Point15Val0StateReviewRequired {
+		if model.CurrentState == Point15Val0StateReviewRequired {
 			return Point15ValDStateReviewRequired
 		}
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == Point15Val0StateBlocked && !model.BlockedReasonVisible {
+	if model.CurrentState == Point15Val0StateBlocked && !model.BlockedReasonVisible {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) != Point15Val0StateActive &&
-		strings.TrimSpace(model.DowngradeReason) == "" &&
-		strings.TrimSpace(model.EnforcementReason) == "" {
+	if model.CurrentState != Point15Val0StateActive &&
+		model.DowngradeReason == "" &&
+		model.EnforcementReason == "" {
+		return Point15ValDStateBlocked
+	}
+	if model.DowngradeReason != "" && !point15ValDRawTriggerValid(model.DowngradeReason) {
+		return Point15ValDStateBlocked
+	}
+	if model.EnforcementReason != "" && !point15ValDRawReasonValid(model.EnforcementReason) {
 		return Point15ValDStateBlocked
 	}
 	return Point15ValDStateActive
@@ -782,16 +950,16 @@ func point15ValDDashboardSummaryModel(dependency Point15ValDDependencySnapshot) 
 
 func EvaluatePoint15ValDDashboardSummaryState(model Point15ValDDashboardSummary) string {
 	if !point15ValDRefValid(model.DashboardID) ||
-		strings.TrimSpace(model.ProjectionMode) != point15ValDModeDashboardSummary ||
-		strings.TrimSpace(model.ProjectionAction) != point15ValDActionDisplayOnly ||
+		model.ProjectionMode != point15ValDModeDashboardSummary ||
+		model.ProjectionAction != point15ValDActionDisplayOnly ||
 		!point15ValDVisibilityValid(model.Visibility) ||
-		strings.TrimSpace(model.SummaryScope) != point15ValDSummaryScopeTenant {
+		model.SummaryScope != point15ValDSummaryScopeTenant {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" {
+	if model.TenantScope == "" {
 		return Point15ValDStateIncomplete
 	}
-	if !point11Val0ScopeValid(model.TenantScope) {
+	if !point15ValDRawScopeValid(model.TenantScope) {
 		return Point15ValDStateBlocked
 	}
 	if model.EvidenceCount < 0 || model.ActiveCount < 0 || model.BlockedCount < 0 || model.ReviewRequiredCount < 0 || model.IncompleteCount < 0 || model.StaleCount < 0 || model.ExpiredCount < 0 || model.RevokedCount < 0 || model.EnforcementCount < 0 {
@@ -833,20 +1001,20 @@ func point15ValDQueryProjectionModel(dependency Point15ValDDependencySnapshot) P
 
 func EvaluatePoint15ValDQueryProjectionState(model Point15ValDQueryProjection) string {
 	if !point15ValDRefValid(model.QueryID) ||
-		strings.TrimSpace(model.ProjectionMode) != point15ValDModeQueryResult ||
+		model.ProjectionMode != point15ValDModeQueryResult ||
 		!point15ValDActionValid(model.ProjectionAction) ||
 		!point15ValDVisibilityValid(model.Visibility) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
-		!point11Val0ScopeValid(model.ViewerScope) ||
+		!point15ValDRawScopeValid(model.TenantScope) ||
+		!point15ValDRawScopeValid(model.ViewerScope) ||
 		!point15ValDQueryScopeValid(model.RequestedScope) ||
 		!point15ValDSortOrderValid(model.SortOrder) ||
 		!point15ValDQueryResultStateValid(model.ResultState) ||
 		!point15ValDRedactionStateValid(model.RedactionState) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ProjectionAction) != point15ValDActionFilterOnly &&
-		strings.TrimSpace(model.ProjectionAction) != point15ValDActionSortOnly &&
-		strings.TrimSpace(model.ProjectionAction) != point15ValDActionExplainOnly {
+	if model.ProjectionAction != point15ValDActionFilterOnly &&
+		model.ProjectionAction != point15ValDActionSortOnly &&
+		model.ProjectionAction != point15ValDActionExplainOnly {
 		return Point15ValDStateBlocked
 	}
 	for _, filter := range model.Filters {
@@ -855,21 +1023,21 @@ func EvaluatePoint15ValDQueryProjectionState(model Point15ValDQueryProjection) s
 		}
 	}
 	for _, ref := range model.ResultRefs {
-		if strings.TrimSpace(ref) == "" || !point15ValDRefValid(ref) {
+		if !formalRawExactNonEmpty(ref) || !point15ValDRefValid(ref) {
 			return Point15ValDStateBlocked
 		}
 	}
 	if model.QueryMutationAttempted || model.StrengthensClaims || model.CrossTenantQuery || model.Visibility == point15ValDVisibilityPublicBlocked {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ViewerScope) != strings.TrimSpace(model.TenantScope) {
+	if model.ViewerScope != model.TenantScope {
 		return Point15ValDStateBlocked
 	}
-	if !model.LimitationsVisible && (strings.TrimSpace(model.ResultState) == point15ValDQueryRedacted || strings.TrimSpace(model.RedactionState) != point15ValDRedactionNone) {
+	if !model.LimitationsVisible && (model.ResultState == point15ValDQueryRedacted || model.RedactionState != point15ValDRedactionNone) {
 		return Point15ValDStateReviewRequired
 	}
 	if !model.DecisiveEvidenceVisible {
-		if strings.TrimSpace(model.ResultState) == point15ValDQueryRedacted || strings.TrimSpace(model.ResultState) == point15ValDQueryReviewRequired {
+		if model.ResultState == point15ValDQueryRedacted || model.ResultState == point15ValDQueryReviewRequired {
 			return Point15ValDStateReviewRequired
 		}
 		return Point15ValDStateBlocked
@@ -899,19 +1067,19 @@ func point15ValDEvidenceDetailModel(dependency Point15ValDDependencySnapshot) Po
 }
 
 func EvaluatePoint15ValDEvidenceDetailProjectionState(model Point15ValDEvidenceDetailProjection) string {
-	if strings.TrimSpace(model.ProjectionMode) != point15ValDModeEvidenceDetail ||
-		(strings.TrimSpace(model.ProjectionAction) != point15ValDActionDisplayOnly && strings.TrimSpace(model.ProjectionAction) != point15ValDActionExplainOnly) ||
+	if model.ProjectionMode != point15ValDModeEvidenceDetail ||
+		(model.ProjectionAction != point15ValDActionDisplayOnly && model.ProjectionAction != point15ValDActionExplainOnly) ||
 		!point15ValDVisibilityValid(model.Visibility) ||
-		strings.TrimSpace(model.EvidenceID) == "" ||
-		!point11Val0ScopeValid(model.TenantScope) ||
-		strings.TrimSpace(model.EvidenceHash) == "" ||
-		strings.TrimSpace(model.PolicyVersion) == "" ||
-		strings.TrimSpace(model.EngineVersion) == "" ||
-		strings.TrimSpace(model.SchemaVersion) == "" ||
-		!point15Val0FreshnessStatusValid(model.FreshnessStatus) ||
-		!point15Val0DowngradeOutcomeValid(model.DowngradeOutcome) ||
-		!point15ValCLifecycleStatusValid(model.LifecycleStatus) ||
-		!point15Val0StateValid(model.EnforcementStatus) {
+		!formalRawExactNonEmpty(model.EvidenceID) ||
+		!point15ValDRawScopeValid(model.TenantScope) ||
+		!formalRawExactNonEmpty(model.EvidenceHash) ||
+		!formalRawExactNonEmpty(model.PolicyVersion) ||
+		!formalRawExactNonEmpty(model.EngineVersion) ||
+		!formalRawExactNonEmpty(model.SchemaVersion) ||
+		!point15ValDRawFreshnessStatusValid(model.FreshnessStatus) ||
+		!point15ValDRawDowngradeOutcomeValid(model.DowngradeOutcome) ||
+		!point15ValDRawLifecycleStatusValid(model.LifecycleStatus) ||
+		!point15ValDRawVal0StateValid(model.EnforcementStatus) {
 		return Point15ValDStateBlocked
 	}
 	if model.IdentityDerivedFromNameOnly {
@@ -946,17 +1114,17 @@ func point15ValDRevalidationDetailModel(dependency Point15ValDDependencySnapshot
 }
 
 func EvaluatePoint15ValDRevalidationDetailProjectionState(model Point15ValDRevalidationDetailProjection) string {
-	if strings.TrimSpace(model.ProjectionMode) != point15ValDModeRevalidationDetail ||
-		(strings.TrimSpace(model.ProjectionAction) != point15ValDActionDisplayOnly && strings.TrimSpace(model.ProjectionAction) != point15ValDActionExplainOnly) ||
+	if model.ProjectionMode != point15ValDModeRevalidationDetail ||
+		(model.ProjectionAction != point15ValDActionDisplayOnly && model.ProjectionAction != point15ValDActionExplainOnly) ||
 		!point15ValDVisibilityValid(model.Visibility) ||
 		!point15ValDRefValid(model.ScheduleRef) ||
-		(strings.TrimSpace(model.RunRef) != "" && !point15ValDRefValid(model.RunRef)) ||
+		(model.RunRef != "" && !point15ValDRefValid(model.RunRef)) ||
 		!point15ValDRefValid(model.RetryBudgetRef) ||
 		!point15ValDRefValid(model.TenantThrottleRef) ||
-		!point15ValBScheduleStatusValid(model.ScheduledStatus) ||
-		!point15ValBRunResultValid(model.RunResult) ||
-		!point15ValBRetryStatusValid(model.RetryStatus) ||
-		!point15ValBThrottleStatusValid(model.ThrottleStatus) {
+		!point15ValDRawScheduleStatusValid(model.ScheduledStatus) ||
+		!point15ValDRawRunResultValid(model.RunResult) ||
+		!point15ValDRawRetryStatusValid(model.RetryStatus) ||
+		!point15ValDRawThrottleStatusValid(model.ThrottleStatus) {
 		return Point15ValDStateBlocked
 	}
 	if model.ScheduleMutationAttempted || model.RetryTriggered || model.RetryBudgetResetAttempted || model.MarksFresh || model.RestoresActiveClosure {
@@ -988,33 +1156,33 @@ func point15ValDEnforcementDetailModel(dependency Point15ValDDependencySnapshot)
 }
 
 func EvaluatePoint15ValDEnforcementDetailProjectionState(model Point15ValDEnforcementDetailProjection) string {
-	if strings.TrimSpace(model.ProjectionMode) != point15ValDModeEnforcementDetail ||
-		(strings.TrimSpace(model.ProjectionAction) != point15ValDActionDisplayOnly && strings.TrimSpace(model.ProjectionAction) != point15ValDActionExplainOnly) ||
+	if model.ProjectionMode != point15ValDModeEnforcementDetail ||
+		(model.ProjectionAction != point15ValDActionDisplayOnly && model.ProjectionAction != point15ValDActionExplainOnly) ||
 		!point15ValDVisibilityValid(model.Visibility) ||
 		!point15ValDRefValid(model.EnforcementRef) ||
-		!point15ValCActionValid(model.EnforcementAction) ||
-		!point15Val0StateValid(model.TargetState) ||
-		!point15Val0StateValid(model.PriorState) ||
-		!point15Val0StateValid(model.CurrentState) {
+		!point15ValDRawActionValid(model.EnforcementAction) ||
+		!point15ValDRawVal0StateValid(model.TargetState) ||
+		!point15ValDRawVal0StateValid(model.PriorState) ||
+		!point15ValDRawVal0StateValid(model.CurrentState) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.EnforcementAction) == point15ValCActionNone {
-		if strings.TrimSpace(model.EnforcementReason) != "" || strings.TrimSpace(model.TargetState) != Point15Val0StateActive || strings.TrimSpace(model.CurrentState) != Point15Val0StateActive {
+	if model.EnforcementAction == point15ValCActionNone {
+		if model.EnforcementReason != "" || model.TargetState != Point15Val0StateActive || model.CurrentState != Point15Val0StateActive {
 			return Point15ValDStateBlocked
 		}
 	} else {
-		if !point15ValCReasonValid(model.EnforcementReason) {
+		if !point15ValDRawReasonValid(model.EnforcementReason) {
 			return Point15ValDStateBlocked
 		}
 		expectedAction, expectedState, _ := point15ValCExpectedAction(model.EnforcementReason, model.ReasonDecisive)
-		if strings.TrimSpace(model.EnforcementAction) != expectedAction || strings.TrimSpace(model.TargetState) != expectedState {
+		if model.EnforcementAction != expectedAction || model.TargetState != expectedState {
 			return Point15ValDStateBlocked
 		}
 	}
 	if model.PerformsEnforcement || model.AutoRevokes || model.AutoPublishes || model.DeletesEvidence || model.SilentReplacement || !model.HistoryPreserved {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.CurrentState) == Point15Val0StateBlocked && !model.BlockedReasonVisible {
+	if model.CurrentState == Point15Val0StateBlocked && !model.BlockedReasonVisible {
 		return Point15ValDStateBlocked
 	}
 	return Point15ValDStateActive
@@ -1046,15 +1214,15 @@ func EvaluatePoint15ValDReplayProofHistoryProjectionState(model Point15ValDRepla
 		!point15ValDRefValid(model.ProofHistoryRef) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ProjectionMode) != point15ValDModeReplayDetail && strings.TrimSpace(model.ProjectionMode) != point15ValDModeExportPreview {
+	if model.ProjectionMode != point15ValDModeReplayDetail && model.ProjectionMode != point15ValDModeExportPreview {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ProjectionMode) == point15ValDModeReplayDetail &&
-		strings.TrimSpace(model.ProjectionAction) != point15ValDActionDisplayOnly &&
-		strings.TrimSpace(model.ProjectionAction) != point15ValDActionExplainOnly {
+	if model.ProjectionMode == point15ValDModeReplayDetail &&
+		model.ProjectionAction != point15ValDActionDisplayOnly &&
+		model.ProjectionAction != point15ValDActionExplainOnly {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ProjectionMode) == point15ValDModeExportPreview && strings.TrimSpace(model.ProjectionAction) != point15ValDActionExportPreviewOnly {
+	if model.ProjectionMode == point15ValDModeExportPreview && model.ProjectionAction != point15ValDActionExportPreviewOnly {
 		return Point15ValDStateBlocked
 	}
 	if !model.PriorStateVisible || !model.CurrentStateVisible || !model.DecisiveEvidenceVisible || !model.BlockedReasonVisible || !model.HashBindingVisible || model.ProofHistoryHidden {
@@ -1081,13 +1249,13 @@ func EvaluatePoint15ValDAccessTenantPrivacyBoundaryState(model Point15ValDAccess
 	if !point15ValDRefValid(model.BoundaryID) || !point15ValDVisibilityValid(model.Visibility) || !point15ValDRedactionStateValid(model.RedactionState) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" || strings.TrimSpace(model.ViewerScope) == "" {
+	if model.TenantScope == "" || model.ViewerScope == "" {
 		return Point15ValDStateIncomplete
 	}
-	if !point11Val0ScopeValid(model.TenantScope) || !point11Val0ScopeValid(model.ViewerScope) {
+	if !point15ValDRawScopeValid(model.TenantScope) || !point15ValDRawScopeValid(model.ViewerScope) {
 		return Point15ValDStateBlocked
 	}
-	if model.CrossTenantDetected || strings.TrimSpace(model.ViewerScope) != strings.TrimSpace(model.TenantScope) || model.TenantPrivateDataExposed || model.Visibility == point15ValDVisibilityPublicBlocked || model.ProjectionStateMutated {
+	if model.CrossTenantDetected || model.ViewerScope != model.TenantScope || model.TenantPrivateDataExposed || model.Visibility == point15ValDVisibilityPublicBlocked || model.ProjectionStateMutated {
 		return Point15ValDStateBlocked
 	}
 	if model.DecisiveFailureHidden {
@@ -1098,9 +1266,9 @@ func EvaluatePoint15ValDAccessTenantPrivacyBoundaryState(model Point15ValDAccess
 
 func point15ValDTimestampDisplayModel(dependency Point15ValDDependencySnapshot) Point15ValDTimestampDisplayDiscipline {
 	valC := dependency.Point15ValC.TimestampDiscipline
-	eventAt := strings.TrimSpace(valC.EnforcedAt)
+	eventAt := valC.EnforcedAt
 	if eventAt == "" {
-		eventAt = strings.TrimSpace(valC.EvaluatedAt)
+		eventAt = valC.EvaluatedAt
 	}
 	return Point15ValDTimestampDisplayDiscipline{
 		DisciplineID:                 "timestamp_display_point15_vald_001",
@@ -1122,53 +1290,45 @@ func point15ValDTimestampDisplayModel(dependency Point15ValDDependencySnapshot) 
 
 func EvaluatePoint15ValDTimestampDisplayDisciplineState(model Point15ValDTimestampDisplayDiscipline) string {
 	if !point15ValDRefValid(model.DisciplineID) ||
-		!point15ValDModeValid(model.ProjectionMode) ||
-		!point11Val0ScopeValid(model.TenantScope) ||
-		strings.TrimSpace(model.EventAt) == "" ||
-		strings.TrimSpace(model.DisplayedAt) == "" ||
-		strings.TrimSpace(model.ReferenceNow) == "" ||
+		model.ProjectionMode != point15ValDModeTimeline ||
+		!point15ValDRawScopeValid(model.TenantScope) ||
+		!point12Val0RawTimestampValid(model.EventAt) ||
+		!point12Val0RawTimestampValid(model.DisplayedAt) ||
+		!point12Val0RawTimestampValid(model.ReferenceNow) ||
 		!point14Val0CanonicalTimeSourceValid(model.TimeSource) {
 		return Point15ValDStateBlocked
 	}
 	if model.ClientLocalCreatesCanonical || model.SourceEventCreatesCanonical || model.CanonicalOrderingFromDisplay {
 		return Point15ValDStateBlocked
 	}
-	eventAt, okEvent := point14Val0ParsedTime(model.EventAt)
-	displayedAt, okDisplayed := point14Val0ParsedTime(model.DisplayedAt)
-	referenceNow, okNow := point14Val0ParsedTime(model.ReferenceNow)
-	if !okEvent || !okDisplayed || !okNow {
+	if !point15ValDOptionalRawTimestampValid(model.SourceEventAt) ||
+		!point15ValDOptionalRawTimestampValid(model.ReceivedAt) ||
+		!point15ValDOptionalRawTimestampValid(model.ValidatedAt) ||
+		!point15ValDOptionalRawTimestampValid(model.EnforcedAt) {
 		return Point15ValDStateBlocked
 	}
+	eventAt, _ := point14Val0ParsedTime(model.EventAt)
+	displayedAt, _ := point14Val0ParsedTime(model.DisplayedAt)
+	referenceNow, _ := point14Val0ParsedTime(model.ReferenceNow)
 	if displayedAt.Before(eventAt) {
 		return Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.SourceEventAt) != "" {
-		if _, ok := point14Val0ParsedTime(model.SourceEventAt); !ok {
-			return Point15ValDStateBlocked
-		}
-		if strings.TrimSpace(model.EventAt) == "" {
-			return Point15ValDStateBlocked
-		}
+	if model.SourceEventAt != "" && model.EventAt == "" {
+		return Point15ValDStateBlocked
 	}
 	if eventAt.After(referenceNow) {
 		return Point15ValDStateReviewRequired
 	}
-	if strings.TrimSpace(model.EnforcedAt) != "" && strings.TrimSpace(model.ValidatedAt) != "" {
-		enforcedAt, okEnforced := point14Val0ParsedTime(model.EnforcedAt)
-		validatedAt, okValidated := point14Val0ParsedTime(model.ValidatedAt)
-		if !okEnforced || !okValidated {
-			return Point15ValDStateBlocked
-		}
+	if model.EnforcedAt != "" && model.ValidatedAt != "" {
+		enforcedAt, _ := point14Val0ParsedTime(model.EnforcedAt)
+		validatedAt, _ := point14Val0ParsedTime(model.ValidatedAt)
 		if enforcedAt.Before(validatedAt) {
 			return Point15ValDStateReviewRequired
 		}
 	}
-	if strings.TrimSpace(model.ValidatedAt) != "" && strings.TrimSpace(model.ReceivedAt) != "" {
-		validatedAt, okValidated := point14Val0ParsedTime(model.ValidatedAt)
-		receivedAt, okReceived := point14Val0ParsedTime(model.ReceivedAt)
-		if !okValidated || !okReceived {
-			return Point15ValDStateBlocked
-		}
+	if model.ValidatedAt != "" && model.ReceivedAt != "" {
+		validatedAt, _ := point14Val0ParsedTime(model.ValidatedAt)
+		receivedAt, _ := point14Val0ParsedTime(model.ReceivedAt)
 		if validatedAt.Before(receivedAt) {
 			return Point15ValDStateReviewRequired
 		}
@@ -1221,7 +1381,7 @@ func point15ValDAuthorityBoundaryModel(dependency Point15ValDDependencySnapshot)
 }
 
 func EvaluatePoint15ValDAuthorityBoundaryState(model Point15ValDAuthorityBoundary) string {
-	if !point15ValDRefValid(model.BoundaryID) || !point11Val0ScopeValid(model.TenantScope) || !model.FormalCoreOnly {
+	if !point15ValDRefValid(model.BoundaryID) || !point15ValDRawScopeValid(model.TenantScope) || !model.FormalCoreOnly {
 		return Point15ValDStateBlocked
 	}
 	if model.DashboardApprovesPass ||
@@ -1251,7 +1411,7 @@ func point15ValDNoOverclaimGuardModel() Point15ValDNoOverclaimGuard {
 }
 
 func EvaluatePoint15ValDNoOverclaimGuardState(model Point15ValDNoOverclaimGuard) string {
-	if strings.TrimSpace(model.ProjectionDisclaimer) != point15ValDProjectionDisclaimer ||
+	if model.ProjectionDisclaimer != point15ValDProjectionDisclaimer ||
 		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point15ValDSafeWording()) ||
 		!point12Val0ExactStringSetMatch(model.BlockedWording, point15ValDForbiddenWording()) {
 		return Point15ValDStateBlocked
@@ -1259,7 +1419,7 @@ func EvaluatePoint15ValDNoOverclaimGuardState(model Point15ValDNoOverclaimGuard)
 	if point15ValDObservedListContainsForbiddenWording(model.ObservedTexts) {
 		return Point15ValDStateBlocked
 	}
-	if point15ValDObservedListContainsForbiddenWording(model.InternalDiagnosticTexts) && !model.InternalDiagnosticsClassifiedBlocked {
+	if point15ValDInternalListContainsForbiddenWording(model.InternalDiagnosticTexts) && !model.InternalDiagnosticsClassifiedBlocked {
 		return Point15ValDStateBlocked
 	}
 	return Point15ValDStateActive
@@ -1291,18 +1451,28 @@ func Point15ValDFoundationModel() Point15ValDAssuranceProjectionFoundation {
 }
 
 func point15ValDAggregate(states ...string) string {
+	if len(states) == 0 {
+		return Point15ValDStateBlocked
+	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValDStateBlocked {
+		switch state {
+		case Point15ValDStateActive, Point15ValDStateBlocked, Point15ValDStateReviewRequired, Point15ValDStateIncomplete:
+		default:
 			return Point15ValDStateBlocked
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValDStateReviewRequired {
+		if state == Point15ValDStateBlocked {
+			return Point15ValDStateBlocked
+		}
+	}
+	for _, state := range states {
+		if state == Point15ValDStateReviewRequired {
 			return Point15ValDStateReviewRequired
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValDStateIncomplete {
+		if state == Point15ValDStateIncomplete {
 			return Point15ValDStateIncomplete
 		}
 	}
@@ -1327,7 +1497,11 @@ func point15ValDBlockingReasons(model Point15ValDAssuranceProjectionFoundation) 
 	}
 	reasons := []string{}
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15ValDStateBlocked {
+		switch state {
+		case Point15ValDStateBlocked:
+			reasons = append(reasons, name)
+		case Point15ValDStateActive, Point15ValDStateReviewRequired, Point15ValDStateIncomplete:
+		default:
 			reasons = append(reasons, name)
 		}
 	}
@@ -1352,7 +1526,7 @@ func point15ValDReviewPrerequisites(model Point15ValDAssuranceProjectionFoundati
 	}
 	prereqs := append([]string{}, model.Dependency.ReviewPrerequisites...)
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15ValDStateReviewRequired || strings.TrimSpace(state) == Point15ValDStateIncomplete {
+		if state == Point15ValDStateReviewRequired || state == Point15ValDStateIncomplete {
 			prereqs = append(prereqs, name)
 		}
 	}
@@ -1375,40 +1549,40 @@ func ComputePoint15ValDAssuranceProjectionFoundation(model Point15ValDAssuranceP
 	model.AuthorityBoundaryState = EvaluatePoint15ValDAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValDNoOverclaimGuardState(model.NoOverclaimGuard)
 
-	expectedTenant := strings.TrimSpace(model.Dependency.InheritedTenantScope)
+	expectedTenant := model.Dependency.InheritedTenantScope
 	val0 := model.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0
-	expectedEvidenceID := strings.TrimSpace(val0.EvidenceContext.EvidenceID)
-	expectedHash := strings.TrimSpace(val0.EvidenceContext.EvidenceHash)
-	expectedPolicy := strings.TrimSpace(val0.EvidenceContext.PolicyVersion)
-	expectedEngine := strings.TrimSpace(val0.EvidenceContext.EngineVersion)
-	expectedSchema := strings.TrimSpace(val0.EvidenceContext.SchemaVersion)
-	expectedFreshness := strings.TrimSpace(val0.FreshnessTaxonomy.FreshnessStatus)
-	expectedDowngrade := strings.TrimSpace(val0.DowngradeTaxonomy.DowngradeOutcome)
-	expectedLifecycle := strings.TrimSpace(model.Dependency.Point15ValC.EvidenceLifecycle.LifecycleStatus)
-	expectedEnforcementRef := strings.TrimSpace(model.Dependency.Point15ValC.EnforcementAction.EnforcementID)
-	expectedEnforcementAction := strings.TrimSpace(model.Dependency.Point15ValC.EnforcementAction.EnforcementAction)
-	expectedEnforcementReason := strings.TrimSpace(model.Dependency.Point15ValC.EnforcementAction.EnforcementReason)
-	expectedTargetState := strings.TrimSpace(model.Dependency.Point15ValC.EnforcementAction.TargetState)
-	expectedReplayRef := strings.TrimSpace(model.Dependency.Point15ValC.ReplayProofHistory.ReplayRef)
-	expectedProofHistoryRef := strings.TrimSpace(model.Dependency.Point15ValC.ReplayProofHistory.ProofHistoryRef)
-	expectedProofPackRef := strings.TrimSpace(model.Dependency.Point15ValC.ReplayProofHistory.ProofPackRef)
-	expectedScheduleRef := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.Schedule.ScheduleID)
-	expectedRunRef := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.Run.RunID)
-	expectedRetryRef := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.RetryBudget.BudgetID)
-	expectedThrottleRef := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.TenantThrottle.ThrottleID)
-	expectedScheduledStatus := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.Schedule.ScheduledStatus)
-	expectedRunResult := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.Run.RunResult)
-	expectedRetryStatus := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.RetryBudget.RetryBudgetStatus)
-	expectedThrottleStatus := strings.TrimSpace(model.Dependency.Point15ValC.Dependency.Point15ValB.TenantThrottle.ThrottleStatus)
+	expectedEvidenceID := val0.EvidenceContext.EvidenceID
+	expectedHash := val0.EvidenceContext.EvidenceHash
+	expectedPolicy := val0.EvidenceContext.PolicyVersion
+	expectedEngine := val0.EvidenceContext.EngineVersion
+	expectedSchema := val0.EvidenceContext.SchemaVersion
+	expectedFreshness := val0.FreshnessTaxonomy.FreshnessStatus
+	expectedDowngrade := val0.DowngradeTaxonomy.DowngradeOutcome
+	expectedLifecycle := model.Dependency.Point15ValC.EvidenceLifecycle.LifecycleStatus
+	expectedEnforcementRef := model.Dependency.Point15ValC.EnforcementAction.EnforcementID
+	expectedEnforcementAction := model.Dependency.Point15ValC.EnforcementAction.EnforcementAction
+	expectedEnforcementReason := model.Dependency.Point15ValC.EnforcementAction.EnforcementReason
+	expectedTargetState := model.Dependency.Point15ValC.EnforcementAction.TargetState
+	expectedReplayRef := model.Dependency.Point15ValC.ReplayProofHistory.ReplayRef
+	expectedProofHistoryRef := model.Dependency.Point15ValC.ReplayProofHistory.ProofHistoryRef
+	expectedProofPackRef := model.Dependency.Point15ValC.ReplayProofHistory.ProofPackRef
+	expectedScheduleRef := model.Dependency.Point15ValC.Dependency.Point15ValB.Schedule.ScheduleID
+	expectedRunRef := model.Dependency.Point15ValC.Dependency.Point15ValB.Run.RunID
+	expectedRetryRef := model.Dependency.Point15ValC.Dependency.Point15ValB.RetryBudget.BudgetID
+	expectedThrottleRef := model.Dependency.Point15ValC.Dependency.Point15ValB.TenantThrottle.ThrottleID
+	expectedScheduledStatus := model.Dependency.Point15ValC.Dependency.Point15ValB.Schedule.ScheduledStatus
+	expectedRunResult := model.Dependency.Point15ValC.Dependency.Point15ValB.Run.RunResult
+	expectedRetryStatus := model.Dependency.Point15ValC.Dependency.Point15ValB.RetryBudget.RetryBudgetStatus
+	expectedThrottleStatus := model.Dependency.Point15ValC.Dependency.Point15ValB.TenantThrottle.ThrottleStatus
 
-	if expectedTenant == "" ||
-		strings.TrimSpace(model.Timeline.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.Dashboard.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.Query.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.EvidenceDetail.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.AccessTenantPrivacy.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.TimestampDisplayDiscipline.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.AuthorityBoundary.TenantScope) != expectedTenant {
+	if !formalRawExactValid(expectedTenant, point11Val0ScopeValid) ||
+		model.Timeline.TenantScope != expectedTenant ||
+		model.Dashboard.TenantScope != expectedTenant ||
+		model.Query.TenantScope != expectedTenant ||
+		model.EvidenceDetail.TenantScope != expectedTenant ||
+		model.AccessTenantPrivacy.TenantScope != expectedTenant ||
+		model.TimestampDisplayDiscipline.TenantScope != expectedTenant ||
+		model.AuthorityBoundary.TenantScope != expectedTenant {
 		model.TimelineState = Point15ValDStateBlocked
 		model.DashboardState = Point15ValDStateBlocked
 		model.QueryState = Point15ValDStateBlocked
@@ -1417,54 +1591,54 @@ func ComputePoint15ValDAssuranceProjectionFoundation(model Point15ValDAssuranceP
 		model.TimestampDisplayState = Point15ValDStateBlocked
 		model.AuthorityBoundaryState = Point15ValDStateBlocked
 	}
-	if expectedEvidenceID == "" ||
-		strings.TrimSpace(model.Timeline.EvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.EvidenceDetail.EvidenceID) != expectedEvidenceID {
+	if !formalRawExactNonEmpty(expectedEvidenceID) ||
+		model.Timeline.EvidenceID != expectedEvidenceID ||
+		model.EvidenceDetail.EvidenceID != expectedEvidenceID {
 		model.TimelineState = Point15ValDStateBlocked
 		model.EvidenceDetailState = Point15ValDStateBlocked
 		model.QueryState = Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.EvidenceDetail.EvidenceHash) != expectedHash ||
-		strings.TrimSpace(model.EvidenceDetail.PolicyVersion) != expectedPolicy ||
-		strings.TrimSpace(model.EvidenceDetail.EngineVersion) != expectedEngine ||
-		strings.TrimSpace(model.EvidenceDetail.SchemaVersion) != expectedSchema ||
-		strings.TrimSpace(model.EvidenceDetail.FreshnessStatus) != expectedFreshness ||
-		strings.TrimSpace(model.EvidenceDetail.DowngradeOutcome) != expectedDowngrade ||
-		strings.TrimSpace(model.EvidenceDetail.LifecycleStatus) != expectedLifecycle ||
-		strings.TrimSpace(model.EvidenceDetail.EnforcementStatus) != expectedTargetState {
+	if model.EvidenceDetail.EvidenceHash != expectedHash ||
+		model.EvidenceDetail.PolicyVersion != expectedPolicy ||
+		model.EvidenceDetail.EngineVersion != expectedEngine ||
+		model.EvidenceDetail.SchemaVersion != expectedSchema ||
+		model.EvidenceDetail.FreshnessStatus != expectedFreshness ||
+		model.EvidenceDetail.DowngradeOutcome != expectedDowngrade ||
+		model.EvidenceDetail.LifecycleStatus != expectedLifecycle ||
+		model.EvidenceDetail.EnforcementStatus != expectedTargetState {
 		model.EvidenceDetailState = Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.Timeline.SourceValCRef) != expectedEnforcementRef ||
-		strings.TrimSpace(model.Timeline.ReplayRef) != expectedReplayRef ||
-		strings.TrimSpace(model.Timeline.ProofHistoryRef) != expectedProofHistoryRef {
+	if model.Timeline.SourceValCRef != expectedEnforcementRef ||
+		model.Timeline.ReplayRef != expectedReplayRef ||
+		model.Timeline.ProofHistoryRef != expectedProofHistoryRef {
 		model.TimelineState = Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.EnforcementDetail.EnforcementRef) != expectedEnforcementRef ||
-		strings.TrimSpace(model.EnforcementDetail.EnforcementAction) != expectedEnforcementAction ||
-		strings.TrimSpace(model.EnforcementDetail.EnforcementReason) != expectedEnforcementReason ||
-		strings.TrimSpace(model.EnforcementDetail.TargetState) != expectedTargetState ||
-		strings.TrimSpace(model.EnforcementDetail.CurrentState) != expectedTargetState ||
-		strings.TrimSpace(model.EnforcementDetail.CurrentState) != strings.TrimSpace(model.Timeline.CurrentState) ||
-		strings.TrimSpace(model.EnforcementDetail.PriorState) != strings.TrimSpace(model.Timeline.PriorState) {
+	if model.EnforcementDetail.EnforcementRef != expectedEnforcementRef ||
+		model.EnforcementDetail.EnforcementAction != expectedEnforcementAction ||
+		model.EnforcementDetail.EnforcementReason != expectedEnforcementReason ||
+		model.EnforcementDetail.TargetState != expectedTargetState ||
+		model.EnforcementDetail.CurrentState != expectedTargetState ||
+		model.EnforcementDetail.CurrentState != model.Timeline.CurrentState ||
+		model.EnforcementDetail.PriorState != model.Timeline.PriorState {
 		model.EnforcementDetailState = Point15ValDStateBlocked
 		model.TimelineState = Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ReplayProofHistory.ReplayRef) != expectedReplayRef ||
-		strings.TrimSpace(model.ReplayProofHistory.ProofHistoryRef) != expectedProofHistoryRef ||
-		strings.TrimSpace(model.ReplayProofHistory.ProofPackRef) != expectedProofPackRef {
+	if model.ReplayProofHistory.ReplayRef != expectedReplayRef ||
+		model.ReplayProofHistory.ProofHistoryRef != expectedProofHistoryRef ||
+		model.ReplayProofHistory.ProofPackRef != expectedProofPackRef {
 		model.ReplayProofHistoryState = Point15ValDStateBlocked
 	}
 	if !point12Val0ExactStringSetMatch(model.Query.ResultRefs, []string{expectedEvidenceID, expectedEnforcementRef, expectedReplayRef}) {
 		model.QueryState = Point15ValDStateBlocked
 	}
-	if strings.TrimSpace(model.RevalidationDetail.ScheduleRef) != expectedScheduleRef ||
-		strings.TrimSpace(model.RevalidationDetail.RunRef) != expectedRunRef ||
-		strings.TrimSpace(model.RevalidationDetail.RetryBudgetRef) != expectedRetryRef ||
-		strings.TrimSpace(model.RevalidationDetail.TenantThrottleRef) != expectedThrottleRef ||
-		strings.TrimSpace(model.RevalidationDetail.ScheduledStatus) != expectedScheduledStatus ||
-		strings.TrimSpace(model.RevalidationDetail.RunResult) != expectedRunResult ||
-		strings.TrimSpace(model.RevalidationDetail.RetryStatus) != expectedRetryStatus ||
-		strings.TrimSpace(model.RevalidationDetail.ThrottleStatus) != expectedThrottleStatus {
+	if model.RevalidationDetail.ScheduleRef != expectedScheduleRef ||
+		model.RevalidationDetail.RunRef != expectedRunRef ||
+		model.RevalidationDetail.RetryBudgetRef != expectedRetryRef ||
+		model.RevalidationDetail.TenantThrottleRef != expectedThrottleRef ||
+		model.RevalidationDetail.ScheduledStatus != expectedScheduledStatus ||
+		model.RevalidationDetail.RunResult != expectedRunResult ||
+		model.RevalidationDetail.RetryStatus != expectedRetryStatus ||
+		model.RevalidationDetail.ThrottleStatus != expectedThrottleStatus {
 		model.RevalidationDetailState = Point15ValDStateBlocked
 	}
 
@@ -1472,7 +1646,7 @@ func ComputePoint15ValDAssuranceProjectionFoundation(model Point15ValDAssuranceP
 	expectedBlockedCount := 0
 	expectedReviewCount := 0
 	expectedIncompleteCount := 0
-	switch strings.TrimSpace(model.EvidenceDetail.EnforcementStatus) {
+	switch model.EvidenceDetail.EnforcementStatus {
 	case Point15Val0StateActive:
 		expectedActiveCount = 1
 	case Point15Val0StateBlocked:
@@ -1483,19 +1657,19 @@ func ComputePoint15ValDAssuranceProjectionFoundation(model Point15ValDAssuranceP
 		expectedIncompleteCount = 1
 	}
 	expectedStaleCount := 0
-	if strings.TrimSpace(model.EvidenceDetail.FreshnessStatus) == point15Val0FreshnessStale || strings.TrimSpace(model.EvidenceDetail.LifecycleStatus) == point15ValCLifecycleStale {
+	if model.EvidenceDetail.FreshnessStatus == point15Val0FreshnessStale || model.EvidenceDetail.LifecycleStatus == point15ValCLifecycleStale {
 		expectedStaleCount = 1
 	}
 	expectedExpiredCount := 0
-	if strings.TrimSpace(model.EvidenceDetail.LifecycleStatus) == point15ValCLifecycleExpired {
+	if model.EvidenceDetail.LifecycleStatus == point15ValCLifecycleExpired {
 		expectedExpiredCount = 1
 	}
 	expectedRevokedCount := 0
-	if strings.TrimSpace(model.EvidenceDetail.LifecycleStatus) == point15ValCLifecycleRevoked {
+	if model.EvidenceDetail.LifecycleStatus == point15ValCLifecycleRevoked {
 		expectedRevokedCount = 1
 	}
 	expectedEnforcementCount := 0
-	if strings.TrimSpace(model.EnforcementDetail.EnforcementAction) != point15ValCActionNone {
+	if model.EnforcementDetail.EnforcementAction != point15ValCActionNone {
 		expectedEnforcementCount = 1
 	}
 	if model.Dashboard.EvidenceCount != 1 ||
