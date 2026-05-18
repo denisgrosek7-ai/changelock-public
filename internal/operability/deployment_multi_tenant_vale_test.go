@@ -1282,6 +1282,17 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 		}
 	}
 
+	t.Run("repetitive split scan stays bounded without backtracking", func(t *testing.T) {
+		values := make([]string, 300)
+		allowed := make([]bool, len(values))
+		for i := range values {
+			values[i] = "agent"
+		}
+		if deploymentMultiTenantValEForbiddenPhraseAcrossValues(values, allowed, "agent agent agent agent denied") {
+			t.Fatalf("expected repetitive non-matching split phrase corpus not to block")
+		}
+	})
+
 	allowedSplitClaims := [][]string{
 		{"validated deployment baseline", "not production approval"},
 	}

@@ -1604,30 +1604,62 @@ func deploymentMultiTenantValEForbiddenPhraseAcrossValues(values []string, allow
 			flat = append(flat, tokenBucket{token: token, bucket: bucketIndex})
 		}
 	}
-	var search func(nextIndex, phraseIndex, lastBucket, distinctBuckets int, includesNonAllowed bool) bool
-	search = func(nextIndex, phraseIndex, lastBucket, distinctBuckets int, includesNonAllowed bool) bool {
-		if phraseIndex == len(phraseTokens) {
-			return distinctBuckets > 1 && includesNonAllowed
+
+	const (
+		matchedMultipleBuckets = 1 << iota
+		matchedNonAllowedBucket
+	)
+	states := make([][4]map[int]struct{}, len(phraseTokens)+1)
+	addState := func(phraseIndex, stateMask, bucket int) {
+		if states[phraseIndex][stateMask] == nil {
+			states[phraseIndex][stateMask] = map[int]struct{}{}
 		}
-		for i := nextIndex; i < len(flat); i++ {
-			if flat[i].token != phraseTokens[phraseIndex] {
+		states[phraseIndex][stateMask][bucket] = struct{}{}
+	}
+	hasCurrentBucket := func(buckets map[int]struct{}, bucket int) bool {
+		_, ok := buckets[bucket]
+		return ok
+	}
+	hasDifferentBucket := func(buckets map[int]struct{}, bucket int) bool {
+		if len(buckets) > 1 {
+			return true
+		}
+		if len(buckets) == 0 {
+			return false
+		}
+		return !hasCurrentBucket(buckets, bucket)
+	}
+
+	for _, candidate := range flat {
+		for phraseIndex := len(phraseTokens) - 1; phraseIndex >= 1; phraseIndex-- {
+			if candidate.token != phraseTokens[phraseIndex] {
 				continue
 			}
-			nextDistinctBuckets := distinctBuckets
-			if flat[i].bucket != lastBucket {
-				nextDistinctBuckets++
-			}
-			if search(i+1, phraseIndex+1, flat[i].bucket, nextDistinctBuckets, includesNonAllowed || !allowed[flat[i].bucket]) {
-				return true
+			for stateMask := 0; stateMask < 4; stateMask++ {
+				buckets := states[phraseIndex][stateMask]
+				if len(buckets) == 0 {
+					continue
+				}
+				nextStateMask := stateMask
+				if !allowed[candidate.bucket] {
+					nextStateMask |= matchedNonAllowedBucket
+				}
+				if hasCurrentBucket(buckets, candidate.bucket) {
+					addState(phraseIndex+1, nextStateMask, candidate.bucket)
+				}
+				if hasDifferentBucket(buckets, candidate.bucket) {
+					addState(phraseIndex+1, nextStateMask|matchedMultipleBuckets, candidate.bucket)
+				}
 			}
 		}
-		return false
-	}
-	for i, token := range flat {
-		if token.token != phraseTokens[0] {
-			continue
+		if candidate.token == phraseTokens[0] {
+			stateMask := 0
+			if !allowed[candidate.bucket] {
+				stateMask |= matchedNonAllowedBucket
+			}
+			addState(1, stateMask, candidate.bucket)
 		}
-		if search(i+1, 1, token.bucket, 1, !allowed[token.bucket]) {
+		if len(states[len(phraseTokens)][matchedMultipleBuckets|matchedNonAllowedBucket]) > 0 {
 			return true
 		}
 	}
