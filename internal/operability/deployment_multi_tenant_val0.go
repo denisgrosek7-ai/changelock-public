@@ -1171,33 +1171,87 @@ func deploymentMultiTenantVal0ForbiddenPhraseAcrossValues(values []string, allow
 	if len(phraseTokens) < 2 {
 		return false
 	}
-	matched := 0
-	distinctBuckets := 0
-	lastBucket := -1
-	matchedIncludesNonAllowed := false
+	return deploymentMultiTenantVal0ForbiddenTokenSequenceAcrossValues(values, allowed, phraseTokens)
+}
+
+type deploymentMultiTenantVal0PhraseMatchState struct {
+	lastBucket         int
+	distinctBuckets    int
+	includesNonAllowed bool
+}
+
+func deploymentMultiTenantVal0ForbiddenTokenSequenceAcrossValues(values []string, allowed []bool, phraseTokens []string) bool {
+	states := make([][]deploymentMultiTenantVal0PhraseMatchState, len(phraseTokens))
 	for bucketIndex, value := range values {
 		bucketTokens := strings.Fields(value)
 		if len(bucketTokens) == 0 {
 			continue
 		}
 		for _, token := range bucketTokens {
-			if token != phraseTokens[matched] {
-				continue
-			}
-			if bucketIndex != lastBucket {
-				distinctBuckets++
-				lastBucket = bucketIndex
-			}
-			if !allowed[bucketIndex] {
-				matchedIncludesNonAllowed = true
-			}
-			matched++
-			if matched == len(phraseTokens) {
-				return distinctBuckets > 1 && matchedIncludesNonAllowed
+			for phraseIndex := len(phraseTokens) - 1; phraseIndex >= 0; phraseIndex-- {
+				if token != phraseTokens[phraseIndex] {
+					continue
+				}
+				var candidates []deploymentMultiTenantVal0PhraseMatchState
+				if phraseIndex == 0 {
+					candidates = append(candidates, deploymentMultiTenantVal0PhraseMatchState{
+						lastBucket:         bucketIndex,
+						distinctBuckets:    1,
+						includesNonAllowed: !allowed[bucketIndex],
+					})
+				} else {
+					for _, previous := range states[phraseIndex] {
+						next := previous
+						if bucketIndex != previous.lastBucket {
+							next.distinctBuckets++
+							if next.distinctBuckets > 2 {
+								next.distinctBuckets = 2
+							}
+						}
+						next.lastBucket = bucketIndex
+						next.includesNonAllowed = next.includesNonAllowed || !allowed[bucketIndex]
+						candidates = append(candidates, next)
+					}
+				}
+				for _, candidate := range candidates {
+					if phraseIndex+1 == len(phraseTokens) {
+						if candidate.distinctBuckets > 1 && candidate.includesNonAllowed {
+							return true
+						}
+						continue
+					}
+					states[phraseIndex+1] = deploymentMultiTenantVal0AppendPhraseMatchState(states[phraseIndex+1], candidate)
+				}
 			}
 		}
 	}
 	return false
+}
+
+func deploymentMultiTenantVal0AppendPhraseMatchState(states []deploymentMultiTenantVal0PhraseMatchState, candidate deploymentMultiTenantVal0PhraseMatchState) []deploymentMultiTenantVal0PhraseMatchState {
+	for _, state := range states {
+		if deploymentMultiTenantVal0PhraseMatchStateDominates(state, candidate) {
+			return states
+		}
+	}
+	filtered := states[:0]
+	for _, state := range states {
+		if deploymentMultiTenantVal0PhraseMatchStateDominates(candidate, state) {
+			continue
+		}
+		filtered = append(filtered, state)
+	}
+	return append(filtered, candidate)
+}
+
+func deploymentMultiTenantVal0PhraseMatchStateDominates(a, b deploymentMultiTenantVal0PhraseMatchState) bool {
+	if a.distinctBuckets < b.distinctBuckets {
+		return false
+	}
+	if b.includesNonAllowed && !a.includesNonAllowed {
+		return false
+	}
+	return a.distinctBuckets > 1 || a.lastBucket == b.lastBucket
 }
 
 func deploymentMultiTenantVal0ForbiddenCompactAcrossValues(values []string, allowed []bool, phrase string) bool {
@@ -1208,24 +1262,85 @@ func deploymentMultiTenantVal0ForbiddenCompactAcrossValues(values []string, allo
 	if compactPhrase == "" {
 		return false
 	}
-	for start := range values {
-		var compact strings.Builder
-		allAllowed := true
-		parts := 0
-		for end := start; end < len(values); end++ {
-			part := deploymentMultiTenantVal0CompactClaimText(values[end])
-			if part == "" {
-				continue
-			}
-			compact.WriteString(part)
-			allAllowed = allAllowed && allowed[end]
-			parts++
-			if parts > 1 && !allAllowed && strings.Contains(compact.String(), compactPhrase) {
-				return true
-			}
+	var compact strings.Builder
+	var compactAllowed []bool
+	var compactBucket []int
+	for idx, value := range values {
+		part := deploymentMultiTenantVal0CompactClaimText(value)
+		if part == "" {
+			continue
+		}
+		for _, r := range part {
+			compact.WriteRune(r)
+			compactAllowed = append(compactAllowed, allowed[idx])
+			compactBucket = append(compactBucket, idx)
 		}
 	}
+	return deploymentMultiTenantVal0CompactMatchUsesNonAllowedBucket(compact.String(), compactAllowed, compactBucket, compactPhrase)
+}
+
+func deploymentMultiTenantVal0CompactMatchUsesNonAllowedBucket(compact string, allowed []bool, buckets []int, phrase string) bool {
+	text := []rune(compact)
+	pattern := []rune(phrase)
+	if len(pattern) == 0 || len(text) < len(pattern) || len(text) != len(allowed) || len(text) != len(buckets) {
+		return false
+	}
+
+	lps := make([]int, len(pattern))
+	for i, length := 1, 0; i < len(pattern); {
+		if pattern[i] == pattern[length] {
+			length++
+			lps[i] = length
+			i++
+			continue
+		}
+		if length != 0 {
+			length = lps[length-1]
+			continue
+		}
+		lps[i] = 0
+		i++
+	}
+
+	for i, matched := 0, 0; i < len(text); {
+		if text[i] == pattern[matched] {
+			i++
+			matched++
+			if matched != len(pattern) {
+				continue
+			}
+			start := i - matched
+			if deploymentMultiTenantVal0CompactMatchedWindowUsesNonAllowedBucket(allowed, buckets, start, i) {
+				return true
+			}
+			matched = lps[matched-1]
+			continue
+		}
+		if matched != 0 {
+			matched = lps[matched-1]
+			continue
+		}
+		i++
+	}
 	return false
+}
+
+func deploymentMultiTenantVal0CompactMatchedWindowUsesNonAllowedBucket(allowed []bool, buckets []int, start, end int) bool {
+	if start < 0 || end > len(allowed) || end > len(buckets) || start >= end {
+		return false
+	}
+	firstBucket := buckets[start]
+	spansBuckets := false
+	includesNonAllowed := false
+	for i := start; i < end; i++ {
+		if buckets[i] != firstBucket {
+			spansBuckets = true
+		}
+		if !allowed[i] {
+			includesNonAllowed = true
+		}
+	}
+	return spansBuckets && includesNonAllowed
 }
 
 func deploymentMultiTenantVal0ValueContainsForbiddenPhraseTokenSequence(value, phrase string) bool {

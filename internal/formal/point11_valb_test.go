@@ -91,6 +91,12 @@ func TestPoint11ValBDependencyState(t *testing.T) {
 		{name: "blocked vala graph blocks", mutate: func(model *Point11ValBDependencySnapshot) {
 			model.ValAGraphState = Point11ValAGraphStateBlocked
 		}, wantState: Point11ValBDependencyStateBlocked},
+		{name: "whitespace retagged vala current state blocks raw exact", mutate: func(model *Point11ValBDependencySnapshot) {
+			model.ValACurrentState = " " + Point11ValAStateActive
+		}, wantState: Point11ValBDependencyStateBlocked},
+		{name: "tab newline retagged vala dependency state blocks raw exact", mutate: func(model *Point11ValBDependencySnapshot) {
+			model.ValADependencyState = "\t" + Point11ValADependencyStateActive + "\n"
+		}, wantState: Point11ValBDependencyStateBlocked},
 		{name: "vala point11 pass emission marker blocks", mutate: func(model *Point11ValBDependencySnapshot) {
 			model.ValAPoint11PassEmitted = true
 		}, wantState: Point11ValBDependencyStateBlocked},
@@ -132,6 +138,25 @@ func TestPoint11ValBDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("retagged vala inherited state records exact dependency reason", func(t *testing.T) {
+		for _, mutate := range []func(*Point11ValBDependencySnapshot){
+			func(model *Point11ValBDependencySnapshot) { model.ValACurrentState = " " + Point11ValAStateActive },
+			func(model *Point11ValBDependencySnapshot) {
+				model.ValADependencyState = "\t" + Point11ValADependencyStateActive + "\n"
+			},
+		} {
+			model := point11ValBActiveDependencySnapshot()
+			mutate(&model)
+			state, reasons := point11ValBDependencyStateAndReasons(model)
+			if state != Point11ValBDependencyStateBlocked {
+				t.Fatalf("expected retagged vala inherited state to block, got %q for %#v", state, model)
+			}
+			if !point11Val0ContainsTrimmed(reasons, "vala_dependency_not_active") {
+				t.Fatalf("expected exact vala dependency reason, got %#v", reasons)
+			}
+		}
+	})
 
 	t.Run("taxonomy drift review prerequisite cannot mask blocked vala registry", func(t *testing.T) {
 		valA := activePoint11ValAFoundation()
@@ -571,6 +596,19 @@ func TestPoint11ValBVerificationState(t *testing.T) {
 		}
 	})
 
+	t.Run("hash required claim with padded matching evidence hash refs blocks raw exact", func(t *testing.T) {
+		model := activePoint11ValBFoundation()
+		hashes := []string{" evidence_hash_point11_valb_claim_001"}
+		setHashContract(&model, true, hashes, hashes)
+		model = ComputePoint11ValBFoundation(model)
+		if model.VerificationState != Point11ValBVerificationStateBlocked {
+			t.Fatalf("expected padded matching hashes to block verification, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.Diagnostics.VerificationReasons, "claim_verification_evidence_hash_refs_mismatch") {
+			t.Fatalf("expected exact evidence hash mismatch reason, got %#v", model.Diagnostics.VerificationReasons)
+		}
+	})
+
 	t.Run("hash optional claim with one sided hash refs blocks", func(t *testing.T) {
 		model := activePoint11ValBFoundation()
 		setHashContract(&model, false, []string{"evidence_hash_point11_valb_claim_001"}, nil)
@@ -845,6 +883,17 @@ func TestPoint11ValBAggregateState(t *testing.T) {
 		model = ComputePoint11ValBFoundation(model)
 		if model.CurrentState != Point11ValBStateBlocked {
 			t.Fatalf("expected publication side-effect marker to block aggregate, got %#v", model)
+		}
+	})
+
+	t.Run("aggregate blocks padded active local state instead of normalizing", func(t *testing.T) {
+		model := activePoint11ValBFoundation()
+		model.VerificationState = " " + Point11ValBVerificationStateActive + " "
+		if got := EvaluatePoint11ValBFoundationState(model); got != Point11ValBStateBlocked {
+			t.Fatalf("expected padded verification state to block aggregate, got %q for %#v", got, model)
+		}
+		if !point11Val0ContainsTrimmed(point11ValBBlockingReasons(model), "claim_verification_blocked") {
+			t.Fatalf("expected exact claim verification blocking reason, got %#v", point11ValBBlockingReasons(model))
 		}
 	})
 }

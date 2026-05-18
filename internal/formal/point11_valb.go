@@ -439,14 +439,13 @@ func point11ValBPublicationSurfacesValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11Val0ContainsTrimmed(point11Val0PublicationSurfaces(), trimmed) {
+		if !point11Val0ContainsTrimmed(point11Val0PublicationSurfaces(), value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -472,7 +471,7 @@ func point11ValBFreshnessClassSupported(value string) bool {
 }
 
 func point11ValBFreshnessClassCompatible(required, actual string) bool {
-	return strings.TrimSpace(required) == strings.TrimSpace(actual)
+	return required == actual
 }
 
 func point11ValBClaimLifecycleAllowed(value string) bool {
@@ -491,7 +490,7 @@ func point11ValBClaimLifecycleAllowed(value string) bool {
 }
 
 func point11ValBClaimLifecycleActiveUseEligible(value string) bool {
-	switch strings.TrimSpace(value) {
+	switch value {
 	case Point11Val0ClaimLifecycleApproved, Point11Val0ClaimLifecyclePublished, point11ValBClaimLifecycleActive:
 		return true
 	default:
@@ -500,7 +499,7 @@ func point11ValBClaimLifecycleActiveUseEligible(value string) bool {
 }
 
 func point11ValBClaimLifecycleInvalidated(value string) bool {
-	switch strings.TrimSpace(value) {
+	switch value {
 	case Point11Val0ClaimLifecycleRevoked,
 		Point11Val0ClaimLifecycleSuperseded,
 		Point11Val0ClaimLifecycleCorrected,
@@ -514,8 +513,8 @@ func point11ValBClaimLifecycleInvalidated(value string) bool {
 
 func point11ValBClaimNeedsGovernanceEvent(category, surface string) bool {
 	return point11Val0PublicFacingSurface(surface) ||
-		strings.TrimSpace(category) == Point11Val0ClaimCategoryCustomerVisible ||
-		strings.TrimSpace(category) == Point11Val0ClaimCategoryPublicSafe
+		category == Point11Val0ClaimCategoryCustomerVisible ||
+		category == Point11Val0ClaimCategoryPublicSafe
 }
 
 func point11ValBClaimNeedsCleanRoomReview(category, surface string) bool {
@@ -526,15 +525,14 @@ func point11ValBStringSetKey(values []string) string {
 	seen := map[string]struct{}{}
 	ordered := []string{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
+		if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
+			return ""
 		}
-		if _, exists := seen[trimmed]; exists {
-			continue
+		if _, exists := seen[value]; exists {
+			return ""
 		}
-		seen[trimmed] = struct{}{}
-		ordered = append(ordered, trimmed)
+		seen[value] = struct{}{}
+		ordered = append(ordered, value)
 	}
 	if len(ordered) == 0 {
 		return ""
@@ -560,14 +558,13 @@ func point11ValBClaimRefListValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11ValBClaimRefValid(trimmed) {
+		if !point11ValBClaimRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -578,14 +575,13 @@ func point11ValBEvidenceHashRefsValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11ValBEvidenceHashRefValid(trimmed) {
+		if !point11ValBEvidenceHashRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -712,22 +708,22 @@ func point11ValBDependencyStateAndReasons(model Point11ValBDependencySnapshot) (
 	if model.OpenCLB2Findings > 0 {
 		reasons = append(reasons, "vala_open_clb2_findings")
 	}
-	if strings.TrimSpace(model.ValARegistryState) != Point11ValARegistryStateActive {
+	if model.ValARegistryState != Point11ValARegistryStateActive {
 		reasons = append(reasons, "vala_registry_not_active")
 	}
-	if strings.TrimSpace(model.ValASignatureState) != Point11ValASignatureStateActive {
+	if model.ValASignatureState != Point11ValASignatureStateActive {
 		reasons = append(reasons, "vala_signature_not_active")
 	}
-	if strings.TrimSpace(model.ValAAnchorState) != Point11ValAAnchorStateActive {
+	if model.ValAAnchorState != Point11ValAAnchorStateActive {
 		reasons = append(reasons, "vala_anchor_not_active")
 	}
-	if strings.TrimSpace(model.ValALifecycleTransitionState) != Point11ValALifecycleTransitionStateActive {
+	if model.ValALifecycleTransitionState != Point11ValALifecycleTransitionStateActive {
 		reasons = append(reasons, "vala_lifecycle_transition_not_active")
 	}
-	if strings.TrimSpace(model.ValAPolicyUseState) != Point11ValAPolicyUseStateActive {
+	if model.ValAPolicyUseState != Point11ValAPolicyUseStateActive {
 		reasons = append(reasons, "vala_policy_use_not_active")
 	}
-	if strings.TrimSpace(model.ValAGraphState) != Point11ValAGraphStateActive {
+	if model.ValAGraphState != Point11ValAGraphStateActive {
 		reasons = append(reasons, "vala_graph_not_active")
 	}
 	// Hard blockers always win. Review prerequisites are considered only after
@@ -741,15 +737,15 @@ func point11ValBDependencyStateAndReasons(model Point11ValBDependencySnapshot) (
 		}
 		return Point11ValBDependencyStateBlocked, []string{"cross_point_taxonomy_drift_unresolved"}
 	}
-	if strings.TrimSpace(model.ValACurrentState) == Point11ValAStateActive &&
-		strings.TrimSpace(model.ValADependencyState) == Point11ValADependencyStateActive &&
+	if model.ValACurrentState == Point11ValAStateActive &&
+		model.ValADependencyState == Point11ValADependencyStateActive &&
 		len(model.ReviewPrerequisites) == 0 {
 		return Point11ValBDependencyStateActive, nil
 	}
 	if model.LocalReviewAllowsReviewRequired &&
 		(len(model.ReviewPrerequisites) > 0 ||
-			strings.TrimSpace(model.ValACurrentState) == Point11ValAStateReviewRequired ||
-			strings.TrimSpace(model.ValADependencyState) == Point11ValADependencyStateReviewRequired) {
+			model.ValACurrentState == Point11ValAStateReviewRequired ||
+			model.ValADependencyState == Point11ValADependencyStateReviewRequired) {
 		return Point11ValBDependencyStateReviewRequired, []string{"vala_dependency_review_required"}
 	}
 	return Point11ValBDependencyStateBlocked, []string{"vala_dependency_not_active"}
@@ -870,7 +866,7 @@ func point11ValBIssuanceRequestStateAndReasons(model Point11ValBClaimIssuanceReq
 	if !point11ValAPolicyRefValid(model.PolicyBasisRef) {
 		reasons = append(reasons, "issuance_policy_basis_ref_invalid")
 	}
-	if strings.TrimSpace(model.PolicyBasisState) != point11ValBPolicyBasisStateActive {
+	if model.PolicyBasisState != point11ValBPolicyBasisStateActive {
 		reasons = append(reasons, "issuance_policy_basis_not_active")
 	}
 	if !point11Val0IdentityValueValid(model.PolicyVersion) {
@@ -880,7 +876,7 @@ func point11ValBIssuanceRequestStateAndReasons(model Point11ValBClaimIssuanceReq
 		reasons = append(reasons, "issuance_evidence_refs_invalid")
 	}
 	if !point11ValBVerificationMethodSupported(model.VerificationMethod) ||
-		strings.TrimSpace(model.VerificationMethod) != strings.TrimSpace(model.ClaimTypeRequiredVerification) {
+		model.VerificationMethod != model.ClaimTypeRequiredVerification {
 		reasons = append(reasons, "issuance_verification_method_invalid")
 	}
 	if !point11ValBFreshnessClassSupported(model.FreshnessClass) ||
@@ -896,25 +892,25 @@ func point11ValBIssuanceRequestStateAndReasons(model Point11ValBClaimIssuanceReq
 		reasons = append(reasons, "issuance_requested_category_or_audience_invalid")
 	}
 	if !point11ValBAuthorityMatrixRefValid(model.AuthorityMatrixRef) ||
-		strings.TrimSpace(model.AuthorityMatrixState) != point11ValBAuthorityMatrixStateActive {
+		model.AuthorityMatrixState != point11ValBAuthorityMatrixStateActive {
 		reasons = append(reasons, "issuance_authority_matrix_invalid")
 	}
 	if !point11Val0ValidTimestamp(model.IssuedAt) || !point11Val0ValidTimestamp(model.ExpiresAt) {
 		reasons = append(reasons, "issuance_timestamp_invalid")
 	} else {
-		expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.ExpiresAt))
+		expiresAt, _ := time.Parse(time.RFC3339, model.ExpiresAt)
 		if expiresAt.Before(time.Now().UTC()) {
 			reasons = append(reasons, "issuance_expired")
 		}
 	}
-	if strings.TrimSpace(model.ClaimTypeState) != Point11ValBClaimTypeStateActive {
+	if model.ClaimTypeState != Point11ValBClaimTypeStateActive {
 		reasons = append(reasons, "issuance_claim_type_not_active")
 	}
-	if strings.TrimSpace(model.RequestedClaimCategory) == Point11Val0ClaimCategoryCustomerVisible &&
+	if model.RequestedClaimCategory == Point11Val0ClaimCategoryCustomerVisible &&
 		!model.ClaimTypeCustomerVisibleAllowed {
 		reasons = append(reasons, "issuance_customer_visible_category_not_allowed")
 	}
-	if strings.TrimSpace(model.RequestedClaimCategory) == Point11Val0ClaimCategoryPublicSafe &&
+	if model.RequestedClaimCategory == Point11Val0ClaimCategoryPublicSafe &&
 		!model.ClaimTypePublicSafeAllowed {
 		reasons = append(reasons, "issuance_public_safe_category_not_allowed")
 	}
@@ -929,9 +925,9 @@ func point11ValBIssuanceRequestStateAndReasons(model Point11ValBClaimIssuanceReq
 		(!model.ClaimTypeGovernanceEventRequired || !point11ValBGovernanceEventRefValid(model.GovernanceEventRef)) {
 		reasons = append(reasons, "issuance_missing_governance_event")
 	}
-	if strings.TrimSpace(model.ProposerRef) == strings.TrimSpace(model.ApproverRef) {
+	if model.ProposerRef == model.ApproverRef {
 		if point11ValBClaimNeedsGovernanceEvent(model.RequestedClaimCategory, model.PublicationSurface) ||
-			strings.TrimSpace(model.PublicationSurface) == point11Val0PublicationSurfaceExport {
+			model.PublicationSurface == point11Val0PublicationSurfaceExport {
 			reasons = append(reasons, "issuance_proposer_equals_final_approver")
 		}
 		switch point11Val0ActorClass(model.ProposerRef) {
@@ -944,8 +940,8 @@ func point11ValBIssuanceRequestStateAndReasons(model Point11ValBClaimIssuanceReq
 		}
 	}
 	if model.AgentOrigin &&
-		(strings.TrimSpace(model.RequestedClaimCategory) == Point11Val0ClaimCategoryCustomerVisible ||
-			strings.TrimSpace(model.RequestedClaimCategory) == Point11Val0ClaimCategoryPublicSafe) &&
+		(model.RequestedClaimCategory == Point11Val0ClaimCategoryCustomerVisible ||
+			model.RequestedClaimCategory == Point11Val0ClaimCategoryPublicSafe) &&
 		!point11ValBGovernanceEventRefValid(model.GovernanceEventRef) {
 		reasons = append(reasons, "issuance_agent_origin_missing_governance_event")
 	}
@@ -990,7 +986,7 @@ func point11ValBIssuedClaimStateAndReasons(model Point11ValBIssuedClaimRecord) (
 		reasons = append(reasons, "issued_publication_surface_invalid")
 	}
 	if !point11ValAPolicyRefValid(model.PolicyBasisRef) ||
-		strings.TrimSpace(model.PolicyBasisState) != point11ValBPolicyBasisStateActive ||
+		model.PolicyBasisState != point11ValBPolicyBasisStateActive ||
 		!point11Val0IdentityValueValid(model.PolicyVersion) {
 		reasons = append(reasons, "issued_policy_basis_invalid")
 	}
@@ -1003,13 +999,13 @@ func point11ValBIssuedClaimStateAndReasons(model Point11ValBIssuedClaimRecord) (
 	if !point11ValBVerificationMethodSupported(model.VerificationMethod) {
 		reasons = append(reasons, "issued_verification_method_invalid")
 	}
-	if strings.TrimSpace(model.VerificationResult) != point11ValBVerificationResultVerified {
+	if model.VerificationResult != point11ValBVerificationResultVerified {
 		reasons = append(reasons, "issued_verification_result_not_active")
 	}
 	if !point11Val0ValidTimestamp(model.IssuedAt) || !point11Val0ValidTimestamp(model.ExpiresAt) {
 		reasons = append(reasons, "issued_timestamps_invalid")
 	} else {
-		expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.ExpiresAt))
+		expiresAt, _ := time.Parse(time.RFC3339, model.ExpiresAt)
 		if expiresAt.Before(time.Now().UTC()) {
 			reasons = append(reasons, "issued_claim_expired")
 		}
@@ -1017,7 +1013,7 @@ func point11ValBIssuedClaimStateAndReasons(model Point11ValBIssuedClaimRecord) (
 	if !point11ValBClaimLifecycleAllowed(model.LifecycleState) {
 		reasons = append(reasons, "issued_lifecycle_invalid")
 	}
-	switch strings.TrimSpace(model.LifecycleState) {
+	switch model.LifecycleState {
 	case Point11Val0ClaimLifecycleRevoked:
 		if !point11ValBGovernanceEventRefValid(model.RevocationRef) {
 			reasons = append(reasons, "issued_revocation_ref_missing")
@@ -1068,16 +1064,16 @@ func EvaluatePoint11ValBIssuedClaimState(model Point11ValBIssuedClaimRecord) str
 func point11ValBRegisteredClaimMap(claims []Point11ValBIssuedClaimRecord) map[string]Point11ValBIssuedClaimRecord {
 	registered := map[string]Point11ValBIssuedClaimRecord{}
 	for _, claim := range claims {
-		registered[strings.TrimSpace(claim.ClaimID)] = claim
+		registered[claim.ClaimID] = claim
 	}
 	return registered
 }
 
 func point11ValBClaimIdentityKey(claim Point11ValBIssuedClaimRecord) string {
 	return strings.Join([]string{
-		strings.TrimSpace(claim.ClaimID),
-		strings.TrimSpace(claim.SubjectRef),
-		strings.TrimSpace(claim.PolicyBasisRef),
+		claim.ClaimID,
+		claim.SubjectRef,
+		claim.PolicyBasisRef,
 		point11ValBStringSetKey(claim.EvidenceHashRefs),
 	}, "|")
 }
@@ -1094,7 +1090,7 @@ func point11ValBRegistryStateAndReasons(model Point11ValBClaimRegistry) (string,
 		reasons = append(reasons, "claim_registry_version_invalid")
 	}
 	if !point11ValAPolicyRefValid(model.RegistryPolicyBasisRef) ||
-		strings.TrimSpace(model.RegistryPolicyBasisState) != point11ValBPolicyBasisStateActive {
+		model.RegistryPolicyBasisState != point11ValBPolicyBasisStateActive {
 		reasons = append(reasons, "claim_registry_policy_basis_invalid")
 	}
 	if !point11ValBGovernanceEventRefValid(model.GovernanceEventRef) {
@@ -1134,9 +1130,8 @@ func point11ValBRegistryStateAndReasons(model Point11ValBClaimRegistry) (string,
 	registeredClaims := point11ValBRegisteredClaimMap(model.RegisteredClaims)
 	activeRefSet := map[string]struct{}{}
 	for _, ref := range model.ActiveClaimRefs {
-		trimmed := strings.TrimSpace(ref)
-		activeRefSet[trimmed] = struct{}{}
-		claim, exists := registeredClaims[trimmed]
+		activeRefSet[ref] = struct{}{}
+		claim, exists := registeredClaims[ref]
 		if !exists {
 			reasons = append(reasons, "claim_registry_active_ref_not_registered")
 			continue
@@ -1158,7 +1153,7 @@ func point11ValBRegistryStateAndReasons(model Point11ValBClaimRegistry) (string,
 			reasons = append(reasons, "claim_registry_duplicate_claim_identity")
 		}
 		seenIdentity[identityKey] = struct{}{}
-		claimsByID[strings.TrimSpace(claim.ClaimID)] = append(claimsByID[strings.TrimSpace(claim.ClaimID)], claim)
+		claimsByID[claim.ClaimID] = append(claimsByID[claim.ClaimID], claim)
 	}
 	for _, claims := range claimsByID {
 		if len(claims) < 2 {
@@ -1170,11 +1165,11 @@ func point11ValBRegistryStateAndReasons(model Point11ValBClaimRegistry) (string,
 		evidenceKeys := map[string]struct{}{}
 		governed := true
 		for _, claim := range claims {
-			scopeKeys[strings.TrimSpace(claim.Scope)] = struct{}{}
-			subjectKeys[strings.TrimSpace(claim.SubjectRef)] = struct{}{}
-			policyKeys[strings.TrimSpace(claim.PolicyBasisRef)] = struct{}{}
+			scopeKeys[claim.Scope] = struct{}{}
+			subjectKeys[claim.SubjectRef] = struct{}{}
+			policyKeys[claim.PolicyBasisRef] = struct{}{}
 			evidenceKeys[point11ValBStringSetKey(claim.EvidenceHashRefs)] = struct{}{}
-			lifecycle := strings.TrimSpace(claim.LifecycleState)
+			lifecycle := claim.LifecycleState
 			if lifecycle != Point11Val0ClaimLifecycleCorrected && lifecycle != Point11Val0ClaimLifecycleSuperseded {
 				governed = false
 			}
@@ -1216,10 +1211,10 @@ func point11ValBVerificationStateAndReasons(model Point11ValBClaimVerificationRe
 	if !point11ValBIssuerRefValid(model.VerifierRef) || !point11Val0IdentityValueValid(model.VerifierKind) {
 		reasons = append(reasons, "claim_verification_verifier_invalid")
 	}
-	if !point11ValAPolicyRefValid(model.PolicyBasisRef) || strings.TrimSpace(model.PolicyBasisState) != point11ValBPolicyBasisStateActive {
+	if !point11ValAPolicyRefValid(model.PolicyBasisRef) || model.PolicyBasisState != point11ValBPolicyBasisStateActive {
 		reasons = append(reasons, "claim_verification_policy_basis_invalid")
 	}
-	if !model.ClaimRegistered || strings.TrimSpace(model.ClaimRegistryState) != Point11ValBRegistryStateActive {
+	if !model.ClaimRegistered || model.ClaimRegistryState != Point11ValBRegistryStateActive {
 		reasons = append(reasons, "claim_verification_claim_not_registered")
 	}
 	if !point11Val0EvidenceRefsValid(model.EvidenceRefs) || !point11Val0EvidenceRefsValid(model.ClaimEvidenceRefs) ||
@@ -1235,33 +1230,33 @@ func point11ValBVerificationStateAndReasons(model Point11ValBClaimVerificationRe
 	if !point11Val0ValidTimestamp(model.VerificationTimestamp) {
 		reasons = append(reasons, "claim_verification_timestamp_invalid")
 	}
-	if strings.TrimSpace(model.FreshnessResult) != point11ValBFreshnessResultActive {
+	if model.FreshnessResult != point11ValBFreshnessResultActive {
 		reasons = append(reasons, "claim_verification_freshness_blocked")
 	}
-	if strings.TrimSpace(model.SignatureOrRegistryResult) != point11ValBSignatureOrRegistryResultActive {
+	if model.SignatureOrRegistryResult != point11ValBSignatureOrRegistryResultActive {
 		reasons = append(reasons, "claim_verification_signature_or_registry_blocked")
 	}
-	if strings.TrimSpace(model.RevocationCheckResult) != point11ValBRevocationCheckActive {
+	if model.RevocationCheckResult != point11ValBRevocationCheckActive {
 		reasons = append(reasons, "claim_verification_revocation_blocked")
 	}
-	if strings.TrimSpace(model.SupersessionCheckResult) != point11ValBSupersessionCheckActive {
-		if !(model.HistoricalVerificationAllowed && strings.TrimSpace(model.SupersessionCheckResult) == point11ValBSupersessionCheckHistoricalOnly) {
+	if model.SupersessionCheckResult != point11ValBSupersessionCheckActive {
+		if !(model.HistoricalVerificationAllowed && model.SupersessionCheckResult == point11ValBSupersessionCheckHistoricalOnly) {
 			reasons = append(reasons, "claim_verification_supersession_blocked")
 		}
 	}
-	if strings.TrimSpace(model.ScopeCheckResult) != point11ValBScopeCheckActive {
+	if model.ScopeCheckResult != point11ValBScopeCheckActive {
 		reasons = append(reasons, "claim_verification_scope_blocked")
 	}
-	if strings.TrimSpace(model.AudienceCheckResult) != point11ValBAudienceCheckActive {
+	if model.AudienceCheckResult != point11ValBAudienceCheckActive {
 		reasons = append(reasons, "claim_verification_audience_blocked")
 	}
-	if strings.TrimSpace(model.IssuerTrustResult) != point11ValBIssuerTrustActive {
+	if model.IssuerTrustResult != point11ValBIssuerTrustActive {
 		reasons = append(reasons, "claim_verification_issuer_trust_blocked")
 	}
-	if model.CrossDomainRequired && strings.TrimSpace(model.CrossDomainCompatibilityResult) != point11ValBCrossDomainCompatibilityActive {
+	if model.CrossDomainRequired && model.CrossDomainCompatibilityResult != point11ValBCrossDomainCompatibilityActive {
 		reasons = append(reasons, "claim_verification_cross_domain_blocked")
 	}
-	if strings.TrimSpace(model.ResultState) != point11ValBVerificationResultVerified {
+	if model.ResultState != point11ValBVerificationResultVerified {
 		reasons = append(reasons, "claim_verification_result_state_blocked")
 	}
 	if point11ValBClaimLifecycleInvalidated(model.ClaimLifecycleState) && !model.HistoricalVerificationAllowed {
@@ -1298,7 +1293,7 @@ func point11ValBCrossDomainStateAndReasons(model Point11ValBCrossDomainClaimInta
 	if !point11ValBTrustRootRefValid(model.RemoteTrustRootRef) {
 		reasons = append(reasons, "cross_domain_trust_root_invalid")
 	}
-	if !point11ValAPolicyRefValid(model.LocalPolicyBasisRef) || strings.TrimSpace(model.LocalPolicyBasisState) != point11ValBPolicyBasisStateActive {
+	if !point11ValAPolicyRefValid(model.LocalPolicyBasisRef) || model.LocalPolicyBasisState != point11ValBPolicyBasisStateActive {
 		reasons = append(reasons, "cross_domain_local_policy_basis_invalid")
 	}
 	if !point11ValBCompatibilityRuleRefValid(model.CompatibilityRuleRef) {
@@ -1313,39 +1308,39 @@ func point11ValBCrossDomainStateAndReasons(model Point11ValBCrossDomainClaimInta
 	if model.CreatesLegalAuthority || model.CreatesRegulatoryAuthority || model.CreatesCertificationAuthority {
 		reasons = append(reasons, "cross_domain_creates_forbidden_authority")
 	}
-	switch strings.TrimSpace(model.RemoteClaimState) {
+	switch model.RemoteClaimState {
 	case Point11Val0ClaimLifecycleRevoked, point11ValBClaimLifecycleExpired, Point11Val0ClaimLifecycleSuperseded:
 		reasons = append(reasons, "cross_domain_remote_claim_invalidated")
 	}
 	reviewRequired := false
-	switch strings.TrimSpace(model.ScopeCompatibilityResult) {
+	switch model.ScopeCompatibilityResult {
 	case point11ValBGenericCompatibilityActive:
 	case point11ValBGenericCompatibilityReviewRequired:
 		reviewRequired = true
 	default:
 		reasons = append(reasons, "cross_domain_scope_compatibility_blocked")
 	}
-	switch strings.TrimSpace(model.FreshnessCompatibilityResult) {
+	switch model.FreshnessCompatibilityResult {
 	case point11ValBGenericCompatibilityActive:
 	case point11ValBGenericCompatibilityReviewRequired:
 		reviewRequired = true
 	default:
 		reasons = append(reasons, "cross_domain_freshness_compatibility_blocked")
 	}
-	if strings.TrimSpace(model.RevocationHandlingResult) != point11ValBRevocationHandlingResultActive {
+	if model.RevocationHandlingResult != point11ValBRevocationHandlingResultActive {
 		reasons = append(reasons, "cross_domain_revocation_handling_blocked")
 	}
-	if strings.TrimSpace(model.IssuerTrustResult) != point11ValBIssuerTrustActive {
+	if model.IssuerTrustResult != point11ValBIssuerTrustActive {
 		reasons = append(reasons, "cross_domain_issuer_trust_blocked")
 	}
-	switch strings.TrimSpace(model.EvidenceTranslationResult) {
+	switch model.EvidenceTranslationResult {
 	case point11ValBEvidenceTranslationResultActive:
 	case point11ValBEvidenceTranslationResultReview:
 		reviewRequired = true
 	default:
 		reasons = append(reasons, "cross_domain_evidence_translation_blocked")
 	}
-	switch strings.TrimSpace(model.LocalAdmissibilityResult) {
+	switch model.LocalAdmissibilityResult {
 	case point11ValBLocalAdmissibilityResultActive:
 	case point11ValBLocalAdmissibilityResultReview:
 		reviewRequired = true
@@ -1371,25 +1366,27 @@ func EvaluatePoint11ValBCrossDomainIntakeState(model Point11ValBCrossDomainClaim
 
 func point11ValBBlockingReasons(model Point11ValBFoundation) []string {
 	reasons := []string{}
-	if model.DependencyState == Point11ValBDependencyStateBlocked {
+	if model.DependencyState != Point11ValBDependencyStateActive &&
+		model.DependencyState != Point11ValBDependencyStateReviewRequired {
 		reasons = append(reasons, "vala_dependency_blocked")
 	}
-	if model.ClaimTypeState == Point11ValBClaimTypeStateBlocked {
+	if model.ClaimTypeState != Point11ValBClaimTypeStateActive {
 		reasons = append(reasons, "claim_type_blocked")
 	}
-	if model.IssuanceRequestState == Point11ValBIssuanceRequestStateBlocked {
+	if model.IssuanceRequestState != Point11ValBIssuanceRequestStateActive {
 		reasons = append(reasons, "issuance_request_blocked")
 	}
-	if model.IssuedClaimState == Point11ValBIssuedClaimStateBlocked {
+	if model.IssuedClaimState != Point11ValBIssuedClaimStateActive {
 		reasons = append(reasons, "issued_claim_blocked")
 	}
-	if model.RegistryState == Point11ValBRegistryStateBlocked {
+	if model.RegistryState != Point11ValBRegistryStateActive {
 		reasons = append(reasons, "claim_registry_blocked")
 	}
-	if model.VerificationState == Point11ValBVerificationStateBlocked {
+	if model.VerificationState != Point11ValBVerificationStateActive {
 		reasons = append(reasons, "claim_verification_blocked")
 	}
-	if model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateBlocked {
+	if model.CrossDomainIntakeState != Point11ValBCrossDomainIntakeStateActive &&
+		model.CrossDomainIntakeState != Point11ValBCrossDomainIntakeStateReviewRequired {
 		reasons = append(reasons, "cross_domain_intake_blocked")
 	}
 	if model.CreatesAuthorityClaims {
@@ -1434,20 +1431,29 @@ func EvaluatePoint11ValBFoundationState(model Point11ValBFoundation) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		model.CreatesAuthorityClaims ||
 		model.CreatesPublicationSideEffects ||
-		strings.TrimSpace(model.ClaimTypeState) == Point11ValBClaimTypeStateBlocked ||
-		strings.TrimSpace(model.IssuanceRequestState) == Point11ValBIssuanceRequestStateBlocked ||
-		strings.TrimSpace(model.IssuedClaimState) == Point11ValBIssuedClaimStateBlocked ||
-		strings.TrimSpace(model.RegistryState) == Point11ValBRegistryStateBlocked ||
-		strings.TrimSpace(model.VerificationState) == Point11ValBVerificationStateBlocked ||
-		strings.TrimSpace(model.CrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateBlocked ||
-		strings.TrimSpace(model.DependencyState) == Point11ValBDependencyStateBlocked {
+		model.ClaimTypeState == Point11ValBClaimTypeStateBlocked ||
+		model.IssuanceRequestState == Point11ValBIssuanceRequestStateBlocked ||
+		model.IssuedClaimState == Point11ValBIssuedClaimStateBlocked ||
+		model.RegistryState == Point11ValBRegistryStateBlocked ||
+		model.VerificationState == Point11ValBVerificationStateBlocked ||
+		model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateBlocked ||
+		model.DependencyState == Point11ValBDependencyStateBlocked {
 		return Point11ValBStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point11ValBDependencyStateReviewRequired ||
-		strings.TrimSpace(model.CrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateReviewRequired {
+	if model.DependencyState == Point11ValBDependencyStateReviewRequired ||
+		model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateReviewRequired {
 		return Point11ValBStateReviewRequired
 	}
-	return Point11ValBStateActive
+	if model.DependencyState == Point11ValBDependencyStateActive &&
+		model.ClaimTypeState == Point11ValBClaimTypeStateActive &&
+		model.IssuanceRequestState == Point11ValBIssuanceRequestStateActive &&
+		model.IssuedClaimState == Point11ValBIssuedClaimStateActive &&
+		model.RegistryState == Point11ValBRegistryStateActive &&
+		model.VerificationState == Point11ValBVerificationStateActive &&
+		model.CrossDomainIntakeState == Point11ValBCrossDomainIntakeStateActive {
+		return Point11ValBStateActive
+	}
+	return Point11ValBStateBlocked
 }
 
 func Point11ValBFoundationModel() Point11ValBFoundation {

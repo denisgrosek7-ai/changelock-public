@@ -452,6 +452,7 @@ func deploymentMultiTenantValEEvidenceIdentityBoundarySafe(entry DeploymentMulti
 	values := []string{
 		entry.EvidenceID,
 		entry.Source,
+		entry.Scope,
 		entry.Surface,
 		entry.EvidenceHash,
 		entry.ArtifactHash,
@@ -464,7 +465,72 @@ func deploymentMultiTenantValEEvidenceIdentityBoundarySafe(entry DeploymentMulti
 	return true
 }
 
+func deploymentMultiTenantValEEvidenceScopeValueIsValid(value string) bool {
+	if !deploymentMultiTenantValEIdentityValueIsValid(value) {
+		return false
+	}
+	normalized := deploymentMultiTenantVal0NormalizeClaimText(value)
+	tokens := strings.Fields(normalized)
+	for _, token := range tokens {
+		switch token {
+		case "global", "unscoped", "wildcard", "alltenant", "alltenants", "cross", "crosstenant", "crosstenants", "crossscope", "crossboundary", "othertenant", "othertenants":
+			return false
+		}
+	}
+	for i := 0; i+1 < len(tokens); i++ {
+		switch tokens[i] + " " + tokens[i+1] {
+		case "all tenant", "all tenants", "tenant all", "scope all", "cross tenant", "cross tenants", "cross scope", "cross boundary", "other tenant", "other tenants":
+			return false
+		}
+	}
+	if deploymentMultiTenantValEEvidenceScopeCompactedTokensBlocked(tokens) {
+		return false
+	}
+	compact := deploymentMultiTenantVal0CompactClaimText(value)
+	for _, blocked := range []string{"global", "unscoped", "wildcard", "alltenant", "alltenants", "crossscope", "crossboundary", "crosstenant", "crosstenants", "othertenant", "othertenants"} {
+		if compact == blocked {
+			return false
+		}
+	}
+	return true
+}
+
+func deploymentMultiTenantValEEvidenceScopeCompactedTokensBlocked(tokens []string) bool {
+	blocked := map[string]struct{}{
+		"global":        {},
+		"unscoped":      {},
+		"wildcard":      {},
+		"alltenant":     {},
+		"alltenants":    {},
+		"cross":         {},
+		"crossscope":    {},
+		"crossboundary": {},
+		"crosstenant":   {},
+		"crosstenants":  {},
+		"othertenant":   {},
+		"othertenants":  {},
+	}
+	const maxBoundaryTokenLength = len("crossboundary")
+	for start := range tokens {
+		compact := ""
+		for end := start; end < len(tokens); end++ {
+			compact += tokens[end]
+			if len(compact) > maxBoundaryTokenLength {
+				break
+			}
+			if _, ok := blocked[compact]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func deploymentMultiTenantValEEvidenceIdentityHasBoundaryLaunderingMarker(value string, crossTenantDeclared bool) bool {
+	tokens := strings.Fields(deploymentMultiTenantVal0NormalizeClaimText(value))
+	if deploymentMultiTenantValEEvidenceScopeCompactedTokensBlocked(tokens) {
+		return true
+	}
 	compact := deploymentMultiTenantVal0CompactClaimText(value)
 	for _, blocked := range []string{
 		"tenantbeta",
@@ -483,6 +549,7 @@ func deploymentMultiTenantValEEvidenceIdentityHasBoundaryLaunderingMarker(value 
 		"unrelatedprofile",
 		"customprofile",
 		"companytenant",
+		"global",
 		"globaladminscope",
 		"globalscope",
 	} {
@@ -1002,7 +1069,7 @@ func deploymentMultiTenantValEEvidenceEntryValid(entry DeploymentMultiTenantValE
 	if !deploymentMultiTenantValEIdentityValueIsValid(entry.EvidenceID) ||
 		!deploymentMultiTenantValEIdentityValueIsValid(entry.EvidenceType) ||
 		!deploymentMultiTenantValEIdentityValueIsValid(entry.Source) ||
-		!deploymentMultiTenantValEIdentityValueIsValid(entry.Scope) ||
+		!deploymentMultiTenantValEEvidenceScopeValueIsValid(entry.Scope) ||
 		entry.TenantScope != deploymentMultiTenantValEExpectedTenantScope() ||
 		entry.DeploymentProfile != deploymentMultiTenantValEExpectedDeploymentProfile() ||
 		!deploymentMultiTenantValEIdentityValueIsValid(entry.Surface) ||
@@ -1587,83 +1654,7 @@ func deploymentMultiTenantValEContainsForbiddenClaim(values ...string) bool {
 }
 
 func deploymentMultiTenantValEForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
-	if len(values) != len(allowed) {
-		return false
-	}
-	phraseTokens := strings.Fields(phrase)
-	if len(phraseTokens) < 2 {
-		return false
-	}
-	type tokenBucket struct {
-		token  string
-		bucket int
-	}
-	flat := []tokenBucket{}
-	for bucketIndex, value := range values {
-		for _, token := range strings.Fields(value) {
-			flat = append(flat, tokenBucket{token: token, bucket: bucketIndex})
-		}
-	}
-
-	const (
-		matchedMultipleBuckets = 1 << iota
-		matchedNonAllowedBucket
-	)
-	states := make([][4]map[int]struct{}, len(phraseTokens)+1)
-	addState := func(phraseIndex, stateMask, bucket int) {
-		if states[phraseIndex][stateMask] == nil {
-			states[phraseIndex][stateMask] = map[int]struct{}{}
-		}
-		states[phraseIndex][stateMask][bucket] = struct{}{}
-	}
-	hasCurrentBucket := func(buckets map[int]struct{}, bucket int) bool {
-		_, ok := buckets[bucket]
-		return ok
-	}
-	hasDifferentBucket := func(buckets map[int]struct{}, bucket int) bool {
-		if len(buckets) > 1 {
-			return true
-		}
-		if len(buckets) == 0 {
-			return false
-		}
-		return !hasCurrentBucket(buckets, bucket)
-	}
-
-	for _, candidate := range flat {
-		for phraseIndex := len(phraseTokens) - 1; phraseIndex >= 1; phraseIndex-- {
-			if candidate.token != phraseTokens[phraseIndex] {
-				continue
-			}
-			for stateMask := 0; stateMask < 4; stateMask++ {
-				buckets := states[phraseIndex][stateMask]
-				if len(buckets) == 0 {
-					continue
-				}
-				nextStateMask := stateMask
-				if !allowed[candidate.bucket] {
-					nextStateMask |= matchedNonAllowedBucket
-				}
-				if hasCurrentBucket(buckets, candidate.bucket) {
-					addState(phraseIndex+1, nextStateMask, candidate.bucket)
-				}
-				if hasDifferentBucket(buckets, candidate.bucket) {
-					addState(phraseIndex+1, nextStateMask|matchedMultipleBuckets, candidate.bucket)
-				}
-			}
-		}
-		if candidate.token == phraseTokens[0] {
-			stateMask := 0
-			if !allowed[candidate.bucket] {
-				stateMask |= matchedNonAllowedBucket
-			}
-			addState(1, stateMask, candidate.bucket)
-		}
-		if len(states[len(phraseTokens)][matchedMultipleBuckets|matchedNonAllowedBucket]) > 0 {
-			return true
-		}
-	}
-	return false
+	return deploymentMultiTenantVal0ForbiddenPhraseAcrossValues(values, allowed, phrase)
 }
 
 func EvaluateDeploymentMultiTenantValENoOverclaimState(model DeploymentMultiTenantValENoOverclaimDiscipline) string {

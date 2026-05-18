@@ -303,13 +303,16 @@ type Point11Val0Foundation struct {
 }
 
 func point11Val0NormalizeText(value string) string {
-	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), " ")
+	return formalNoOverclaimNormalizeText(value)
+}
+
+func point11Val0NormalizeNoOverclaimText(value string) string {
+	return formalNoOverclaimNormalizePublicText(value)
 }
 
 func point11Val0ContainsTrimmed(values []string, target string) bool {
-	target = strings.TrimSpace(target)
 	for _, value := range values {
-		if strings.TrimSpace(value) == target {
+		if value == target {
 			return true
 		}
 	}
@@ -317,8 +320,11 @@ func point11Val0ContainsTrimmed(values []string, target string) bool {
 }
 
 func point11Val0ValidTimestamp(value string) bool {
-	_, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
-	return err == nil
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	return err == nil && parsed.UTC().Format(time.RFC3339) == value
 }
 
 func point11Val0ValidProjectionDisclaimer(value string) bool {
@@ -370,11 +376,10 @@ func point11Val0ValidDependencyProjectionDisclaimer(value string) bool {
 }
 
 func point11Val0IdentityValueValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") || !point11Val0ASCIIVisibleValue(value) {
 		return false
 	}
-	normalized := point11Val0NormalizeText(trimmed)
+	normalized := point11Val0NormalizeText(value)
 	for _, blocked := range []string{
 		"unknown",
 		"partial",
@@ -388,7 +393,16 @@ func point11Val0IdentityValueValid(value string) bool {
 		"duplicate",
 		"unrelated",
 	} {
-		if strings.Contains(normalized, blocked) {
+		if strings.Contains(normalized, point11Val0NormalizeText(blocked)) {
+			return false
+		}
+	}
+	return true
+}
+
+func point11Val0ASCIIVisibleValue(value string) bool {
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f || r > 0x7e {
 			return false
 		}
 	}
@@ -396,14 +410,19 @@ func point11Val0IdentityValueValid(value string) bool {
 }
 
 func point11Val0CanonicalRefWithPrefixes(value string, prefixes []string) bool {
-	trimmed := strings.TrimSpace(value)
-	if !point11Val0IdentityValueValid(trimmed) {
+	if !point11Val0IdentityValueValid(value) {
 		return false
 	}
-	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, " ") {
+	if strings.Contains(value, "/") || strings.Contains(value, " ") {
 		return false
 	}
-	lowerTrimmed := strings.ToLower(trimmed)
+	if point11Val0ContainsTenantBoundaryBypass(value) {
+		return false
+	}
+	if !point11Val0CanonicalRefCharactersValid(value) {
+		return false
+	}
+	lowerValue := strings.ToLower(value)
 	for _, blocked := range []string{
 		"unknown",
 		"unsupported",
@@ -421,16 +440,26 @@ func point11Val0CanonicalRefWithPrefixes(value string, prefixes []string) bool {
 		"all-tenants",
 		"wildcard",
 	} {
-		if strings.Contains(lowerTrimmed, blocked) {
+		if strings.Contains(lowerValue, blocked) {
 			return false
 		}
 	}
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(trimmed, prefix) {
+		if strings.HasPrefix(value, prefix) {
 			return true
 		}
 	}
 	return false
+}
+
+func point11Val0CanonicalRefCharactersValid(value string) bool {
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == ':' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func point11Val0PolicyLineageRefValid(value string) bool {
@@ -460,13 +489,7 @@ func point11Val0ScopeValid(value string) bool {
 	if !point11Val0IdentityValueValid(value) {
 		return false
 	}
-	normalized := point11Val0NormalizeText(value)
-	for _, blocked := range []string{"global", "unscoped", "wildcard", "all-tenants", "cross-tenant"} {
-		if strings.Contains(normalized, blocked) {
-			return false
-		}
-	}
-	return true
+	return !point11Val0ContainsTenantBoundaryBypass(value)
 }
 
 func point11Val0EvidenceRefsValid(values []string) bool {
@@ -475,16 +498,85 @@ func point11Val0EvidenceRefsValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11Val0IdentityValueValid(trimmed) {
+		if !point11Val0EvidenceRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
+}
+
+func point11Val0EvidenceRefValid(value string) bool {
+	if !point11Val0IdentityValueValid(value) || strings.Contains(value, " ") || strings.Contains(value, "/") {
+		return false
+	}
+	if point11Val0ContainsTenantBoundaryBypass(value) {
+		return false
+	}
+	return strings.HasPrefix(value, "evidence:") || strings.HasPrefix(value, "evidence_")
+}
+
+func point11Val0ContainsTenantBoundaryBypass(value string) bool {
+	normalized := point11Val0NormalizeNoOverclaimText(value)
+	tokens := strings.Fields(normalized)
+	if point11Val0TenantBoundaryTokensBlocked(tokens) {
+		return true
+	}
+
+	return false
+}
+
+func point11Val0TenantBoundaryTokensBlocked(tokens []string) bool {
+	for _, token := range tokens {
+		switch token {
+		case "global", "unscoped", "wildcard", "alltenants", "alltenant", "cross", "crossscope", "crossboundary", "crosstenants", "crosstenant", "othertenants", "othertenant":
+			return true
+		}
+	}
+	for i := 0; i+1 < len(tokens); i++ {
+		switch tokens[i] + " " + tokens[i+1] {
+		case "all tenants", "all tenant", "tenant all", "scope all", "cross scope", "cross boundary", "cross tenants", "cross tenant", "other tenants", "other tenant":
+			return true
+		}
+	}
+	if point11Val0CompactedTenantBoundaryTokensBlocked(tokens) {
+		return true
+	}
+	return false
+}
+
+func point11Val0CompactedTenantBoundaryTokensBlocked(tokens []string) bool {
+	blocked := map[string]struct{}{
+		"global":        {},
+		"unscoped":      {},
+		"wildcard":      {},
+		"alltenant":     {},
+		"alltenants":    {},
+		"cross":         {},
+		"crossscope":    {},
+		"crossboundary": {},
+		"crosstenant":   {},
+		"crosstenants":  {},
+		"othertenant":   {},
+		"othertenants":  {},
+	}
+	const maxBoundaryTokenLength = len("crossboundary")
+	for start := range tokens {
+		compact := ""
+		for end := start; end < len(tokens); end++ {
+			compact += tokens[end]
+			if len(compact) > maxBoundaryTokenLength {
+				break
+			}
+			if _, ok := blocked[compact]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func point11Val0AllValuesValid(values []string) bool {
@@ -493,14 +585,13 @@ func point11Val0AllValuesValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11Val0IdentityValueValid(trimmed) {
+		if !point11Val0IdentityValueValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -624,17 +715,38 @@ func point11Val0AllowedClaims() []string {
 func point11Val0ContainsForbiddenClaim(values ...string) bool {
 	allowed := map[string]struct{}{}
 	for _, value := range point11Val0AllowedClaims() {
-		allowed[point11Val0NormalizeText(value)] = struct{}{}
+		allowed[point11Val0NormalizeNoOverclaimText(value)] = struct{}{}
 	}
+	type normalizedClaimBucket struct {
+		value   string
+		allowed bool
+	}
+	buckets := make([]normalizedClaimBucket, 0, len(values))
 	for _, value := range values {
-		normalized := point11Val0NormalizeText(value)
+		normalized := point11Val0NormalizeNoOverclaimText(value)
 		if _, ok := allowed[normalized]; ok {
+			buckets = append(buckets, normalizedClaimBucket{value: normalized, allowed: true})
 			continue
 		}
 		for _, forbidden := range point11Val0ForbiddenClaims() {
-			if strings.Contains(normalized, point11Val0NormalizeText(forbidden)) {
+			if formalNoOverclaimContainsForbidden(normalized, point11Val0NormalizeNoOverclaimText(forbidden)) {
 				return true
 			}
+		}
+		if normalized != "" {
+			buckets = append(buckets, normalizedClaimBucket{value: normalized})
+		}
+	}
+	bucketValues := make([]string, 0, len(buckets))
+	bucketAllowed := make([]bool, 0, len(buckets))
+	for _, bucket := range buckets {
+		bucketValues = append(bucketValues, bucket.value)
+		bucketAllowed = append(bucketAllowed, bucket.allowed)
+	}
+	for _, forbidden := range point11Val0ForbiddenClaims() {
+		normalizedForbidden := point11Val0NormalizeNoOverclaimText(forbidden)
+		if formalNoOverclaimForbiddenPhraseAcrossValues(bucketValues, bucketAllowed, normalizedForbidden) {
+			return true
 		}
 	}
 	return false
@@ -727,22 +839,22 @@ func EvaluatePoint11Val0PolicyContractState(model Point11Val0PolicyContract) str
 		!point11Val0IdentityValueValid(model.Issuer) ||
 		!point11Val0IdentityValueValid(model.Owner) ||
 		!point11Val0AllValuesValid(model.ApproverChain) ||
-		strings.TrimSpace(model.SignedState) != point11Val0PolicySignedState ||
-		strings.TrimSpace(model.AnchoredState) != point11Val0PolicyAnchoredState ||
+		model.SignedState != point11Val0PolicySignedState ||
+		model.AnchoredState != point11Val0PolicyAnchoredState ||
 		!point11Val0ValidTimestamp(model.EffectiveFrom) ||
 		!point11Val0IdentityValueValid(model.SchemaVersion) ||
 		!point11Val0EvidenceRefsValid(model.ApprovalEvidenceRefs) ||
 		!point11Val0IdentityValueValid(model.MethodologyOrRuleBasis) {
 		return Point11Val0PolicyContractStateBlocked
 	}
-	if strings.TrimSpace(model.RevokedBy) != "" {
+	if model.RevokedBy != "" {
 		return Point11Val0PolicyContractStateBlocked
 	}
-	if strings.TrimSpace(model.EffectiveUntil) != "" {
+	if model.EffectiveUntil != "" {
 		if !point11Val0ValidTimestamp(model.EffectiveUntil) {
 			return Point11Val0PolicyContractStateBlocked
 		}
-		expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.EffectiveUntil))
+		expiresAt, _ := time.Parse(time.RFC3339, model.EffectiveUntil)
 		if expiresAt.Before(time.Now().UTC()) {
 			return Point11Val0PolicyContractStateBlocked
 		}
@@ -777,16 +889,16 @@ func EvaluatePoint11Val0ClaimGovernanceState(model Point11Val0ClaimGovernance) s
 		point11Val0ContainsForbiddenClaim(model.ClaimType, model.Audience) {
 		return Point11Val0ClaimGovernanceStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) == Point11Val0ClaimLifecycleBlocked ||
-		strings.TrimSpace(model.LifecycleState) == Point11Val0ClaimLifecycleRevoked ||
-		strings.TrimSpace(model.LifecycleState) == Point11Val0ClaimLifecycleSuperseded ||
-		strings.TrimSpace(model.ClaimCategory) == Point11Val0ClaimCategoryBlocked {
+	if model.LifecycleState == Point11Val0ClaimLifecycleBlocked ||
+		model.LifecycleState == Point11Val0ClaimLifecycleRevoked ||
+		model.LifecycleState == Point11Val0ClaimLifecycleSuperseded ||
+		model.ClaimCategory == Point11Val0ClaimCategoryBlocked {
 		return Point11Val0ClaimGovernanceStateBlocked
 	}
 	if point11Val0ClaimInvalidatedStatus(model.RevocationOrSupersessionStatus) {
 		return Point11Val0ClaimGovernanceStateBlocked
 	}
-	expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.Expiry))
+	expiresAt, _ := time.Parse(time.RFC3339, model.Expiry)
 	if expiresAt.Before(time.Now().UTC()) {
 		return Point11Val0ClaimGovernanceStateBlocked
 	}
@@ -795,7 +907,7 @@ func EvaluatePoint11Val0ClaimGovernanceState(model Point11Val0ClaimGovernance) s
 			!point11Val0ScopeValid(model.Scope) ||
 			!point11Val0IdentityValueValid(model.Owner) ||
 			!point11Val0IdentityValueValid(model.RevocationPath) ||
-			strings.TrimSpace(model.ApprovalStatus) != Point11Val0ClaimLifecycleApproved {
+			model.ApprovalStatus != Point11Val0ClaimLifecycleApproved {
 			return Point11Val0ClaimGovernanceStateBlocked
 		}
 	}
@@ -803,7 +915,7 @@ func EvaluatePoint11Val0ClaimGovernanceState(model Point11Val0ClaimGovernance) s
 		if model.ClaimCategory == Point11Val0ClaimCategoryInternalOnly {
 			return Point11Val0ClaimGovernanceStateBlocked
 		}
-		if model.ClaimCategory == Point11Val0ClaimCategoryReviewRequired && strings.TrimSpace(model.ApprovalStatus) != Point11Val0ClaimLifecycleApproved {
+		if model.ClaimCategory == Point11Val0ClaimCategoryReviewRequired && model.ApprovalStatus != Point11Val0ClaimLifecycleApproved {
 			return Point11Val0ClaimGovernanceStateBlocked
 		}
 		if !point11Val0IdentityValueValid(model.PolicyVersion) ||
@@ -870,12 +982,12 @@ func EvaluatePoint11Val0ExceptionGovernanceState(model Point11Val0ExceptionGover
 		!point11Val0IdentityValueValid(model.RevocationPath) ||
 		!point11Val0IdentityValueValid(model.AuditID) ||
 		!point11Val0EvidenceRefsValid(model.EvidenceRefs) ||
-		strings.TrimSpace(model.SignedGovernanceState) != point11Val0ExceptionSignedGovernanceState ||
+		model.SignedGovernanceState != point11Val0ExceptionSignedGovernanceState ||
 		model.PermanentSilentException ||
 		model.Revoked {
 		return Point11Val0ExceptionGovernanceStateBlocked
 	}
-	expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.ExpiresAt))
+	expiresAt, _ := time.Parse(time.RFC3339, model.ExpiresAt)
 	if expiresAt.Before(time.Now().UTC()) {
 		return Point11Val0ExceptionGovernanceStateBlocked
 	}
@@ -908,14 +1020,14 @@ func EvaluatePoint11Val0ABACGovernanceState(model Point11Val0ABACGovernance) str
 		}
 		return Point11Val0ABACStateBlocked
 	}
-	if strings.TrimSpace(model.ExceptionState) != "" && !point11Val0IdentityValueValid(model.ExceptionInteraction) {
+	if model.ExceptionState != "" && !point11Val0IdentityValueValid(model.ExceptionInteraction) {
 		return Point11Val0ABACStateBlocked
 	}
 	return Point11Val0ABACStateActive
 }
 
 func point11Val0DecisionRefStateIsActive(state string) bool {
-	return strings.TrimSpace(state) == point11Val0DecisionRefStateActive
+	return state == point11Val0DecisionRefStateActive
 }
 
 func EvaluatePoint11Val0DecisionBindingState(model Point11Val0DecisionBinding) string {
@@ -960,24 +1072,24 @@ func EvaluatePoint11Val0CrossDomainCompatibilityState(model Point11Val0CrossDoma
 		!point11Val0IdentityValueValid(model.LocalPolicyAdmissibilityRule) {
 		return Point11Val0CrossDomainCompatibilityStateBlocked
 	}
-	if strings.TrimSpace(model.IssuerTrustRule) == point11Val0CrossDomainIssuerUnknown || !point11Val0IdentityValueValid(model.IssuerTrustRule) {
+	if model.IssuerTrustRule == point11Val0CrossDomainIssuerUnknown || !point11Val0IdentityValueValid(model.IssuerTrustRule) {
 		return Point11Val0CrossDomainCompatibilityStateBlocked
 	}
 	if model.RemoteOverridesLocalPolicy || model.CreatesPublicAuthority || model.CreatesRegulatoryAuthority || model.CreatesCertificationAuthority {
 		return Point11Val0CrossDomainCompatibilityStateBlocked
 	}
-	switch strings.TrimSpace(model.RemoteClaimState) {
+	switch model.RemoteClaimState {
 	case point11Val0DecisionRefStateRevoked, point11Val0DecisionRefStateExpired:
 		return Point11Val0CrossDomainCompatibilityStateBlocked
 	case point11Val0DecisionRefStateUnknown:
 		return Point11Val0CrossDomainCompatibilityStateReviewRequired
 	}
-	if strings.TrimSpace(model.ScopeCompatibility) == point11Val0CrossDomainScopeIncompatible ||
-		strings.TrimSpace(model.FreshnessCompatibility) == point11Val0CrossDomainFreshnessIncompatible {
+	if model.ScopeCompatibility == point11Val0CrossDomainScopeIncompatible ||
+		model.FreshnessCompatibility == point11Val0CrossDomainFreshnessIncompatible {
 		return Point11Val0CrossDomainCompatibilityStateReviewRequired
 	}
-	if strings.TrimSpace(model.ScopeCompatibility) != point11Val0CrossDomainScopeCompatible ||
-		strings.TrimSpace(model.FreshnessCompatibility) != point11Val0CrossDomainFreshnessCompatible {
+	if model.ScopeCompatibility != point11Val0CrossDomainScopeCompatible ||
+		model.FreshnessCompatibility != point11Val0CrossDomainFreshnessCompatible {
 		return Point11Val0CrossDomainCompatibilityStateBlocked
 	}
 	return Point11Val0CrossDomainCompatibilityStateActive
@@ -997,24 +1109,52 @@ func EvaluatePoint11Val0State(model Point11Val0Foundation) string {
 		model.NoOverclaimState,
 		model.CrossDomainCompatibilityState,
 	}
-	if strings.TrimSpace(model.DependencyState) == Point11Val0DependencyStateBlocked {
+	if model.DependencyState == Point11Val0DependencyStateBlocked {
 		return Point11Val0StateBlocked
 	}
-	for _, state := range states {
-		if strings.TrimSpace(state) == Point11Val0PolicyContractStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0ClaimGovernanceStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0AuthorityMatrixStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0ExceptionGovernanceStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0ABACStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0DecisionBindingStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0NoOverclaimStateBlocked ||
-			strings.TrimSpace(state) == Point11Val0CrossDomainCompatibilityStateBlocked {
-			return Point11Val0StateBlocked
+	for index, state := range states {
+		switch index {
+		case 0:
+			if state != Point11Val0PolicyContractStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 1:
+			if state != Point11Val0ClaimGovernanceStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 2:
+			if state != Point11Val0AuthorityMatrixStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 3:
+			if state != Point11Val0ExceptionGovernanceStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 4:
+			if state != Point11Val0ABACStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 5:
+			if state != Point11Val0DecisionBindingStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 6:
+			if state != Point11Val0NoOverclaimStateActive {
+				return Point11Val0StateBlocked
+			}
+		case 7:
+			if state != Point11Val0CrossDomainCompatibilityStateActive &&
+				state != Point11Val0CrossDomainCompatibilityStateReviewRequired {
+				return Point11Val0StateBlocked
+			}
 		}
 	}
-	if strings.TrimSpace(model.DependencyState) == Point11Val0DependencyStateReviewRequired ||
-		strings.TrimSpace(model.CrossDomainCompatibilityState) == Point11Val0CrossDomainCompatibilityStateReviewRequired {
+	if model.DependencyState == Point11Val0DependencyStateReviewRequired ||
+		model.CrossDomainCompatibilityState == Point11Val0CrossDomainCompatibilityStateReviewRequired {
 		return Point11Val0StateReviewRequired
+	}
+	if model.DependencyState != Point11Val0DependencyStateActive {
+		return Point11Val0StateBlocked
 	}
 	return Point11Val0StateActive
 }
@@ -1024,31 +1164,33 @@ func point11Val0BlockingReasons(model Point11Val0Foundation) []string {
 	if !point11Val0HasFoundationProjectionDisclaimer(model.ProjectionDisclaimer) {
 		reasons = append(reasons, "aggregate_projection_disclaimer_blocked")
 	}
-	if model.DependencyState == Point11Val0DependencyStateBlocked {
+	if model.DependencyState != Point11Val0DependencyStateActive &&
+		model.DependencyState != Point11Val0DependencyStateReviewRequired {
 		reasons = append(reasons, "point10_dependency_blocked")
 	}
-	if model.PolicyContractState == Point11Val0PolicyContractStateBlocked {
+	if model.PolicyContractState != Point11Val0PolicyContractStateActive {
 		reasons = append(reasons, "policy_contract_blocked")
 	}
-	if model.ClaimGovernanceState == Point11Val0ClaimGovernanceStateBlocked {
+	if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
 		reasons = append(reasons, "claim_governance_blocked")
 	}
-	if model.AuthorityMatrixState == Point11Val0AuthorityMatrixStateBlocked {
+	if model.AuthorityMatrixState != Point11Val0AuthorityMatrixStateActive {
 		reasons = append(reasons, "authority_matrix_blocked")
 	}
-	if model.ExceptionGovernanceState == Point11Val0ExceptionGovernanceStateBlocked {
+	if model.ExceptionGovernanceState != Point11Val0ExceptionGovernanceStateActive {
 		reasons = append(reasons, "exception_governance_blocked")
 	}
-	if model.ABACGovernanceState == Point11Val0ABACStateBlocked {
+	if model.ABACGovernanceState != Point11Val0ABACStateActive {
 		reasons = append(reasons, "abac_governance_blocked")
 	}
-	if model.DecisionBindingState == Point11Val0DecisionBindingStateBlocked {
+	if model.DecisionBindingState != Point11Val0DecisionBindingStateActive {
 		reasons = append(reasons, "decision_binding_blocked")
 	}
-	if model.NoOverclaimState == Point11Val0NoOverclaimStateBlocked {
+	if model.NoOverclaimState != Point11Val0NoOverclaimStateActive {
 		reasons = append(reasons, "no_overclaim_blocked")
 	}
-	if model.CrossDomainCompatibilityState == Point11Val0CrossDomainCompatibilityStateBlocked {
+	if model.CrossDomainCompatibilityState != Point11Val0CrossDomainCompatibilityStateActive &&
+		model.CrossDomainCompatibilityState != Point11Val0CrossDomainCompatibilityStateReviewRequired {
 		reasons = append(reasons, "cross_domain_compatibility_blocked")
 	}
 	return reasons

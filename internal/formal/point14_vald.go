@@ -76,6 +76,7 @@ type Point14ValDDependencySnapshot struct {
 	InheritedPoint12DependencyState          string                                          `json:"inherited_point12_dependency_state"`
 	InheritedPoint12PassClosureState         string                                          `json:"inherited_point12_pass_closure_state"`
 	InheritedPoint12ReviewerResult           string                                          `json:"inherited_point12_reviewer_result"`
+	InheritedPoint11CurrentState             string                                          `json:"inherited_point11_current_state"`
 	InheritedPoint11PublicationState         string                                          `json:"inherited_point11_publication_state"`
 	InheritedPoint11NoOverclaimState         string                                          `json:"inherited_point11_no_overclaim_state"`
 	InheritedPoint11FinalPassGateState       string                                          `json:"inherited_point11_final_pass_gate_state"`
@@ -524,30 +525,11 @@ func point14ValDForbiddenWording() []string {
 }
 
 func point14ValDObservedTextContainsForbiddenWording(text string) bool {
-	trimmed := strings.ToLower(strings.TrimSpace(text))
-	if trimmed == "" {
-		return false
-	}
-	for _, safe := range point14ValDSafeWording() {
-		if trimmed == strings.ToLower(strings.TrimSpace(safe)) {
-			return false
-		}
-	}
-	for _, phrase := range point14ValDForbiddenWording() {
-		if strings.Contains(trimmed, strings.ToLower(strings.TrimSpace(phrase))) {
-			return true
-		}
-	}
-	return false
+	return point14Val0ContainsForbiddenWordingFor(text, point14ValDSafeWording(), point14ValDForbiddenWording())
 }
 
 func point14ValDObservedListContainsForbiddenWording(values []string) bool {
-	for _, value := range values {
-		if point14ValDObservedTextContainsForbiddenWording(value) {
-			return true
-		}
-	}
-	return false
+	return point14Val0ListContainsForbiddenWordingFor(values, point14ValDSafeWording(), point14ValDForbiddenWording())
 }
 
 func point14ValDExactValueValid(value string, allowed []string) bool {
@@ -595,6 +577,7 @@ func point14ValDDependencySnapshotFromUpstream(valC Point14ValCFoundation) Point
 		InheritedPoint12DependencyState:          valC.Dependency.InheritedPoint12DependencyState,
 		InheritedPoint12PassClosureState:         valC.Dependency.InheritedPoint12PassClosureState,
 		InheritedPoint12ReviewerResult:           valC.Dependency.InheritedPoint12ReviewerResult,
+		InheritedPoint11CurrentState:             valC.Dependency.InheritedPoint11CurrentState,
 		InheritedPoint11PublicationState:         valC.Dependency.InheritedPoint11PublicationState,
 		InheritedPoint11NoOverclaimState:         valC.Dependency.InheritedPoint11NoOverclaimState,
 		InheritedPoint11FinalPassGateState:       valC.Dependency.InheritedPoint11FinalPassGateState,
@@ -654,6 +637,7 @@ func EvaluatePoint14ValDDependencyState(model Point14ValDDependencySnapshot) str
 		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
 		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
 		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
+		model.InheritedPoint11CurrentState == "" ||
 		model.InheritedPoint11PublicationState == "" ||
 		model.InheritedPoint11NoOverclaimState == "" ||
 		model.InheritedPoint11FinalPassGateState == "" ||
@@ -661,6 +645,16 @@ func EvaluatePoint14ValDDependencyState(model Point14ValDDependencySnapshot) str
 		model.InheritedPoint10NoOverclaimState == "" ||
 		model.InheritedPoint10ProjectionState == "" ||
 		model.InheritedPoint10PassRuleState == "" ||
+		!point14ValDDependencyEmbeddedSnapshotCopiesExact(model) ||
+		!point14ValCDependencyChainComputedActive(model.Point14ValC) ||
+		!point14ValBDependencyChainComputedActive(model.Point14ValB) ||
+		!point14ValAFoundationComputedActive(model.Point14ValA) ||
+		!point14Val0FoundationComputedActive(model.Point14Val0) ||
+		!point14Val0Point11FoundationActive(model.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValC.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValC.Dependency.Point14ValB.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point14Val0.Dependency.Point11) ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point14ValDStateBlocked
 	}
@@ -689,9 +683,18 @@ func EvaluatePoint14ValDDependencyState(model Point14ValDDependencySnapshot) str
 		model.InheritedPoint12DependencyState != model.Point14ValC.Dependency.InheritedPoint12DependencyState ||
 		model.InheritedPoint12PassClosureState != model.Point14ValC.Dependency.InheritedPoint12PassClosureState ||
 		model.InheritedPoint12ReviewerResult != model.Point14ValC.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedPoint11CurrentState != model.Point14ValC.Dependency.InheritedPoint11CurrentState ||
 		model.InheritedPoint11PublicationState != model.Point14ValC.Dependency.InheritedPoint11PublicationState ||
 		model.InheritedPoint11NoOverclaimState != model.Point14ValC.Dependency.InheritedPoint11NoOverclaimState ||
 		model.InheritedPoint11FinalPassGateState != model.Point14ValC.Dependency.InheritedPoint11FinalPassGateState ||
+		model.InheritedPoint11CurrentState != model.Point14ValC.Dependency.Point11.CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point14ValC.Dependency.Point11.PublicationReviewState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValC.Dependency.Point11.NoOverclaimReviewState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValC.Dependency.Point11.FinalPassGateState ||
+		model.InheritedPoint11CurrentState != model.Point11.CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point11.PublicationReviewState ||
+		model.InheritedPoint11NoOverclaimState != model.Point11.NoOverclaimReviewState ||
+		model.InheritedPoint11FinalPassGateState != model.Point11.FinalPassGateState ||
 		model.InheritedPoint10CurrentState != model.Point14ValC.Dependency.InheritedPoint10CurrentState ||
 		model.InheritedPoint10NoOverclaimState != model.Point14ValC.Dependency.InheritedPoint10NoOverclaimState ||
 		model.InheritedPoint10ProjectionState != model.Point14ValC.Dependency.InheritedPoint10ProjectionState ||
@@ -723,6 +726,7 @@ func EvaluatePoint14ValDDependencyState(model Point14ValDDependencySnapshot) str
 		model.InheritedPoint12DependencyState != Point12ValEStateActive ||
 		model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
 		model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed ||
+		model.InheritedPoint11CurrentState != Point11ValDStateActive ||
 		model.InheritedPoint11PublicationState != Point11ValDPublicationReviewStateActive ||
 		model.InheritedPoint11NoOverclaimState != Point11ValDNoOverclaimReviewStateActive ||
 		model.InheritedPoint11FinalPassGateState != Point11ValDFinalPassGateStateActive ||
@@ -1284,15 +1288,16 @@ func EvaluatePoint14ValDNoOverclaimTimelineWordingState(model Point14ValDNoOverc
 		!point14Val0TextListValid(model.BlockedWording) {
 		return Point14ValDStateBlocked
 	}
-	if point14ValDObservedListContainsForbiddenWording(model.ObservedTimelineTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedSignalTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedDisputeTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedReadProjectionTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedGovernanceTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedQueryTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedAccessTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedPrivacyTexts) ||
-		point14ValDObservedListContainsForbiddenWording(model.ObservedAgentTexts) {
+	observedTexts := append([]string{}, model.ObservedTimelineTexts...)
+	observedTexts = append(observedTexts, model.ObservedSignalTexts...)
+	observedTexts = append(observedTexts, model.ObservedDisputeTexts...)
+	observedTexts = append(observedTexts, model.ObservedReadProjectionTexts...)
+	observedTexts = append(observedTexts, model.ObservedGovernanceTexts...)
+	observedTexts = append(observedTexts, model.ObservedQueryTexts...)
+	observedTexts = append(observedTexts, model.ObservedAccessTexts...)
+	observedTexts = append(observedTexts, model.ObservedPrivacyTexts...)
+	observedTexts = append(observedTexts, model.ObservedAgentTexts...)
+	if point14ValDObservedListContainsForbiddenWording(observedTexts) {
 		return Point14ValDStateBlocked
 	}
 	if point14ValDObservedListContainsForbiddenWording(model.InternalDiagnosticTexts) && !model.InternalDiagnosticsClassifiedBlocked {

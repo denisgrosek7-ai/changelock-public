@@ -361,7 +361,7 @@ func point16Val0ObservedTextContainsForbiddenWording(text string) bool {
 		if normalizedPhrase == "" {
 			continue
 		}
-		if point16Val0NormalizedTextContainsNormalizedPhrase(normalized, normalizedPhrase) {
+		if point16Val0ObservedTextContainsNormalizedPhrase(text, normalizedPhrase) {
 			return true
 		}
 	}
@@ -384,10 +384,10 @@ func point16Val0CrossObservedDiagnosticForbiddenWording(observed, diagnostics []
 	if len(observed) == 0 || len(diagnostics) == 0 {
 		return false
 	}
-	observedCorpus := point16Val0NormalizeObservedText(strings.Join(observed, " "))
-	diagnosticsCorpus := point16Val0NormalizeObservedText(strings.Join(diagnostics, " "))
-	combinedCorpus := point16Val0NormalizeObservedText(strings.Join(append(append([]string{}, observed...), diagnostics...), " "))
-	if observedCorpus == "" || diagnosticsCorpus == "" || combinedCorpus == "" {
+	observedCorpusVariants := point16Val0NormalizedObservedTextVariants(strings.Join(observed, " "))
+	diagnosticsCorpusVariants := point16Val0NormalizedObservedTextVariants(strings.Join(diagnostics, " "))
+	combinedCorpusVariants := point16Val0NormalizedObservedTextVariants(strings.Join(append(append([]string{}, observed...), diagnostics...), " "))
+	if len(observedCorpusVariants) == 0 || len(diagnosticsCorpusVariants) == 0 || len(combinedCorpusVariants) == 0 {
 		return false
 	}
 	for _, phrase := range point16Val0ForbiddenWording() {
@@ -395,16 +395,34 @@ func point16Val0CrossObservedDiagnosticForbiddenWording(observed, diagnostics []
 		if normalizedPhrase == "" {
 			continue
 		}
-		if !point16Val0NormalizedTextContainsNormalizedPhrase(combinedCorpus, normalizedPhrase) {
+		if !point16Val0AnyNormalizedVariantContainsNormalizedPhrase(combinedCorpusVariants, normalizedPhrase) {
 			continue
 		}
-		if point16Val0NormalizedTextContainsNormalizedPhrase(observedCorpus, normalizedPhrase) {
+		if point16Val0AnyNormalizedVariantContainsNormalizedPhrase(observedCorpusVariants, normalizedPhrase) {
 			continue
 		}
-		if point16Val0NormalizedTextContainsNormalizedPhrase(diagnosticsCorpus, normalizedPhrase) {
+		if point16Val0AnyNormalizedVariantContainsNormalizedPhrase(diagnosticsCorpusVariants, normalizedPhrase) {
 			continue
 		}
 		return true
+	}
+	return false
+}
+
+func point16Val0ObservedTextContainsNormalizedPhrase(text, normalizedPhrase string) bool {
+	for _, normalizedText := range point16Val0NormalizedObservedTextVariants(text) {
+		if point16Val0NormalizedTextContainsNormalizedPhrase(normalizedText, normalizedPhrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func point16Val0AnyNormalizedVariantContainsNormalizedPhrase(normalizedTexts []string, normalizedPhrase string) bool {
+	for _, normalizedText := range normalizedTexts {
+		if point16Val0NormalizedTextContainsNormalizedPhrase(normalizedText, normalizedPhrase) {
+			return true
+		}
 	}
 	return false
 }
@@ -421,11 +439,32 @@ func point16Val0NormalizedTextContainsNormalizedPhrase(normalizedText, normalize
 	return compactPhrase != "" && strings.Contains(compactText, compactPhrase)
 }
 
+func point16Val0NormalizedObservedTextVariants(text string) []string {
+	primary := point16Val0NormalizeObservedText(text)
+	if primary == "" {
+		return nil
+	}
+	variants := []string{primary}
+	if strings.ContainsRune(text, 'ſ') {
+		longSAsF := strings.Map(func(r rune) rune {
+			if r == 'ſ' {
+				return 'f'
+			}
+			return r
+		}, text)
+		alternate := point16Val0NormalizeObservedText(longSAsF)
+		if alternate != "" && alternate != primary {
+			variants = append(variants, alternate)
+		}
+	}
+	return variants
+}
+
 func point16Val0NormalizeObservedText(text string) string {
 	trimmed := strings.TrimSpace(strings.Map(func(r rune) rune {
 		switch r {
 		case 'ſ':
-			return 'f'
+			return 's'
 		default:
 			return r
 		}
@@ -512,7 +551,7 @@ func point16Val0FoldConfusableRune(r rune) rune {
 	case 'м', 'М':
 		return 'm'
 	case 'ſ':
-		return 'f'
+		return 's'
 	case 'т', 'Т', 'τ', 'Τ':
 		return 't'
 	case 'в', 'В':

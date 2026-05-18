@@ -529,6 +529,12 @@ func TestPoint12Val0ManifestValidation(t *testing.T) {
 		{name: "cross tenant evidence ref blocks", mutate: func(model *Point12Val0SignedProofPackManifest) {
 			model.EvidenceRefs = []string{"evidence:cross-tenant-proof-pack"}
 		}},
+		{name: "underscore retagged other tenant evidence ref blocks", mutate: func(model *Point12Val0SignedProofPackManifest) {
+			model.EvidenceRefs = []string{"evidence:other_tenant-proof-pack"}
+		}},
+		{name: "singular all tenant evidence ref blocks", mutate: func(model *Point12Val0SignedProofPackManifest) {
+			model.EvidenceRefs = []string{"evidence:all-tenant-proof-pack"}
+		}},
 		{name: "stale revoked expired superseded refs block", mutate: func(model *Point12Val0SignedProofPackManifest) { model.ClaimRefs = []string{"claim_revoked"} }},
 		{name: "missing projection disclaimer blocks projection export readiness", mutate: func(model *Point12Val0SignedProofPackManifest) { model.ProjectionDisclaimer = "" }},
 		{name: "missing retention class blocks export advisory readiness", mutate: func(model *Point12Val0SignedProofPackManifest) { model.RetentionClassRef = "" }},
@@ -1580,6 +1586,30 @@ func TestPoint12Val0NoOverclaimState(t *testing.T) {
 		model = ComputePoint12Val0Foundation(model)
 		if model.NoOverclaimState != Point12Val0NoOverclaimStateActive || model.CurrentState != Point12Val0StateActive {
 			t.Fatalf("expected all-allowed disclaimer-only combination to remain active, got %#v", model)
+		}
+	})
+
+	t.Run("allowed compact forbidden phrase plus harmless non allowed text does not false positive", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.NoOverclaimReview.ObservedCustomerFacingTexts = []string{"canonical evidence spine remains source of truth"}
+		model.NoOverclaimReview.ObservedExportFacingTexts = []string{"bounded customer evidence note"}
+		model = ComputePoint12Val0Foundation(model)
+		if model.NoOverclaimState != Point12Val0NoOverclaimStateActive || model.CurrentState != Point12Val0StateActive {
+			t.Fatalf("expected allowed source-of-truth disclaimer plus harmless text to remain active, got %#v", model)
+		}
+	})
+
+	t.Run("repetitive compact split corpus remains bounded and safe", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		repeated := make([]string, 256)
+		for i := range repeated {
+			repeated[i] = "produc"
+		}
+		model.NoOverclaimReview.ObservedCustomerFacingTexts = repeated
+		model.NoOverclaimReview.ObservedExportFacingTexts = []string{"bounded customer evidence note"}
+		model = ComputePoint12Val0Foundation(model)
+		if model.NoOverclaimState != Point12Val0NoOverclaimStateActive || model.CurrentState != Point12Val0StateActive {
+			t.Fatalf("expected repetitive non-matching compact corpus to remain active, got %#v", model)
 		}
 	})
 

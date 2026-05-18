@@ -73,6 +73,20 @@ func TestPoint14ValDDependencyState(t *testing.T) {
 			want: Point14ValDStateBlocked,
 		},
 		{
+			name: "whitespace retagged nested point11 current state in valc dependency blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "whitespace retagged point11 current state blocks raw exact",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
 			name: "whitespace retagged nested point11 final pass gate in valc dependency blocks",
 			mutate: func(model *Point14ValDDependencySnapshot) {
 				model.Point14ValC.Dependency.InheritedPoint11FinalPassGateState += " "
@@ -125,10 +139,89 @@ func TestPoint14ValDDependencyState(t *testing.T) {
 			want: Point14ValDStateBlocked,
 		},
 		{
+			name: "nested valc point11 current state mismatch blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "nested valc embedded point11 current state mismatch blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "embedded point11 current state mismatch blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "embedded point11 pass manifest current state mismatch blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point11.PassClosureManifest.CurrentState = Point11ValDPassClosureManifestStateBlocked
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "nested point11 final pass gate current state mismatch blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.Point11.FinalPassGate.CurrentState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "point11 current state review required blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+				model.Point14ValC.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
 			name: "point11 final pass gate blocked blocks",
 			mutate: func(model *Point14ValDDependencySnapshot) {
 				model.InheritedPoint11FinalPassGateState = Point11ValDFinalPassGateStateBlocked
 				model.Point14ValC.Dependency.InheritedPoint11FinalPassGateState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "direct embedded valb state drift blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValB.CurrentState = Point14ValBStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "direct embedded vala state drift blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValA.CurrentState = Point14ValAStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "nested valc embedded vala state drift blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValC.Dependency.Point14ValA.CurrentState = Point14ValAStateReviewRequired
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "embedded valb production approval authority blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+			},
+			want: Point14ValDStateBlocked,
+		},
+		{
+			name: "synchronized embedded valb production approval authority blocks",
+			mutate: func(model *Point14ValDDependencySnapshot) {
+				model.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+				model.Point14ValC.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
 			},
 			want: Point14ValDStateBlocked,
 		},
@@ -537,6 +630,31 @@ func TestPoint14ValDNoOverclaimTimelineWordingState(t *testing.T) {
 	t.Run("forbidden timeline wording blocks", func(t *testing.T) {
 		model := point14ValDNoOverclaimTimelineWordingModel()
 		model.ObservedTimelineTexts = []string{"timeline proves truth"}
+		if got := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model); got != Point14ValDStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("zero-width forbidden timeline wording blocks", func(t *testing.T) {
+		model := point14ValDNoOverclaimTimelineWordingModel()
+		model.ObservedTimelineTexts = []string{"timeline proves tr\u200buth"}
+		if got := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model); got != Point14ValDStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("split forbidden timeline wording blocks across observed corpus", func(t *testing.T) {
+		model := point14ValDNoOverclaimTimelineWordingModel()
+		model.ObservedTimelineTexts = []string{"timeline proves", "truth"}
+		if got := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model); got != Point14ValDStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("split forbidden timeline wording across observed categories blocks", func(t *testing.T) {
+		model := point14ValDNoOverclaimTimelineWordingModel()
+		model.ObservedTimelineTexts = []string{"timeline proves"}
+		model.ObservedAgentTexts = []string{"truth"}
 		if got := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model); got != Point14ValDStateBlocked {
 			t.Fatalf("expected blocked, got %s", got)
 		}

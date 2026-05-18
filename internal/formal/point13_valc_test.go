@@ -366,6 +366,9 @@ func TestPoint13ValCRedactionSafeDisclosureState(t *testing.T) {
 		{name: "missing approver blocks", mutate: func(model *Point13ValCFoundation) {
 			model.RedactionSafeDisclosureBoundary.RedactionApproverRef = ""
 		}, expectedState: Point13ValCStateBlocked},
+		{name: "padded approver ref blocks raw exact", mutate: func(model *Point13ValCFoundation) {
+			model.RedactionSafeDisclosureBoundary.RedactionApproverRef = " " + model.RedactionSafeDisclosureBoundary.RedactionApproverRef
+		}, expectedState: Point13ValCStateBlocked},
 		{name: "missing audit event blocks", mutate: func(model *Point13ValCFoundation) {
 			model.RedactionSafeDisclosureBoundary.RedactionAuditEventRef = ""
 		}, expectedState: Point13ValCStateBlocked},
@@ -387,6 +390,13 @@ func TestPoint13ValCRedactionSafeDisclosureState(t *testing.T) {
 		{name: "surviving customer claims overlapping disallowed claims blocks", mutate: func(model *Point13ValCFoundation) {
 			model.RedactionSafeDisclosureBoundary.SurvivingCustomerClaims = []string{"production approved"}
 		}, expectedState: Point13ValCStateBlocked},
+		{name: "normalized surviving customer claim variant overlapping disallowed claim blocks", mutate: func(model *Point13ValCFoundation) {
+			model.RedactionSafeDisclosureBoundary.DisallowedCustomerClaims = []string{"customer-ready"}
+			model.RedactionSafeDisclosureBoundary.SurvivingCustomerClaims = []string{"customer ready"}
+		}, expectedState: Point13ValCStateBlocked},
+		{name: "normalized duplicate denylist variants do not block safe disclosure", mutate: func(model *Point13ValCFoundation) {
+			model.RedactionSafeDisclosureBoundary.DisallowedCustomerClaims = []string{"ai-approved", "ai approved"}
+		}, expectedState: Point13ValCStateActive},
 		{name: "forbidden minimum safe statement blocks", mutate: func(model *Point13ValCFoundation) {
 			model.RedactionSafeDisclosureBoundary.MinimumSafeStatement = "production approved"
 		}, expectedState: Point13ValCStateBlocked},

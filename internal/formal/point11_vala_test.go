@@ -148,6 +148,12 @@ func TestPoint11ValADependencyState(t *testing.T) {
 		{name: "blocked val0 cross domain compatibility blocks", mutate: func(model *Point11ValADependencySnapshot) {
 			model.Val0CrossDomainCompatibilityState = Point11Val0CrossDomainCompatibilityStateBlocked
 		}, want: Point11ValADependencyStateBlocked},
+		{name: "whitespace retagged val0 current state blocks raw exact", mutate: func(model *Point11ValADependencySnapshot) {
+			model.Val0CurrentState = " " + Point11Val0StateActive
+		}, want: Point11ValADependencyStateBlocked},
+		{name: "tab newline retagged val0 dependency state blocks raw exact", mutate: func(model *Point11ValADependencySnapshot) {
+			model.Val0DependencyState = "\t" + Point11Val0DependencyStateActive + "\n"
+		}, want: Point11ValADependencyStateBlocked},
 		{name: "val0 point11 pass emission marker blocks", mutate: func(model *Point11ValADependencySnapshot) {
 			model.Val0Point11PassEmitted = true
 		}, want: Point11ValADependencyStateBlocked},
@@ -167,6 +173,18 @@ func TestPoint11ValADependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("whitespace retagged val0 current state records exact aggregate reason", func(t *testing.T) {
+		model := activePoint11ValAFoundation()
+		model.Dependency.Val0CurrentState = " " + Point11Val0StateActive
+		model = ComputePoint11ValAFoundation(model)
+		if model.DependencyState != Point11ValADependencyStateBlocked || model.CurrentState != Point11ValAStateBlocked {
+			t.Fatalf("expected retagged val0 current state to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "val0_dependency_blocked") {
+			t.Fatalf("expected exact val0 dependency blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint11ValARegistryState(t *testing.T) {
@@ -240,6 +258,18 @@ func TestPoint11ValASignatureState(t *testing.T) {
 		{name: "signing key ref unknown blocks", mutate: func(model *Point11ValAPolicySignatureEnvelope) { model.SigningKeyRef = "signing_key_unknown" }},
 		{name: "signed subject hash missing blocks", mutate: func(model *Point11ValAPolicySignatureEnvelope) { model.SignedSubjectHash = "" }},
 		{name: "signed subject hash malformed blocks", mutate: func(model *Point11ValAPolicySignatureEnvelope) { model.SignedSubjectHash = "sha256:xyz" }},
+		{name: "signed subject hash without sha256 prefix blocks raw exact", mutate: func(model *Point11ValAPolicySignatureEnvelope) {
+			model.SignedSubjectHash = strings.TrimPrefix(model.SignedSubjectHash, "sha256:")
+		}},
+		{name: "signed subject hash uppercase hex blocks raw exact", mutate: func(model *Point11ValAPolicySignatureEnvelope) {
+			model.SignedSubjectHash = strings.ToUpper(model.SignedSubjectHash)
+		}},
+		{name: "signed subject hash leading whitespace blocks raw exact", mutate: func(model *Point11ValAPolicySignatureEnvelope) {
+			model.SignedSubjectHash = " " + model.SignedSubjectHash
+		}},
+		{name: "signed subject hash tab newline retag blocks raw exact", mutate: func(model *Point11ValAPolicySignatureEnvelope) {
+			model.SignedSubjectHash = "\t" + model.SignedSubjectHash + "\n"
+		}},
 		{name: "expired signature blocks", mutate: func(model *Point11ValAPolicySignatureEnvelope) { model.ExpiresAt = "2000-01-01T00:00:00Z" }},
 		{name: "revoked signature state blocks", mutate: func(model *Point11ValAPolicySignatureEnvelope) { model.SignatureState = "revoked_signature_state" }},
 		{name: "unknown signature state blocks", mutate: func(model *Point11ValAPolicySignatureEnvelope) { model.SignatureState = "unknown_signature_state" }},
@@ -257,6 +287,18 @@ func TestPoint11ValASignatureState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("signed subject hash whitespace retag records exact aggregate reason", func(t *testing.T) {
+		model := activePoint11ValAFoundation()
+		model.Signature.SignedSubjectHash = " " + model.Signature.SignedSubjectHash
+		model = ComputePoint11ValAFoundation(model)
+		if model.SignatureState != Point11ValASignatureStateBlocked || model.CurrentState != Point11ValAStateBlocked {
+			t.Fatalf("expected retagged signature hash to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "policy_signature_blocked") {
+			t.Fatalf("expected exact policy signature blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint11ValAAnchorState(t *testing.T) {

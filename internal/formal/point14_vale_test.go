@@ -89,6 +89,56 @@ func TestPoint14ValEDependencyState(t *testing.T) {
 			want: Point14ValEStateBlocked,
 		},
 		{
+			name: "whitespace retagged nested point11 current state in vald dependency blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "whitespace retagged point11 current state blocks raw exact",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "nested vald point11 current state mismatch blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "nested vald embedded point11 current state mismatch blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "nested vald embedded point11 pass manifest current state mismatch blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point11.PassClosureManifest.CurrentState = Point11ValDPassClosureManifestStateBlocked
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "deep nested point11 final pass gate current state mismatch blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValC.Dependency.Point11.FinalPassGate.CurrentState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "point11 current state review required blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+				model.Point14ValD.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
 			name: "whitespace retagged nested point11 final pass gate in vald dependency blocks",
 			mutate: func(model *Point14ValEDependencySnapshot) {
 				model.Point14ValD.Dependency.InheritedPoint11FinalPassGateState += " "
@@ -145,6 +195,20 @@ func TestPoint14ValEDependencyState(t *testing.T) {
 			want: Point14ValEStateBlocked,
 		},
 		{
+			name: "nested vald embedded point11 dependency state mismatch blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point11.DependencyState = Point11ValDDependencyStateBlocked
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "deep nested valc embedded point11 val0 dependency mismatch blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValC.Dependency.Point11.Val0Dependency.CurrentState = Point11Val0StateBlocked
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
 			name: "missing point13 vale blocks",
 			mutate: func(model *Point14ValEDependencySnapshot) {
 				model.InheritedPoint13ValECurrentState = ""
@@ -165,6 +229,42 @@ func TestPoint14ValEDependencyState(t *testing.T) {
 				model.Point14ValDTimelineProjectionState = Point14ValDStateActive
 				model.Point14ValDDisputeTimelineState = Point14ValDStateActive
 				model.InheritedPoint14ValCCurrentState = Point14ValCStateActive
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "direct embedded valb state drift blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValB.CurrentState = Point14ValBStateReviewRequired
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "direct embedded vala state drift blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValA.CurrentState = Point14ValAStateReviewRequired
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "nested valc embedded vala state drift blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValA.CurrentState = Point14ValAStateReviewRequired
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "embedded valb production approval authority blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "synchronized embedded valb production approval authority blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+				model.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
 			},
 			want: Point14ValEStateBlocked,
 		},
@@ -392,15 +492,19 @@ func TestPoint14ValETenantPrivacyClosureCheckState(t *testing.T) {
 		{"tenant private data exposure blocks clb0", func(model *Point14ValETenantPrivacyClosureCheck) { model.TenantPrivateDataExposed = true }, Point14ValEStateBlocked},
 		{"public private classification missing blocks", func(model *Point14ValETenantPrivacyClosureCheck) { model.PublicPrivateClassificationPresent = false }, Point14ValEStateBlocked},
 		{"public notice leaking tenant private data blocks", func(model *Point14ValETenantPrivacyClosureCheck) { model.PublicNoticeLeaksTenantPrivateData = true }, Point14ValEStateBlocked},
+		{"tenant scope substitution cannot pass final privacy closure", func(model *Point14ValETenantPrivacyClosureCheck) {
+			model.TenantScope = "tenant_point14_other"
+		}, Point14ValEStateBlocked},
 		{"redaction limitation missing blocks", func(model *Point14ValETenantPrivacyClosureCheck) {
 			model.RequiredRedactionLimitationRefsPresent = false
 		}, Point14ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValETenantPrivacyClosureCheckModel(point14ValEDependencySnapshotModel())
+			dependency := point14ValEDependencySnapshotModel()
+			model := point14ValETenantPrivacyClosureCheckModel(dependency)
 			tc.mutate(&model)
-			if got := EvaluatePoint14ValETenantPrivacyClosureCheckState(model); got != tc.want {
+			if got := EvaluatePoint14ValETenantPrivacyClosureCheckState(model, dependency); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
 			}
 		})
@@ -426,12 +530,16 @@ func TestPoint14ValETimestampIntegrityClosureCheckState(t *testing.T) {
 		{"backdated correction publication approval blocks", func(model *Point14ValETimestampIntegrityClosureCheck) { model.BackdatedApproval = true }, Point14ValEStateBlocked},
 		{"impossible ordering blocks", func(model *Point14ValETimestampIntegrityClosureCheck) { model.ImpossibleOrdering = true }, Point14ValEStateBlocked},
 		{"timeline ordering cannot upgrade validity", func(model *Point14ValETimestampIntegrityClosureCheck) { model.TimelineOrderingUpgradesValidity = true }, Point14ValEStateBlocked},
+		{"tenant scope mismatch blocks current context substitution", func(model *Point14ValETimestampIntegrityClosureCheck) {
+			model.TenantScope = "tenant_scope_point12_beta"
+		}, Point14ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValETimestampIntegrityClosureCheckModel(point14ValEDependencySnapshotModel())
+			dependency := point14ValEDependencySnapshotModel()
+			model := point14ValETimestampIntegrityClosureCheckModel(dependency)
 			tc.mutate(&model)
-			if got := EvaluatePoint14ValETimestampIntegrityClosureCheckState(model); got != tc.want {
+			if got := EvaluatePoint14ValETimestampIntegrityClosureCheckState(model, dependency); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
 			}
 		})
@@ -452,22 +560,130 @@ func TestPoint14ValEAgentAdvisoryClosureCheckState(t *testing.T) {
 		{"ai agent authority flags block", func(model *Point14ValEAgentAdvisoryClosureCheck) { model.AgentAuthorityFlags = true }, Point14ValEStateBlocked},
 		{"ai agent pass blocks", func(model *Point14ValEAgentAdvisoryClosureCheck) { model.AgentPassAllowed = true }, Point14ValEStateBlocked},
 		{"ai agent public badge blocks", func(model *Point14ValEAgentAdvisoryClosureCheck) { model.AgentPublicBadgeAllowed = true }, Point14ValEStateBlocked},
+		{"tenant scope mismatch blocks current context substitution", func(model *Point14ValEAgentAdvisoryClosureCheck) {
+			model.TenantScope = "tenant_scope_point12_beta"
+		}, Point14ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			model := point14ValEAgentAdvisoryClosureCheckModel(point14ValEDependencySnapshotModel())
+			dependency := point14ValEDependencySnapshotModel()
+			model := point14ValEAgentAdvisoryClosureCheckModel(dependency)
 			tc.mutate(&model)
-			if got := EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model); got != tc.want {
+			if got := EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model, dependency); got != tc.want {
 				t.Fatalf("expected %s, got %s", tc.want, got)
 			}
 		})
 	}
 }
 
+func TestPoint14ValEAuthorityBoundaryClosureCheckState(t *testing.T) {
+	t.Run("zero-width observed authority mark blocks", func(t *testing.T) {
+		model := point14ValEAuthorityBoundaryClosureCheckModel(point14ValEDependencySnapshotModel())
+		model.ObservedAuthorityMarks = []string{"external_pass\u200b"}
+		if got := EvaluatePoint14ValEAuthorityBoundaryClosureCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("long-s observed authority mark blocks", func(t *testing.T) {
+		model := point14ValEAuthorityBoundaryClosureCheckModel(point14ValEDependencySnapshotModel())
+		model.ObservedAuthorityMarks = []string{"external_paſs"}
+		if got := EvaluatePoint14ValEAuthorityBoundaryClosureCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("split observed authority mark blocks", func(t *testing.T) {
+		model := point14ValEAuthorityBoundaryClosureCheckModel(point14ValEDependencySnapshotModel())
+		model.ObservedAuthorityMarks = []string{"public", "badge", "authority"}
+		if got := EvaluatePoint14ValEAuthorityBoundaryClosureCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+}
+
 func TestPoint14ValENoOverclaimFinalCheckState(t *testing.T) {
 	t.Run("forbidden final closure wording blocks", func(t *testing.T) {
 		model := point14ValENoOverclaimFinalCheckModel(point14ValEDependencySnapshotModel())
 		model.ObservedTexts = []string{"timeline proves truth"}
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("zero-width forbidden final closure wording blocks", func(t *testing.T) {
+		model := point14ValENoOverclaimFinalCheckModel(point14ValEDependencySnapshotModel())
+		model.ObservedTexts = []string{"timeline proves tr\u200buth"}
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("split forbidden final closure wording blocks across observed corpus", func(t *testing.T) {
+		model := point14ValENoOverclaimFinalCheckModel(point14ValEDependencySnapshotModel())
+		model.ObservedTexts = []string{"timeline proves", "truth"}
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("long-s final pass wording blocks", func(t *testing.T) {
+		model := point14ValENoOverclaimFinalCheckModel(point14ValEDependencySnapshotModel())
+		model.ObservedTexts = []string{"external PAſS"}
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("inherited ValA omitted observed category blocks", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.Dependency.Point14ValA.NoOverclaimValidationWording.ObservedSourceIdentityTexts = []string{"production approved"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("inherited ValB-only forbidden wording blocks", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.Dependency.Point14ValB.NoOverclaimDisputeWording.ObservedDisputeTexts = []string{"dispute resolved by AI"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("inherited ValC-only forbidden wording blocks", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.Dependency.Point14ValC.NoOverclaimPublicationWording.ObservedCorrectionTexts = []string{"correction certified"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("inherited ValD omitted observed category blocks", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.NoOverclaimTimelineWording.ObservedAccessTexts = []string{"public badge"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("nested ValC copy ValB forbidden wording blocks", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.NoOverclaimDisputeWording.ObservedDisputeTexts = []string{"dispute resolved by AI"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+
+	t.Run("nested ValB copy ValA forbidden wording blocks", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.Dependency.Point14ValB.Dependency.Point14ValA.NoOverclaimValidationWording.ObservedSourceIdentityTexts = []string{"production approved"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
 		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStateBlocked {
 			t.Fatalf("expected blocked, got %s", got)
 		}
@@ -484,6 +700,19 @@ func TestPoint14ValENoOverclaimFinalCheckState(t *testing.T) {
 		model := point14ValENoOverclaimFinalCheckModel(point14ValEDependencySnapshotModel())
 		model.InternalDiagnosticTexts = []string{"query approved"}
 		model.InternalDiagnosticsClassifiedBlocked = true
+		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStatePassConfirmed {
+			t.Fatalf("expected pass_confirmed, got %s", got)
+		}
+	})
+
+	t.Run("duplicate safe internal diagnostics do not false positive", func(t *testing.T) {
+		dependency := point14ValEDependencySnapshotModel()
+		dependency.Point14ValD.NoOverclaimTimelineWording.InternalDiagnosticTexts = []string{"bounded timeline projection"}
+		dependency.Point14ValD.Dependency.Point14ValC.NoOverclaimPublicationWording.InternalDiagnosticTexts = []string{"bounded timeline projection"}
+		model := point14ValENoOverclaimFinalCheckModel(dependency)
+		if len(model.InternalDiagnosticTexts) != 1 {
+			t.Fatalf("expected duplicate internal diagnostic to be deduped, got %#v", model.InternalDiagnosticTexts)
+		}
 		if got := EvaluatePoint14ValENoOverclaimFinalCheckState(model); got != Point14ValEStatePassConfirmed {
 			t.Fatalf("expected pass_confirmed, got %s", got)
 		}
@@ -522,5 +751,103 @@ func TestPoint14ValEFoundationHappyPath(t *testing.T) {
 	}
 	if model.PassClosureManifestState != Point14ValEStatePassConfirmed || model.ClosureEvaluatorState != Point14ValEStatePassConfirmed {
 		t.Fatalf("expected manifest and closure evaluator pass_confirmed, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationStaleSafeNoOverclaimFinalCheckBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.NoOverclaimFinalCheck.ObservedTexts = append(model.NoOverclaimFinalCheck.ObservedTexts, "validated deployment baseline")
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.NoOverclaimFinalCheckState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "no_overclaim") {
+		t.Fatalf("expected stale safe no-overclaim final check mismatch to block, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after stale no-overclaim final check mismatch, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationTimestampTenantMismatchBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.TimestampIntegrityClosureCheck.TenantScope = "tenant_scope_point12_beta"
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.TimestampIntegrityClosureState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "timestamp_integrity") {
+		t.Fatalf("expected timestamp tenant mismatch to block final pass, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after timestamp tenant mismatch, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationAgentTenantMismatchBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.AgentAdvisoryClosureCheck.TenantScope = "tenant_scope_point12_beta"
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.AgentAdvisoryClosureState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "agent_advisory") {
+		t.Fatalf("expected agent tenant mismatch to block final pass, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after agent tenant mismatch, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationNestedInheritedNoOverclaimBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.NoOverclaimDisputeWording.ObservedDisputeTexts = []string{"dispute resolved by AI"}
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.NoOverclaimFinalCheckState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "no_overclaim") {
+		t.Fatalf("expected nested inherited no-overclaim block, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after nested inherited overclaim, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationNestedValBValANoOverclaimBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.Dependency.Point14ValD.Dependency.Point14ValB.Dependency.Point14ValA.NoOverclaimValidationWording.ObservedSourceIdentityTexts = []string{"production approved"}
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.NoOverclaimFinalCheckState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "no_overclaim") {
+		t.Fatalf("expected nested ValB->ValA no-overclaim block, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after nested ValA overclaim, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationNestedVal0NoOverclaimBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.Dependency.Point14ValD.Dependency.Point14ValA.Dependency.Point14Val0.NoOverclaimEcosystemWording.ObservedAgentTexts = []string{"public badge"}
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.DependencyState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "dependency") {
+		t.Fatalf("expected nested Val0 no-overclaim dependency block, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after nested Val0 overclaim, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationTenantSubstitutionBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.TenantPrivacyClosureCheck.TenantScope = "tenant_point14_other"
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.TenantPrivacyClosureState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "tenant_privacy") {
+		t.Fatalf("expected tenant privacy closure blocked, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after tenant substitution, got %#v", model)
 	}
 }

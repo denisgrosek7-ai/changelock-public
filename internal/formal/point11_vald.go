@@ -1977,8 +1977,10 @@ func ComputePoint11ValDFoundation(model Point11ValDFoundation) Point11ValDFounda
 
 	manifestState, manifestReasons := point11ValDPassClosureManifestStateAndReasons(model.PassClosureManifest, model)
 	model.PassClosureManifestState = manifestState
+	model.PassClosureManifest.CurrentState = manifestState
 	finalGateState, finalGateReasons := point11ValDFinalPassGateStateAndReasons(model.FinalPassGate, model)
 	model.FinalPassGateState = finalGateState
+	model.FinalPassGate.CurrentState = finalGateState
 
 	reviewOnlyDueToUpstreamPrereq := model.DependencyState == Point11ValDDependencyStateReviewRequired &&
 		model.IntegratedInvariantState == Point11ValDIntegratedInvariantStateActive &&

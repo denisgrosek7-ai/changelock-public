@@ -88,6 +88,12 @@ func TestPoint11ValCDependencyState(t *testing.T) {
 		{name: "blocked valb cross domain intake blocks", mutate: func(model *Point11ValCDependencySnapshot) {
 			model.ValBCrossDomainIntakeState = Point11ValBCrossDomainIntakeStateBlocked
 		}, wantState: Point11ValCDependencyStateBlocked},
+		{name: "whitespace retagged valb current state blocks raw exact", mutate: func(model *Point11ValCDependencySnapshot) {
+			model.ValBCurrentState = " " + Point11ValBStateActive
+		}, wantState: Point11ValCDependencyStateBlocked},
+		{name: "tab newline retagged valb dependency state blocks raw exact", mutate: func(model *Point11ValCDependencySnapshot) {
+			model.ValBDependencyState = "\t" + Point11ValBDependencyStateActive + "\n"
+		}, wantState: Point11ValCDependencyStateBlocked},
 		{name: "valb dependency review required propagates", mutate: func(model *Point11ValCDependencySnapshot) {
 			model.ValBCurrentState = Point11ValBStateReviewRequired
 			model.ValBDependencyState = Point11ValBDependencyStateReviewRequired
@@ -125,6 +131,25 @@ func TestPoint11ValCDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("retagged valb inherited state records exact dependency reason", func(t *testing.T) {
+		for _, mutate := range []func(*Point11ValCDependencySnapshot){
+			func(model *Point11ValCDependencySnapshot) { model.ValBCurrentState = " " + Point11ValBStateActive },
+			func(model *Point11ValCDependencySnapshot) {
+				model.ValBDependencyState = "\t" + Point11ValBDependencyStateActive + "\n"
+			},
+		} {
+			model := point11ValCActiveDependencySnapshot()
+			mutate(&model)
+			state, reasons := point11ValCDependencyStateAndReasons(model)
+			if state != Point11ValCDependencyStateBlocked {
+				t.Fatalf("expected retagged valb inherited state to block, got %q for %#v", state, model)
+			}
+			if !point11Val0ContainsTrimmed(reasons, "valb_dependency_not_active") {
+				t.Fatalf("expected exact valb dependency reason, got %#v", reasons)
+			}
+		}
+	})
 }
 
 func TestPoint11ValCEnforcementInputState(t *testing.T) {
@@ -251,6 +276,10 @@ func TestPoint11ValCEnforcementResultState(t *testing.T) {
 			model.PolicyResultState = point11ValCCheckStateBlocked
 			model.BlockedActionReason = "policy invalid"
 		}},
+		{name: "whitespace retagged active policy result blocks raw exact", mutate: func(model *Point11ValCPolicyDecisionEnforcementResult) {
+			model.PolicyResultState = " " + point11ValCPolicyStateActive
+			model.BlockedActionReason = "policy invalid"
+		}},
 		{name: "invalid claim blocks result", mutate: func(model *Point11ValCPolicyDecisionEnforcementResult) {
 			model.ClaimResultState = point11ValCCheckStateBlocked
 			model.BlockedActionReason = "claim invalid"
@@ -279,6 +308,10 @@ func TestPoint11ValCEnforcementResultState(t *testing.T) {
 			model.EnforcementOutcome = "production approved"
 			model.BlockedActionReason = "overclaim blocked"
 		}},
+		{name: "split source of truth diagnostics block result", mutate: func(model *Point11ValCPolicyDecisionEnforcementResult) {
+			model.Diagnostics = []string{"source of", "truth"}
+			model.BlockedActionReason = "overclaim blocked"
+		}},
 	}
 
 	for _, testCase := range testCases {
@@ -291,6 +324,19 @@ func TestPoint11ValCEnforcementResultState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("whitespace retagged active policy result records exact reason", func(t *testing.T) {
+		model := activePoint11ValCFoundation()
+		model.EnforcementResult.PolicyResultState = " " + point11ValCPolicyStateActive
+		model.EnforcementResult.BlockedActionReason = "policy invalid"
+		model = ComputePoint11ValCFoundation(model)
+		if model.EnforcementResultState != Point11ValCEnforcementResultStateBlocked || model.CurrentState != Point11ValCStateBlocked {
+			t.Fatalf("expected retagged policy result to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.Diagnostics.EnforcementResultReasons, "enforcement_result_policy_invalid") {
+			t.Fatalf("expected exact enforcement result policy reason, got %#v", model.Diagnostics.EnforcementResultReasons)
+		}
+	})
 }
 
 func TestPoint11ValCABACDecisionState(t *testing.T) {
@@ -737,6 +783,17 @@ func TestPoint11ValCAggregateState(t *testing.T) {
 		model := activePoint11ValCFoundation()
 		if model.CreatesRealEnforcementSideEffects {
 			t.Fatalf("expected no real enforcement side effects on active model, got %#v", model)
+		}
+	})
+
+	t.Run("aggregate blocks padded active monitoring state instead of normalizing", func(t *testing.T) {
+		model := activePoint11ValCFoundation()
+		model.MonitoringState = "\t" + Point11ValCMonitoringStateActive + "\n"
+		if got := EvaluatePoint11ValCFoundationState(model); got != Point11ValCStateBlocked {
+			t.Fatalf("expected padded monitoring state to block aggregate, got %q for %#v", got, model)
+		}
+		if !point11Val0ContainsTrimmed(point11ValCBlockingReasons(model), "monitoring_blocked") {
+			t.Fatalf("expected exact monitoring blocking reason, got %#v", point11ValCBlockingReasons(model))
 		}
 	})
 }

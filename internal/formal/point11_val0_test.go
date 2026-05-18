@@ -186,6 +186,34 @@ func TestPoint11Val0PolicyContractState(t *testing.T) {
 		}},
 		{name: "global scope blocks", mutate: func(model *Point11Val0PolicyContract) { model.Scope = "global_admin_scope" }},
 		{name: "policy without approval evidence refs blocks", mutate: func(model *Point11Val0PolicyContract) { model.ApprovalEvidenceRefs = nil }},
+		{name: "zero width approval evidence ref blocks raw exact identity", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence:point11-policy-approval-001\u200b"}
+		}},
+		{name: "cross tenant approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence_cross_tenant_tenantB_001"}
+		}},
+		{name: "singular all tenant approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence:all-tenant-approval-001"}
+		}},
+		{name: "reversed tenant scope all approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence_tenant_scope_all_approval_001"}
+		}},
+		{name: "compact all tenants approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence_allTenants_approval_001"}
+		}},
+		{name: "cross scope approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence_cross_scope_approval_001"}
+		}},
+		{name: "standalone cross approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence_cross_approval_001"}
+		}},
+		{name: "compact crossboundary approval evidence ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.ApprovalEvidenceRefs = []string{"evidence_crossboundary_approval_001"}
+		}},
+		{name: "confusable canonical successor policy ref blocks", mutate: func(model *Point11Val0PolicyContract) {
+			model.SupersededBy = "point11_pоlicy_successor"
+			model.CompatibilityVersion = "point11_val0_compat_v1"
+		}},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -334,6 +362,42 @@ func TestPoint11Val0ClaimGovernanceState(t *testing.T) {
 			model.PublicationBoundary = point11Val0PublicationSurfaceExport
 			model.EvidenceRefs = nil
 		}},
+		{name: "claim with global evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_global_point11_claim_001"}
+		}},
+		{name: "claim with compact cross tenant evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_crossTenant_point11_claim_001"}
+		}},
+		{name: "claim with plural compact cross tenants evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_crossTenants_point11_claim_001"}
+		}},
+		{name: "claim with compact cross scope evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_crossScope_point11_claim_001"}
+		}},
+		{name: "claim with obfuscated cross evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_c-r-o-s-s_point11_claim_001"}
+		}},
+		{name: "claim with plural compact other tenants evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_otherTenants_point11_claim_001"}
+		}},
+		{name: "claim with reversed tenant scope all evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_tenant_scope_all_point11_claim_001"}
+		}},
+		{name: "claim with compact all tenants evidence ref blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.EvidenceRefs = []string{"evidence_allTenants_point11_claim_001"}
+		}},
+		{name: "claim with underscore cross tenant scope blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.Scope = "tenant_cross_tenant_claim_scope"
+		}},
+		{name: "claim with tenant scope all blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.Scope = "tenant_scope_all_claim_scope"
+		}},
+		{name: "claim with compact all tenants scope blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.Scope = "tenant_allTenants_claim_scope"
+		}},
+		{name: "claim with underscore cross tenants scope blocks publication", mutate: func(model *Point11Val0ClaimGovernance) {
+			model.Scope = "tenant_cross_tenants_claim_scope"
+		}},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -356,6 +420,26 @@ func TestPoint11Val0ClaimGovernanceState(t *testing.T) {
 		model = ComputePoint11Val0Foundation(model)
 		if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
 			t.Fatalf("expected active claim governance state, got %#v", model)
+		}
+	})
+
+	t.Run("smalltenant scope and evidence ref do not false positive as all tenant", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.ClaimGovernance.Scope = "tenant_smalltenant_claim_scope"
+		model.ClaimGovernance.EvidenceRefs = []string{"evidence:smalltenant:point11_claim_001"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
+			t.Fatalf("expected active claim governance state for smalltenant scope, got %#v", model)
+		}
+	})
+
+	t.Run("crosscheck scope and evidence ref do not false positive as cross boundary", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.ClaimGovernance.Scope = "tenant_crosscheck_claim_scope"
+		model.ClaimGovernance.EvidenceRefs = []string{"evidence_crosscheck_point11_claim_001"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive {
+			t.Fatalf("expected active claim governance state for crosscheck scope, got %#v", model)
 		}
 	})
 
@@ -434,6 +518,9 @@ func TestPoint11Val0ExceptionGovernanceState(t *testing.T) {
 		{name: "emergency claim without approver blocks", mutate: func(model *Point11Val0ExceptionGovernance) { model.Approver = "" }},
 		{name: "exception without audit id blocks", mutate: func(model *Point11Val0ExceptionGovernance) { model.AuditID = "" }},
 		{name: "exception without evidence refs blocks", mutate: func(model *Point11Val0ExceptionGovernance) { model.EvidenceRefs = nil }},
+		{name: "exception with other tenant evidence ref blocks", mutate: func(model *Point11Val0ExceptionGovernance) {
+			model.EvidenceRefs = []string{"evidence:other-tenant-exception-001"}
+		}},
 		{name: "expired exception blocks", mutate: func(model *Point11Val0ExceptionGovernance) { model.ExpiresAt = "2000-01-01T00:00:00Z" }},
 		{name: "permanent silent exception blocks", mutate: func(model *Point11Val0ExceptionGovernance) { model.PermanentSilentException = true }},
 		{name: "cross tenant exception scope blocks", mutate: func(model *Point11Val0ExceptionGovernance) { model.Scope = "cross-tenant_exception_scope" }},
@@ -539,6 +626,21 @@ func TestPoint11Val0DecisionBindingState(t *testing.T) {
 	}{
 		{name: "policy to decision binding requires policy ref", mutate: func(model *Point11Val0DecisionBinding) { model.PolicyRef = "" }},
 		{name: "policy to decision binding requires evidence refs", mutate: func(model *Point11Val0DecisionBinding) { model.EvidenceRefs = nil }},
+		{name: "decision binding with all tenants evidence ref blocks", mutate: func(model *Point11Val0DecisionBinding) {
+			model.EvidenceRefs = []string{"evidence_all_tenants_decision_001"}
+		}},
+		{name: "decision binding with singular all tenant evidence ref blocks", mutate: func(model *Point11Val0DecisionBinding) {
+			model.EvidenceRefs = []string{"evidence_all_tenant_decision_001"}
+		}},
+		{name: "decision binding with tenant scope all evidence ref blocks", mutate: func(model *Point11Val0DecisionBinding) {
+			model.EvidenceRefs = []string{"evidence_tenant_scope_all_decision_001"}
+		}},
+		{name: "decision binding with compact all tenants evidence ref blocks", mutate: func(model *Point11Val0DecisionBinding) {
+			model.EvidenceRefs = []string{"evidence_allTenants_decision_001"}
+		}},
+		{name: "decision binding with cross boundary evidence ref blocks", mutate: func(model *Point11Val0DecisionBinding) {
+			model.EvidenceRefs = []string{"evidence_cross_boundary_decision_001"}
+		}},
 		{name: "invalid policy blocks decision active state", mutate: func(model *Point11Val0DecisionBinding) { model.PolicyRefState = point11Val0DecisionRefStateUnknown }},
 		{name: "invalid claim blocks decision active state", mutate: func(model *Point11Val0DecisionBinding) { model.ClaimRefState = point11Val0DecisionRefStateUnknown }},
 		{name: "revoked policy or claim blocks active decision", mutate: func(model *Point11Val0DecisionBinding) { model.PolicyRefState = point11Val0DecisionRefStateRevoked }},
@@ -553,6 +655,133 @@ func TestPoint11Val0DecisionBindingState(t *testing.T) {
 			model = ComputePoint11Val0Foundation(model)
 			if model.DecisionBindingState != Point11Val0DecisionBindingStateBlocked {
 				t.Fatalf("expected blocked decision binding state, got %#v", model)
+			}
+		})
+	}
+}
+
+func TestPoint11Val0CompactAllTenantsBoundaryBlocksExactReasons(t *testing.T) {
+	tests := []struct {
+		name           string
+		mutate         func(*Point11Val0Foundation)
+		componentState func(Point11Val0Foundation) string
+		wantState      string
+		wantReason     string
+	}{
+		{
+			name: "policy approval evidence compact allTenants blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.PolicyContract.ApprovalEvidenceRefs = []string{"evidence_allTenants_approval_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.PolicyContractState },
+			wantState:      Point11Val0PolicyContractStateBlocked,
+			wantReason:     "policy_contract_blocked",
+		},
+		{
+			name: "claim evidence compact allTenants blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.ClaimGovernance.EvidenceRefs = []string{"evidence_allTenants_point11_claim_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.ClaimGovernanceState },
+			wantState:      Point11Val0ClaimGovernanceStateBlocked,
+			wantReason:     "claim_governance_blocked",
+		},
+		{
+			name: "claim scope compact allTenants blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.ClaimGovernance.Scope = "tenant_allTenants_claim_scope"
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.ClaimGovernanceState },
+			wantState:      Point11Val0ClaimGovernanceStateBlocked,
+			wantReason:     "claim_governance_blocked",
+		},
+		{
+			name: "decision evidence compact allTenants blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.DecisionBinding.EvidenceRefs = []string{"evidence_allTenants_decision_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.DecisionBindingState },
+			wantState:      Point11Val0DecisionBindingStateBlocked,
+			wantReason:     "decision_binding_blocked",
+		},
+		{
+			name: "policy approval evidence cross scope blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.PolicyContract.ApprovalEvidenceRefs = []string{"evidence_cross_scope_approval_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.PolicyContractState },
+			wantState:      Point11Val0PolicyContractStateBlocked,
+			wantReason:     "policy_contract_blocked",
+		},
+		{
+			name: "policy approval evidence standalone cross blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.PolicyContract.ApprovalEvidenceRefs = []string{"evidence_cross_approval_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.PolicyContractState },
+			wantState:      Point11Val0PolicyContractStateBlocked,
+			wantReason:     "policy_contract_blocked",
+		},
+		{
+			name: "policy approval evidence compact crossboundary blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.PolicyContract.ApprovalEvidenceRefs = []string{"evidence_crossboundary_approval_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.PolicyContractState },
+			wantState:      Point11Val0PolicyContractStateBlocked,
+			wantReason:     "policy_contract_blocked",
+		},
+		{
+			name: "claim evidence cross boundary blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.ClaimGovernance.EvidenceRefs = []string{"evidence_cross_boundary_point11_claim_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.ClaimGovernanceState },
+			wantState:      Point11Val0ClaimGovernanceStateBlocked,
+			wantReason:     "claim_governance_blocked",
+		},
+		{
+			name: "claim scope compact crossScope blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.ClaimGovernance.Scope = "tenant_crossScope_claim_scope"
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.ClaimGovernanceState },
+			wantState:      Point11Val0ClaimGovernanceStateBlocked,
+			wantReason:     "claim_governance_blocked",
+		},
+		{
+			name: "decision evidence cross boundary blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.DecisionBinding.EvidenceRefs = []string{"evidence_cross_boundary_decision_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.DecisionBindingState },
+			wantState:      Point11Val0DecisionBindingStateBlocked,
+			wantReason:     "decision_binding_blocked",
+		},
+		{
+			name: "claim evidence obfuscated cross blocks",
+			mutate: func(model *Point11Val0Foundation) {
+				model.ClaimGovernance.EvidenceRefs = []string{"evidence_c-r-o-s-s_point11_claim_001"}
+			},
+			componentState: func(model Point11Val0Foundation) string { return model.ClaimGovernanceState },
+			wantState:      Point11Val0ClaimGovernanceStateBlocked,
+			wantReason:     "claim_governance_blocked",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model := activePoint11Val0Foundation()
+			test.mutate(&model)
+			model = ComputePoint11Val0Foundation(model)
+			if got := test.componentState(model); got != test.wantState {
+				t.Fatalf("expected component state %s, got %#v", test.wantState, model)
+			}
+			if model.CurrentState != Point11Val0StateBlocked {
+				t.Fatalf("expected aggregate blocked state, got %#v", model)
+			}
+			if !point12Val0StringSliceContains(model.BlockingReasons, test.wantReason) {
+				t.Fatalf("expected exact blocking reason %s, got %#v", test.wantReason, model.BlockingReasons)
 			}
 		})
 	}
@@ -582,6 +811,18 @@ func TestPoint11Val0NoOverclaimState(t *testing.T) {
 		})
 	}
 
+	t.Run("confusable production approved wording blocks", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"prоduction apprоved"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateBlocked || model.CurrentState != Point11Val0StateBlocked {
+			t.Fatalf("expected confusable production approved overclaim to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected exact no overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
 	model := activePoint11Val0Foundation()
 	model.NoOverclaim.ObservedClaims = []string{
 		"signed and versioned policy contract",
@@ -593,6 +834,75 @@ func TestPoint11Val0NoOverclaimState(t *testing.T) {
 	if model.NoOverclaimState != Point11Val0NoOverclaimStateActive {
 		t.Fatalf("expected active no overclaim state for bounded wording, got %#v", model)
 	}
+
+	t.Run("allowed disclaimer cannot hide split production approved overclaim", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"not production approval", "approved"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateBlocked || model.CurrentState != Point11Val0StateBlocked {
+			t.Fatalf("expected split production approved overclaim to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected exact no overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("split forbidden token across buckets blocks", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"cert", "ified"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateBlocked || model.CurrentState != Point11Val0StateBlocked {
+			t.Fatalf("expected split certified overclaim to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected exact no overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("mid token split production approved overclaim blocks", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"produc", "tion approved"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateBlocked || model.CurrentState != Point11Val0StateBlocked {
+			t.Fatalf("expected mid-token split production approved overclaim to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected exact no overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("allowed disclaimer cannot hide confusable split approved overclaim", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"not production approval", "apprоved"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateBlocked || model.CurrentState != Point11Val0StateBlocked {
+			t.Fatalf("expected confusable split production approved overclaim to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected exact no overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
+
+	t.Run("all allowed disclaimer only claims do not false positive", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"not production approval", "not compliance guarantee"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateActive || model.CurrentState != Point11Val0StateActive {
+			t.Fatalf("expected allowed disclaimer-only wording to remain active, got %#v", model)
+		}
+	})
+
+	t.Run("tab newline split overclaim blocks across buckets", func(t *testing.T) {
+		model := activePoint11Val0Foundation()
+		model.NoOverclaim.ObservedClaims = []string{"production\t", "\napproved"}
+		model = ComputePoint11Val0Foundation(model)
+		if model.NoOverclaimState != Point11Val0NoOverclaimStateBlocked || model.CurrentState != Point11Val0StateBlocked {
+			t.Fatalf("expected tab newline split overclaim to block exactly, got %#v", model)
+		}
+		if !point11Val0ContainsTrimmed(model.BlockingReasons, "no_overclaim_blocked") {
+			t.Fatalf("expected exact no overclaim blocking reason, got %#v", model.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint11Val0CrossDomainCompatibilityState(t *testing.T) {

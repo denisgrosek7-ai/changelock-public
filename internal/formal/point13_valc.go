@@ -281,6 +281,15 @@ func point13ValCTextListValid(values []string) bool {
 	return true
 }
 
+func point13ValCDisallowedCustomerClaimsValid(values []string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" || formalNoOverclaimNormalizePublicText(value) == "" {
+			return false
+		}
+	}
+	return true
+}
+
 func point13ValCChecklistItemsValid(values []string) bool {
 	return point12Val0StringListValid(values, point11Val0IdentityValueValid)
 }
@@ -307,10 +316,14 @@ func point13ValCRetentionClassRefsValid(values []string) bool {
 func point13ValCClaimsOverlap(left, right []string) bool {
 	rightSeen := map[string]struct{}{}
 	for _, value := range right {
-		rightSeen[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
+		normalized := formalNoOverclaimNormalizePublicText(value)
+		if normalized != "" {
+			rightSeen[normalized] = struct{}{}
+		}
 	}
 	for _, value := range left {
-		if _, exists := rightSeen[strings.ToLower(strings.TrimSpace(value))]; exists {
+		normalized := formalNoOverclaimNormalizePublicText(value)
+		if _, exists := rightSeen[normalized]; exists {
 			return true
 		}
 	}
@@ -569,10 +582,10 @@ func EvaluatePoint13ValCRedactionSafeDisclosureState(model Point13ValCRedactionS
 		!point12Val0RedactionManifestRefValid(model.RedactionManifestRef) ||
 		!point12Val0RedactionFieldValuesValid(model.RedactedFields) ||
 		!point13ValAStringListValid(model.RedactionReasons) ||
-		!point11Val0IdentityValueValid(strings.TrimSpace(model.RedactionApproverRef)) ||
+		!point11Val0IdentityValueValid(model.RedactionApproverRef) ||
 		!point12Val0AuditRefValid(model.RedactionAuditEventRef) ||
 		strings.TrimSpace(model.MinimumSafeStatement) == "" ||
-		!point12Val0OptionalClaimTextListValid(model.DisallowedCustomerClaims) ||
+		!point13ValCDisallowedCustomerClaimsValid(model.DisallowedCustomerClaims) ||
 		!point12Val0OptionalClaimTextListValid(model.SurvivingCustomerClaims) ||
 		!model.RedactionCannotStrengthenClaim ||
 		!model.RedactionCannotHideDecisiveMissingProof {

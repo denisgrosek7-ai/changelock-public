@@ -733,11 +733,8 @@ func point12Val0EvidenceRefValid(value string) bool {
 	if strings.Contains(value, " ") || strings.Contains(value, "/") {
 		return false
 	}
-	normalized := point11Val0NormalizeText(value)
-	for _, blocked := range []string{"cross-tenant", "other-tenant", "global", "unscoped", "wildcard", "all-tenants"} {
-		if strings.Contains(normalized, blocked) {
-			return false
-		}
+	if point11Val0ContainsTenantBoundaryBypass(value) {
+		return false
 	}
 	return strings.HasPrefix(value, "evidence:") || strings.HasPrefix(value, "evidence_")
 }
@@ -1076,31 +1073,236 @@ func formalNoOverclaimCompact(value string) string {
 }
 
 func formalNoOverclaimForbiddenCompactAcrossValues(values []string, allowed []bool, phrase string) bool {
-	if len(values) != len(allowed) {
+	buckets := make([]int, len(values))
+	for i := range buckets {
+		buckets[i] = i
+	}
+	return formalNoOverclaimForbiddenCompactAcrossValuesWithBuckets(values, allowed, buckets, phrase)
+}
+
+func formalNoOverclaimForbiddenCompactAcrossValuesWithBuckets(values []string, allowed []bool, sourceBuckets []int, phrase string) bool {
+	if len(values) != len(allowed) || len(values) != len(sourceBuckets) {
 		return false
 	}
 	compactPhrase := formalNoOverclaimCompact(phrase)
 	if compactPhrase == "" {
 		return false
 	}
-	for start := range values {
-		var compact strings.Builder
-		allAllowed := true
-		parts := 0
-		for end := start; end < len(values); end++ {
-			part := formalNoOverclaimCompact(values[end])
-			if part == "" {
+	var compact strings.Builder
+	var compactAllowed []bool
+	var compactBucket []int
+	for idx, value := range values {
+		part := formalNoOverclaimCompact(value)
+		if part == "" {
+			continue
+		}
+		for _, r := range part {
+			compact.WriteRune(r)
+			compactAllowed = append(compactAllowed, allowed[idx])
+			compactBucket = append(compactBucket, sourceBuckets[idx])
+		}
+	}
+	return formalNoOverclaimCompactMatchUsesNonAllowedBucket(compact.String(), compactAllowed, compactBucket, compactPhrase)
+}
+
+func formalNoOverclaimCompactMatchUsesNonAllowedBucket(compact string, allowed []bool, buckets []int, phrase string) bool {
+	text := []rune(compact)
+	pattern := []rune(phrase)
+	if len(pattern) == 0 || len(text) < len(pattern) || len(text) != len(allowed) || len(text) != len(buckets) {
+		return false
+	}
+
+	lps := make([]int, len(pattern))
+	for i, length := 1, 0; i < len(pattern); {
+		if pattern[i] == pattern[length] {
+			length++
+			lps[i] = length
+			i++
+			continue
+		}
+		if length != 0 {
+			length = lps[length-1]
+			continue
+		}
+		lps[i] = 0
+		i++
+	}
+
+	for i, matched := 0, 0; i < len(text); {
+		if text[i] == pattern[matched] {
+			i++
+			matched++
+			if matched != len(pattern) {
 				continue
 			}
-			compact.WriteString(part)
-			allAllowed = allAllowed && allowed[end]
-			parts++
-			if parts > 1 && !allAllowed && strings.Contains(compact.String(), compactPhrase) {
+			start := i - matched
+			if formalNoOverclaimCompactMatchedWindowUsesNonAllowedBucket(allowed, buckets, start, i) {
 				return true
+			}
+			matched = lps[matched-1]
+			continue
+		}
+		if matched != 0 {
+			matched = lps[matched-1]
+			continue
+		}
+		i++
+	}
+	return false
+}
+
+func formalNoOverclaimCompactMatchedWindowUsesNonAllowedBucket(allowed []bool, buckets []int, start, end int) bool {
+	if start < 0 || end > len(allowed) || end > len(buckets) || start >= end {
+		return false
+	}
+	firstBucket := buckets[start]
+	spansBuckets := false
+	includesNonAllowed := false
+	for i := start; i < end; i++ {
+		if buckets[i] != firstBucket {
+			spansBuckets = true
+		}
+		if !allowed[i] {
+			includesNonAllowed = true
+		}
+	}
+	return spansBuckets && includesNonAllowed
+}
+
+func formalNoOverclaimForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
+	if len(values) != len(allowed) {
+		return false
+	}
+	buckets := make([]int, len(values))
+	for i := range buckets {
+		buckets[i] = i
+	}
+	return formalNoOverclaimForbiddenPhraseAcrossValuesWithBuckets(values, allowed, buckets, phrase)
+}
+
+func formalNoOverclaimForbiddenPhraseAcrossValueVariants(valueVariants [][]string, allowed []bool, phrase string) bool {
+	if len(valueVariants) != len(allowed) {
+		return false
+	}
+	var values []string
+	var valueAllowed []bool
+	var sourceBuckets []int
+	for bucketIndex, variants := range valueVariants {
+		for _, variant := range variants {
+			if variant == "" {
+				continue
+			}
+			values = append(values, variant)
+			valueAllowed = append(valueAllowed, allowed[bucketIndex])
+			sourceBuckets = append(sourceBuckets, bucketIndex)
+		}
+	}
+	if len(values) == 0 {
+		return false
+	}
+	return formalNoOverclaimForbiddenPhraseAcrossValuesWithBuckets(values, valueAllowed, sourceBuckets, phrase)
+}
+
+func formalNoOverclaimForbiddenPhraseAcrossValuesWithBuckets(values []string, allowed []bool, sourceBuckets []int, phrase string) bool {
+	if len(values) != len(allowed) || len(values) != len(sourceBuckets) {
+		return false
+	}
+	if formalNoOverclaimForbiddenCompactAcrossValuesWithBuckets(values, allowed, sourceBuckets, phrase) {
+		return true
+	}
+	phraseTokens := strings.Fields(phrase)
+	if len(phraseTokens) < 2 {
+		return false
+	}
+	return formalNoOverclaimForbiddenTokenSequenceAcrossValuesWithBuckets(values, allowed, sourceBuckets, phraseTokens)
+}
+
+type formalNoOverclaimPhraseMatchState struct {
+	lastBucket         int
+	distinctBuckets    int
+	includesNonAllowed bool
+}
+
+func formalNoOverclaimForbiddenTokenSequenceAcrossValues(values []string, allowed []bool, phraseTokens []string) bool {
+	buckets := make([]int, len(values))
+	for i := range buckets {
+		buckets[i] = i
+	}
+	return formalNoOverclaimForbiddenTokenSequenceAcrossValuesWithBuckets(values, allowed, buckets, phraseTokens)
+}
+
+func formalNoOverclaimForbiddenTokenSequenceAcrossValuesWithBuckets(values []string, allowed []bool, sourceBuckets []int, phraseTokens []string) bool {
+	if len(values) != len(allowed) || len(values) != len(sourceBuckets) {
+		return false
+	}
+	states := make([][]formalNoOverclaimPhraseMatchState, len(phraseTokens))
+	for valueIndex, value := range values {
+		bucketIndex := sourceBuckets[valueIndex]
+		for _, token := range strings.Fields(value) {
+			for phraseIndex := len(phraseTokens) - 1; phraseIndex >= 0; phraseIndex-- {
+				if token != phraseTokens[phraseIndex] {
+					continue
+				}
+				var candidates []formalNoOverclaimPhraseMatchState
+				if phraseIndex == 0 {
+					candidates = append(candidates, formalNoOverclaimPhraseMatchState{
+						lastBucket:         bucketIndex,
+						distinctBuckets:    1,
+						includesNonAllowed: !allowed[valueIndex],
+					})
+				} else {
+					for _, previous := range states[phraseIndex] {
+						next := previous
+						if bucketIndex != previous.lastBucket {
+							next.distinctBuckets++
+							if next.distinctBuckets > 2 {
+								next.distinctBuckets = 2
+							}
+						}
+						next.lastBucket = bucketIndex
+						next.includesNonAllowed = next.includesNonAllowed || !allowed[valueIndex]
+						candidates = append(candidates, next)
+					}
+				}
+				for _, candidate := range candidates {
+					if phraseIndex+1 == len(phraseTokens) {
+						if candidate.distinctBuckets > 1 && candidate.includesNonAllowed {
+							return true
+						}
+						continue
+					}
+					states[phraseIndex+1] = formalNoOverclaimAppendPhraseMatchState(states[phraseIndex+1], candidate)
+				}
 			}
 		}
 	}
 	return false
+}
+
+func formalNoOverclaimAppendPhraseMatchState(states []formalNoOverclaimPhraseMatchState, candidate formalNoOverclaimPhraseMatchState) []formalNoOverclaimPhraseMatchState {
+	for _, state := range states {
+		if formalNoOverclaimPhraseMatchStateDominates(state, candidate) {
+			return states
+		}
+	}
+	filtered := states[:0]
+	for _, state := range states {
+		if formalNoOverclaimPhraseMatchStateDominates(candidate, state) {
+			continue
+		}
+		filtered = append(filtered, state)
+	}
+	return append(filtered, candidate)
+}
+
+func formalNoOverclaimPhraseMatchStateDominates(a, b formalNoOverclaimPhraseMatchState) bool {
+	if a.distinctBuckets < b.distinctBuckets {
+		return false
+	}
+	if b.includesNonAllowed && !a.includesNonAllowed {
+		return false
+	}
+	return a.distinctBuckets > 1 || a.lastBucket == b.lastBucket
 }
 
 func point12Val0ContainsForbiddenClaim(values ...string) bool {
@@ -1144,43 +1346,7 @@ func point12Val0ContainsForbiddenClaimWithNormalizer(normalize func(string) stri
 }
 
 func point12Val0ForbiddenPhraseAcrossValues(values []string, allowed []bool, phrase string) bool {
-	if len(values) != len(allowed) {
-		return false
-	}
-	if formalNoOverclaimForbiddenCompactAcrossValues(values, allowed, phrase) {
-		return true
-	}
-	phraseTokens := strings.Fields(phrase)
-	if len(phraseTokens) < 2 {
-		return false
-	}
-	matched := 0
-	distinctBuckets := 0
-	lastBucket := -1
-	matchedIncludesNonAllowed := false
-	for bucketIndex, value := range values {
-		bucketTokens := strings.Fields(value)
-		if len(bucketTokens) == 0 {
-			continue
-		}
-		for _, token := range bucketTokens {
-			if token != phraseTokens[matched] {
-				continue
-			}
-			if bucketIndex != lastBucket {
-				distinctBuckets++
-				lastBucket = bucketIndex
-			}
-			if !allowed[bucketIndex] {
-				matchedIncludesNonAllowed = true
-			}
-			matched++
-			if matched == len(phraseTokens) {
-				return distinctBuckets > 1 && matchedIncludesNonAllowed
-			}
-		}
-	}
-	return false
+	return formalNoOverclaimForbiddenPhraseAcrossValues(values, allowed, phrase)
 }
 
 func SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD Point11ValDFoundation, review Point12Val0Point11ReviewContext) Point12Val0DependencySnapshot {

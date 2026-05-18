@@ -442,6 +442,34 @@ func TestDeploymentMultiTenantValEEvidenceQualityBlockers(t *testing.T) {
 		{name: "missing scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].Scope = ""
 		}},
+		{name: "global evidence scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "global"
+		}},
+		{name: "compact all tenant evidence scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "alltenant"
+		}},
+		{name: "camel compact all tenants evidence scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "allTenants"
+		}},
+		{name: "split all tenants evidence scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "all tenants"
+		}},
+		{name: "underscore all tenants evidence scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "all_tenants_scope"
+		}},
+		{name: "standalone cross evidence scope blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "cross"
+		}},
+		{name: "cross scope evidence scope blocks even with scoped exception", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "cross_scope"
+			model.EvidenceQualityMap.Entries[0].CrossTenant = true
+			model.EvidenceQualityMap.Entries[0].ScopedAuditedException = "evidence:scoped-audited-exception-1"
+		}},
+		{name: "obfuscated standalone cross evidence scope blocks even with scoped exception", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Scope = "c-r-o-s-s"
+			model.EvidenceQualityMap.Entries[0].CrossTenant = true
+			model.EvidenceQualityMap.Entries[0].ScopedAuditedException = "evidence:scoped-audited-exception-1"
+		}},
 		{name: "missing deployment profile blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].DeploymentProfile = ""
 		}},
@@ -524,6 +552,15 @@ func TestDeploymentMultiTenantValEEvidenceQualityBlockers(t *testing.T) {
 		{name: "cross tenant marker in source with cross tenant flag false blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].Source = "computed_val0_output_cross_tenant"
 			model.EvidenceQualityMap.Entries[0].CrossTenant = false
+		}},
+		{name: "obfuscated standalone cross marker in source blocks identity boundary", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Source = "computed_val0_output_c-r-o-s-s"
+		}},
+		{name: "obfuscated standalone cross marker in evidence id blocks identity boundary", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].EvidenceID = "evidence:vale-c-r-o-s-s-foundation"
+		}},
+		{name: "obfuscated standalone cross marker in surface blocks identity boundary", mutate: func(model *DeploymentMultiTenantValEFoundation) {
+			model.EvidenceQualityMap.Entries[0].Surface = "val_c-r-o-s-s_surface"
 		}},
 		{name: "tenant beta marker in evidence id blocks", mutate: func(model *DeploymentMultiTenantValEFoundation) {
 			model.EvidenceQualityMap.Entries[0].EvidenceID = "evidence:vale-tenant-beta-foundation"
@@ -683,6 +720,29 @@ func TestDeploymentMultiTenantValEEvidenceQualityDuplicateBlockers(t *testing.T)
 		if deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, forbidden) {
 			t.Fatalf("expected exact scoped audited exception happy path to exclude reason %q, got %#v", forbidden, model.BlockingReasons)
 		}
+	}
+}
+
+func TestDeploymentMultiTenantValEEvidenceScopeCrosscheckFalsePositiveGuard(t *testing.T) {
+	model := activeDeploymentMultiTenantValEModel()
+	model.EvidenceQualityMap.Entries[0].Scope = "tenant_crosscheck_scope"
+	model = ComputeDeploymentMultiTenantValEFoundation(model)
+	if model.EvidenceQualityState != DeploymentMultiTenantValEEvidenceQualityStateActive || model.CurrentState != DeploymentMultiTenantValEStatePass {
+		t.Fatalf("expected crosscheck scope to avoid false-positive cross boundary block, got %#v", model)
+	}
+}
+
+func TestDeploymentMultiTenantValEEvidenceIdentityBoundaryFalsePositiveGuards(t *testing.T) {
+	model := activeDeploymentMultiTenantValEModel()
+	model.EvidenceQualityMap.Entries[0].EvidenceID = "evidence:vale-crosscheck-foundation"
+	model.EvidenceQualityMap.Entries[0].Source = "computed_crosscheck_output"
+	model.EvidenceQualityMap.Entries[0].Scope = "tenant_smalltenant_scope"
+	model.EvidenceQualityMap.Entries[0].Surface = "crosscheck_surface"
+	model.EvidenceQualityMap.Entries[0].EvidenceHash = "smalltenant_crosscheck_hash_v1"
+	model.EvidenceQualityMap.Entries[0].ArtifactHash = "smalltenant_crosscheck_artifact_hash_v1"
+	model = ComputeDeploymentMultiTenantValEFoundation(model)
+	if model.EvidenceQualityState != DeploymentMultiTenantValEEvidenceQualityStateActive || model.CurrentState != DeploymentMultiTenantValEStatePass {
+		t.Fatalf("expected smalltenant/crosscheck identity values to avoid false-positive boundary block, got %#v", model)
 	}
 }
 
@@ -1319,6 +1379,40 @@ func TestDeploymentMultiTenantValENoOverclaimBlockers(t *testing.T) {
 			if !deploymentMultiTenantValEExactReasonPresent(model.BlockingReasons, expected) {
 				t.Fatalf("expected split exploit to include reason %q, got %#v", expected, model.BlockingReasons)
 			}
+		}
+	})
+
+	t.Run("repetitive partial split phrase corpus remains bounded", func(t *testing.T) {
+		values := make([]string, 0, 2048)
+		allowed := make([]bool, 0, 2048)
+		for i := 0; i < 2048; i++ {
+			values = append(values, "point 10 pass by")
+			allowed = append(allowed, false)
+		}
+		if deploymentMultiTenantValEForbiddenPhraseAcrossValues(values, allowed, "point 10 pass by agent") {
+			t.Fatalf("expected repetitive partial split phrase corpus without terminal token not to block")
+		}
+	})
+
+	t.Run("large compact split phrase corpus still blocks terminal token", func(t *testing.T) {
+		values := make([]string, 0, 2049)
+		allowed := make([]bool, 0, 2049)
+		for i := 0; i < 2048; i++ {
+			values = append(values, "point 10 pass by")
+			allowed = append(allowed, true)
+		}
+		values = append(values, "agent")
+		allowed = append(allowed, false)
+		if !deploymentMultiTenantValEForbiddenPhraseAcrossValues(values, allowed, "point 10 pass by agent") {
+			t.Fatalf("expected large split corpus with terminal unsafe bucket to block")
+		}
+	})
+
+	t.Run("allowed compact phrase plus harmless non allowed suffix does not false positive", func(t *testing.T) {
+		values := []string{"not production approval", "bounded evidence note"}
+		allowed := []bool{true, false}
+		if deploymentMultiTenantValEForbiddenPhraseAcrossValues(values, allowed, "production approval") {
+			t.Fatalf("expected allowed disclaimer occurrence plus harmless suffix not to block")
 		}
 	})
 

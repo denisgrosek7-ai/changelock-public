@@ -56,9 +56,72 @@ func TestPoint14ValCDependencyState(t *testing.T) {
 			want: Point14ValCStateBlocked,
 		},
 		{
+			name: "whitespace retagged nested point11 current state in valb dependency blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
 			name: "whitespace retagged nested point11 final pass gate in valb dependency blocks",
 			mutate: func(model *Point14ValCDependencySnapshot) {
 				model.Point14ValB.Dependency.InheritedPoint11FinalPassGateState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "nested valb point11 current state mismatch blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "nested valb embedded point11 current state mismatch blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "embedded point11 current state mismatch blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "nested valb point11 final pass gate mismatch blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.Dependency.InheritedPoint11FinalPassGateState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged point11 current state blocks raw exact",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "whitespace retagged point11 final pass gate blocks raw exact",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.InheritedPoint11FinalPassGateState += " "
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "missing point11 current state blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.InheritedPoint11CurrentState = ""
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "missing point11 final pass gate blocks",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.InheritedPoint11FinalPassGateState = ""
 			},
 			want: Point14ValCStateBlocked,
 		},
@@ -104,6 +167,13 @@ func TestPoint14ValCDependencyState(t *testing.T) {
 			name: "embedded point14 valb mismatch blocks",
 			mutate: func(model *Point14ValCDependencySnapshot) {
 				model.Point14ValB.CurrentState = Point14ValBStateBlocked
+			},
+			want: Point14ValCStateBlocked,
+		},
+		{
+			name: "embedded valb production approval authority blocks through recompute",
+			mutate: func(model *Point14ValCDependencySnapshot) {
+				model.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
 			},
 			want: Point14ValCStateBlocked,
 		},
@@ -437,6 +507,13 @@ func TestPoint14ValCAuthorityAndWordingGuards(t *testing.T) {
 			t.Fatalf("expected blocked, got %s", got)
 		}
 	})
+	t.Run("zero-width authority marker blocks", func(t *testing.T) {
+		model := point14ValCNoExternalAuthorityPublicationGuardModel()
+		model.ObservedAuthorityMarkers = []string{"publication_public_badge\u200b"}
+		if got := EvaluatePoint14ValCNoExternalAuthorityPublicationGuardState(model); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
 	t.Run("agent approved publication blocks", func(t *testing.T) {
 		model := point14ValCNoExternalAuthorityPublicationGuardModel()
 		model.AgentApprovedPublication = true
@@ -447,6 +524,28 @@ func TestPoint14ValCAuthorityAndWordingGuards(t *testing.T) {
 	t.Run("forbidden publication wording blocks", func(t *testing.T) {
 		model := point14ValCNoOverclaimPublicationWordingModel()
 		model.ObservedPublicationTexts = []string{"publication proves safety"}
+		if got := EvaluatePoint14ValCNoOverclaimPublicationWordingState(model); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("zero-width forbidden publication wording blocks", func(t *testing.T) {
+		model := point14ValCNoOverclaimPublicationWordingModel()
+		model.ObservedPublicationTexts = []string{"publication proves saf\u200bety"}
+		if got := EvaluatePoint14ValCNoOverclaimPublicationWordingState(model); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("split forbidden publication wording blocks across observed corpus", func(t *testing.T) {
+		model := point14ValCNoOverclaimPublicationWordingModel()
+		model.ObservedPublicationTexts = []string{"publication proves", "safety"}
+		if got := EvaluatePoint14ValCNoOverclaimPublicationWordingState(model); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("split forbidden publication wording across observed categories blocks", func(t *testing.T) {
+		model := point14ValCNoOverclaimPublicationWordingModel()
+		model.ObservedPublicationTexts = []string{"publication proves"}
+		model.ObservedAgentTexts = []string{"safety"}
 		if got := EvaluatePoint14ValCNoOverclaimPublicationWordingState(model); got != Point14ValCStateBlocked {
 			t.Fatalf("expected blocked, got %s", got)
 		}

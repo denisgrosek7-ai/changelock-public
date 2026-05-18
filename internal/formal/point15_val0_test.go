@@ -108,6 +108,12 @@ func TestPoint15Val0DependencyState(t *testing.T) {
 		{"blocks when embedded point14 manifest wave id is tab newline retagged", func(model *Point15Val0DependencySnapshot) {
 			model.Point14ValE.PassClosureManifest.WaveID = "\t" + model.Point14ValE.PassClosureManifest.WaveID + "\n"
 		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 closure evaluator current state is stale", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.ClosureEvaluator.CurrentState = Point14ValEStateBlocked
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 pass manifest current state is stale", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.PassClosureManifest.CurrentState = Point14ValEStateBlocked
+		}, Point15Val0StateBlocked},
 		{"blocks when embedded point14 dependency inherited point10 state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
 			model.Point14ValE.Dependency.InheritedPoint10CurrentState += " "
 		}, Point15Val0StateBlocked},
@@ -119,6 +125,40 @@ func TestPoint15Val0DependencyState(t *testing.T) {
 		}, Point15Val0StateBlocked},
 		{"blocks when embedded point14 dependency inherited point10 pass rule state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
 			model.Point14ValE.Dependency.InheritedPoint10PassRuleState += " "
+		}, Point15Val0StateBlocked},
+		{"blocks when inherited point11 current state is whitespace retagged", func(model *Point15Val0DependencySnapshot) {
+			model.InheritedPoint11CurrentState += " "
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 dependency inherited point11 current state is non active", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+		}, Point15Val0StateBlocked},
+		{"blocks when nested point14 dependency embedded point11 current state is non active", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.CurrentState = Point11ValDStateReviewRequired
+		}, Point15Val0StateBlocked},
+		{"blocks when nested point14 dependency embedded point11 dependency state is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.DependencyState = Point11ValDDependencyStateBlocked
+		}, Point15Val0StateBlocked},
+		{"blocks when deep nested valc embedded point11 val0 dependency is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point11.Val0Dependency.CurrentState = Point11Val0StateBlocked
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 vald valb state drifts", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValB.CurrentState = Point14ValBStateReviewRequired
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 vald vala state drifts", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValA.CurrentState = Point14ValAStateReviewRequired
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 vald valb authority is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+		}, Point15Val0StateBlocked},
+		{"blocks when synchronized embedded point14 vald valb authority is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.AgentDisputeRecommendationBoundary.ProductionApproved = true
+		}, Point15Val0StateBlocked},
+		{"blocks when embedded point14 vale stale nested no overclaim is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.NoOverclaimDisputeWording.ObservedDisputeTexts = []string{"dispute resolved by AI"}
+		}, Point15Val0StateBlocked},
+		{"blocks when inherited point11 current state missing", func(model *Point15Val0DependencySnapshot) {
+			model.InheritedPoint11CurrentState = ""
 		}, Point15Val0StateBlocked},
 		{"blocks when point14 pass token absent", func(model *Point15Val0DependencySnapshot) { model.Point14PassToken = "" }, Point15Val0StateBlocked},
 		{"blocks when point14 pass token not from vale", func(model *Point15Val0DependencySnapshot) { model.Point14PassManifestWaveID = point14ValDWaveID }, Point15Val0StateBlocked},
@@ -426,6 +466,12 @@ func TestPoint15Val0NoOverclaimGuardState(t *testing.T) {
 		}, Point15Val0StateBlocked},
 		{"forbidden wording with confusable rune blocks", func(model *Point15Val0NoOverclaimGuard) {
 			model.ObservedTexts = []string{"continuous assurance guаranteed"}
+		}, Point15Val0StateBlocked},
+		{"long-s as f overclaim variant blocks", func(model *Point15Val0NoOverclaimGuard) {
+			model.ObservedTexts = []string{"certiſied"}
+		}, Point15Val0StateBlocked},
+		{"split long-s as f overclaim variant blocks", func(model *Point15Val0NoOverclaimGuard) {
+			model.ObservedTexts = []string{"certiſ", "ied"}
 		}, Point15Val0StateBlocked},
 		{"split forbidden wording across observed corpus blocks", func(model *Point15Val0NoOverclaimGuard) {
 			model.ObservedTexts = []string{"continuous assurance", "guaranteed"}

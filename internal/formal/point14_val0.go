@@ -3,6 +3,7 @@ package formal
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -499,9 +500,37 @@ func point14Val0SafeWording() []string {
 	}
 }
 
+func point14Val0AuthorityMarkerForbidden(marker string, forbidden []string) bool {
+	normalizedMarker := point16Val0NormalizeObservedText(marker)
+	if normalizedMarker == "" {
+		return false
+	}
+	for _, forbiddenMarker := range forbidden {
+		normalizedForbidden := point16Val0NormalizeObservedText(forbiddenMarker)
+		if normalizedForbidden == "" {
+			continue
+		}
+		if point16Val0NormalizedTextContainsNormalizedPhrase(normalizedMarker, normalizedForbidden) {
+			return true
+		}
+		if point16Val0ObservedTextContainsNormalizedPhrase(marker, normalizedForbidden) {
+			return true
+		}
+	}
+	return false
+}
+
+func point14Val0AuthorityMarkersContainForbidden(markers []string, forbidden []string) bool {
+	return point14Val0ListContainsForbiddenWordingFor(markers, nil, forbidden)
+}
+
 func point14Val0RefValid(value string, prefixes ...string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" {
+	if value == "" ||
+		value != strings.TrimSpace(value) ||
+		strings.ContainsAny(value, "\t\r\n") ||
+		strings.Contains(value, " ") ||
+		strings.Contains(value, "/") ||
+		!point11Val0ASCIIVisibleValue(value) {
 		return false
 	}
 	for _, prefix := range prefixes {
@@ -529,7 +558,166 @@ func point14Val0ClaimRefsValid(values []string) bool {
 }
 
 func point14Val0EvidenceRefsValid(values []string) bool {
-	return point14Val0RefListValid(values, "evidence_")
+	if len(values) == 0 {
+		return false
+	}
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		if !point14Val0EvidenceRefValid(value) {
+			return false
+		}
+		if _, exists := seen[value]; exists {
+			return false
+		}
+		seen[value] = struct{}{}
+	}
+	return true
+}
+
+func point14Val0EvidenceRefValid(value string) bool {
+	if !point11Val0IdentityValueValid(value) || strings.Contains(value, " ") || strings.Contains(value, "/") || !strings.HasPrefix(value, "evidence_") {
+		return false
+	}
+	return !point11Val0ContainsTenantBoundaryBypass(value)
+}
+
+func point14Val0Point11FoundationActive(model Point11ValDFoundation) bool {
+	computed := ComputePoint11ValDFoundation(model)
+	if computed.CurrentState != Point11ValDStateActive ||
+		computed.DependencyState != Point11ValDDependencyStateActive ||
+		computed.IntegratedInvariantState != Point11ValDIntegratedInvariantStateActive ||
+		computed.QualityMapState != Point11ValDQualityMapStateActive ||
+		computed.PublicationReviewState != Point11ValDPublicationReviewStateActive ||
+		computed.NoOverclaimReviewState != Point11ValDNoOverclaimReviewStateActive ||
+		computed.CleanRoomIPReviewState != Point11ValDCleanRoomIPReviewStateActive ||
+		computed.CLBClosureState != Point11ValDCLBClosureStateActive ||
+		computed.PassClosureManifestState != Point11ValDPassClosureManifestStateActive ||
+		computed.FinalPassGateState != Point11ValDFinalPassGateStateActive ||
+		computed.Point11PassToken != point11ValDPoint11PassToken ||
+		computed.PassClosureManifest.CurrentState != Point11ValDPassClosureManifestStateActive ||
+		!computed.PassClosureManifest.Point11PassAllowed ||
+		computed.PassClosureManifest.Point11PassToken != point11ValDPoint11PassToken ||
+		computed.FinalPassGate.CurrentState != Point11ValDFinalPassGateStateActive ||
+		!computed.FinalPassGate.Point11PassAllowed ||
+		!computed.FinalPassGate.Point11PassEmitted ||
+		computed.FinalPassGate.Point11PassToken != point11ValDPoint11PassToken {
+		return false
+	}
+	return model.CurrentState == computed.CurrentState &&
+		model.DependencyState == computed.DependencyState &&
+		model.IntegratedInvariantState == computed.IntegratedInvariantState &&
+		model.QualityMapState == computed.QualityMapState &&
+		model.PublicationReviewState == computed.PublicationReviewState &&
+		model.NoOverclaimReviewState == computed.NoOverclaimReviewState &&
+		model.CleanRoomIPReviewState == computed.CleanRoomIPReviewState &&
+		model.CLBClosureState == computed.CLBClosureState &&
+		model.PassClosureManifestState == computed.PassClosureManifestState &&
+		model.FinalPassGateState == computed.FinalPassGateState &&
+		model.Point11PassToken == computed.Point11PassToken &&
+		reflect.DeepEqual(model.PassClosureManifest, computed.PassClosureManifest) &&
+		reflect.DeepEqual(model.FinalPassGate, computed.FinalPassGate)
+}
+
+func point14Val0FoundationComputedActive(model Point14Val0Foundation) bool {
+	computed := ComputePoint14Val0Foundation(model)
+	return computed.CurrentState == Point14Val0StateActive &&
+		model.CurrentState == Point14Val0StateActive
+}
+
+func point14ValAFoundationComputedActive(model Point14ValAFoundation) bool {
+	computed := ComputePoint14ValAFoundation(model)
+	return computed.CurrentState == Point14ValAStateActive &&
+		model.CurrentState == Point14ValAStateActive
+}
+
+func point14ValBFoundationComputedActive(model Point14ValBFoundation) bool {
+	computed := ComputePoint14ValBFoundation(model)
+	return computed.CurrentState == Point14ValBStateActive &&
+		model.CurrentState == Point14ValBStateActive
+}
+
+func point14ValCFoundationComputedActive(model Point14ValCFoundation) bool {
+	computed := ComputePoint14ValCFoundation(model)
+	return computed.CurrentState == Point14ValCStateActive &&
+		model.CurrentState == Point14ValCStateActive
+}
+
+func point14ValDFoundationComputedActive(model Point14ValDFoundation) bool {
+	computed := ComputePoint14ValDFoundation(model)
+	return computed.CurrentState == Point14ValDStateActive &&
+		model.CurrentState == Point14ValDStateActive
+}
+
+func point14ValEFoundationComputedPassConfirmed(model Point14ValEFoundation) bool {
+	computed := ComputePoint14ValEFoundation(model)
+	return computed.CurrentState == Point14ValEStatePassConfirmed &&
+		model.CurrentState == computed.CurrentState &&
+		model.DependencyState == computed.DependencyState &&
+		model.ExternalSignalValidationClosureState == computed.ExternalSignalValidationClosureState &&
+		model.ConflictDisputeClosureState == computed.ConflictDisputeClosureState &&
+		model.CorrectionPublicationClosureState == computed.CorrectionPublicationClosureState &&
+		model.TimelineProjectionClosureState == computed.TimelineProjectionClosureState &&
+		model.AuthorityBoundaryClosureState == computed.AuthorityBoundaryClosureState &&
+		model.TenantPrivacyClosureState == computed.TenantPrivacyClosureState &&
+		model.TimestampIntegrityClosureState == computed.TimestampIntegrityClosureState &&
+		model.AgentAdvisoryClosureState == computed.AgentAdvisoryClosureState &&
+		model.NoOverclaimFinalCheckState == computed.NoOverclaimFinalCheckState &&
+		model.CLBFinalCheckState == computed.CLBFinalCheckState &&
+		model.ClosureEvaluatorState == computed.ClosureEvaluatorState &&
+		model.ClosureEvaluator.CurrentState == computed.ClosureEvaluator.CurrentState &&
+		reflect.DeepEqual(model.ClosureEvaluator, computed.ClosureEvaluator) &&
+		computed.PassClosureManifestState == Point14ValEStatePassConfirmed &&
+		model.PassClosureManifestState == computed.PassClosureManifestState &&
+		model.PassClosureManifest.CurrentState == computed.PassClosureManifest.CurrentState &&
+		computed.Point14PassAllowed &&
+		model.Point14PassAllowed == computed.Point14PassAllowed &&
+		reflect.DeepEqual(model.PassClosureManifest, computed.PassClosureManifest) &&
+		model.PassClosureManifest.Point14PassAllowed == computed.PassClosureManifest.Point14PassAllowed &&
+		model.PassClosureManifest.Point14PassToken == computed.PassClosureManifest.Point14PassToken &&
+		computed.Point14PassToken == point14Val0BlockedPassToken &&
+		model.Point14PassToken == computed.Point14PassToken
+}
+
+func point14ValBDependencyChainComputedActive(model Point14ValBFoundation) bool {
+	return point14ValBFoundationComputedActive(model) &&
+		point14ValAFoundationComputedActive(model.Dependency.Point14ValA) &&
+		point14Val0FoundationComputedActive(model.Dependency.Point14Val0)
+}
+
+func point14ValCDependencyChainComputedActive(model Point14ValCFoundation) bool {
+	return point14ValCFoundationComputedActive(model) &&
+		point14ValBDependencyChainComputedActive(model.Dependency.Point14ValB) &&
+		point14ValAFoundationComputedActive(model.Dependency.Point14ValA) &&
+		point14Val0FoundationComputedActive(model.Dependency.Point14Val0)
+}
+
+func point14ValDDependencyChainComputedActive(model Point14ValDFoundation) bool {
+	return point14ValDFoundationComputedActive(model) &&
+		point14ValCDependencyChainComputedActive(model.Dependency.Point14ValC) &&
+		point14ValBDependencyChainComputedActive(model.Dependency.Point14ValB) &&
+		point14ValAFoundationComputedActive(model.Dependency.Point14ValA) &&
+		point14Val0FoundationComputedActive(model.Dependency.Point14Val0)
+}
+
+func point14ValCDependencyEmbeddedSnapshotCopiesExact(model Point14ValCDependencySnapshot) bool {
+	return reflect.DeepEqual(model.Point14ValB.Dependency.Point14ValA, model.Point14ValA) &&
+		reflect.DeepEqual(model.Point14ValB.Dependency.Point14Val0, model.Point14Val0) &&
+		reflect.DeepEqual(model.Point14ValB.Dependency.Point14ValA.Dependency.Point14Val0, model.Point14Val0)
+}
+
+func point14ValCEmbeddedSnapshotCopiesExact(model Point14ValCFoundation) bool {
+	return point14ValCDependencyEmbeddedSnapshotCopiesExact(model.Dependency)
+}
+
+func point14ValDDependencyEmbeddedSnapshotCopiesExact(model Point14ValDDependencySnapshot) bool {
+	return reflect.DeepEqual(model.Point14ValB, model.Point14ValC.Dependency.Point14ValB) &&
+		reflect.DeepEqual(model.Point14ValA, model.Point14ValC.Dependency.Point14ValA) &&
+		reflect.DeepEqual(model.Point14Val0, model.Point14ValC.Dependency.Point14Val0) &&
+		point14ValCEmbeddedSnapshotCopiesExact(model.Point14ValC)
+}
+
+func point14ValDFoundationEmbeddedSnapshotCopiesExact(model Point14ValDFoundation) bool {
+	return point14ValDDependencyEmbeddedSnapshotCopiesExact(model.Dependency)
 }
 
 func point14Val0RoleRefsValid(values []string) bool {
@@ -668,12 +856,28 @@ func point14Val0ParsedTime(value string) (time.Time, bool) {
 }
 
 func point14Val0ContainsForbiddenWording(text string) bool {
+	return point14Val0ContainsForbiddenWordingFor(text, point14Val0SafeWording(), point14Val0ForbiddenWording())
+}
+
+func point14Val0ContainsForbiddenWordingFor(text string, safeWording []string, forbiddenWording []string) bool {
 	normalized := point16Val0NormalizeObservedText(text)
 	if normalized == "" {
 		return false
 	}
-	for _, phrase := range point14Val0ForbiddenWording() {
-		if point16Val0NormalizedTextContainsNormalizedPhrase(normalized, point16Val0NormalizeObservedText(phrase)) {
+	for _, safe := range safeWording {
+		if normalized == point16Val0NormalizeObservedText(safe) {
+			return false
+		}
+	}
+	for _, phrase := range forbiddenWording {
+		normalizedPhrase := point16Val0NormalizeObservedText(phrase)
+		if normalizedPhrase == "" {
+			continue
+		}
+		if point16Val0NormalizedTextContainsNormalizedPhrase(normalized, normalizedPhrase) {
+			return true
+		}
+		if point16Val0ObservedTextContainsNormalizedPhrase(text, normalizedPhrase) {
 			return true
 		}
 	}
@@ -681,22 +885,36 @@ func point14Val0ContainsForbiddenWording(text string) bool {
 }
 
 func point14Val0ListContainsForbiddenWording(values []string) bool {
-	corpusParts := make([]string, 0, len(values))
+	return point14Val0ListContainsForbiddenWordingFor(values, point14Val0SafeWording(), point14Val0ForbiddenWording())
+}
+
+func point14Val0ListContainsForbiddenWordingFor(values []string, safeWording []string, forbiddenWording []string) bool {
+	corpusVariants := make([][]string, 0, len(values))
+	corpusAllowed := make([]bool, 0, len(values))
 	for _, value := range values {
-		if point14Val0ContainsForbiddenWording(value) {
+		variants := point16Val0NormalizedObservedTextVariants(value)
+		if len(variants) == 0 {
+			continue
+		}
+		normalized := variants[0]
+		allowed := false
+		for _, safe := range safeWording {
+			if normalized == point16Val0NormalizeObservedText(safe) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed && point14Val0ContainsForbiddenWordingFor(value, safeWording, forbiddenWording) {
 			return true
 		}
-		normalized := point16Val0NormalizeObservedText(value)
-		if normalized != "" {
-			corpusParts = append(corpusParts, normalized)
-		}
+		corpusVariants = append(corpusVariants, variants)
+		corpusAllowed = append(corpusAllowed, allowed)
 	}
-	if len(corpusParts) == 0 {
+	if len(corpusVariants) == 0 {
 		return false
 	}
-	corpus := strings.Join(corpusParts, " ")
-	for _, phrase := range point14Val0ForbiddenWording() {
-		if point16Val0NormalizedTextContainsNormalizedPhrase(corpus, point16Val0NormalizeObservedText(phrase)) {
+	for _, phrase := range forbiddenWording {
+		if formalNoOverclaimForbiddenPhraseAcrossValueVariants(corpusVariants, corpusAllowed, point16Val0NormalizeObservedText(phrase)) {
 			return true
 		}
 	}
@@ -709,16 +927,16 @@ func point14Val0SignalIdentityKey(model ExternalEcosystemSignalCandidate) string
 	sort.Strings(claims)
 	sort.Strings(duplicates)
 	parts := []string{
-		strings.TrimSpace(model.SourceType),
-		strings.TrimSpace(model.SourceRef),
-		strings.TrimSpace(model.SignalType),
-		strings.TrimSpace(model.ScopeClassification),
-		strings.TrimSpace(model.ReferencedTenantScope),
-		strings.TrimSpace(model.ArtifactRef),
+		model.SourceType,
+		model.SourceRef,
+		model.SignalType,
+		model.ScopeClassification,
+		model.ReferencedTenantScope,
+		model.ArtifactRef,
 		strings.Join(claims, ","),
-		strings.TrimSpace(model.HashRef),
-		strings.TrimSpace(model.SignatureRef),
-		strings.TrimSpace(model.ProvenanceRef),
+		model.HashRef,
+		model.SignatureRef,
+		model.ProvenanceRef,
 		strings.Join(duplicates, ","),
 	}
 	sum := sha256.Sum256([]byte(strings.Join(parts, "|")))
@@ -849,6 +1067,7 @@ func EvaluatePoint14Val0DependencyState(model Point14Val0DependencySnapshot) str
 		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
 		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
 		strings.TrimSpace(model.InheritedPoint11CurrentState) == "" ||
+		!point14Val0Point11FoundationActive(model.Point11) ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point14Val0StateBlocked
 	}
@@ -896,6 +1115,8 @@ func EvaluatePoint14Val0DependencyState(model Point14Val0DependencySnapshot) str
 		model.InheritedPoint12DependencyState != Point12ValEStateActive ||
 		model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
 		model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed ||
+		model.InheritedPoint11CurrentState != Point11ValDStateActive ||
+		model.InheritedPoint11FinalPassGateState != Point11ValDFinalPassGateStateActive ||
 		model.InheritedPoint11PublicationState != Point11ValDPublicationReviewStateActive ||
 		model.InheritedPoint11NoOverclaimState != Point11ValDNoOverclaimReviewStateActive ||
 		model.InheritedPoint10CurrentState != operability.DeploymentMultiTenantPoint10StatePass ||
@@ -1396,10 +1617,8 @@ func point14Val0NoExternalAuthorityGuardModel() Point14Val0NoExternalAuthorityGu
 }
 
 func EvaluatePoint14Val0NoExternalAuthorityGuardState(model Point14Val0NoExternalAuthorityGuard) string {
-	for _, marker := range model.ObservedAuthorityMarkers {
-		if point11Val0ContainsTrimmed(point14Val0ForbiddenAuthorityMarkers(), marker) {
-			return Point14Val0StateBlocked
-		}
+	if point14Val0AuthorityMarkersContainForbidden(model.ObservedAuthorityMarkers, point14Val0ForbiddenAuthorityMarkers()) {
+		return Point14Val0StateBlocked
 	}
 	return Point14Val0StateActive
 }
@@ -1423,11 +1642,12 @@ func EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model Point14Val0NoOver
 		!point14Val0TextListValid(model.BlockedWording) {
 		return Point14Val0StateBlocked
 	}
-	if point14Val0ListContainsForbiddenWording(model.ObservedSignalTexts) ||
-		point14Val0ListContainsForbiddenWording(model.ObservedDisputeTexts) ||
-		point14Val0ListContainsForbiddenWording(model.ObservedCorrectionTexts) ||
-		point14Val0ListContainsForbiddenWording(model.ObservedPublicationTexts) ||
-		point14Val0ListContainsForbiddenWording(model.ObservedAgentTexts) {
+	observedTexts := append([]string{}, model.ObservedSignalTexts...)
+	observedTexts = append(observedTexts, model.ObservedDisputeTexts...)
+	observedTexts = append(observedTexts, model.ObservedCorrectionTexts...)
+	observedTexts = append(observedTexts, model.ObservedPublicationTexts...)
+	observedTexts = append(observedTexts, model.ObservedAgentTexts...)
+	if point14Val0ListContainsForbiddenWording(observedTexts) {
 		return Point14Val0StateBlocked
 	}
 	if point14Val0ListContainsForbiddenWording(model.InternalDiagnosticTexts) &&

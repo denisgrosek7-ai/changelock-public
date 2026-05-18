@@ -2,6 +2,7 @@ package formal
 
 import (
 	"encoding/json"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -58,6 +59,7 @@ type Point14ValEDependencySnapshot struct {
 	InheritedPoint12DependencyState            string                `json:"inherited_point12_dependency_state"`
 	InheritedPoint12PassClosureState           string                `json:"inherited_point12_pass_closure_state"`
 	InheritedPoint12ReviewerResult             string                `json:"inherited_point12_reviewer_result"`
+	InheritedPoint11CurrentState               string                `json:"inherited_point11_current_state"`
 	InheritedPoint11PublicationState           string                `json:"inherited_point11_publication_state"`
 	InheritedPoint11NoOverclaimState           string                `json:"inherited_point11_no_overclaim_state"`
 	InheritedPoint11FinalPassGateState         string                `json:"inherited_point11_final_pass_gate_state"`
@@ -306,11 +308,15 @@ func point14ValEForbiddenAuthorityMarkers() []string {
 }
 
 func point14ValEForbiddenWording() []string {
-	return point14ValDForbiddenWording()
+	forbidden := append([]string{}, point14Val0ForbiddenWording()...)
+	forbidden = append(forbidden, point14ValBForbiddenWording()...)
+	forbidden = append(forbidden, point14ValCForbiddenWording()...)
+	forbidden = append(forbidden, point14ValDForbiddenWording()...)
+	return point14ValEUniqueWording(forbidden)
 }
 
 func point14ValESafeWording() []string {
-	return []string{
+	safe := []string{
 		"bounded external ecosystem evidence input",
 		"dispute requires governance review",
 		"correction publication boundary is governed",
@@ -321,6 +327,24 @@ func point14ValESafeWording() []string {
 		"limitations remain visible",
 		"point 14 closure verifies boundaries only",
 	}
+	safe = append(safe, point14ValASafeWording()...)
+	safe = append(safe, point14ValBSafeWording()...)
+	safe = append(safe, point14ValCSafeWording()...)
+	safe = append(safe, point14ValDSafeWording()...)
+	return point14ValEUniqueWording(safe)
+}
+
+func point14ValEUniqueWording(values []string) []string {
+	seen := map[string]struct{}{}
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
 }
 
 func point14ValEExplicitNonGoals() []string {
@@ -345,30 +369,11 @@ func point14ValEExplicitNonGoals() []string {
 }
 
 func point14ValEObservedTextContainsForbiddenWording(text string) bool {
-	trimmed := strings.TrimSpace(strings.ToLower(text))
-	if trimmed == "" {
-		return false
-	}
-	for _, safe := range point14ValESafeWording() {
-		if trimmed == strings.ToLower(strings.TrimSpace(safe)) {
-			return false
-		}
-	}
-	for _, forbidden := range point14ValEForbiddenWording() {
-		if strings.Contains(trimmed, strings.ToLower(strings.TrimSpace(forbidden))) {
-			return true
-		}
-	}
-	return false
+	return point14Val0ContainsForbiddenWordingFor(text, point14ValESafeWording(), point14ValEForbiddenWording())
 }
 
 func point14ValEObservedListContainsForbiddenWording(values []string) bool {
-	for _, value := range values {
-		if point14ValEObservedTextContainsForbiddenWording(value) {
-			return true
-		}
-	}
-	return false
+	return point14Val0ListContainsForbiddenWordingFor(values, point14ValESafeWording(), point14ValEForbiddenWording())
 }
 
 func point14ValECheckIDValid(value string) bool {
@@ -507,6 +512,7 @@ func point14ValEDependencySnapshotFromUpstream(valD Point14ValDFoundation) Point
 		InheritedPoint12DependencyState:            valD.Dependency.InheritedPoint12DependencyState,
 		InheritedPoint12PassClosureState:           valD.Dependency.InheritedPoint12PassClosureState,
 		InheritedPoint12ReviewerResult:             valD.Dependency.InheritedPoint12ReviewerResult,
+		InheritedPoint11CurrentState:               valD.Dependency.InheritedPoint11CurrentState,
 		InheritedPoint11PublicationState:           valD.Dependency.InheritedPoint11PublicationState,
 		InheritedPoint11NoOverclaimState:           valD.Dependency.InheritedPoint11NoOverclaimState,
 		InheritedPoint11FinalPassGateState:         valD.Dependency.InheritedPoint11FinalPassGateState,
@@ -561,6 +567,7 @@ func EvaluatePoint14ValEDependencyState(model Point14ValEDependencySnapshot) str
 		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
 		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
 		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
+		model.InheritedPoint11CurrentState == "" ||
 		model.InheritedPoint11PublicationState == "" ||
 		model.InheritedPoint11NoOverclaimState == "" ||
 		model.InheritedPoint11FinalPassGateState == "" ||
@@ -568,6 +575,13 @@ func EvaluatePoint14ValEDependencyState(model Point14ValEDependencySnapshot) str
 		model.InheritedPoint10NoOverclaimState == "" ||
 		model.InheritedPoint10ProjectionState == "" ||
 		model.InheritedPoint10PassRuleState == "" ||
+		!point14ValDFoundationEmbeddedSnapshotCopiesExact(model.Point14ValD) ||
+		!point14ValDDependencyChainComputedActive(model.Point14ValD) ||
+		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point14ValC.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point11) ||
+		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point14Val0.Dependency.Point11) ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point14ValEStateBlocked
 	}
@@ -598,9 +612,14 @@ func EvaluatePoint14ValEDependencyState(model Point14ValEDependencySnapshot) str
 		model.InheritedPoint12DependencyState != model.Point14ValD.Dependency.InheritedPoint12DependencyState ||
 		model.InheritedPoint12PassClosureState != model.Point14ValD.Dependency.InheritedPoint12PassClosureState ||
 		model.InheritedPoint12ReviewerResult != model.Point14ValD.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedPoint11CurrentState != model.Point14ValD.Dependency.InheritedPoint11CurrentState ||
 		model.InheritedPoint11PublicationState != model.Point14ValD.Dependency.InheritedPoint11PublicationState ||
 		model.InheritedPoint11NoOverclaimState != model.Point14ValD.Dependency.InheritedPoint11NoOverclaimState ||
 		model.InheritedPoint11FinalPassGateState != model.Point14ValD.Dependency.InheritedPoint11FinalPassGateState ||
+		model.InheritedPoint11CurrentState != model.Point14ValD.Dependency.Point11.CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point14ValD.Dependency.Point11.PublicationReviewState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValD.Dependency.Point11.NoOverclaimReviewState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValD.Dependency.Point11.FinalPassGateState ||
 		model.InheritedPoint10CurrentState != model.Point14ValD.Dependency.InheritedPoint10CurrentState ||
 		model.InheritedPoint10NoOverclaimState != model.Point14ValD.Dependency.InheritedPoint10NoOverclaimState ||
 		model.InheritedPoint10ProjectionState != model.Point14ValD.Dependency.InheritedPoint10ProjectionState ||
@@ -634,6 +653,7 @@ func EvaluatePoint14ValEDependencyState(model Point14ValEDependencySnapshot) str
 		model.InheritedPoint12DependencyState != Point12ValEStateActive ||
 		model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
 		model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed ||
+		model.InheritedPoint11CurrentState != Point11ValDStateActive ||
 		model.InheritedPoint11PublicationState != Point11ValDPublicationReviewStateActive ||
 		model.InheritedPoint11NoOverclaimState != Point11ValDNoOverclaimReviewStateActive ||
 		model.InheritedPoint11FinalPassGateState != Point11ValDFinalPassGateStateActive ||
@@ -839,12 +859,8 @@ func EvaluatePoint14ValEAuthorityBoundaryClosureCheckState(model Point14ValEAuth
 	if model.ExternalAuthorityFound {
 		return Point14ValEStateBlocked
 	}
-	for _, marker := range model.ObservedAuthorityMarks {
-		for _, forbidden := range point14ValEForbiddenAuthorityMarkers() {
-			if strings.EqualFold(strings.TrimSpace(marker), strings.TrimSpace(forbidden)) {
-				return Point14ValEStateBlocked
-			}
-		}
+	if point14Val0AuthorityMarkersContainForbidden(model.ObservedAuthorityMarks, point14ValEForbiddenAuthorityMarkers()) {
+		return Point14ValEStateBlocked
 	}
 	return Point14ValEStatePassConfirmed
 }
@@ -864,8 +880,10 @@ func point14ValETenantPrivacyClosureCheckModel(dependency Point14ValEDependencyS
 	}
 }
 
-func EvaluatePoint14ValETenantPrivacyClosureCheckState(model Point14ValETenantPrivacyClosureCheck) string {
-	if !point14ValECheckIDValid(model.CheckID) || !point11Val0ScopeValid(model.TenantScope) {
+func EvaluatePoint14ValETenantPrivacyClosureCheckState(model Point14ValETenantPrivacyClosureCheck, dependency Point14ValEDependencySnapshot) string {
+	if !point14ValECheckIDValid(model.CheckID) ||
+		!point11Val0ScopeValid(model.TenantScope) ||
+		model.TenantScope != dependency.InheritedTenantScope {
 		return Point14ValEStateBlocked
 	}
 	if model.CrossTenantDetected ||
@@ -906,9 +924,10 @@ func point14ValETimestampIntegrityClosureCheckModel(dependency Point14ValEDepend
 	}
 }
 
-func EvaluatePoint14ValETimestampIntegrityClosureCheckState(model Point14ValETimestampIntegrityClosureCheck) string {
+func EvaluatePoint14ValETimestampIntegrityClosureCheckState(model Point14ValETimestampIntegrityClosureCheck, dependency Point14ValEDependencySnapshot) string {
 	if !point14ValECheckIDValid(model.CheckID) ||
 		!point11Val0ScopeValid(model.TenantScope) ||
+		model.TenantScope != dependency.InheritedTenantScope ||
 		!point14Val0ParsedTimeOk(model.EventAt) ||
 		!point14Val0CanonicalTimeSourceValid(model.EventTimeSource) ||
 		!point14Val0ParsedTimeOk(model.GeneratedAt) ||
@@ -954,8 +973,11 @@ func point14ValEAgentAdvisoryClosureCheckModel(dependency Point14ValEDependencyS
 	}
 }
 
-func EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model Point14ValEAgentAdvisoryClosureCheck) string {
-	if !point14ValECheckIDValid(model.CheckID) || !point11Val0ScopeValid(model.TenantScope) || !model.AdvisoryOnly {
+func EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model Point14ValEAgentAdvisoryClosureCheck, dependency Point14ValEDependencySnapshot) string {
+	if !point14ValECheckIDValid(model.CheckID) ||
+		!point11Val0ScopeValid(model.TenantScope) ||
+		model.TenantScope != dependency.InheritedTenantScope ||
+		!model.AdvisoryOnly {
 		return Point14ValEStateBlocked
 	}
 	if model.AgentResolvesDispute ||
@@ -970,29 +992,148 @@ func EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model Point14ValEAgentAdv
 	return Point14ValEStatePassConfirmed
 }
 
+type point14ValENoOverclaimCorpus struct {
+	observed                             []string
+	observedSeen                         map[string]struct{}
+	internalDiagnostics                  []string
+	internalDiagnosticsSeen              map[string]struct{}
+	internalForbiddenDiagnosticSeen      bool
+	internalForbiddenDiagnosticUnblocked bool
+}
+
+func (corpus *point14ValENoOverclaimCorpus) appendObserved(texts ...[]string) {
+	if corpus.observedSeen == nil {
+		corpus.observedSeen = make(map[string]struct{})
+		for _, existing := range corpus.observed {
+			corpus.observedSeen[existing] = struct{}{}
+		}
+	}
+	for _, group := range texts {
+		for _, text := range group {
+			if _, ok := corpus.observedSeen[text]; ok {
+				continue
+			}
+			corpus.observedSeen[text] = struct{}{}
+			corpus.observed = append(corpus.observed, text)
+		}
+	}
+}
+
+func (corpus *point14ValENoOverclaimCorpus) appendInternalDiagnostics(texts []string, classifiedBlocked bool) {
+	if corpus.internalDiagnosticsSeen == nil {
+		corpus.internalDiagnosticsSeen = make(map[string]struct{})
+		for _, existing := range corpus.internalDiagnostics {
+			corpus.internalDiagnosticsSeen[existing] = struct{}{}
+		}
+	}
+	for _, text := range texts {
+		if _, ok := corpus.internalDiagnosticsSeen[text]; ok {
+			continue
+		}
+		corpus.internalDiagnosticsSeen[text] = struct{}{}
+		corpus.internalDiagnostics = append(corpus.internalDiagnostics, text)
+	}
+	if point14ValEObservedListContainsForbiddenWording(texts) {
+		corpus.internalForbiddenDiagnosticSeen = true
+		if !classifiedBlocked {
+			corpus.internalForbiddenDiagnosticUnblocked = true
+		}
+	}
+}
+
+func (corpus point14ValENoOverclaimCorpus) internalDiagnosticsClassifiedBlocked() bool {
+	return corpus.internalForbiddenDiagnosticSeen && !corpus.internalForbiddenDiagnosticUnblocked
+}
+
+func point14ValEAppendValANoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valA Point14ValAFoundation) {
+	wording := valA.NoOverclaimValidationWording
+	corpus.appendObserved(
+		wording.ObservedNormalizationTexts,
+		wording.ObservedValidationTexts,
+		wording.ObservedSourceIdentityTexts,
+		wording.ObservedScopeBindingTexts,
+		wording.ObservedEvidenceBindingTexts,
+	)
+	corpus.appendInternalDiagnostics(wording.InternalDiagnosticTexts, wording.InternalDiagnosticsClassifiedBlocked)
+}
+
+func point14ValEAppendValAInheritedNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valA Point14ValAFoundation) {
+	point14ValEAppendValANoOverclaimCorpus(corpus, valA)
+}
+
+func point14ValEAppendValBNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valB Point14ValBFoundation) {
+	wording := valB.NoOverclaimDisputeWording
+	corpus.appendObserved(
+		wording.ObservedConflictTexts,
+		wording.ObservedDisputeTexts,
+		wording.ObservedEvidenceRequirementTexts,
+		wording.ObservedEscalationTexts,
+		wording.ObservedPrivacyTexts,
+		wording.ObservedAgentTexts,
+	)
+	corpus.appendInternalDiagnostics(wording.InternalDiagnosticTexts, wording.InternalDiagnosticsClassifiedBlocked)
+}
+
+func point14ValEAppendValBInheritedNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valB Point14ValBFoundation) {
+	point14ValEAppendValBNoOverclaimCorpus(corpus, valB)
+	point14ValEAppendValAInheritedNoOverclaimCorpus(corpus, valB.Dependency.Point14ValA)
+}
+
+func point14ValEAppendValCNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valC Point14ValCFoundation) {
+	wording := valC.NoOverclaimPublicationWording
+	corpus.appendObserved(
+		wording.ObservedCorrectionTexts,
+		wording.ObservedRevocationTexts,
+		wording.ObservedSupersessionTexts,
+		wording.ObservedPublicationTexts,
+		wording.ObservedVisibilityTexts,
+		wording.ObservedPrivacyTexts,
+		wording.ObservedGovernanceTexts,
+		wording.ObservedAgentTexts,
+	)
+	corpus.appendInternalDiagnostics(wording.InternalDiagnosticTexts, wording.InternalDiagnosticsClassifiedBlocked)
+}
+
+func point14ValEAppendValCInheritedNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valC Point14ValCFoundation) {
+	point14ValEAppendValCNoOverclaimCorpus(corpus, valC)
+	point14ValEAppendValBInheritedNoOverclaimCorpus(corpus, valC.Dependency.Point14ValB)
+}
+
+func point14ValEAppendValDNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valD Point14ValDFoundation) {
+	wording := valD.NoOverclaimTimelineWording
+	corpus.appendObserved(
+		wording.ObservedTimelineTexts,
+		wording.ObservedSignalTexts,
+		wording.ObservedDisputeTexts,
+		wording.ObservedReadProjectionTexts,
+		wording.ObservedGovernanceTexts,
+		wording.ObservedQueryTexts,
+		wording.ObservedAccessTexts,
+		wording.ObservedPrivacyTexts,
+		wording.ObservedAgentTexts,
+	)
+	corpus.appendInternalDiagnostics(wording.InternalDiagnosticTexts, wording.InternalDiagnosticsClassifiedBlocked)
+}
+
+func point14ValEAppendValDInheritedNoOverclaimCorpus(corpus *point14ValENoOverclaimCorpus, valD Point14ValDFoundation) {
+	point14ValEAppendValDNoOverclaimCorpus(corpus, valD)
+	point14ValEAppendValCInheritedNoOverclaimCorpus(corpus, valD.Dependency.Point14ValC)
+	point14ValEAppendValBInheritedNoOverclaimCorpus(corpus, valD.Dependency.Point14ValB)
+	point14ValEAppendValAInheritedNoOverclaimCorpus(corpus, valD.Dependency.Point14ValA)
+}
+
 func point14ValENoOverclaimFinalCheckModel(dependency Point14ValEDependencySnapshot) Point14ValENoOverclaimFinalCheck {
-	valA := dependency.Point14ValD.Dependency.Point14ValA
-	valB := dependency.Point14ValD.Dependency.Point14ValB
-	valC := dependency.Point14ValD.Dependency.Point14ValC
-	valD := dependency.Point14ValD
-	observed := []string{
+	corpus := point14ValENoOverclaimCorpus{observed: []string{
 		"bounded external ecosystem evidence input",
 		"read-only ecosystem timeline",
 		"no external authority granted",
 		"point 14 closure verifies boundaries only",
-	}
-	observed = append(observed, valA.NoOverclaimValidationWording.ObservedNormalizationTexts...)
-	observed = append(observed, valB.NoOverclaimDisputeWording.ObservedConflictTexts...)
-	observed = append(observed, valC.NoOverclaimPublicationWording.ObservedPublicationTexts...)
-	observed = append(observed, valD.NoOverclaimTimelineWording.ObservedTimelineTexts...)
-	internalDiagnostics := append([]string{}, valA.NoOverclaimValidationWording.InternalDiagnosticTexts...)
-	internalDiagnostics = append(internalDiagnostics, valB.NoOverclaimDisputeWording.InternalDiagnosticTexts...)
-	internalDiagnostics = append(internalDiagnostics, valC.NoOverclaimPublicationWording.InternalDiagnosticTexts...)
-	internalDiagnostics = append(internalDiagnostics, valD.NoOverclaimTimelineWording.InternalDiagnosticTexts...)
+	}}
+	point14ValEAppendValDInheritedNoOverclaimCorpus(&corpus, dependency.Point14ValD)
 	return Point14ValENoOverclaimFinalCheck{
-		ObservedTexts:                        observed,
-		InternalDiagnosticTexts:              internalDiagnostics,
-		InternalDiagnosticsClassifiedBlocked: valA.NoOverclaimValidationWording.InternalDiagnosticsClassifiedBlocked && valB.NoOverclaimDisputeWording.InternalDiagnosticsClassifiedBlocked && valC.NoOverclaimPublicationWording.InternalDiagnosticsClassifiedBlocked && valD.NoOverclaimTimelineWording.InternalDiagnosticsClassifiedBlocked,
+		ObservedTexts:                        corpus.observed,
+		InternalDiagnosticTexts:              corpus.internalDiagnostics,
+		InternalDiagnosticsClassifiedBlocked: corpus.internalDiagnosticsClassifiedBlocked(),
 		AllowedSafeWording:                   point14ValESafeWording(),
 		BlockedWording:                       point14ValEForbiddenWording(),
 		ProjectionDisclaimer:                 point14ValEProjectionDisclaimerBase,
@@ -1287,10 +1428,16 @@ func ComputePoint14ValEFoundation(model Point14ValEFoundation) Point14ValEFounda
 	model.CorrectionPublicationClosureState = EvaluatePoint14ValECorrectionPublicationClosureCheckState(model.CorrectionPublicationClosureCheck)
 	model.TimelineProjectionClosureState = EvaluatePoint14ValETimelineProjectionClosureCheckState(model.TimelineProjectionClosureCheck)
 	model.AuthorityBoundaryClosureState = EvaluatePoint14ValEAuthorityBoundaryClosureCheckState(model.AuthorityBoundaryClosureCheck)
-	model.TenantPrivacyClosureState = EvaluatePoint14ValETenantPrivacyClosureCheckState(model.TenantPrivacyClosureCheck)
-	model.TimestampIntegrityClosureState = EvaluatePoint14ValETimestampIntegrityClosureCheckState(model.TimestampIntegrityClosureCheck)
-	model.AgentAdvisoryClosureState = EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model.AgentAdvisoryClosureCheck)
+	model.TenantPrivacyClosureState = EvaluatePoint14ValETenantPrivacyClosureCheckState(model.TenantPrivacyClosureCheck, model.Dependency)
+	model.TimestampIntegrityClosureState = EvaluatePoint14ValETimestampIntegrityClosureCheckState(model.TimestampIntegrityClosureCheck, model.Dependency)
+	model.AgentAdvisoryClosureState = EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model.AgentAdvisoryClosureCheck, model.Dependency)
+	derivedNoOverclaimFinalCheck := point14ValENoOverclaimFinalCheckModel(model.Dependency)
+	noOverclaimFinalCheckMatchesDependency := reflect.DeepEqual(model.NoOverclaimFinalCheck, derivedNoOverclaimFinalCheck)
+	model.NoOverclaimFinalCheck = derivedNoOverclaimFinalCheck
 	model.NoOverclaimFinalCheckState = EvaluatePoint14ValENoOverclaimFinalCheckState(model.NoOverclaimFinalCheck)
+	if !noOverclaimFinalCheckMatchesDependency && model.NoOverclaimFinalCheckState == Point14ValEStatePassConfirmed {
+		model.NoOverclaimFinalCheckState = Point14ValEStateBlocked
+	}
 	model.CLBFinalCheckState = EvaluatePoint14ValECLBFinalCheckState(model.CLBFinalCheck)
 
 	passCandidate := point14ValEFoundationState(

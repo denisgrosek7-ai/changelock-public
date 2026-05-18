@@ -63,6 +63,62 @@ func TestPoint14ValADependencyState(t *testing.T) {
 			want: Point14ValAStateBlocked,
 		},
 		{
+			name: "whitespace retagged point11 current state blocks raw exact",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.InheritedPoint11CurrentState += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged point11 final pass gate blocks raw exact",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.InheritedPoint11FinalPassGateState += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "nested val0 point11 current state mismatch blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "nested val0 embedded point11 current state mismatch blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "nested val0 embedded point11 dependency state mismatch blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.Point11.DependencyState = Point11ValDDependencyStateBlocked
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "nested val0 point11 final pass gate mismatch blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.Dependency.InheritedPoint11FinalPassGateState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "missing point11 current state blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.InheritedPoint11CurrentState = ""
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "missing point11 final pass gate blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.InheritedPoint11FinalPassGateState = ""
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
 			name: "point14 val0 blocked blocks",
 			mutate: func(model *Point14ValADependencySnapshot) {
 				model.Point14Val0CurrentState = Point14Val0StateBlocked
@@ -103,6 +159,13 @@ func TestPoint14ValADependencyState(t *testing.T) {
 			name: "embedded point14 val0 mismatch blocks",
 			mutate: func(model *Point14ValADependencySnapshot) {
 				model.Point14Val0.CurrentState = Point14Val0StateBlocked
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "stale active embedded val0 recomputation blocks",
+			mutate: func(model *Point14ValADependencySnapshot) {
+				model.Point14Val0.NoOverclaimEcosystemWording.ObservedAgentTexts = []string{"public badge"}
 			},
 			want: Point14ValAStateBlocked,
 		},
@@ -212,6 +275,48 @@ func TestPoint14ValANormalizedExternalSignalState(t *testing.T) {
 			name: "normalized signal with public badge allowed blocks",
 			mutate: func(model *NormalizedExternalSignal) {
 				model.PublicBadgeAllowed = true
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "normalized signal with global evidence ref blocks",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.EvidenceRefs = []string{"evidence_global_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "normalized signal with singular all tenant evidence ref blocks",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.EvidenceRefs = []string{"evidence_all_tenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "normalized signal with cross tenant evidence ref blocks",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.EvidenceRefs = []string{"evidence_cross_tenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "normalized signal with compact cross tenant evidence ref blocks",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.EvidenceRefs = []string{"evidence_crossTenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "normalized signal with compact all tenant evidence ref blocks",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.EvidenceRefs = []string{"evidence_allTenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "normalized signal with padded evidence ref blocks",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.EvidenceRefs = []string{model.EvidenceRefs[0] + " "}
 			},
 			want: Point14ValAStateBlocked,
 		},
@@ -399,6 +504,41 @@ func TestPoint14ValAExternalSignalEvidenceBindingState(t *testing.T) {
 			name: "missing evidence refs blocks where required",
 			mutate: func(model *ExternalSignalEvidenceBinding) {
 				model.EvidenceRefs = nil
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "global evidence ref blocks in evidence binding",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceRefs = []string{"evidence_global_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "cross tenant evidence ref blocks in evidence binding",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceRefs = []string{"evidence_cross_tenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "singular all tenant evidence ref blocks in evidence binding",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceRefs = []string{"evidence_all_tenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "compact cross tenant evidence ref blocks in evidence binding",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceRefs = []string{"evidence_crossTenant_point14_vala_001"}
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "padded evidence ref blocks in evidence binding",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceRefs = []string{model.EvidenceRefs[0] + " "}
 			},
 			want: Point14ValAStateBlocked,
 		},
@@ -646,6 +786,13 @@ func TestPoint14ValAAuthorityAndWordingGuards(t *testing.T) {
 			t.Fatalf("expected blocked, got %s", got)
 		}
 	})
+	t.Run("zero-width external authority marker blocks", func(t *testing.T) {
+		model := point14ValANoExternalAuthorityValidationGuardModel()
+		model.ObservedAuthorityMarkers = []string{"external_source_of_truth\u200b"}
+		if got := EvaluatePoint14ValANoExternalAuthorityValidationGuardState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
 	t.Run("point14 pass marker blocks", func(t *testing.T) {
 		model := point14ValANoExternalAuthorityValidationGuardModel()
 		model.ObservedAuthorityMarkers = []string{point14ValABlockedPassToken}
@@ -663,6 +810,21 @@ func TestPoint14ValAAuthorityAndWordingGuards(t *testing.T) {
 	t.Run("forbidden wording blocks", func(t *testing.T) {
 		model := point14ValANoOverclaimValidationWordingModel()
 		model.ObservedValidationTexts = []string{"production approved"}
+		if got := EvaluatePoint14ValANoOverclaimValidationWordingState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("split forbidden wording blocks across observed corpus", func(t *testing.T) {
+		model := point14ValANoOverclaimValidationWordingModel()
+		model.ObservedValidationTexts = []string{"production", "approved"}
+		if got := EvaluatePoint14ValANoOverclaimValidationWordingState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("split forbidden wording across observed categories blocks", func(t *testing.T) {
+		model := point14ValANoOverclaimValidationWordingModel()
+		model.ObservedNormalizationTexts = []string{"production"}
+		model.ObservedValidationTexts = []string{"approved"}
 		if got := EvaluatePoint14ValANoOverclaimValidationWordingState(model); got != Point14ValAStateBlocked {
 			t.Fatalf("expected blocked, got %s", got)
 		}

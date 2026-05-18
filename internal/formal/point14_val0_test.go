@@ -78,6 +78,56 @@ func TestPoint14Val0DependencyState(t *testing.T) {
 			want: Point14Val0StateBlocked,
 		},
 		{
+			name: "embedded point11 dependency state mismatch blocks",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.Point11.DependencyState = Point11ValDDependencyStateBlocked
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "embedded point11 val0 dependency cannot forge active summary",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.Point11.Val0Dependency.CurrentState = Point11Val0StateBlocked
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "non active point11 aggregate blocks even when final gate is active",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.InheritedPoint11CurrentState = Point11ValDStateReviewRequired
+				model.Point11.CurrentState = Point11ValDStateReviewRequired
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "embedded point11 final pass gate mismatch blocks",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.Point11.FinalPassGateState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "embedded point11 no overclaim submodel cannot forge active summary",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.Point11.NoOverclaimReview.ObservedClaims = []string{"production approved"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "inherited point11 final pass gate must be active raw exact",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.InheritedPoint11FinalPassGateState = Point11ValDFinalPassGateStateBlocked
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "whitespace retagged inherited point11 final pass gate blocks",
+			mutate: func(model *Point14Val0DependencySnapshot) {
+				model.InheritedPoint11FinalPassGateState = " " + Point11ValDFinalPassGateStateActive
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
 			name: "embedded point10 pass rule mismatch blocks",
 			mutate: func(model *Point14Val0DependencySnapshot) {
 				model.Point10.Point10PassRuleState = operability.DeploymentMultiTenantValEPoint10PassRuleStateBlocked
@@ -132,6 +182,35 @@ func TestPoint14Val0ExternalSignalCandidateState(t *testing.T) {
 			name: "missing evidence refs blocks",
 			mutate: func(model *ExternalEcosystemSignalCandidate) {
 				model.EvidenceRefs = nil
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "global evidence ref blocks raw evidence boundary",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_global_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "singular all tenant evidence ref blocks raw evidence boundary",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_all_tenant_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "padded evidence ref blocks raw evidence boundary",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{" " + model.EvidenceRefs[0]}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "zero width source ref cannot validate even with recomputed identity key",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.SourceRef += "\u200b"
+				model.SignalIdentityKey = point14Val0SignalIdentityKey(*model)
 			},
 			want: Point14Val0StateBlocked,
 		},
@@ -247,6 +326,83 @@ func TestPoint14Val0ExternalSignalCandidateState(t *testing.T) {
 			name: "cross tenant external signal blocks",
 			mutate: func(model *ExternalEcosystemSignalCandidate) {
 				model.ReferencedTenantScope = "tenant_point14_val0_other"
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "cross tenant evidence ref blocks directly",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_cross_tenant_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "camelcase compact cross tenant evidence ref blocks",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_crossTenant_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "camelcase compact cross tenants evidence ref blocks",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_crossTenants_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "cross scope evidence ref blocks downstream helper drift",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_cross_scope_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "compact cross boundary evidence ref blocks downstream helper drift",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_crossBoundary_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "camelcase compact other tenants evidence ref blocks",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_otherTenants_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "camelcase compact all tenant evidence ref blocks",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_allTenant_point14_val0_001"}
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "smalltenant evidence ref does not false positive as all tenant",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.EvidenceRefs = []string{"evidence_smalltenant_point14_val0_001"}
+			},
+			want: Point14Val0StateActive,
+		},
+		{
+			name: "padded source ref cannot validate by trim",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.SourceRef += " "
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "padded artifact ref cannot validate by trim",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.ArtifactRef = " " + model.ArtifactRef
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "tab newline hash ref cannot validate by trim",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.HashRef = model.HashRef + "\n"
 			},
 			want: Point14Val0StateBlocked,
 		},
@@ -661,6 +817,28 @@ func TestPoint14Val0AgentBoundaryAndNoOverclaim(t *testing.T) {
 			t.Fatalf("expected blocked, got %s", got)
 		}
 	})
+	t.Run("split forbidden ecosystem wording across observed categories blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.ObservedPublicationTexts = []string{"production"}
+		model.ObservedAgentTexts = []string{"approved"}
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("long-s pass wording obfuscation blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.ObservedPublicationTexts = []string{"external PAſS"}
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
+	t.Run("split long-s as f overclaim across observed corpus blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.ObservedPublicationTexts = []string{"certiſ", "ied"}
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked, got %s", got)
+		}
+	})
 	t.Run("safe bounded wording passes", func(t *testing.T) {
 		model := point14Val0NoOverclaimEcosystemWordingModel()
 		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateActive {
@@ -682,6 +860,24 @@ func TestPoint14Val0NoExternalAuthorityGuardState(t *testing.T) {
 	model.ObservedAuthorityMarkers = []string{"external_pass"}
 	if got := EvaluatePoint14Val0NoExternalAuthorityGuardState(model); got != Point14Val0StateBlocked {
 		t.Fatalf("expected blocked, got %s", got)
+	}
+
+	model = point14Val0NoExternalAuthorityGuardModel()
+	model.ObservedAuthorityMarkers = []string{"external_source_of_truth\u200b"}
+	if got := EvaluatePoint14Val0NoExternalAuthorityGuardState(model); got != Point14Val0StateBlocked {
+		t.Fatalf("expected zero-width authority marker blocked, got %s", got)
+	}
+
+	model = point14Val0NoExternalAuthorityGuardModel()
+	model.ObservedAuthorityMarkers = []string{"external_paſs"}
+	if got := EvaluatePoint14Val0NoExternalAuthorityGuardState(model); got != Point14Val0StateBlocked {
+		t.Fatalf("expected long-s authority marker blocked, got %s", got)
+	}
+
+	model = point14Val0NoExternalAuthorityGuardModel()
+	model.ObservedAuthorityMarkers = []string{"external", "pass"}
+	if got := EvaluatePoint14Val0NoExternalAuthorityGuardState(model); got != Point14Val0StateBlocked {
+		t.Fatalf("expected split authority marker blocked, got %s", got)
 	}
 }
 

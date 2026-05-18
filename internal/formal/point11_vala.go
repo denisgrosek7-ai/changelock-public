@@ -313,17 +313,23 @@ func point11ValARevokerRefValid(value string) bool {
 }
 
 func point11ValAHashValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if value == "" || value != strings.TrimSpace(value) || strings.ContainsAny(value, "\t\r\n") {
 		return false
 	}
-	if strings.HasPrefix(trimmed, "sha256:") {
-		trimmed = strings.TrimPrefix(trimmed, "sha256:")
-	}
-	if len(trimmed) != 64 {
+	if !strings.HasPrefix(value, "sha256:") {
 		return false
 	}
-	_, err := hex.DecodeString(trimmed)
+	value = strings.TrimPrefix(value, "sha256:")
+	if len(value) != 64 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') {
+			continue
+		}
+		return false
+	}
+	_, err := hex.DecodeString(value)
 	return err == nil
 }
 
@@ -357,7 +363,7 @@ func point11ValAPolicyLifecycleAllowed(value string) bool {
 }
 
 func point11ValAPolicyLifecycleInvalidated(value string) bool {
-	switch strings.TrimSpace(value) {
+	switch value {
 	case point11ValAPolicyLifecycleRevoked, point11ValAPolicyLifecycleExpired, point11ValAPolicyLifecycleSuperseded, point11ValAPolicyLifecycleBlocked:
 		return true
 	default:
@@ -366,11 +372,11 @@ func point11ValAPolicyLifecycleInvalidated(value string) bool {
 }
 
 func point11ValASignatureEnvelopeActive(value string) bool {
-	return strings.TrimSpace(value) == Point11ValASignatureStateActive
+	return value == Point11ValASignatureStateActive
 }
 
 func point11ValAAnchorEnvelopeActive(value string) bool {
-	return strings.TrimSpace(value) == Point11ValAAnchorStateActive
+	return value == Point11ValAAnchorStateActive
 }
 
 func point11ValAGraphHasCycle(path []string) bool {
@@ -379,14 +385,13 @@ func point11ValAGraphHasCycle(path []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, ref := range path {
-		trimmed := strings.TrimSpace(ref)
-		if !point11ValAPolicyRefValid(trimmed) {
+		if !point11ValAPolicyRefValid(ref) {
 			return true
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[ref]; exists {
 			return true
 		}
-		seen[trimmed] = struct{}{}
+		seen[ref] = struct{}{}
 	}
 	return false
 }
@@ -457,23 +462,23 @@ func EvaluatePoint11ValADependencyState(model Point11ValADependencySnapshot) str
 		model.OpenCLB0Findings > 0 ||
 		model.OpenCLB1Findings > 0 ||
 		model.OpenCLB2Findings > 0 ||
-		strings.TrimSpace(model.Val0PolicyContractState) != Point11Val0PolicyContractStateActive ||
-		strings.TrimSpace(model.Val0ClaimGovernanceState) != Point11Val0ClaimGovernanceStateActive ||
-		strings.TrimSpace(model.Val0AuthorityMatrixState) != Point11Val0AuthorityMatrixStateActive ||
-		strings.TrimSpace(model.Val0ExceptionGovernanceState) != Point11Val0ExceptionGovernanceStateActive ||
-		strings.TrimSpace(model.Val0ABACState) != Point11Val0ABACStateActive ||
-		strings.TrimSpace(model.Val0DecisionBindingState) != Point11Val0DecisionBindingStateActive ||
-		strings.TrimSpace(model.Val0NoOverclaimState) != Point11Val0NoOverclaimStateActive ||
-		strings.TrimSpace(model.Val0CrossDomainCompatibilityState) != Point11Val0CrossDomainCompatibilityStateActive {
+		model.Val0PolicyContractState != Point11Val0PolicyContractStateActive ||
+		model.Val0ClaimGovernanceState != Point11Val0ClaimGovernanceStateActive ||
+		model.Val0AuthorityMatrixState != Point11Val0AuthorityMatrixStateActive ||
+		model.Val0ExceptionGovernanceState != Point11Val0ExceptionGovernanceStateActive ||
+		model.Val0ABACState != Point11Val0ABACStateActive ||
+		model.Val0DecisionBindingState != Point11Val0DecisionBindingStateActive ||
+		model.Val0NoOverclaimState != Point11Val0NoOverclaimStateActive ||
+		model.Val0CrossDomainCompatibilityState != Point11Val0CrossDomainCompatibilityStateActive {
 		return Point11ValADependencyStateBlocked
 	}
-	if strings.TrimSpace(model.Val0CurrentState) == Point11Val0StateActive &&
-		strings.TrimSpace(model.Val0DependencyState) == Point11Val0DependencyStateActive {
+	if model.Val0CurrentState == Point11Val0StateActive &&
+		model.Val0DependencyState == Point11Val0DependencyStateActive {
 		return Point11ValADependencyStateActive
 	}
 	if model.LocalReviewAllowsReviewRequired &&
-		(strings.TrimSpace(model.Val0CurrentState) == Point11Val0StateReviewRequired ||
-			strings.TrimSpace(model.Val0DependencyState) == Point11Val0DependencyStateReviewRequired) {
+		(model.Val0CurrentState == Point11Val0StateReviewRequired ||
+			model.Val0DependencyState == Point11Val0DependencyStateReviewRequired) {
 		return Point11ValADependencyStateReviewRequired
 	}
 	return Point11ValADependencyStateBlocked
@@ -493,9 +498,9 @@ func EvaluatePoint11ValARegistryState(model Point11ValASignedPolicyRegistry) str
 		!point11ValASignatureRefValid(model.SignatureRef) ||
 		!point11ValASigningKeyRefValid(model.SigningKeyRef) ||
 		!point11ValASigningAlgorithmAllowed(model.SigningAlgorithm) ||
-		strings.TrimSpace(model.SignatureState) != point11ValASignatureEnvelopeStateVerified ||
+		model.SignatureState != point11ValASignatureEnvelopeStateVerified ||
 		!point11ValAAnchorRefValid(model.AnchorRef) ||
-		strings.TrimSpace(model.AnchorState) != point11ValAAnchorEnvelopeStateVerified ||
+		model.AnchorState != point11ValAAnchorEnvelopeStateVerified ||
 		!point11Val0IdentityValueValid(model.SchemaVersion) ||
 		!point11Val0IdentityValueValid(model.CompatibilityVersion) ||
 		!point11Val0ValidTimestamp(model.EffectiveFrom) ||
@@ -505,23 +510,23 @@ func EvaluatePoint11ValARegistryState(model Point11ValASignedPolicyRegistry) str
 		!point11Val0EvidenceRefsValid(model.ApprovalEvidenceRefs) {
 		return Point11ValARegistryStateBlocked
 	}
-	expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.EffectiveUntil))
-	if expiresAt.Before(time.Now().UTC()) || strings.TrimSpace(model.RevokedBy) != "" {
+	expiresAt, _ := time.Parse(time.RFC3339, model.EffectiveUntil)
+	if expiresAt.Before(time.Now().UTC()) || model.RevokedBy != "" {
 		return Point11ValARegistryStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) == point11ValAPolicyLifecycleSuperseded {
+	if model.LifecycleState == point11ValAPolicyLifecycleSuperseded {
 		if !point11ValAPolicyRefValid(model.SupersededBy) || !point11Val0IdentityValueValid(model.CompatibilityVersion) {
 			return Point11ValARegistryStateBlocked
 		}
 		return Point11ValARegistryStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) == point11ValAPolicyLifecycleRevoked ||
-		strings.TrimSpace(model.LifecycleState) == point11ValAPolicyLifecycleExpired ||
-		strings.TrimSpace(model.LifecycleState) == point11ValAPolicyLifecycleBlocked {
+	if model.LifecycleState == point11ValAPolicyLifecycleRevoked ||
+		model.LifecycleState == point11ValAPolicyLifecycleExpired ||
+		model.LifecycleState == point11ValAPolicyLifecycleBlocked {
 		return Point11ValARegistryStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) != point11ValAPolicyLifecycleActive &&
-		strings.TrimSpace(model.LifecycleState) != point11ValAPolicyLifecycleApproved {
+	if model.LifecycleState != point11ValAPolicyLifecycleActive &&
+		model.LifecycleState != point11ValAPolicyLifecycleApproved {
 		return Point11ValARegistryStateBlocked
 	}
 	return Point11ValARegistryStateActive
@@ -536,15 +541,15 @@ func EvaluatePoint11ValASignatureState(model Point11ValAPolicySignatureEnvelope)
 		!point11Val0IdentityValueValid(model.SignerIdentity) ||
 		!point11Val0ValidTimestamp(model.IssuedAt) ||
 		!point11Val0ValidTimestamp(model.ExpiresAt) ||
-		strings.TrimSpace(model.SignatureState) != point11ValASignatureEnvelopeStateVerified ||
-		strings.TrimSpace(model.VerificationResult) != point11ValASignatureVerificationActive ||
+		model.SignatureState != point11ValASignatureEnvelopeStateVerified ||
+		model.VerificationResult != point11ValASignatureVerificationActive ||
 		!point11Val0EvidenceRefsValid(model.VerificationEvidenceRefs) {
 		return Point11ValASignatureStateBlocked
 	}
-	if strings.TrimSpace(model.RevocationRef) != "" && !point11ValAGovernanceEventRefValid(model.RevocationRef) {
+	if model.RevocationRef != "" && !point11ValAGovernanceEventRefValid(model.RevocationRef) {
 		return Point11ValASignatureStateBlocked
 	}
-	expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.ExpiresAt))
+	expiresAt, _ := time.Parse(time.RFC3339, model.ExpiresAt)
 	if expiresAt.Before(time.Now().UTC()) {
 		return Point11ValASignatureStateBlocked
 	}
@@ -557,8 +562,8 @@ func EvaluatePoint11ValAAnchorState(model Point11ValAPolicyAnchorEnvelope) strin
 		!point11ValAPolicyRefValid(model.AnchoredSubjectRef) ||
 		!point11ValAHashValid(model.AnchoredSubjectHash) ||
 		!point11Val0ValidTimestamp(model.AnchorTimestamp) ||
-		strings.TrimSpace(model.AnchorState) != point11ValAAnchorEnvelopeStateVerified ||
-		strings.TrimSpace(model.AnchorVerificationResult) != point11ValAAnchorVerificationActive ||
+		model.AnchorState != point11ValAAnchorEnvelopeStateVerified ||
+		model.AnchorVerificationResult != point11ValAAnchorVerificationActive ||
 		!point11Val0EvidenceRefsValid(model.AnchorEvidenceRefs) {
 		return Point11ValAAnchorStateBlocked
 	}
@@ -596,7 +601,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 			"invalid_transition_identity_or_timestamp",
 		)
 	}
-	if strings.TrimSpace(model.RollbackRef) != "" && !point11ValAGovernanceEventRefValid(model.RollbackRef) {
+	if model.RollbackRef != "" && !point11ValAGovernanceEventRefValid(model.RollbackRef) {
 		return point11ValALifecycleBlockedEvaluation(
 			"lifecycle_transition_invalid_rollback_ref",
 			"invalid_rollback_ref",
@@ -609,7 +614,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 		)
 	}
 	switch {
-	case strings.TrimSpace(model.FromState) == point11ValAPolicyLifecycleDraft && strings.TrimSpace(model.ToState) == point11ValAPolicyLifecycleReviewRequired:
+	case model.FromState == point11ValAPolicyLifecycleDraft && model.ToState == point11ValAPolicyLifecycleReviewRequired:
 		if !point11Val0IdentityValueValid(model.Reason) {
 			return point11ValALifecycleBlockedEvaluation(
 				"draft_to_review_required_missing_reason",
@@ -621,7 +626,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 			Point11ValAPolicyUseStateNotYetActive,
 			"policy_use_not_yet_active",
 		)
-	case strings.TrimSpace(model.FromState) == point11ValAPolicyLifecycleReviewRequired && strings.TrimSpace(model.ToState) == point11ValAPolicyLifecycleApproved:
+	case model.FromState == point11ValAPolicyLifecycleReviewRequired && model.ToState == point11ValAPolicyLifecycleApproved:
 		if !point11Val0IdentityValueValid(model.ApproverRef) ||
 			!point11ValAGovernanceEventRefValid(model.GovernanceEventRef) ||
 			!point11Val0EvidenceRefsValid(model.ApprovalEvidenceRefs) {
@@ -635,7 +640,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 			Point11ValAPolicyUseStateNotYetActive,
 			"policy_use_not_yet_active",
 		)
-	case strings.TrimSpace(model.FromState) == point11ValAPolicyLifecycleApproved && strings.TrimSpace(model.ToState) == point11ValAPolicyLifecycleActive:
+	case model.FromState == point11ValAPolicyLifecycleApproved && model.ToState == point11ValAPolicyLifecycleActive:
 		if !point11ValAGovernanceEventRefValid(model.GovernanceEventRef) ||
 			!point11Val0EvidenceRefsValid(model.ApprovalEvidenceRefs) {
 			return point11ValALifecycleBlockedEvaluation(
@@ -655,7 +660,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 			Point11ValAPolicyUseStateActive,
 			"policy_use_active",
 		)
-	case strings.TrimSpace(model.FromState) == point11ValAPolicyLifecycleActive && strings.TrimSpace(model.ToState) == point11ValAPolicyLifecycleDeprecated:
+	case model.FromState == point11ValAPolicyLifecycleActive && model.ToState == point11ValAPolicyLifecycleDeprecated:
 		if !point11ValAGovernanceEventRefValid(model.GovernanceEventRef) ||
 			!point11Val0IdentityValueValid(model.Reason) ||
 			!point11Val0EvidenceRefsValid(model.ApprovalEvidenceRefs) {
@@ -669,7 +674,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 			Point11ValAPolicyUseStateHistoricalOnly,
 			"policy_use_historical_only_due_to_deprecation",
 		)
-	case strings.TrimSpace(model.FromState) == point11ValAPolicyLifecycleActive && strings.TrimSpace(model.ToState) == point11ValAPolicyLifecycleSuperseded:
+	case model.FromState == point11ValAPolicyLifecycleActive && model.ToState == point11ValAPolicyLifecycleSuperseded:
 		if !point11ValAPolicyRefValid(model.SuccessorPolicyRef) ||
 			!point11ValACompatibilityReviewRefValid(model.CompatibilityReviewRef) ||
 			!point11ValAGovernanceEventRefValid(model.GovernanceEventRef) ||
@@ -685,7 +690,7 @@ func EvaluatePoint11ValALifecycleTransition(model Point11ValAPolicyLifecycleTran
 			Point11ValAPolicyUseStateHistoricalOnly,
 			"policy_use_historical_only_due_to_supersession",
 		)
-	case strings.TrimSpace(model.FromState) == point11ValAPolicyLifecycleActive && strings.TrimSpace(model.ToState) == point11ValAPolicyLifecycleRevoked:
+	case model.FromState == point11ValAPolicyLifecycleActive && model.ToState == point11ValAPolicyLifecycleRevoked:
 		if !point11Val0IdentityValueValid(model.ApproverRef) ||
 			!point11ValAGovernanceEventRefValid(model.GovernanceEventRef) ||
 			!point11Val0IdentityValueValid(model.Reason) ||
@@ -721,21 +726,21 @@ func point11ValALifecycleGraphConsistencyDiagnostics(
 	graph Point11ValAPolicySupersessionRevocationGraph,
 ) []string {
 	diagnostics := []string{}
-	fromState := strings.TrimSpace(lifecycle.FromState)
-	toState := strings.TrimSpace(lifecycle.ToState)
+	fromState := lifecycle.FromState
+	toState := lifecycle.ToState
 	if fromState == point11ValAPolicyLifecycleActive && toState == point11ValAPolicyLifecycleSuperseded {
-		if strings.TrimSpace(graph.SourcePolicyRef) != strings.TrimSpace(lifecycle.PolicyRef) {
+		if graph.SourcePolicyRef != lifecycle.PolicyRef {
 			diagnostics = append(diagnostics, "graph_source_policy_ref_mismatch")
 		}
-		if strings.TrimSpace(graph.SuccessorPolicyRef) != strings.TrimSpace(lifecycle.SuccessorPolicyRef) {
+		if graph.SuccessorPolicyRef != lifecycle.SuccessorPolicyRef {
 			diagnostics = append(diagnostics, "graph_missing_or_mismatched_successor_policy_ref")
 		}
-		if strings.TrimSpace(graph.CompatibilityReviewRef) != strings.TrimSpace(lifecycle.CompatibilityReviewRef) {
+		if graph.CompatibilityReviewRef != lifecycle.CompatibilityReviewRef {
 			diagnostics = append(diagnostics, "graph_missing_or_mismatched_compatibility_review_ref")
 		}
 	}
 	if fromState == point11ValAPolicyLifecycleActive && toState == point11ValAPolicyLifecycleRevoked {
-		if strings.TrimSpace(graph.SourcePolicyRef) != strings.TrimSpace(lifecycle.PolicyRef) {
+		if graph.SourcePolicyRef != lifecycle.PolicyRef {
 			diagnostics = append(diagnostics, "graph_source_policy_ref_mismatch")
 		}
 		if !point11ValARevokerRefValid(graph.RevokedByRef) {
@@ -759,13 +764,13 @@ func EvaluatePoint11ValAGraphState(model Point11ValAPolicySupersessionRevocation
 	}
 	if model.SuccessorPolicyRef != "" {
 		if !point11ValAPolicyRefValid(model.SuccessorPolicyRef) ||
-			strings.TrimSpace(model.SuccessorPolicyRef) == strings.TrimSpace(model.SourcePolicyRef) ||
+			model.SuccessorPolicyRef == model.SourcePolicyRef ||
 			!point11Val0IdentityValueValid(model.CompatibilityVersion) ||
 			!point11ValACompatibilityReviewRefValid(model.CompatibilityReviewRef) ||
 			!point11Val0IdentityValueValid(model.SupersessionReason) {
 			return Point11ValAGraphStateBlocked
 		}
-		switch strings.TrimSpace(model.SuccessorLifecycleState) {
+		switch model.SuccessorLifecycleState {
 		case point11ValAPolicyLifecycleRevoked, point11ValAPolicyLifecycleExpired:
 			return Point11ValAGraphStateBlocked
 		}
@@ -787,29 +792,30 @@ func EvaluatePoint11ValAGraphState(model Point11ValAPolicySupersessionRevocation
 
 func point11ValABlockingReasons(model Point11ValAFoundation) []string {
 	reasons := []string{}
-	if model.DependencyState == Point11ValADependencyStateBlocked {
+	if model.DependencyState != Point11ValADependencyStateActive &&
+		model.DependencyState != Point11ValADependencyStateReviewRequired {
 		reasons = append(reasons, "val0_dependency_blocked")
 	}
-	if model.RegistryState == Point11ValARegistryStateBlocked {
+	if model.RegistryState != Point11ValARegistryStateActive {
 		reasons = append(reasons, "policy_registry_blocked")
 	}
-	if model.SignatureState == Point11ValASignatureStateBlocked {
+	if model.SignatureState != Point11ValASignatureStateActive {
 		reasons = append(reasons, "policy_signature_blocked")
 	}
-	if model.AnchorState == Point11ValAAnchorStateBlocked {
+	if model.AnchorState != Point11ValAAnchorStateActive {
 		reasons = append(reasons, "policy_anchor_blocked")
 	}
-	if model.LifecycleTransitionState == Point11ValALifecycleTransitionStateBlocked {
+	if model.LifecycleTransitionState != Point11ValALifecycleTransitionStateActive {
 		reasons = append(reasons, "policy_lifecycle_transition_blocked")
 	}
 	if model.PolicyUseState == Point11ValAPolicyUseStateHistoricalOnly {
 		reasons = append(reasons, "policy_use_historical_only")
 	}
-	if model.PolicyUseState == Point11ValAPolicyUseStateBlocked ||
-		model.PolicyUseState == Point11ValAPolicyUseStateNotYetActive {
+	if model.PolicyUseState != Point11ValAPolicyUseStateActive &&
+		model.PolicyUseState != Point11ValAPolicyUseStateHistoricalOnly {
 		reasons = append(reasons, "policy_use_not_active")
 	}
-	if model.GraphState == Point11ValAGraphStateBlocked {
+	if model.GraphState != Point11ValAGraphStateActive {
 		reasons = append(reasons, "policy_graph_blocked")
 	}
 	if model.CreatesLegalRegulatoryCertificationClaim {
@@ -837,17 +843,20 @@ func EvaluatePoint11ValAFoundationState(model Point11ValAFoundation) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		model.CreatesLegalRegulatoryCertificationClaim ||
 		model.CreatesPublicationSideEffects ||
-		strings.TrimSpace(model.RegistryState) == Point11ValARegistryStateBlocked ||
-		strings.TrimSpace(model.SignatureState) == Point11ValASignatureStateBlocked ||
-		strings.TrimSpace(model.AnchorState) == Point11ValAAnchorStateBlocked ||
-		strings.TrimSpace(model.LifecycleTransitionState) == Point11ValALifecycleTransitionStateBlocked ||
-		strings.TrimSpace(model.PolicyUseState) != Point11ValAPolicyUseStateActive ||
-		strings.TrimSpace(model.GraphState) == Point11ValAGraphStateBlocked ||
-		strings.TrimSpace(model.DependencyState) == Point11ValADependencyStateBlocked {
+		model.RegistryState != Point11ValARegistryStateActive ||
+		model.SignatureState != Point11ValASignatureStateActive ||
+		model.AnchorState != Point11ValAAnchorStateActive ||
+		model.LifecycleTransitionState != Point11ValALifecycleTransitionStateActive ||
+		model.PolicyUseState != Point11ValAPolicyUseStateActive ||
+		model.GraphState != Point11ValAGraphStateActive ||
+		model.DependencyState == Point11ValADependencyStateBlocked {
 		return Point11ValAStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point11ValADependencyStateReviewRequired {
+	if model.DependencyState == Point11ValADependencyStateReviewRequired {
 		return Point11ValAStateReviewRequired
+	}
+	if model.DependencyState != Point11ValADependencyStateActive {
+		return Point11ValAStateBlocked
 	}
 	return Point11ValAStateActive
 }

@@ -370,9 +370,20 @@ func point11ValCContainsForbiddenText(values ...string) bool {
 	}
 	sourcePhrase := "source of" + " truth"
 	canonicalPhrase := "canonical" + " truth"
+	normalizedValues := make([]string, 0, len(values))
+	allowedValues := make([]bool, 0, len(values))
 	for _, value := range values {
 		normalized := point11Val0NormalizeText(value)
 		if strings.Contains(normalized, sourcePhrase) || strings.Contains(normalized, canonicalPhrase) {
+			return true
+		}
+		if normalized != "" {
+			normalizedValues = append(normalizedValues, normalized)
+			allowedValues = append(allowedValues, false)
+		}
+	}
+	for _, phrase := range []string{sourcePhrase, canonicalPhrase} {
+		if formalNoOverclaimForbiddenPhraseAcrossValues(normalizedValues, allowedValues, phrase) {
 			return true
 		}
 	}
@@ -449,14 +460,13 @@ func point11ValCExceptionRefListValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11ValCExceptionRefValid(trimmed) {
+		if !point11ValCExceptionRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -467,14 +477,13 @@ func point11ValCEmergencyRefListValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11ValCEmergencyRefValid(trimmed) {
+		if !point11ValCEmergencyRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -485,14 +494,13 @@ func point11ValCDecisionRefListValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11ValCDecisionRefValid(trimmed) {
+		if !point11ValCDecisionRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -503,14 +511,13 @@ func point11ValCMonitoringRefListValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if !point11ValCMonitoringRefValid(trimmed) {
+		if !point11ValCMonitoringRefValid(value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
@@ -564,24 +571,23 @@ func point11ValCVisibleSurfacesValid(values []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
 		if !point11Val0ContainsTrimmed([]string{
 			point11ValCRequestedSurfaceInternalReview,
 			point11ValCRequestedSurfaceGovernanceDashboard,
 			point11ValCRequestedSurfaceSupportConsole,
-		}, trimmed) {
+		}, value) {
 			return false
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[value]; exists {
 			return false
 		}
-		seen[trimmed] = struct{}{}
+		seen[value] = struct{}{}
 	}
 	return true
 }
 
 func point11ValCGenericStateActive(value string) bool {
-	return strings.TrimSpace(value) == point11ValCCheckStateActive
+	return value == point11ValCCheckStateActive
 }
 
 func point11ValCPrecedenceRuleAllowed(value string) bool {
@@ -693,38 +699,38 @@ func point11ValCDependencyStateAndReasons(model Point11ValCDependencySnapshot) (
 	if model.OpenCLB2Findings > 0 {
 		reasons = append(reasons, "valb_open_clb2_findings")
 	}
-	if strings.TrimSpace(model.ValBClaimTypeState) != Point11ValBClaimTypeStateActive {
+	if model.ValBClaimTypeState != Point11ValBClaimTypeStateActive {
 		reasons = append(reasons, "valb_claim_type_not_active")
 	}
-	if strings.TrimSpace(model.ValBIssuanceRequestState) != Point11ValBIssuanceRequestStateActive {
+	if model.ValBIssuanceRequestState != Point11ValBIssuanceRequestStateActive {
 		reasons = append(reasons, "valb_issuance_request_not_active")
 	}
-	if strings.TrimSpace(model.ValBIssuedClaimState) != Point11ValBIssuedClaimStateActive {
+	if model.ValBIssuedClaimState != Point11ValBIssuedClaimStateActive {
 		reasons = append(reasons, "valb_issued_claim_not_active")
 	}
-	if strings.TrimSpace(model.ValBRegistryState) != Point11ValBRegistryStateActive {
+	if model.ValBRegistryState != Point11ValBRegistryStateActive {
 		reasons = append(reasons, "valb_registry_not_active")
 	}
-	if strings.TrimSpace(model.ValBVerificationState) != Point11ValBVerificationStateActive {
+	if model.ValBVerificationState != Point11ValBVerificationStateActive {
 		reasons = append(reasons, "valb_verification_not_active")
 	}
-	if strings.TrimSpace(model.ValBCrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateBlocked {
+	if model.ValBCrossDomainIntakeState == Point11ValBCrossDomainIntakeStateBlocked {
 		reasons = append(reasons, "valb_cross_domain_intake_blocked")
 	}
 	if len(reasons) > 0 {
 		return Point11ValCDependencyStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.ValBCurrentState) == Point11ValBStateActive &&
-		strings.TrimSpace(model.ValBDependencyState) == Point11ValBDependencyStateActive &&
-		strings.TrimSpace(model.ValBCrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateActive &&
+	if model.ValBCurrentState == Point11ValBStateActive &&
+		model.ValBDependencyState == Point11ValBDependencyStateActive &&
+		model.ValBCrossDomainIntakeState == Point11ValBCrossDomainIntakeStateActive &&
 		len(model.ReviewPrerequisites) == 0 {
 		return Point11ValCDependencyStateActive, nil
 	}
 	if model.LocalReviewAllowsReviewRequired &&
 		(len(model.ReviewPrerequisites) > 0 ||
-			strings.TrimSpace(model.ValBCurrentState) == Point11ValBStateReviewRequired ||
-			strings.TrimSpace(model.ValBDependencyState) == Point11ValBDependencyStateReviewRequired ||
-			strings.TrimSpace(model.ValBCrossDomainIntakeState) == Point11ValBCrossDomainIntakeStateReviewRequired) {
+			model.ValBCurrentState == Point11ValBStateReviewRequired ||
+			model.ValBDependencyState == Point11ValBDependencyStateReviewRequired ||
+			model.ValBCrossDomainIntakeState == Point11ValBCrossDomainIntakeStateReviewRequired) {
 		return Point11ValCDependencyStateReviewRequired, []string{"valb_dependency_review_required"}
 	}
 	return Point11ValCDependencyStateBlocked, []string{"valb_dependency_not_active"}
@@ -761,7 +767,7 @@ func point11ValCEnforcementInputStateAndReasons(model Point11ValCGovernanceEnfor
 	if !point11ValCArtifactRefValid(model.ArtifactRef) {
 		reasons = append(reasons, "enforcement_input_artifact_ref_invalid")
 	}
-	if !point11ValAPolicyRefValid(model.PolicyBasisRef) || strings.TrimSpace(model.PolicyBasisState) != point11ValBPolicyBasisStateActive {
+	if !point11ValAPolicyRefValid(model.PolicyBasisRef) || model.PolicyBasisState != point11ValBPolicyBasisStateActive {
 		reasons = append(reasons, "enforcement_input_policy_basis_invalid")
 	}
 	if !point11Val0IdentityValueValid(model.PolicyVersion) {
@@ -776,10 +782,10 @@ func point11ValCEnforcementInputStateAndReasons(model Point11ValCGovernanceEnfor
 	if len(model.ClaimVerificationRefs) == 0 || !point11ValBClaimRefListValid(model.ClaimVerificationRefs) {
 		reasons = append(reasons, "enforcement_input_claim_verification_refs_invalid")
 	}
-	if strings.TrimSpace(model.ClaimVerificationState) != Point11ValBVerificationStateActive {
+	if model.ClaimVerificationState != Point11ValBVerificationStateActive {
 		reasons = append(reasons, "enforcement_input_claim_verification_not_active")
 	}
-	if !point11ValBClaimRegistryRefValid(model.RegistryRef) || strings.TrimSpace(model.RegistryState) != Point11ValBRegistryStateActive {
+	if !point11ValBClaimRegistryRefValid(model.RegistryRef) || model.RegistryState != Point11ValBRegistryStateActive {
 		reasons = append(reasons, "enforcement_input_registry_invalid")
 	}
 	if len(model.ExceptionRefs) > 0 && !point11ValCExceptionRefListValid(model.ExceptionRefs) {
@@ -869,28 +875,28 @@ func point11ValCEnforcementResultStateAndReasons(model Point11ValCPolicyDecision
 		point11ValCContainsForbiddenText(model.Diagnostics...) {
 		reasons = append(reasons, "enforcement_result_overclaim_detected")
 	}
-	if strings.TrimSpace(model.PolicyResultState) != point11ValCPolicyStateActive {
+	if model.PolicyResultState != point11ValCPolicyStateActive {
 		reasons = append(reasons, "enforcement_result_policy_invalid")
 	}
-	if strings.TrimSpace(model.ClaimResultState) != point11ValCClaimStateActive {
+	if model.ClaimResultState != point11ValCClaimStateActive {
 		reasons = append(reasons, "enforcement_result_claim_invalid")
 	}
-	if strings.TrimSpace(model.ABACDecisionState) != Point11ValCABACDecisionStateActive {
+	if model.ABACDecisionState != Point11ValCABACDecisionStateActive {
 		reasons = append(reasons, "enforcement_result_abac_blocked")
 	}
-	if strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateBlocked {
+	if model.ExceptionDecisionState == Point11ValCExceptionDecisionStateBlocked {
 		reasons = append(reasons, "enforcement_result_exception_invalid")
 	}
-	if strings.TrimSpace(model.EmergencyDecisionState) == Point11ValCExceptionDecisionStateBlocked {
+	if model.EmergencyDecisionState == Point11ValCExceptionDecisionStateBlocked {
 		reasons = append(reasons, "enforcement_result_emergency_invalid")
 	}
-	if strings.TrimSpace(model.EvidenceState) != point11ValCEvidenceStateActive {
+	if model.EvidenceState != point11ValCEvidenceStateActive {
 		reasons = append(reasons, "enforcement_result_evidence_invalid")
 	}
-	if strings.TrimSpace(model.ScopeState) != point11ValCScopeStateActive {
+	if model.ScopeState != point11ValCScopeStateActive {
 		reasons = append(reasons, "enforcement_result_scope_invalid")
 	}
-	if strings.TrimSpace(model.AuthorityState) != point11ValCAuthorityStateActive {
+	if model.AuthorityState != point11ValCAuthorityStateActive {
 		reasons = append(reasons, "enforcement_result_authority_invalid")
 	}
 	if point11ValCRequestedActionImpliesRealSideEffect(model.AllowedAction) {
@@ -900,21 +906,21 @@ func point11ValCEnforcementResultStateAndReasons(model Point11ValCPolicyDecision
 		reasons = append(reasons, "enforcement_result_allowed_action_invalid")
 	}
 	if len(reasons) > 0 {
-		if strings.TrimSpace(model.BlockedActionReason) == "" {
+		if model.BlockedActionReason == "" || model.BlockedActionReason != strings.TrimSpace(model.BlockedActionReason) || strings.ContainsAny(model.BlockedActionReason, "\t\r\n") {
 			reasons = append(reasons, "enforcement_result_blocked_action_reason_missing")
 		}
 		return Point11ValCEnforcementResultStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateReviewRequired ||
-		strings.TrimSpace(model.EmergencyDecisionState) == Point11ValCExceptionDecisionStateReviewRequired ||
-		strings.TrimSpace(model.EnforcementState) == Point11ValCEnforcementResultStateReviewRequired {
-		if strings.TrimSpace(model.ReviewRequiredReason) == "" {
+	if model.ExceptionDecisionState == Point11ValCExceptionDecisionStateReviewRequired ||
+		model.EmergencyDecisionState == Point11ValCExceptionDecisionStateReviewRequired ||
+		model.EnforcementState == Point11ValCEnforcementResultStateReviewRequired {
+		if model.ReviewRequiredReason == "" || model.ReviewRequiredReason != strings.TrimSpace(model.ReviewRequiredReason) || strings.ContainsAny(model.ReviewRequiredReason, "\t\r\n") {
 			return Point11ValCEnforcementResultStateBlocked, []string{"enforcement_result_review_required_reason_missing"}
 		}
 		reviewReasons := append([]string{"enforcement_result_review_required"}, model.Diagnostics...)
 		return Point11ValCEnforcementResultStateReviewRequired, reviewReasons
 	}
-	if strings.TrimSpace(model.EnforcementOutcome) != point11ValCRequestedOutcomeAllow {
+	if model.EnforcementOutcome != point11ValCRequestedOutcomeAllow {
 		return Point11ValCEnforcementResultStateBlocked, []string{"enforcement_result_allow_outcome_missing"}
 	}
 	return Point11ValCEnforcementResultStateActive, append([]string{}, model.Diagnostics...)
@@ -980,15 +986,15 @@ func point11ValCABACDecisionStateAndReasons(model Point11ValCABACEnforcementDeci
 	if !point11ValBAuditRefValid(model.AuditID) {
 		reasons = append(reasons, "abac_audit_id_invalid")
 	}
-	if strings.TrimSpace(model.PolicyState) != point11ValCPolicyStateActive ||
-		strings.TrimSpace(model.ClaimState) != point11ValCClaimStateActive ||
-		strings.TrimSpace(model.EvidenceState) != point11ValCEvidenceStateActive {
+	if model.PolicyState != point11ValCPolicyStateActive ||
+		model.ClaimState != point11ValCClaimStateActive ||
+		model.EvidenceState != point11ValCEvidenceStateActive {
 		reasons = append(reasons, "abac_cannot_override_invalid_policy_claim_or_evidence")
 	}
 	if len(model.DeniedAttributes) > 0 {
 		reasons = append(reasons, "abac_deny_overrides_allow")
 		if len(model.ExceptionRefs) > 0 &&
-			(strings.TrimSpace(model.ExceptionState) != Point11ValCExceptionDecisionStateActive ||
+			(model.ExceptionState != Point11ValCExceptionDecisionStateActive ||
 				!model.ExceptionScoped || model.ExceptionExpired || !model.ExceptionRevocable || !model.ExceptionGovernanceApproved) {
 			reasons = append(reasons, "abac_exception_override_not_eligible")
 		}
@@ -1036,7 +1042,7 @@ func point11ValCExceptionDecisionStateAndReasons(model Point11ValCExceptionEmerg
 	if !point11ValBIssuerRefValid(model.IssuerRef) || !point11ValCActorRefValid(model.ApproverRef) {
 		reasons = append(reasons, "exception_issuer_or_approver_invalid")
 	}
-	if strings.TrimSpace(model.IssuerRef) == strings.TrimSpace(model.ApproverRef) {
+	if model.IssuerRef == model.ApproverRef {
 		reasons = append(reasons, "exception_issuer_equals_approver")
 	}
 	if !point11ValCAuthorityBasisRefValid(model.AuthorityBasisRef) {
@@ -1048,7 +1054,7 @@ func point11ValCExceptionDecisionStateAndReasons(model Point11ValCExceptionEmerg
 	if !point11Val0ValidTimestamp(model.IssuedAt) || !point11Val0ValidTimestamp(model.ExpiresAt) {
 		reasons = append(reasons, "exception_timestamps_invalid")
 	} else {
-		expiresAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.ExpiresAt))
+		expiresAt, _ := time.Parse(time.RFC3339, model.ExpiresAt)
 		if expiresAt.Before(time.Now().UTC()) {
 			reasons = append(reasons, "exception_expired")
 		}
@@ -1086,7 +1092,7 @@ func point11ValCExceptionDecisionStateAndReasons(model Point11ValCExceptionEmerg
 	if len(reasons) > 0 {
 		return Point11ValCExceptionDecisionStateBlocked, reasons
 	}
-	switch strings.TrimSpace(model.ExceptionType) {
+	switch model.ExceptionType {
 	case point11ValCExceptionTypeTemporaryOverrideCandidate, point11ValCExceptionTypeEmergencyOverrideCandidate:
 		return Point11ValCExceptionDecisionStateReviewRequired, []string{"exception_temporary_override_candidate"}
 	default:
@@ -1123,10 +1129,10 @@ func point11ValCPrecedenceStateAndReasons(model Point11ValCOverridePrecedence) (
 	if point11ValCContainsForbiddenText(strings.Join(model.Diagnostics, " ")) {
 		reasons = append(reasons, "precedence_overclaim_detected")
 	}
-	if strings.TrimSpace(model.LocalPolicyResult) == point11ValCLocalPolicyResultInvalid {
+	if model.LocalPolicyResult == point11ValCLocalPolicyResultInvalid {
 		reasons = append(reasons, "precedence_invalid_local_policy")
 	}
-	if strings.TrimSpace(model.ClaimResultState) != point11ValCClaimStateActive {
+	if model.ClaimResultState != point11ValCClaimStateActive {
 		reasons = append(reasons, "precedence_invalid_claim")
 	}
 	if model.ExceptionExpired {
@@ -1138,38 +1144,38 @@ func point11ValCPrecedenceStateAndReasons(model Point11ValCOverridePrecedence) (
 	if model.RemoteClaimOverridesLocal {
 		reasons = append(reasons, "precedence_remote_claim_overrides_local_policy")
 	}
-	if strings.TrimSpace(model.ABACResult) == point11ValCABACResultDeny {
-		if strings.TrimSpace(model.LocalPolicyResult) == point11ValCLocalPolicyResultDeny {
+	if model.ABACResult == point11ValCABACResultDeny {
+		if model.LocalPolicyResult == point11ValCLocalPolicyResultDeny {
 			if point11ValCExceptionOverrideEligible(model) &&
-				(strings.TrimSpace(model.ExceptionResult) == Point11ValCExceptionDecisionStateReviewRequired ||
-					strings.TrimSpace(model.ExceptionResult) == Point11ValCExceptionDecisionStateActive) {
+				(model.ExceptionResult == Point11ValCExceptionDecisionStateReviewRequired ||
+					model.ExceptionResult == Point11ValCExceptionDecisionStateActive) {
 				return Point11ValCPrecedenceStateReviewRequired, []string{"precedence_exception_override_candidate"}
 			}
 			if point11ValCEmergencyOverrideEligible(model) &&
-				strings.TrimSpace(model.EmergencyResult) == Point11ValCExceptionDecisionStateReviewRequired {
+				model.EmergencyResult == Point11ValCExceptionDecisionStateReviewRequired {
 				return Point11ValCPrecedenceStateReviewRequired, []string{"precedence_emergency_override_candidate"}
 			}
 		}
 		reasons = append(reasons, "precedence_abac_deny_overrides_allow")
 	}
-	if strings.TrimSpace(model.LocalPolicyResult) == point11ValCLocalPolicyResultDeny && !point11ValCExceptionOverrideEligible(model) {
+	if model.LocalPolicyResult == point11ValCLocalPolicyResultDeny && !point11ValCExceptionOverrideEligible(model) {
 		reasons = append(reasons, "precedence_local_policy_deny")
 	}
 	if len(reasons) > 0 {
 		return Point11ValCPrecedenceStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.LocalPolicyResult) == point11ValCLocalPolicyResultReview ||
-		strings.TrimSpace(model.RemoteClaimResult) == point11ValCRemoteClaimResultReview ||
-		strings.TrimSpace(model.ExceptionResult) == Point11ValCExceptionDecisionStateReviewRequired ||
-		strings.TrimSpace(model.EmergencyResult) == Point11ValCExceptionDecisionStateReviewRequired {
+	if model.LocalPolicyResult == point11ValCLocalPolicyResultReview ||
+		model.RemoteClaimResult == point11ValCRemoteClaimResultReview ||
+		model.ExceptionResult == Point11ValCExceptionDecisionStateReviewRequired ||
+		model.EmergencyResult == Point11ValCExceptionDecisionStateReviewRequired {
 		if model.GovernanceEventResolved {
 			return Point11ValCPrecedenceStateActive, nil
 		}
 		return Point11ValCPrecedenceStateReviewRequired, []string{"precedence_review_required"}
 	}
-	if strings.TrimSpace(model.LocalPolicyResult) == point11ValCLocalPolicyResultActive &&
-		strings.TrimSpace(model.ABACResult) == point11ValCABACResultAllow &&
-		strings.TrimSpace(model.RemoteClaimResult) != point11ValCRemoteClaimResultBlocked {
+	if model.LocalPolicyResult == point11ValCLocalPolicyResultActive &&
+		model.ABACResult == point11ValCABACResultAllow &&
+		model.RemoteClaimResult != point11ValCRemoteClaimResultBlocked {
 		return Point11ValCPrecedenceStateActive, nil
 	}
 	return Point11ValCPrecedenceStateBlocked, []string{"precedence_not_active"}
@@ -1194,7 +1200,7 @@ func point11ValCMonitoringStateAndReasons(model Point11ValCMonitoringLinkedEmerg
 	if !point11ValCMonitoringRefValid(model.MonitoringRequirementRef) {
 		reasons = append(reasons, "monitoring_requirement_ref_invalid")
 	}
-	if strings.TrimSpace(model.MonitoringState) != point11ValCMonitoringLinkActive {
+	if model.MonitoringState != point11ValCMonitoringLinkActive {
 		reasons = append(reasons, "monitoring_link_not_active")
 	}
 	if !point11ValCSignalRefsValid(model.SignalRefs) {
@@ -1206,7 +1212,7 @@ func point11ValCMonitoringStateAndReasons(model Point11ValCMonitoringLinkedEmerg
 	if !point11Val0ValidTimestamp(model.ReviewDeadline) {
 		reasons = append(reasons, "monitoring_review_deadline_invalid")
 	} else {
-		reviewDeadline, _ := time.Parse(time.RFC3339, strings.TrimSpace(model.ReviewDeadline))
+		reviewDeadline, _ := time.Parse(time.RFC3339, model.ReviewDeadline)
 		if reviewDeadline.Before(time.Now().UTC()) {
 			reasons = append(reasons, "monitoring_review_deadline_expired")
 		}
@@ -1235,7 +1241,7 @@ func point11ValCMonitoringStateAndReasons(model Point11ValCMonitoringLinkedEmerg
 	if len(reasons) > 0 {
 		return Point11ValCMonitoringStateBlocked, reasons
 	}
-	if strings.TrimSpace(model.SignalFreshness) == point11ValCMonitoringSignalStale {
+	if model.SignalFreshness == point11ValCMonitoringSignalStale {
 		return Point11ValCMonitoringStateReviewRequired, []string{"monitoring_signal_stale_review_required"}
 	}
 	return Point11ValCMonitoringStateActive, nil
@@ -1300,28 +1306,33 @@ func EvaluatePoint11ValCDashboardState(model Point11ValCGovernanceDashboardReadM
 
 func point11ValCBlockingReasons(model Point11ValCFoundation) []string {
 	reasons := []string{}
-	if model.DependencyState == Point11ValCDependencyStateBlocked {
+	if model.DependencyState != Point11ValCDependencyStateActive &&
+		model.DependencyState != Point11ValCDependencyStateReviewRequired {
 		reasons = append(reasons, "valb_dependency_blocked")
 	}
-	if model.EnforcementInputState == Point11ValCEnforcementInputStateBlocked {
+	if model.EnforcementInputState != Point11ValCEnforcementInputStateActive {
 		reasons = append(reasons, "enforcement_input_blocked")
 	}
-	if model.EnforcementResultState == Point11ValCEnforcementResultStateBlocked {
+	if model.EnforcementResultState != Point11ValCEnforcementResultStateActive &&
+		model.EnforcementResultState != Point11ValCEnforcementResultStateReviewRequired {
 		reasons = append(reasons, "enforcement_result_blocked")
 	}
-	if model.ABACDecisionState == Point11ValCABACDecisionStateBlocked {
+	if model.ABACDecisionState != Point11ValCABACDecisionStateActive {
 		reasons = append(reasons, "abac_decision_blocked")
 	}
-	if model.ExceptionDecisionState == Point11ValCExceptionDecisionStateBlocked {
+	if model.ExceptionDecisionState != Point11ValCExceptionDecisionStateActive &&
+		model.ExceptionDecisionState != Point11ValCExceptionDecisionStateReviewRequired {
 		reasons = append(reasons, "exception_decision_blocked")
 	}
-	if model.PrecedenceState == Point11ValCPrecedenceStateBlocked {
+	if model.PrecedenceState != Point11ValCPrecedenceStateActive &&
+		model.PrecedenceState != Point11ValCPrecedenceStateReviewRequired {
 		reasons = append(reasons, "precedence_blocked")
 	}
-	if model.MonitoringState == Point11ValCMonitoringStateBlocked {
+	if model.MonitoringState != Point11ValCMonitoringStateActive &&
+		model.MonitoringState != Point11ValCMonitoringStateReviewRequired {
 		reasons = append(reasons, "monitoring_blocked")
 	}
-	if model.DashboardState == Point11ValCDashboardStateBlocked {
+	if model.DashboardState != Point11ValCDashboardStateActive {
 		reasons = append(reasons, "dashboard_blocked")
 	}
 	if model.CreatesAuthorityClaims {
@@ -1369,24 +1380,34 @@ func EvaluatePoint11ValCFoundationState(model Point11ValCFoundation) string {
 		model.CreatesAuthorityClaims ||
 		model.CreatesPublicationSideEffects ||
 		model.CreatesRealEnforcementSideEffects ||
-		strings.TrimSpace(model.DependencyState) == Point11ValCDependencyStateBlocked ||
-		strings.TrimSpace(model.EnforcementInputState) == Point11ValCEnforcementInputStateBlocked ||
-		strings.TrimSpace(model.EnforcementResultState) == Point11ValCEnforcementResultStateBlocked ||
-		strings.TrimSpace(model.ABACDecisionState) == Point11ValCABACDecisionStateBlocked ||
-		strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateBlocked ||
-		strings.TrimSpace(model.PrecedenceState) == Point11ValCPrecedenceStateBlocked ||
-		strings.TrimSpace(model.MonitoringState) == Point11ValCMonitoringStateBlocked ||
-		strings.TrimSpace(model.DashboardState) == Point11ValCDashboardStateBlocked {
+		model.DependencyState == Point11ValCDependencyStateBlocked ||
+		model.EnforcementInputState == Point11ValCEnforcementInputStateBlocked ||
+		model.EnforcementResultState == Point11ValCEnforcementResultStateBlocked ||
+		model.ABACDecisionState == Point11ValCABACDecisionStateBlocked ||
+		model.ExceptionDecisionState == Point11ValCExceptionDecisionStateBlocked ||
+		model.PrecedenceState == Point11ValCPrecedenceStateBlocked ||
+		model.MonitoringState == Point11ValCMonitoringStateBlocked ||
+		model.DashboardState == Point11ValCDashboardStateBlocked {
 		return Point11ValCStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point11ValCDependencyStateReviewRequired ||
-		strings.TrimSpace(model.ExceptionDecisionState) == Point11ValCExceptionDecisionStateReviewRequired ||
-		strings.TrimSpace(model.EnforcementResultState) == Point11ValCEnforcementResultStateReviewRequired ||
-		strings.TrimSpace(model.PrecedenceState) == Point11ValCPrecedenceStateReviewRequired ||
-		strings.TrimSpace(model.MonitoringState) == Point11ValCMonitoringStateReviewRequired {
+	if model.DependencyState == Point11ValCDependencyStateReviewRequired ||
+		model.ExceptionDecisionState == Point11ValCExceptionDecisionStateReviewRequired ||
+		model.EnforcementResultState == Point11ValCEnforcementResultStateReviewRequired ||
+		model.PrecedenceState == Point11ValCPrecedenceStateReviewRequired ||
+		model.MonitoringState == Point11ValCMonitoringStateReviewRequired {
 		return Point11ValCStateReviewRequired
 	}
-	return Point11ValCStateActive
+	if model.DependencyState == Point11ValCDependencyStateActive &&
+		model.EnforcementInputState == Point11ValCEnforcementInputStateActive &&
+		model.EnforcementResultState == Point11ValCEnforcementResultStateActive &&
+		model.ABACDecisionState == Point11ValCABACDecisionStateActive &&
+		model.ExceptionDecisionState == Point11ValCExceptionDecisionStateActive &&
+		model.PrecedenceState == Point11ValCPrecedenceStateActive &&
+		model.MonitoringState == Point11ValCMonitoringStateActive &&
+		model.DashboardState == Point11ValCDashboardStateActive {
+		return Point11ValCStateActive
+	}
+	return Point11ValCStateBlocked
 }
 
 func Point11ValCFoundationModel() Point11ValCFoundation {
