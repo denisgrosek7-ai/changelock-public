@@ -29,8 +29,19 @@ func clonePoint12ValEFoundation(payload []byte) Point12ValEFoundation {
 	return clone
 }
 
+func activePoint12ValDFoundationFromValC(valC Point12ValCFoundation) Point12ValDFoundation {
+	model := Point12ValDFoundationModel()
+	model.Dependency = SnapshotPoint12ValDDependencyFromComputedValC(valC, point12ValDDependencyReviewContextModel())
+	return ComputePoint12ValDFoundation(model)
+}
+
 func uncachedActivePoint12ValEFoundation() Point12ValEFoundation {
-	return ComputePoint12ValEFoundation(Point12ValEFoundationModel())
+	val0 := activePoint12Val0Foundation()
+	valA := activePoint12ValAFoundationFromVal0(val0)
+	valB := activePoint12ValBFoundationFromValA(valA)
+	valC := activePoint12ValCFoundationFromValB(valB)
+	valD := activePoint12ValDFoundationFromValC(valC)
+	return ComputePoint12ValEFoundation(point12ValEFoundationModelFromUpstream(val0, valA, valB, valC, valD))
 }
 
 func rawPoint12ValEFoundationModel() Point12ValEFoundation {
@@ -77,13 +88,23 @@ func assertPoint12ValEReason(t *testing.T, reasons []string, want string) {
 }
 
 func TestPoint12ValEFoundationFixtureIsolation(t *testing.T) {
-	t.Run("raw production path still computes", func(t *testing.T) {
+	t.Run("connected active path still computes", func(t *testing.T) {
 		model := uncachedActivePoint12ValEFoundation()
 		if model.CurrentState != Point12ValEStatePassConfirmed {
-			t.Fatalf("expected raw production path to compute pass-confirmed baseline, got %#v", model)
+			t.Fatalf("expected connected active path to compute pass-confirmed baseline, got %#v", model)
 		}
 		if !model.Point12PassAllowed || model.Point12PassToken != point12ValEPoint12PassToken {
-			t.Fatalf("expected raw production path to emit point_12_pass on final happy path, got %#v", model)
+			t.Fatalf("expected connected active path to emit point_12_pass on final happy path, got %#v", model)
+		}
+	})
+
+	t.Run("direct foundation model remains pass confirmed", func(t *testing.T) {
+		model := Point12ValEFoundationModel()
+		if model.CurrentState != Point12ValEStatePassConfirmed {
+			t.Fatalf("expected direct foundation fixture to stay pass confirmed, got %#v", model)
+		}
+		if !model.Point12PassAllowed || model.Point12PassToken != point12ValEPoint12PassToken {
+			t.Fatalf("expected direct foundation fixture to keep final point_12_pass token, got %#v", model)
 		}
 	})
 
@@ -159,6 +180,100 @@ func TestPoint12ValEDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("computed upstream point pass emission propagates into final dependency block", func(t *testing.T) {
+		val0 := activePoint12Val0Foundation()
+		valA := activePoint12ValAFoundationFromVal0(val0)
+		valB := activePoint12ValBFoundationFromValA(valA)
+		valB.ReplayResult.PointPassEmitted = true
+		valC := activePoint12ValCFoundationFromValB(valB)
+		valD := activePoint12ValDFoundationFromValC(valC)
+
+		snapshot := SnapshotPoint12ValEDependencyFromComputed(val0, valA, valB, valC, valD, point12ValEDependencyReviewContextModel())
+		if !snapshot.ValDPointPassEmitted {
+			t.Fatalf("expected computed upstream point pass emission to propagate into final snapshot, got %#v", snapshot)
+		}
+		state, reasons := point12ValEDependencyStateAndReasons(snapshot)
+		if state != Point12ValEStateBlocked {
+			t.Fatalf("expected propagated point pass emission to block final dependency, state=%s reasons=%v snapshot=%#v", state, reasons, snapshot)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_premature_point12_pass")
+		if !point12Val0StringSliceContains(reasons, "dependency_identity_or_preflight_invalid") {
+			t.Fatalf("expected exact final preflight reason for propagated point pass emission, got %v", reasons)
+		}
+	})
+
+	t.Run("unsafe nested ValC ValA profile context blocks dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ValAManifest.ProfileContext.CurrentProfileHash = ""
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC dependency profile mutation to block, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_profile_context_binding_invalid")
+	})
+
+	t.Run("stale nested ValC dependency pass emission blocks dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ValBPointPassEmitted = true
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected stale nested ValC dependency pass emission to block, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_premature_point12_pass")
+	})
+
+	t.Run("stale embedded ValC ValB replay result pass emission blocks dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ValBReplayResult.PointPassEmitted = true
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected stale embedded ValC ValB replay result pass emission to block, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_premature_point12_pass")
+	})
+
+	t.Run("nested ValC review-required dependency blocks final dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ValBReplayTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+		model.ValC.Dependency.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+		model.ValC.Dependency.ValBReplayResult.UnsupportedVersion = true
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC review-required dependency to block final dependency, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_review_required_or_non_same_decision")
+	})
+
+	t.Run("nested ValC ValB current review-required blocks final dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ValBCurrentState = Point12ValBStateReviewRequired
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC ValB review-required current state to block final dependency, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_review_required_or_non_same_decision")
+	})
+
+	t.Run("nested ValC ValB dependency review-required blocks final dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ValBDependencyState = Point12ValBDependencyStateReviewRequired
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC ValB dependency review-required state to block final dependency, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_review_required_or_non_same_decision")
+	})
+
+	t.Run("nested ValC review prerequisites block final dependency with exact reason", func(t *testing.T) {
+		model := activePoint12ValEFoundation().Dependency
+		model.ValC.Dependency.ReviewPrerequisites = []string{"manual_review_required"}
+		got, reasons := point12ValEDependencyStateAndReasons(model)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC review prerequisite to block final dependency, got state=%s reasons=%v", got, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_valc_review_required_or_non_same_decision")
+	})
 }
 
 func TestPoint12ValEFinalReplayInvariantState(t *testing.T) {
@@ -321,6 +436,14 @@ func TestPoint12ValEFinalReplayInvariantState(t *testing.T) {
 			dependency.ValB.ReplayResult.EvidenceHashCheckResult = point12ValBCheckResultMismatch
 			model.EvidenceHashCheckResult = point12ValBCheckResultActive
 		}, want: Point12ValEStateBlocked},
+		{name: "self consistent blocked manifest check result blocks", mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot) {
+			dependency.ValB.ReplayResult.ManifestIntegrityCheckResult = point12ValBCheckResultBlocked
+			model.ManifestIntegrityCheckResult = point12ValBCheckResultBlocked
+		}, want: Point12ValEStateBlocked},
+		{name: "self consistent blocked compatibility check result blocks", mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot) {
+			dependency.ValB.ReplayResult.CompatibilityCheckResult = point12ValBCheckResultBlocked
+			model.CompatibilityCheckResult = point12ValBCheckResultBlocked
+		}, want: Point12ValEStateBlocked},
 		{name: "missing mismatch expected actual blocks", mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot) {
 			dependency.ValB.ReplayResult.Mismatches = []Point12ValBReplayMismatch{{
 				MismatchID:      "mismatch_point12_vale_001",
@@ -401,6 +524,78 @@ func TestPoint12ValEFinalReplayInvariantState(t *testing.T) {
 		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_semantics_mismatch:blocked_replay")
 		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_blocked_replay")
 	})
+
+	t.Run("self consistent blocked check result fails closed with exact reason", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.Dependency.ValB.ReplayResult.ManifestIntegrityCheckResult = point12ValBCheckResultBlocked
+		foundation.ReplayInvariants.ManifestIntegrityCheckResult = point12ValBCheckResultBlocked
+		got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked replay invariant for self-consistent blocked check result, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_semantics_mismatch:blocked_replay")
+	})
+
+	t.Run("self consistent blocked compatibility check fails closed with exact reason", func(t *testing.T) {
+		foundation := activePoint12ValEFoundation()
+		foundation.Dependency.ValB.ReplayResult.CompatibilityCheckResult = point12ValBCheckResultBlocked
+		foundation.ReplayInvariants.CompatibilityCheckResult = point12ValBCheckResultBlocked
+		got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+		if got != Point12ValEStateBlocked {
+			t.Fatalf("expected blocked replay invariant for self-consistent blocked compatibility check, got %s", got)
+		}
+		assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_semantics_mismatch:blocked_replay")
+	})
+
+	for _, tc := range []struct {
+		name   string
+		value  string
+		mutate func(*Point12ValEFinalReplayInvariants, *Point12ValEDependencySnapshot, string)
+	}{
+		{
+			name:  "self consistent unsupported signature metadata check fails closed",
+			value: point12ValBCheckResultUnsupported,
+			mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot, value string) {
+				dependency.ValB.ReplayResult.SignatureMetadataCheckResult = value
+				model.SignatureMetadataCheckResult = value
+			},
+		},
+		{
+			name:  "self consistent missing signature metadata check fails closed",
+			value: point12ValBCheckResultMissing,
+			mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot, value string) {
+				dependency.ValB.ReplayResult.SignatureMetadataCheckResult = value
+				model.SignatureMetadataCheckResult = value
+			},
+		},
+		{
+			name:  "self consistent missing compatibility check fails closed",
+			value: point12ValBCheckResultMissing,
+			mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot, value string) {
+				dependency.ValB.ReplayResult.CompatibilityCheckResult = value
+				model.CompatibilityCheckResult = value
+			},
+		},
+		{
+			name:  "self consistent tampered compatibility check fails closed",
+			value: point12ValBCheckResultTampered,
+			mutate: func(model *Point12ValEFinalReplayInvariants, dependency *Point12ValEDependencySnapshot, value string) {
+				dependency.ValB.ReplayResult.CompatibilityCheckResult = value
+				model.CompatibilityCheckResult = value
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			foundation := activePoint12ValEFoundation()
+			tc.mutate(&foundation.ReplayInvariants, &foundation.Dependency, tc.value)
+			got, reasons := point12ValEFinalReplayInvariantStateAndReasons(foundation.ReplayInvariants, foundation.Dependency)
+			if got != Point12ValEStateBlocked {
+				t.Fatalf("expected self-consistent non-active check result to block, got state=%s reasons=%v", got, reasons)
+			}
+			assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_semantics_mismatch:blocked_replay")
+			assertPoint12ValEReason(t, reasons, "replay_invariant_dependency_blocked_replay")
+		})
+	}
 
 	t.Run("same decision dependency replay with matching semantics remains active", func(t *testing.T) {
 		foundation := activePoint12ValEFoundation()
@@ -1448,7 +1643,7 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 	})
 
 	t.Run("active subgates are not final pass without pass confirmed manifest", func(t *testing.T) {
-		model := rawPoint12ValEFoundationModel()
+		model := activePoint12ValEFoundation()
 		model.PassClosureManifest.ReviewerResult = point12ValEReviewerResultPass
 		model.PassClosureManifest.Point12PassAllowed = false
 		model.PassClosureManifest.Point12PassToken = ""
@@ -1512,6 +1707,22 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 		{name: "dependency replay point pass emission removes point12 pass", mutate: func(model *Point12ValEFoundation) {
 			model.Dependency.ValB.ReplayResult.PointPassEmitted = true
 		}},
+		{name: "self consistent blocked replay check removes point12 pass", mutate: func(model *Point12ValEFoundation) {
+			model.Dependency.ValB.ReplayResult.ManifestIntegrityCheckResult = point12ValBCheckResultBlocked
+			model.ReplayInvariants.ManifestIntegrityCheckResult = point12ValBCheckResultBlocked
+		}},
+		{name: "self consistent blocked compatibility check removes point12 pass", mutate: func(model *Point12ValEFoundation) {
+			model.Dependency.ValB.ReplayResult.CompatibilityCheckResult = point12ValBCheckResultBlocked
+			model.ReplayInvariants.CompatibilityCheckResult = point12ValBCheckResultBlocked
+		}},
+		{name: "self consistent unsupported signature metadata check removes point12 pass", mutate: func(model *Point12ValEFoundation) {
+			model.Dependency.ValB.ReplayResult.SignatureMetadataCheckResult = point12ValBCheckResultUnsupported
+			model.ReplayInvariants.SignatureMetadataCheckResult = point12ValBCheckResultUnsupported
+		}},
+		{name: "self consistent tampered compatibility check removes point12 pass", mutate: func(model *Point12ValEFoundation) {
+			model.Dependency.ValB.ReplayResult.CompatibilityCheckResult = point12ValBCheckResultTampered
+			model.ReplayInvariants.CompatibilityCheckResult = point12ValBCheckResultTampered
+		}},
 		{name: "evidence quality failure removes point12 pass", mutate: func(model *Point12ValEFoundation) {
 			model.EvidenceQualityMap.MissingRefs = []string{model.EvidenceQualityMap.EvidenceRefs[0]}
 		}},
@@ -1562,6 +1773,406 @@ func TestPoint12ValEAggregateState(t *testing.T) {
 	t.Run("padded binding mutation review id blocks exact aggregate state", func(t *testing.T) {
 		model := rawPoint12ValEFoundationModel()
 		model.BindingMutationClosure.ReviewID = " " + model.BindingMutationClosure.ReviewID + " "
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("unsafe inherited Val0 profile context blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValA.Dependency.Val0Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Dependency.ValA.Dependency.Val0Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusUnsupported
+		model.Dependency.ValA.Dependency.Val0Manifest.ProfileContext.ProfileMismatchReason = "profile_unsupported"
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected unsafe inherited profile context to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_vala_dependency_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("unsafe Val0 replay assessment profile context blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.Val0.ReplayAssessment.ProfileContext.CurrentProfileHash = ""
+		model.Dependency.Val0.ReplayAssessment.ProfileContext.ProfileMatchOriginal = false
+		model.Dependency.Val0.ReplayAssessment.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMissingCurrent
+		model.Dependency.Val0.ReplayAssessment.ProfileContext.ProfileMismatchReason = "profile_current_hash_missing"
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected unsafe Val0 replay profile context to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_val0_profile_context_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("nested ValB ValA profile context blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValB.Dependency.ValAManifest.ProfileContext.CurrentProfileHash = ""
+		model.Dependency.ValB.Dependency.ValAManifest.ProfileContext.ProfileMatchOriginal = false
+		model.Dependency.ValB.Dependency.ValAManifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMissingCurrent
+		model.Dependency.ValB.Dependency.ValAManifest.ProfileContext.ProfileMismatchReason = "profile_current_hash_missing"
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected unsafe nested ValB profile context to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valb_profile_context_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("nested ValC ValA profile context blocks final dependency and binding gates", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.Dependency.ValAManifest.ProfileContext.ProfileApprovalRef = "profile_approval_point_12_pass"
+
+		dependencyState, dependencyReasons := point12ValEDependencyStateAndReasons(model.Dependency)
+		if dependencyState != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC dependency profile mutation to block dependency, got state=%s reasons=%v", dependencyState, dependencyReasons)
+		}
+		assertPoint12ValEReason(t, dependencyReasons, "dependency_valc_profile_context_binding_invalid")
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC dependency profile mutation to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_profile_context_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.DependencyState, "dependency:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale nested ValC dependency pass emission blocks final dependency and binding gates", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.Dependency.ValBPointPassEmitted = true
+
+		dependencyState, dependencyReasons := point12ValEDependencyStateAndReasons(model.Dependency)
+		if dependencyState != Point12ValEStateBlocked {
+			t.Fatalf("expected stale nested ValC dependency pass emission to block dependency, got state=%s reasons=%v", dependencyState, dependencyReasons)
+		}
+		assertPoint12ValEReason(t, dependencyReasons, "dependency_valc_premature_point12_pass")
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected stale nested ValC dependency pass emission to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_premature_point12_pass")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.DependencyState, "dependency:"+Point12ValEStateBlocked)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale embedded ValC ValB replay result pass emission blocks final dependency and binding gates", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.Dependency.ValBReplayResult.PointPassEmitted = true
+
+		dependencyState, dependencyReasons := point12ValEDependencyStateAndReasons(model.Dependency)
+		if dependencyState != Point12ValEStateBlocked {
+			t.Fatalf("expected stale embedded ValC ValB replay result pass emission to block dependency, got state=%s reasons=%v", dependencyState, dependencyReasons)
+		}
+		assertPoint12ValEReason(t, dependencyReasons, "dependency_valc_premature_point12_pass")
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected stale embedded ValC ValB replay result pass emission to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_premature_point12_pass")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.DependencyState, "dependency:"+Point12ValEStateBlocked)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("nested ValC review-required dependency blocks final dependency and binding gates", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.Dependency.ValBReplayTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+		model.Dependency.ValC.Dependency.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+		model.Dependency.ValC.Dependency.ValBReplayResult.UnsupportedVersion = true
+
+		dependencyState, dependencyReasons := point12ValEDependencyStateAndReasons(model.Dependency)
+		if dependencyState != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC review-required dependency to block dependency, got state=%s reasons=%v", dependencyState, dependencyReasons)
+		}
+		assertPoint12ValEReason(t, dependencyReasons, "dependency_valc_review_required_or_non_same_decision")
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected nested ValC review-required dependency to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_review_required_or_non_same_decision")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.DependencyState, "dependency:"+Point12ValEStateBlocked)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("valc export policy hash drift blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.ExportBundle.PolicyHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+
+		redactionManifestState := EvaluatePoint12ValCRedactionManifestState(model.Dependency.ValC.RedactionManifest, model.Dependency.ValC.Dependency, model.Dependency.ValC.ExportBundle)
+		redactionImpactState := EvaluatePoint12ValCRedactionImpactState(model.Dependency.ValC.RedactionImpactVerdict, model.Dependency.ValC.RedactionManifest, model.Dependency.ValC.Dependency)
+		offlineState := EvaluatePoint12ValCOfflineBundleState(model.Dependency.ValC.OfflineBundle, model.Dependency.ValC.Dependency, redactionImpactState)
+		boundaryState := EvaluatePoint12ValCPublicPrivateBoundaryState(model.Dependency.ValC.PublicPrivateBoundary, model.Dependency.ValC.Dependency, model.Dependency.ValC.ExportBundle, model.Dependency.ValC.OfflineBundle, model.Dependency.ValC.RedactionManifest)
+		exportState, exportReasons := point12ValCAuditExportStateAndReasons(model.Dependency.ValC.ExportBundle, model.Dependency.ValC.Dependency, redactionManifestState, redactionImpactState, offlineState, boundaryState)
+		if exportState != Point12ValCExportStateBlocked {
+			t.Fatalf("expected direct ValC export policy drift to block, got state=%s reasons=%v", exportState, exportReasons)
+		}
+		assertPoint12ValEReason(t, exportReasons, "audit_export_dependency_binding_mismatch")
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected ValC export policy hash drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_export_offline_redaction_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated ValC embedded request and export drift cannot self-consistently bypass ValE", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		driftHash := "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Dependency.ValC.Dependency.ValBReplayRequest.PolicyHash = driftHash
+		model.Dependency.ValC.ExportBundle.PolicyHash = driftHash
+		model.Dependency.ValC.OfflineBundle.PolicyHash = driftHash
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated ValC embedded request/export drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_replay_request_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated top-level ValB and ValC policy drift cannot bypass ValA binding", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		driftHash := "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+		model.Dependency.ValB.ReplayRequest.PolicyHash = driftHash
+		model.Dependency.ValC.Dependency.ValBReplayRequest.PolicyHash = driftHash
+		model.Dependency.ValC.ExportBundle.PolicyHash = driftHash
+		model.Dependency.ValC.OfflineBundle.PolicyHash = driftHash
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated top-level ValB/ValC policy drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valb_request_manifest_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated ValC and ValD detached signature drift cannot bypass ValE", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.OfflineBundle.DetachedSignatureRef = "detached_signature_point12_vala_999"
+		model.Dependency.ValD.Dependency.ValCOfflineBundle.DetachedSignatureRef = "detached_signature_point12_vala_999"
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated detached signature drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_offline_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated ValC and ValD retention class drift cannot bypass ValE", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		driftRetention := "retention_class_point12_downgraded"
+		model.Dependency.ValC.ExportBundle.RetentionClassRef = driftRetention
+		model.Dependency.ValC.OfflineBundle.RetentionClassRef = driftRetention
+		model.Dependency.ValC.RedactionManifest.RetentionClassRef = driftRetention
+		model.Dependency.ValD.Dependency.ValCAuditExportBundle.RetentionClassRef = driftRetention
+		model.Dependency.ValD.Dependency.ValCOfflineBundle.RetentionClassRef = driftRetention
+		model.Dependency.ValD.Dependency.ValCRedactionManifest.RetentionClassRef = driftRetention
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated retention class drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_valc_export_binding_invalid")
+
+		retentionState, retentionReasons := point12ValERetentionProvenanceStateAndReasons(model.RetentionProvenanceReview, model.Dependency)
+		if retentionState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated retention class drift to block retention provenance, got state=%s reasons=%v", retentionState, retentionReasons)
+		}
+		assertPoint12ValEReason(t, retentionReasons, "retention_provenance_binding_mismatch")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+		assertBlockedAggregate(t, computed, computed.RetentionProvenanceState, "retention_provenance:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("vald embedded valb request profile drift blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Dependency.ValBReplayRequest.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Dependency.ValD.Dependency.ValBReplayRequest.ProfileContext.ProfileMatchOriginal = false
+		model.Dependency.ValD.Dependency.ValBReplayRequest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.Dependency.ValD.Dependency.ValBReplayRequest.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+
+		if got := EvaluatePoint12ValDDependencyState(model.Dependency.ValD.Dependency); got != Point12ValDDependencyStateBlocked {
+			t.Fatalf("expected direct ValD dependency state to block embedded request profile drift, got %s", got)
+		}
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected ValD embedded ValB replay request profile drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_vald_dependency_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("vald embedded valb result profile drift blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Dependency.ValBReplayResult.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Dependency.ValD.Dependency.ValBReplayResult.ProfileContext.ProfileMatchOriginal = false
+		model.Dependency.ValD.Dependency.ValBReplayResult.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.Dependency.ValD.Dependency.ValBReplayResult.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+
+		if got := EvaluatePoint12ValDDependencyState(model.Dependency.ValD.Dependency); got != Point12ValDDependencyStateBlocked {
+			t.Fatalf("expected direct ValD dependency state to block embedded result profile drift, got %s", got)
+		}
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected ValD embedded ValB replay result profile drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_vald_dependency_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated ValD embedded ValC export drift cannot self-consistently bypass ValE", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		driftHash := "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Dependency.ValD.Dependency.ValCAuditExportBundle.PolicyHash = driftHash
+		model.Dependency.ValD.ProofChain.PolicyHash = driftHash
+		model.Dependency.ValD.ProofChain.ProjectionHash = point12ValDComputedProjectionHash(model.Dependency.ValD.ProofChain)
+
+		if got := EvaluatePoint12ValDProofChainProjectionState(model.Dependency.ValD.ProofChain, model.Dependency.ValD.Dependency); got != Point12ValDProofChainStateActive {
+			t.Fatalf("expected coordinated ValD local proof chain to remain internally active before ValE cross-snapshot check, got %s", got)
+		}
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated ValD embedded export drift to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_vald_dependency_cross_snapshot_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("self consistent substituted ValA profile context blocks final binding mutation gate", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValA.Manifest.ProfileContext.OriginalProfileID = "profile_point12_replay_substituted_002"
+		model.Dependency.ValA.Manifest.ProfileContext.CurrentProfileID = "profile_point12_replay_substituted_002"
+		model.Dependency.ValA.Manifest.ProfileContext.OriginalProfileVersion = "profile_version_point12_replay_v2"
+		model.Dependency.ValA.Manifest.ProfileContext.CurrentProfileVersion = "profile_version_point12_replay_v2"
+		model.Dependency.ValA.Manifest.ProfileContext.OriginalProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Dependency.ValA.Manifest.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Dependency.ValA.Manifest.ProfileContext.ProfileApprovalRef = "profile_approval_point12_replay_002"
+		model.Dependency.ValA.Manifest.ProfileContext.ProfileSignatureRef = "profile_signature_point12_replay_002"
+		model.Dependency.ValA.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Dependency.ValA.Manifest)
+		model.Dependency.ValA.Manifest.SignatureBoundManifestPayloadHash = model.Dependency.ValA.Manifest.ManifestPayloadHash
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected substituted ValA profile context to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_profile_context_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated ValA profile substitution still binds back to Val0 source", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		substituted := model.Dependency.ValA.Manifest.ProfileContext
+		substituted.OriginalProfileID = "profile_point12_replay_substituted_002"
+		substituted.CurrentProfileID = "profile_point12_replay_substituted_002"
+		substituted.OriginalProfileVersion = "profile_version_point12_replay_v2"
+		substituted.CurrentProfileVersion = "profile_version_point12_replay_v2"
+		substituted.OriginalProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		substituted.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		substituted.ProfileApprovalRef = "profile_approval_point12_replay_002"
+		substituted.ProfileSignatureRef = "profile_signature_point12_replay_002"
+		model.Dependency.ValA.Dependency.Val0Manifest.ProfileContext = substituted
+		model.Dependency.ValA.Manifest.ProfileContext = substituted
+		model.Dependency.ValA.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Dependency.ValA.Manifest)
+		model.Dependency.ValA.Manifest.SignatureBoundManifestPayloadHash = model.Dependency.ValA.Manifest.ManifestPayloadHash
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated profile substitution to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_val0_profile_context_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated Val0 and ValA profile substitution still requires original source profile", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		substituted := model.Dependency.Val0.Manifest.ProfileContext
+		substituted.OriginalProfileID = "profile_point12_replay_substituted_002"
+		substituted.CurrentProfileID = "profile_point12_replay_substituted_002"
+		substituted.OriginalProfileVersion = "profile_version_point12_replay_v2"
+		substituted.CurrentProfileVersion = "profile_version_point12_replay_v2"
+		substituted.OriginalProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		substituted.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		substituted.ProfileApprovalRef = "profile_approval_point12_replay_002"
+		substituted.ProfileSignatureRef = "profile_signature_point12_replay_002"
+		model.Dependency.Val0.Manifest.ProfileContext = substituted
+		model.Dependency.Val0.ReplayAssessment.ProfileContext = substituted
+		model.Dependency.ValA.Dependency.Val0Manifest.ProfileContext = substituted
+		model.Dependency.ValA.Manifest.ProfileContext = substituted
+		model.Dependency.ValA.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Dependency.ValA.Manifest)
+		model.Dependency.ValA.Manifest.SignatureBoundManifestPayloadHash = model.Dependency.ValA.Manifest.ManifestPayloadHash
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated Val0 and ValA profile substitution to block binding mutation, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_val0_profile_context_binding_invalid")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("coordinated tenant retag across Val0 ValA and ValB still requires immutable source profile", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		retagged := point12Val0DefaultProfileContext("tenant_scope_point12_beta")
+		model.Dependency.Val0.Manifest.TenantScope = "tenant_scope_point12_beta"
+		model.Dependency.Val0.Manifest.ProfileContext = retagged
+		model.Dependency.Val0.ReplayAssessment.ProfileContext = retagged
+		model.Dependency.ValA.Dependency.Val0Manifest.TenantScope = "tenant_scope_point12_beta"
+		model.Dependency.ValA.Dependency.Val0Manifest.ProfileContext = retagged
+		model.Dependency.ValA.Manifest.TenantScope = "tenant_scope_point12_beta"
+		model.Dependency.ValA.Manifest.ProfileContext = retagged
+		model.Dependency.ValA.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Dependency.ValA.Manifest)
+		model.Dependency.ValA.Manifest.SignatureBoundManifestPayloadHash = model.Dependency.ValA.Manifest.ManifestPayloadHash
+		model.Dependency.ValB.Dependency.ValAManifest = model.Dependency.ValA.Manifest
+
+		bindingState, bindingReasons := point12ValEBindingMutationStateAndReasons(model.BindingMutationClosure, model.Dependency)
+		if bindingState != Point12ValEStateBlocked {
+			t.Fatalf("expected coordinated tenant retag to block immutable source profile, got state=%s reasons=%v", bindingState, bindingReasons)
+		}
+		assertPoint12ValEReason(t, bindingReasons, "binding_mutation_val0_profile_context_binding_invalid")
+
 		computed := ComputePoint12ValEFoundation(model)
 		assertBlockedAggregate(t, computed, computed.BindingMutationState, "binding_mutation:"+Point12ValEStateBlocked)
 	})
@@ -1706,5 +2317,381 @@ func TestPoint12ValEDependencyDerivedBoundaryRecomputedBeforePass(t *testing.T) 
 			t.Fatalf("expected inherited readiness overclaim dependency wording to block, got %#v", computed)
 		}
 		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in export output claims", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.ExportBundle.ExportOutputClaims = []string{"marketplace production ready"}
+		model.Dependency.ValD.Dependency.ValCAuditExportBundle = model.Dependency.ValC.ExportBundle
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited export output claim overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in offline output claims", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValC.OfflineBundle.OfflineOutputClaims = []string{"ha guaranteed"}
+		model.Dependency.ValD.Dependency.ValCOfflineBundle = model.Dependency.ValC.OfflineBundle
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited offline output claim overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	valCNoOverclaimSiblingCases := []struct {
+		name   string
+		mutate func(*Point12ValEFoundation)
+	}{
+		{
+			name: "export limitations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.ExportBundle.Limitations = []string{"deployment approved"}
+			},
+		},
+		{
+			name: "redaction surviving claims",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.RedactionManifest.SurvivingClaimsAfterRedaction = []string{"production approved"}
+			},
+		},
+		{
+			name: "redaction customer visible claims",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.RedactionManifest.CustomerVisibleClaimsAfterRedaction = []string{"public badge"}
+			},
+		},
+		{
+			name: "redaction exported claims",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.RedactionManifest.ExportedClaimsAfterRedaction = []string{"global truth"}
+			},
+		},
+		{
+			name: "redaction replay result claims",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.RedactionManifest.ReplayResultClaims = []string{"official authority"}
+			},
+		},
+		{
+			name: "redaction limitations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.RedactionManifest.Limitations = []string{"compliance guaranteed"}
+			},
+		},
+		{
+			name: "redaction impact limitations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.RedactionImpactVerdict.Limitations = []string{"financial guarantee"}
+			},
+		},
+		{
+			name: "offline limitations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValC.OfflineBundle.Limitations = []string{"deployment approved"}
+			},
+		},
+	}
+	for _, tc := range valCNoOverclaimSiblingCases {
+		t.Run("stale clean no-overclaim review cannot hide inherited overclaim in ValC "+tc.name, func(t *testing.T) {
+			model := rawPoint12ValEFoundationModel()
+			tc.mutate(&model)
+			model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+			model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+			computed := ComputePoint12ValEFoundation(model)
+			assertPoint12ValENoPass(t, computed)
+			if computed.CurrentState != Point12ValEStateBlocked {
+				t.Fatalf("expected inherited ValC %s overclaim to block, got %#v", tc.name, computed)
+			}
+			if computed.NoOverclaimState != Point12ValEStateBlocked {
+				t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+			}
+			assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+		})
+	}
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in replay result claims", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValB.ReplayResult.ReplayOutputClaims = []string{"production sla approved"}
+		model.Dependency.ValC.Dependency.ValBReplayResult = model.Dependency.ValB.ReplayResult
+		model.Dependency.ValD.Dependency.ValBReplayResult = model.Dependency.ValB.ReplayResult
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited replay result claim overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald explanation lists", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.MismatchExplanations = []string{"marketplace production ready"}
+		model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD explanation list overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald expected refs", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.ExpectedRefs = []string{"marketplace production ready"}
+		model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD expected refs overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald actual refs", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.ActualRefs = []string{"ha guaranteed"}
+		model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD actual refs overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald expected versions", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.ExpectedVersions = []string{"marketplace_certified"}
+		model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD expected versions overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald actual versions", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.ActualVersions = []string{"ha_guaranteed"}
+		model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD actual versions overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	valDExplanationSiblingCases := []struct {
+		name   string
+		mutate func(*Point12ValEFoundation)
+	}{
+		{
+			name: "decision context summary",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.Explanation.DecisionContextSummary = "production approved"
+			},
+		},
+		{
+			name: "why decision summary",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.Explanation.WhyDecisionSummary = "deployment approved"
+			},
+		},
+		{
+			name: "why changed summary",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.Explanation.WhyChangedSummary = "public badge"
+			},
+		},
+		{
+			name: "missing evidence explanations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.Explanation.MissingEvidenceExplanations = []string{"global truth"}
+			},
+		},
+		{
+			name: "redaction limitations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.Explanation.RedactionLimitations = []string{"compliance guaranteed"}
+			},
+		},
+		{
+			name: "limitations",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.Explanation.Limitations = []string{"financial guarantee"}
+			},
+		},
+	}
+	for _, tc := range valDExplanationSiblingCases {
+		t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald explanation "+tc.name, func(t *testing.T) {
+			model := rawPoint12ValEFoundationModel()
+			tc.mutate(&model)
+			model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+			model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+			model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+			computed := ComputePoint12ValEFoundation(model)
+			assertPoint12ValENoPass(t, computed)
+			if computed.CurrentState != Point12ValEStateBlocked {
+				t.Fatalf("expected inherited ValD explanation %s overclaim to block, got %#v", tc.name, computed)
+			}
+			if computed.NoOverclaimState != Point12ValEStateBlocked {
+				t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+			}
+			assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+		})
+	}
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald support limitations", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.SupportProfile.Limitations = []string{"ha_guaranteed"}
+		model.Dependency.ValD.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.Dependency.ValD.SupportProfile)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD support limitation overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald support statement", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.SupportProfile.SupportStatement = "deployment approved"
+		model.Dependency.ValD.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.Dependency.ValD.SupportProfile)
+		model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected inherited ValD support statement overclaim to block, got %#v", computed)
+		}
+		if computed.NoOverclaimState != Point12ValEStateBlocked {
+			t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+		}
+		assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+	})
+
+	valDSupportProfileListCases := []struct {
+		name   string
+		mutate func(*Point12ValEFoundation)
+	}{
+		{
+			name: "evidence support categories",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.SupportProfile.EvidenceSupportCategories = []string{"production approved"}
+			},
+		},
+		{
+			name: "risk context metadata",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.SupportProfile.RiskContextMetadata = []string{"compliance guaranteed"}
+			},
+		},
+		{
+			name: "allowed wording refs",
+			mutate: func(model *Point12ValEFoundation) {
+				model.Dependency.ValD.SupportProfile.AllowedWordingRefs = []string{"production approved"}
+			},
+		},
+	}
+	for _, tc := range valDSupportProfileListCases {
+		t.Run("stale clean no-overclaim review cannot hide inherited overclaim in vald support profile "+tc.name, func(t *testing.T) {
+			model := rawPoint12ValEFoundationModel()
+			tc.mutate(&model)
+			model.Dependency.ValD.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.Dependency.ValD.SupportProfile)
+			model.NoOverclaimReview = point12ValENoOverclaimReviewModel(activePoint12ValEFoundation().Dependency)
+			model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+			computed := ComputePoint12ValEFoundation(model)
+			assertPoint12ValENoPass(t, computed)
+			if computed.CurrentState != Point12ValEStateBlocked {
+				t.Fatalf("expected inherited ValD support profile %s overclaim to block, got %#v", tc.name, computed)
+			}
+			if computed.NoOverclaimState != Point12ValEStateBlocked {
+				t.Fatalf("expected no-overclaim state blocked, got %#v", computed.NoOverclaimReview)
+			}
+			assertPoint12ValEReason(t, computed.BlockingReasons, "no_overclaim:"+Point12ValEStateBlocked)
+		})
+	}
+
+	t.Run("vald explanation list point12 pass token cannot reach final closure", func(t *testing.T) {
+		model := rawPoint12ValEFoundationModel()
+		model.Dependency.ValD.Explanation.MismatchExplanations = []string{"point_12_pass"}
+		model.Dependency.ValD.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Dependency.ValD.Explanation)
+		model.PassClosureManifest = point12ValEPassClosureManifestModel(model.Dependency)
+
+		state, reasons := point12ValEDependencyStateAndReasons(model.Dependency)
+		if state != Point12ValEStateBlocked {
+			t.Fatalf("expected dependency state blocked for ValD explanation pass token, got state=%s reasons=%#v", state, reasons)
+		}
+		assertPoint12ValEReason(t, reasons, "dependency_contains_point12_pass_input")
+
+		computed := ComputePoint12ValEFoundation(model)
+		assertPoint12ValENoPass(t, computed)
+		if computed.CurrentState != Point12ValEStateBlocked {
+			t.Fatalf("expected ValD explanation pass token to block final closure, got %#v", computed)
+		}
 	})
 }

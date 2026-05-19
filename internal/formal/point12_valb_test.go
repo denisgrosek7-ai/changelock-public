@@ -29,6 +29,18 @@ func clonePoint12ValBFoundation(payload []byte) Point12ValBFoundation {
 	return clone
 }
 
+func assertPoint12ValBExactReasons(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("expected exact replay reasons %#v, got %#v", want, got)
+	}
+	for _, expected := range want {
+		if !point12Val0StringSliceContains(got, expected) {
+			t.Fatalf("expected exact replay reason %q in %#v", expected, got)
+		}
+	}
+}
+
 func activePoint12ValBDependencySnapshot() Point12ValBDependencySnapshot {
 	valA := activePoint12ValAFoundation()
 	return SnapshotPoint12ValBDependencyFromComputedValA(valA, point12ValBDependencyReviewContextModel())
@@ -40,6 +52,7 @@ func syncPoint12ValBFoundationToDependency(model *Point12ValBFoundation) {
 	model.ReplayCommand.TenantScope = model.Dependency.ValAManifest.TenantScope
 	model.ReplayCommand.ArtifactRef = model.Dependency.ValAManifest.ArtifactRef
 	model.ReplayCommand.CompatibilityProfileRef = model.Dependency.ValAManifest.CompatibilityProfileRef
+	model.ReplayCommand.ProfileContext = model.Dependency.ValAManifest.ProfileContext
 
 	model.ReplayRequest.ProofPackID = model.Dependency.ValAManifest.ProofPackID
 	model.ReplayRequest.ManifestID = model.Dependency.ValAManifest.ManifestID
@@ -60,6 +73,7 @@ func syncPoint12ValBFoundationToDependency(model *Point12ValBFoundation) {
 	model.ReplayRequest.GovernanceEventRefs = append([]string{}, model.Dependency.ValAManifest.GovernanceEventRefs...)
 	model.ReplayRequest.ManifestPayloadHash = model.Dependency.ValAManifest.ManifestPayloadHash
 	model.ReplayRequest.CompatibilityProfileRef = model.Dependency.ValAManifest.CompatibilityProfileRef
+	model.ReplayRequest.ProfileContext = model.Dependency.ValAManifest.ProfileContext
 	model.ReplayRequest.RedactionManifestRef = model.Dependency.ValAManifest.RedactionManifestRef
 	model.ReplayRequest.SourceManifestIntegrityState = model.Dependency.ValAManifestIntegrityState
 
@@ -67,6 +81,7 @@ func syncPoint12ValBFoundationToDependency(model *Point12ValBFoundation) {
 	model.ReplayResult.ProofPackID = model.ReplayRequest.ProofPackID
 	model.ReplayResult.ManifestID = model.ReplayRequest.ManifestID
 	model.ReplayResult.ReplayMode = model.ReplayRequest.ReplayMode
+	model.ReplayResult.ProfileContext = model.ReplayRequest.ProfileContext
 	model.ReplayResult.OriginalDecisionState = model.ReplayRequest.OriginalDecisionState
 	if strings.TrimSpace(model.ReplayResult.ReplayedDecisionState) == "" {
 		model.ReplayResult.ReplayedDecisionState = model.ReplayRequest.OriginalDecisionState
@@ -172,6 +187,21 @@ func TestPoint12ValBDependencyState(t *testing.T) {
 		{name: "vala blocked dependency blocks", mutate: func(model *Point12ValBDependencySnapshot) {
 			model.ValADependencyState = Point12ValADependencyStateBlocked
 		}, want: Point12ValBDependencyStateBlocked},
+		{name: "padded vala active state blocks raw inherited dependency binding", mutate: func(model *Point12ValBDependencySnapshot) {
+			model.ValACurrentState = Point12ValAStateActive + " "
+		}, want: Point12ValBDependencyStateBlocked},
+		{name: "tab newline vala manifest point id blocks raw inherited dependency binding", mutate: func(model *Point12ValBDependencySnapshot) {
+			model.ValAManifest.PointID = "\t" + point12Val0PointID + "\n"
+		}, want: Point12ValBDependencyStateBlocked},
+		{name: "nested vala manifest missing current profile hash blocks dependency", mutate: func(model *Point12ValBDependencySnapshot) {
+			model.ValAManifest.ProfileContext.CurrentProfileHash = ""
+			model.ValAManifest.ProfileContext.ProfileMatchOriginal = false
+			model.ValAManifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMissingCurrent
+			model.ValAManifest.ProfileContext.ProfileMismatchReason = "profile_current_hash_missing"
+		}, want: Point12ValBDependencyStateBlocked},
+		{name: "nested vala manifest profile pass token blocks dependency", mutate: func(model *Point12ValBDependencySnapshot) {
+			model.ValAManifest.ProfileContext.ProfileApprovalRef = "profile_approval_point_12_pass"
+		}, want: Point12ValBDependencyStateBlocked},
 		{name: "vala review required propagates review required", mutate: func(model *Point12ValBDependencySnapshot) {
 			model.ValADependencyState = Point12ValADependencyStateReviewRequired
 		}, want: Point12ValBDependencyStateReviewRequired},
@@ -198,8 +228,9 @@ func TestPoint12ValBReplayCommandState(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name   string
-		mutate func(*Point12ValBReplayCommandContract)
+		name       string
+		mutate     func(*Point12ValBReplayCommandContract)
+		wantReason string
 	}{
 		{name: "missing replay mode blocks", mutate: func(model *Point12ValBReplayCommandContract) { model.ReplayMode = "" }},
 		{name: "unknown replay mode blocks", mutate: func(model *Point12ValBReplayCommandContract) { model.ReplayMode = "unknown_mode" }},
@@ -210,6 +241,24 @@ func TestPoint12ValBReplayCommandState(t *testing.T) {
 			model.OpensPortalPath = true
 		}},
 		{name: "command attempting point12 pass blocks", mutate: func(model *Point12ValBReplayCommandContract) { model.RequestsPoint12Pass = true }},
+		{name: "command compatibility ref cannot carry point12 pass before final closure", mutate: func(model *Point12ValBReplayCommandContract) {
+			model.CompatibilityProfileRef = "compatibility_profile_point_12_pass"
+		}},
+		{name: "padded proof pack id cannot trim into manifest binding", mutate: func(model *Point12ValBReplayCommandContract) {
+			model.ProofPackID = " " + model.ProofPackID
+		}},
+		{name: "tab newline replay mode cannot trim into valid mode", mutate: func(model *Point12ValBReplayCommandContract) {
+			model.ReplayMode = "\t" + point12Val0ReplayModeOriginalContext + "\n"
+		}},
+		{name: "command profile context hash substitution blocks", mutate: func(model *Point12ValBReplayCommandContract) {
+			model.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+			model.ProfileContext.ProfileMatchOriginal = false
+			model.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+			model.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		}, wantReason: "replay_command_profile_context_binding_mismatch"},
+		{name: "command profile approval evidence retag blocks", mutate: func(model *Point12ValBReplayCommandContract) {
+			model.ProfileContext.ProfileApprovalBoundHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		}, wantReason: "replay_command_profile_context_binding_mismatch"},
 	}
 
 	for _, testCase := range testCases {
@@ -220,8 +269,21 @@ func TestPoint12ValBReplayCommandState(t *testing.T) {
 			if model.ReplayCommandState != Point12ValBReplayCommandStateBlocked {
 				t.Fatalf("expected blocked replay command state, got %#v", model)
 			}
+			if testCase.wantReason != "" {
+				_, reasons := point12ValBReplayCommandStateAndReasons(model.ReplayCommand, model.Dependency)
+				assertPoint12ValBExactReasons(t, reasons, testCase.wantReason)
+			}
 		})
 	}
+
+	t.Run("command compatibility ref point12 pass reports exact premature token reason", func(t *testing.T) {
+		model := activePoint12ValBFoundation()
+		model.ReplayCommand.CompatibilityProfileRef = "compatibility_profile_point_12_pass"
+		state, reasons := point12ValBReplayCommandStateAndReasons(model.ReplayCommand, model.Dependency)
+		if state != Point12ValBReplayCommandStateBlocked || !point12Val0StringSliceContains(reasons, "replay_command_premature_point12_pass") {
+			t.Fatalf("expected premature point12 pass compatibility ref to block replay command, state=%s reasons=%#v", state, reasons)
+		}
+	})
 }
 
 func TestPoint12ValBReplayRequestState(t *testing.T) {
@@ -233,8 +295,9 @@ func TestPoint12ValBReplayRequestState(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name   string
-		mutate func(*Point12ValBFoundation)
+		name       string
+		mutate     func(*Point12ValBFoundation)
+		wantReason string
 	}{
 		{name: "missing proof pack id blocks", mutate: func(model *Point12ValBFoundation) { model.ReplayRequest.ProofPackID = "" }},
 		{name: "missing manifest id blocks", mutate: func(model *Point12ValBFoundation) { model.ReplayRequest.ManifestID = "" }},
@@ -244,6 +307,24 @@ func TestPoint12ValBReplayRequestState(t *testing.T) {
 		}},
 		{name: "malformed refs block", mutate: func(model *Point12ValBFoundation) { model.ReplayRequest.ReplayRequestID = "bad request id" }},
 		{name: "canonical looking junk refs block", mutate: func(model *Point12ValBFoundation) { model.ReplayRequest.ManifestID = "manifest_unknown" }},
+		{name: "current policy whitespace is not ignored as absent context", mutate: func(model *Point12ValBFoundation) {
+			model.ReplayRequest.CurrentPolicyRef = " "
+		}},
+		{name: "padded source manifest state cannot trim into active state", mutate: func(model *Point12ValBFoundation) {
+			model.ReplayRequest.SourceManifestIntegrityState = Point12ValAManifestIntegrityStateActive + " "
+		}},
+		{name: "request profile context mismatch cannot silently use substituted current profile", mutate: func(model *Point12ValBFoundation) {
+			model.ReplayRequest.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+			model.ReplayRequest.ProfileContext.ProfileMatchOriginal = false
+			model.ReplayRequest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+			model.ReplayRequest.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		}, wantReason: "replay_request_profile_context_binding_mismatch"},
+		{name: "request profile hash padding fails raw-exact binding", mutate: func(model *Point12ValBFoundation) {
+			model.ReplayRequest.ProfileContext.CurrentProfileHash = model.ReplayRequest.ProfileContext.CurrentProfileHash + " "
+		}, wantReason: "replay_request_profile_context_binding_mismatch"},
+		{name: "request claim ref cannot carry point12 pass before final closure", mutate: func(model *Point12ValBFoundation) {
+			model.ReplayRequest.ClaimRefs[0] = "claim_point_12_pass"
+		}, wantReason: "replay_request_premature_point12_pass"},
 		{name: "cross tenant evidence blocks", mutate: func(model *Point12ValBFoundation) {
 			model.ReplayRequest.EvidenceRefs = []string{"evidence:cross-tenant-pack-001"}
 		}},
@@ -273,6 +354,10 @@ func TestPoint12ValBReplayRequestState(t *testing.T) {
 			model = ComputePoint12ValBFoundation(model)
 			if model.ReplayRequestState != Point12ValBReplayRequestStateBlocked {
 				t.Fatalf("expected blocked replay request state, got %#v", model)
+			}
+			if testCase.wantReason != "" {
+				_, reasons := point12ValBReplayRequestStateAndReasons(model.ReplayRequest, model.Dependency, model.ReplayCommand)
+				assertPoint12ValBExactReasons(t, reasons, testCase.wantReason)
 			}
 		})
 	}
@@ -383,6 +468,18 @@ func TestPoint12ValBReplayModes(t *testing.T) {
 		model = ComputePoint12ValBFoundation(model)
 		if model.ReplayResultState != Point12ValBReplayResultStateBlocked {
 			t.Fatalf("expected rewritten original decision to block, got %#v", model)
+		}
+	})
+
+	t.Run("padded original decision state cannot trim into same replay result", func(t *testing.T) {
+		model := activePoint12ValBFoundation()
+		model.ReplayResult.OriginalDecisionState = model.ReplayRequest.OriginalDecisionState + " "
+		state, reasons := point12ValBReplayResultStateAndReasons(model.ReplayResult, model.ReplayRequest, model.ReplayCommand, model.Dependency)
+		if state != Point12ValBReplayResultStateBlocked {
+			t.Fatalf("expected blocked replay result for padded original decision state, got state=%q reasons=%v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "replay_result_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact identity metadata reason, got %v", reasons)
 		}
 	})
 
@@ -518,6 +615,35 @@ func TestPoint12ValBReplayResultTaxonomy(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("result profile context substitution blocks same decision with exact reason", func(t *testing.T) {
+		model := activePoint12ValBFoundation()
+		model.ReplayResult.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.ReplayResult.ProfileContext.ProfileMatchOriginal = false
+		model.ReplayResult.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.ReplayResult.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		state, reasons := point12ValBReplayResultStateAndReasons(model.ReplayResult, model.ReplayRequest, model.ReplayCommand, model.Dependency)
+		if state != Point12ValBReplayResultStateBlocked {
+			t.Fatalf("expected blocked replay result for profile substitution, got state=%q reasons=%v", state, reasons)
+		}
+		assertPoint12ValBExactReasons(t, reasons,
+			"replay_result_profile_context_binding_mismatch",
+			"replay_result_same_decision_overclaims_replay",
+		)
+	})
+
+	t.Run("result profile approval evidence mismatch blocks same decision with exact reason", func(t *testing.T) {
+		model := activePoint12ValBFoundation()
+		model.ReplayResult.ProfileContext.ProfileApprovalBoundTenant = "tenant_scope_point12_beta"
+		state, reasons := point12ValBReplayResultStateAndReasons(model.ReplayResult, model.ReplayRequest, model.ReplayCommand, model.Dependency)
+		if state != Point12ValBReplayResultStateBlocked {
+			t.Fatalf("expected blocked replay result for profile approval binding drift, got state=%q reasons=%v", state, reasons)
+		}
+		assertPoint12ValBExactReasons(t, reasons,
+			"replay_result_profile_context_binding_mismatch",
+			"replay_result_same_decision_overclaims_replay",
+		)
+	})
 
 	t.Run("missing explanation for decisive mismatch requires review", func(t *testing.T) {
 		model := activePoint12ValBFoundation()

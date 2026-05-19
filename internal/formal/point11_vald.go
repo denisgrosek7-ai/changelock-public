@@ -1783,6 +1783,35 @@ func EvaluatePoint11ValDFoundationState(model Point11ValDFoundation) string {
 	return Point11ValDStateActive
 }
 
+func point11ValDPostMergeFoundationModel() Point11ValDFoundation {
+	val0 := point11Val0PostMergeFoundationModel()
+
+	valA := Point11ValAFoundationModel()
+	valA.Dependency = SnapshotPoint11ValADependencyFromComputedVal0(val0, Point11ValAVal0ReviewContext{
+		LocalReviewAllowsDependencyReviewRequired: true,
+	})
+	valA = ComputePoint11ValAFoundation(valA)
+
+	valB := Point11ValBFoundationModel()
+	valB.Dependency = SnapshotPoint11ValBDependencyFromComputedValA(valA, Point11ValBValAReviewContext{
+		LocalReviewAllowsDependencyReviewRequired: true,
+	})
+	valB = ComputePoint11ValBFoundation(valB)
+
+	valC := Point11ValCFoundationModel()
+	valC.Dependency = SnapshotPoint11ValCDependencyFromComputedValB(valB, Point11ValCValBReviewContext{
+		LocalReviewAllowsDependencyReviewRequired: true,
+	})
+	valC = ComputePoint11ValCFoundation(valC)
+
+	model := Point11ValDFoundationModel()
+	model.Val0Dependency = SnapshotPoint11ValDVal0DependencyFromComputed(val0, point11ValDDefaultVal0ReviewContext())
+	model.ValADependency = SnapshotPoint11ValDValADependencyFromComputed(valA, point11ValDDefaultValAReviewContext())
+	model.ValBDependency = SnapshotPoint11ValDValBDependencyFromComputed(valB, point11ValDDefaultValBReviewContext())
+	model.ValCDependency = SnapshotPoint11ValDValCDependencyFromComputed(valC, point11ValDDefaultValCReviewContext())
+	return ComputePoint11ValDFoundation(model)
+}
+
 func Point11ValDFoundationModel() Point11ValDFoundation {
 	disclaimer := point11ValDProjectionDisclaimerBaseline
 	return Point11ValDFoundation{

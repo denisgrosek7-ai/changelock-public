@@ -92,74 +92,76 @@ type Point12ValBDependencySnapshot struct {
 }
 
 type Point12ValBReplayCommandContract struct {
-	CommandID                   string `json:"command_id"`
-	CommandName                 string `json:"command_name"`
-	CommandKind                 string `json:"command_kind"`
-	ProofPackID                 string `json:"proof_pack_id"`
-	ManifestID                  string `json:"manifest_id"`
-	TenantScope                 string `json:"tenant_scope"`
-	ArtifactRef                 string `json:"artifact_ref"`
-	ReplayMode                  string `json:"replay_mode"`
-	RequestedPolicyContextRef   string `json:"requested_policy_context_ref"`
-	RequestedEngineContextRef   string `json:"requested_engine_context_ref"`
-	RequestedSchemaContextRef   string `json:"requested_schema_context_ref"`
-	CompatibilityProfileRef     string `json:"compatibility_profile_ref"`
-	AllowCurrentPolicy          bool   `json:"allow_current_policy"`
-	AllowExternalAPI            bool   `json:"allow_external_api"`
-	OfflineBundleRequired       bool   `json:"offline_bundle_required"`
-	ExplainMismatch             bool   `json:"explain_mismatch"`
-	ExplainMissingEvidence      bool   `json:"explain_missing_evidence"`
-	ExplainUnsupportedVersion   bool   `json:"explain_unsupported_version"`
-	ExplainRedactionLimitations bool   `json:"explain_redaction_limitations"`
-	GeneratedAt                 string `json:"generated_at"`
-	ProjectionDisclaimer        string `json:"projection_disclaimer"`
-	MutatesEvidenceSpine        bool   `json:"mutates_evidence_spine"`
-	CreatesProofPack            bool   `json:"creates_proof_pack"`
-	CreatesAuditExportBundle    bool   `json:"creates_audit_export_bundle"`
-	OpensPortalPath             bool   `json:"opens_portal_path"`
-	RequestsPoint12Pass         bool   `json:"requests_point12_pass"`
+	CommandID                   string                          `json:"command_id"`
+	CommandName                 string                          `json:"command_name"`
+	CommandKind                 string                          `json:"command_kind"`
+	ProofPackID                 string                          `json:"proof_pack_id"`
+	ManifestID                  string                          `json:"manifest_id"`
+	TenantScope                 string                          `json:"tenant_scope"`
+	ArtifactRef                 string                          `json:"artifact_ref"`
+	ReplayMode                  string                          `json:"replay_mode"`
+	RequestedPolicyContextRef   string                          `json:"requested_policy_context_ref"`
+	RequestedEngineContextRef   string                          `json:"requested_engine_context_ref"`
+	RequestedSchemaContextRef   string                          `json:"requested_schema_context_ref"`
+	CompatibilityProfileRef     string                          `json:"compatibility_profile_ref"`
+	ProfileContext              Point12Val0ReplayProfileContext `json:"profile_context"`
+	AllowCurrentPolicy          bool                            `json:"allow_current_policy"`
+	AllowExternalAPI            bool                            `json:"allow_external_api"`
+	OfflineBundleRequired       bool                            `json:"offline_bundle_required"`
+	ExplainMismatch             bool                            `json:"explain_mismatch"`
+	ExplainMissingEvidence      bool                            `json:"explain_missing_evidence"`
+	ExplainUnsupportedVersion   bool                            `json:"explain_unsupported_version"`
+	ExplainRedactionLimitations bool                            `json:"explain_redaction_limitations"`
+	GeneratedAt                 string                          `json:"generated_at"`
+	ProjectionDisclaimer        string                          `json:"projection_disclaimer"`
+	MutatesEvidenceSpine        bool                            `json:"mutates_evidence_spine"`
+	CreatesProofPack            bool                            `json:"creates_proof_pack"`
+	CreatesAuditExportBundle    bool                            `json:"creates_audit_export_bundle"`
+	OpensPortalPath             bool                            `json:"opens_portal_path"`
+	RequestsPoint12Pass         bool                            `json:"requests_point12_pass"`
 }
 
 type Point12ValBReplayRequest struct {
-	ReplayRequestID              string   `json:"replay_request_id"`
-	ProofPackID                  string   `json:"proof_pack_id"`
-	ManifestID                   string   `json:"manifest_id"`
-	DecisionID                   string   `json:"decision_id"`
-	TenantScope                  string   `json:"tenant_scope"`
-	ArtifactRef                  string   `json:"artifact_ref"`
-	ArtifactHash                 string   `json:"artifact_hash"`
-	EvidenceRefs                 []string `json:"evidence_refs,omitempty"`
-	EvidenceHashRefs             []string `json:"evidence_hash_refs,omitempty"`
-	PolicyRef                    string   `json:"policy_ref"`
-	PolicyVersion                string   `json:"policy_version"`
-	PolicyHash                   string   `json:"policy_hash"`
-	EngineVersion                string   `json:"engine_version"`
-	EngineHash                   string   `json:"engine_hash"`
-	SchemaVersion                string   `json:"schema_version"`
-	SchemaHash                   string   `json:"schema_hash"`
-	ClaimRefs                    []string `json:"claim_refs,omitempty"`
-	GovernanceEventRefs          []string `json:"governance_event_refs,omitempty"`
-	ManifestPayloadHash          string   `json:"manifest_payload_hash"`
-	CompatibilityProfileRef      string   `json:"compatibility_profile_ref"`
-	ReplayMode                   string   `json:"replay_mode"`
-	DeclaredCompatibilityContext string   `json:"declared_compatibility_context"`
-	OriginalDecisionState        string   `json:"original_decision_state"`
-	OriginalDecisionHash         string   `json:"original_decision_hash"`
-	CurrentPolicyRef             string   `json:"current_policy_ref"`
-	CurrentPolicyVersion         string   `json:"current_policy_version"`
-	CurrentPolicyHash            string   `json:"current_policy_hash"`
-	CurrentEngineVersion         string   `json:"current_engine_version"`
-	CurrentEngineHash            string   `json:"current_engine_hash"`
-	CurrentSchemaVersion         string   `json:"current_schema_version"`
-	CurrentSchemaHash            string   `json:"current_schema_hash"`
-	CurrentEvidenceRefs          []string `json:"current_evidence_refs,omitempty"`
-	CurrentEvidenceHashRefs      []string `json:"current_evidence_hash_refs,omitempty"`
-	CurrentClaimRefs             []string `json:"current_claim_refs,omitempty"`
-	CurrentGovernanceEventRefs   []string `json:"current_governance_event_refs,omitempty"`
-	RedactionManifestRef         string   `json:"redaction_manifest_ref"`
-	GeneratedAt                  string   `json:"generated_at"`
-	FreshnessContext             string   `json:"freshness_context"`
-	SourceManifestIntegrityState string   `json:"source_manifest_integrity_state"`
+	ReplayRequestID              string                          `json:"replay_request_id"`
+	ProofPackID                  string                          `json:"proof_pack_id"`
+	ManifestID                   string                          `json:"manifest_id"`
+	DecisionID                   string                          `json:"decision_id"`
+	TenantScope                  string                          `json:"tenant_scope"`
+	ArtifactRef                  string                          `json:"artifact_ref"`
+	ArtifactHash                 string                          `json:"artifact_hash"`
+	EvidenceRefs                 []string                        `json:"evidence_refs,omitempty"`
+	EvidenceHashRefs             []string                        `json:"evidence_hash_refs,omitempty"`
+	PolicyRef                    string                          `json:"policy_ref"`
+	PolicyVersion                string                          `json:"policy_version"`
+	PolicyHash                   string                          `json:"policy_hash"`
+	EngineVersion                string                          `json:"engine_version"`
+	EngineHash                   string                          `json:"engine_hash"`
+	SchemaVersion                string                          `json:"schema_version"`
+	SchemaHash                   string                          `json:"schema_hash"`
+	ClaimRefs                    []string                        `json:"claim_refs,omitempty"`
+	GovernanceEventRefs          []string                        `json:"governance_event_refs,omitempty"`
+	ManifestPayloadHash          string                          `json:"manifest_payload_hash"`
+	CompatibilityProfileRef      string                          `json:"compatibility_profile_ref"`
+	ProfileContext               Point12Val0ReplayProfileContext `json:"profile_context"`
+	ReplayMode                   string                          `json:"replay_mode"`
+	DeclaredCompatibilityContext string                          `json:"declared_compatibility_context"`
+	OriginalDecisionState        string                          `json:"original_decision_state"`
+	OriginalDecisionHash         string                          `json:"original_decision_hash"`
+	CurrentPolicyRef             string                          `json:"current_policy_ref"`
+	CurrentPolicyVersion         string                          `json:"current_policy_version"`
+	CurrentPolicyHash            string                          `json:"current_policy_hash"`
+	CurrentEngineVersion         string                          `json:"current_engine_version"`
+	CurrentEngineHash            string                          `json:"current_engine_hash"`
+	CurrentSchemaVersion         string                          `json:"current_schema_version"`
+	CurrentSchemaHash            string                          `json:"current_schema_hash"`
+	CurrentEvidenceRefs          []string                        `json:"current_evidence_refs,omitempty"`
+	CurrentEvidenceHashRefs      []string                        `json:"current_evidence_hash_refs,omitempty"`
+	CurrentClaimRefs             []string                        `json:"current_claim_refs,omitempty"`
+	CurrentGovernanceEventRefs   []string                        `json:"current_governance_event_refs,omitempty"`
+	RedactionManifestRef         string                          `json:"redaction_manifest_ref"`
+	GeneratedAt                  string                          `json:"generated_at"`
+	FreshnessContext             string                          `json:"freshness_context"`
+	SourceManifestIntegrityState string                          `json:"source_manifest_integrity_state"`
 }
 
 type Point12ValBReplayMismatch struct {
@@ -179,37 +181,154 @@ type Point12ValBReplayMismatch struct {
 }
 
 type Point12ValBReplayResult struct {
-	ReplayResultID               string                      `json:"replay_result_id"`
-	ReplayRequestID              string                      `json:"replay_request_id"`
-	ProofPackID                  string                      `json:"proof_pack_id"`
-	ManifestID                   string                      `json:"manifest_id"`
-	ReplayMode                   string                      `json:"replay_mode"`
-	ReplayState                  string                      `json:"replay_state"`
-	ReplayResultTaxonomy         string                      `json:"replay_result_taxonomy"`
-	OriginalDecisionState        string                      `json:"original_decision_state"`
-	ReplayedDecisionState        string                      `json:"replayed_decision_state"`
-	MatchOriginal                bool                        `json:"match_original"`
-	TamperDetected               bool                        `json:"tamper_detected"`
-	UnsupportedVersion           bool                        `json:"unsupported_version"`
-	InsufficientEvidence         bool                        `json:"insufficient_evidence"`
-	RedactionLimitations         bool                        `json:"redaction_limitations"`
-	Mismatches                   []Point12ValBReplayMismatch `json:"mismatches,omitempty"`
-	MismatchExplanations         []string                    `json:"mismatch_explanations,omitempty"`
-	DecisionDriftExplanation     string                      `json:"decision_drift_explanation"`
-	DecisionDriftClassification  string                      `json:"decision_drift_classification"`
-	EvaluatedPolicyVersion       string                      `json:"evaluated_policy_version"`
-	EvaluatedEngineVersion       string                      `json:"evaluated_engine_version"`
-	EvaluatedSchemaVersion       string                      `json:"evaluated_schema_version"`
-	EvidenceHashCheckResult      string                      `json:"evidence_hash_check_result"`
-	ManifestIntegrityCheckResult string                      `json:"manifest_integrity_check_result"`
-	SignatureMetadataCheckResult string                      `json:"signature_metadata_check_result"`
-	CompatibilityCheckResult     string                      `json:"compatibility_check_result"`
-	ExternalAPIUsed              bool                        `json:"external_api_used"`
-	PointPassEmitted             bool                        `json:"point_pass_emitted"`
-	ProjectionDisclaimer         string                      `json:"projection_disclaimer"`
-	ReplayOutputClaims           []string                    `json:"replay_output_claims,omitempty"`
-	CustomerVisibleExplanation   string                      `json:"customer_visible_explanation"`
-	BlockedReason                string                      `json:"blocked_reason"`
+	ReplayResultID               string                          `json:"replay_result_id"`
+	ReplayRequestID              string                          `json:"replay_request_id"`
+	ProofPackID                  string                          `json:"proof_pack_id"`
+	ManifestID                   string                          `json:"manifest_id"`
+	ReplayMode                   string                          `json:"replay_mode"`
+	ProfileContext               Point12Val0ReplayProfileContext `json:"profile_context"`
+	ReplayState                  string                          `json:"replay_state"`
+	ReplayResultTaxonomy         string                          `json:"replay_result_taxonomy"`
+	OriginalDecisionState        string                          `json:"original_decision_state"`
+	ReplayedDecisionState        string                          `json:"replayed_decision_state"`
+	MatchOriginal                bool                            `json:"match_original"`
+	TamperDetected               bool                            `json:"tamper_detected"`
+	UnsupportedVersion           bool                            `json:"unsupported_version"`
+	InsufficientEvidence         bool                            `json:"insufficient_evidence"`
+	RedactionLimitations         bool                            `json:"redaction_limitations"`
+	Mismatches                   []Point12ValBReplayMismatch     `json:"mismatches,omitempty"`
+	MismatchExplanations         []string                        `json:"mismatch_explanations,omitempty"`
+	DecisionDriftExplanation     string                          `json:"decision_drift_explanation"`
+	DecisionDriftClassification  string                          `json:"decision_drift_classification"`
+	EvaluatedPolicyVersion       string                          `json:"evaluated_policy_version"`
+	EvaluatedEngineVersion       string                          `json:"evaluated_engine_version"`
+	EvaluatedSchemaVersion       string                          `json:"evaluated_schema_version"`
+	EvidenceHashCheckResult      string                          `json:"evidence_hash_check_result"`
+	ManifestIntegrityCheckResult string                          `json:"manifest_integrity_check_result"`
+	SignatureMetadataCheckResult string                          `json:"signature_metadata_check_result"`
+	CompatibilityCheckResult     string                          `json:"compatibility_check_result"`
+	ExternalAPIUsed              bool                            `json:"external_api_used"`
+	PointPassEmitted             bool                            `json:"point_pass_emitted"`
+	ProjectionDisclaimer         string                          `json:"projection_disclaimer"`
+	ReplayOutputClaims           []string                        `json:"replay_output_claims,omitempty"`
+	CustomerVisibleExplanation   string                          `json:"customer_visible_explanation"`
+	BlockedReason                string                          `json:"blocked_reason"`
+}
+
+func point12ValBReplayCommandPassTokenGuardValues(model Point12ValBReplayCommandContract) []string {
+	values := []string{
+		model.CommandID,
+		model.CommandName,
+		model.CommandKind,
+		model.ProofPackID,
+		model.ManifestID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ReplayMode,
+		model.RequestedPolicyContextRef,
+		model.RequestedEngineContextRef,
+		model.RequestedSchemaContextRef,
+		model.CompatibilityProfileRef,
+		model.GeneratedAt,
+		model.ProjectionDisclaimer,
+	}
+	values = append(values, point12Val0ProfileContextGuardValues(model.ProfileContext)...)
+	return values
+}
+
+func point12ValBReplayRequestPassTokenGuardValues(model Point12ValBReplayRequest) []string {
+	values := []string{
+		model.ReplayRequestID,
+		model.ProofPackID,
+		model.ManifestID,
+		model.DecisionID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
+		model.ManifestPayloadHash,
+		model.CompatibilityProfileRef,
+		model.ReplayMode,
+		model.DeclaredCompatibilityContext,
+		model.OriginalDecisionState,
+		model.OriginalDecisionHash,
+		model.CurrentPolicyRef,
+		model.CurrentPolicyVersion,
+		model.CurrentPolicyHash,
+		model.CurrentEngineVersion,
+		model.CurrentEngineHash,
+		model.CurrentSchemaVersion,
+		model.CurrentSchemaHash,
+		model.RedactionManifestRef,
+		model.GeneratedAt,
+		model.FreshnessContext,
+		model.SourceManifestIntegrityState,
+	}
+	values = append(values, model.EvidenceRefs...)
+	values = append(values, model.EvidenceHashRefs...)
+	values = append(values, model.ClaimRefs...)
+	values = append(values, model.GovernanceEventRefs...)
+	values = append(values, model.CurrentEvidenceRefs...)
+	values = append(values, model.CurrentEvidenceHashRefs...)
+	values = append(values, model.CurrentClaimRefs...)
+	values = append(values, model.CurrentGovernanceEventRefs...)
+	values = append(values, point12Val0ProfileContextGuardValues(model.ProfileContext)...)
+	return values
+}
+
+func point12ValBReplayMismatchPassTokenGuardValues(model Point12ValBReplayMismatch) []string {
+	return []string{
+		model.MismatchID,
+		model.MismatchType,
+		model.ExpectedRef,
+		model.ActualRef,
+		model.ExpectedHash,
+		model.ActualHash,
+		model.ExpectedVersion,
+		model.ActualVersion,
+		model.AffectedSurface,
+		model.DriftReason,
+		model.Explanation,
+	}
+}
+
+func point12ValBReplayResultPassTokenGuardValues(model Point12ValBReplayResult) []string {
+	values := []string{
+		model.ReplayResultID,
+		model.ReplayRequestID,
+		model.ProofPackID,
+		model.ManifestID,
+		model.ReplayMode,
+		model.ReplayState,
+		model.ReplayResultTaxonomy,
+		model.OriginalDecisionState,
+		model.ReplayedDecisionState,
+		model.DecisionDriftExplanation,
+		model.DecisionDriftClassification,
+		model.EvaluatedPolicyVersion,
+		model.EvaluatedEngineVersion,
+		model.EvaluatedSchemaVersion,
+		model.EvidenceHashCheckResult,
+		model.ManifestIntegrityCheckResult,
+		model.SignatureMetadataCheckResult,
+		model.CompatibilityCheckResult,
+		model.ProjectionDisclaimer,
+		model.CustomerVisibleExplanation,
+		model.BlockedReason,
+	}
+	values = append(values, point12Val0ProfileContextGuardValues(model.ProfileContext)...)
+	for _, mismatch := range model.Mismatches {
+		values = append(values, point12ValBReplayMismatchPassTokenGuardValues(mismatch)...)
+	}
+	values = append(values, model.MismatchExplanations...)
+	values = append(values, model.ReplayOutputClaims...)
+	return values
 }
 
 type Point12ValBFoundation struct {
@@ -236,18 +355,17 @@ func point12ValBCommandRefValid(value string) bool {
 }
 
 func point12ValBCommandNameValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	return point11Val0IdentityValueValid(trimmed) && !strings.Contains(trimmed, " ") && !strings.Contains(trimmed, "/")
+	return formalRawExactTokenValid(value, point11Val0IdentityValueValid) && !strings.Contains(value, "/")
 }
 
 func point12ValBCommandKindValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValBCommandKindReplayProofPack,
 		point12ValBCommandKindVerifyManifestContext,
 		point12ValBCommandKindExplainMismatch,
 		point12ValBCommandKindExplainMissingEvidence,
 		point12ValBCommandKindExplainUnsupported,
-	}, value)
+	})
 }
 
 func point12ValBRequestedEngineContextRefValid(value string) bool {
@@ -287,27 +405,26 @@ func point12ValBReplayResultStates() []string {
 }
 
 func point12ValBReplayResultTaxonomyValid(value string) bool {
-	return point11Val0ContainsTrimmed(point12Val0ReplayResults(), value)
+	return point12Val0ExactOneOf(value, point12Val0ReplayResults())
 }
 
 func point12ValBDecisionStateValueValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	return point11Val0IdentityValueValid(trimmed) && !strings.Contains(trimmed, " ") && !strings.Contains(trimmed, "/")
+	return formalRawExactTokenValid(value, point11Val0IdentityValueValid) && !strings.Contains(value, "/")
 }
 
 func point12ValBCheckResultValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValBCheckResultActive,
 		point12ValBCheckResultMismatch,
 		point12ValBCheckResultTampered,
 		point12ValBCheckResultUnsupported,
 		point12ValBCheckResultMissing,
 		point12ValBCheckResultBlocked,
-	}, value)
+	})
 }
 
 func point12ValBMismatchTypeValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValBMismatchTypePolicyMismatch,
 		point12ValBMismatchTypeEngineMismatch,
 		point12ValBMismatchTypeSchemaMismatch,
@@ -324,11 +441,11 @@ func point12ValBMismatchTypeValid(value string) bool {
 		point12ValBMismatchTypeMissingEvidence,
 		point12ValBMismatchTypeRevokedExpiredEvidence,
 		point12ValBMismatchTypeSupersededPolicyOrClaim,
-	}, value)
+	})
 }
 
 func point12ValBDriftClassificationValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValBDriftDueToPolicy,
 		point12ValBDriftDueToEngine,
 		point12ValBDriftDueToSchema,
@@ -339,17 +456,16 @@ func point12ValBDriftClassificationValid(value string) bool {
 		point12ValBDriftDueToRevocation,
 		point12ValBDriftDueToToolchainProvenance,
 		point12ValBDriftDueToTenantScope,
-	}, value)
+	})
 }
 
 func point12ValBAffectedSurfaceValid(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	return point11Val0IdentityValueValid(trimmed) && !strings.Contains(trimmed, " ") && !strings.Contains(trimmed, "/")
+	return formalRawExactTokenValid(value, point11Val0IdentityValueValid) && !strings.Contains(value, "/")
 }
 
 func point12ValBHasMismatchType(mismatches []Point12ValBReplayMismatch, mismatchType string) bool {
 	for _, mismatch := range mismatches {
-		if strings.TrimSpace(mismatch.MismatchType) == strings.TrimSpace(mismatchType) {
+		if mismatch.MismatchType == mismatchType {
 			return true
 		}
 	}
@@ -375,19 +491,19 @@ func point12ValBHasReplayBlockingMismatch(mismatches []Point12ValBReplayMismatch
 }
 
 func point12ValBCurrentPolicySupplied(model Point12ValBReplayRequest) bool {
-	return strings.TrimSpace(model.CurrentPolicyRef) != "" ||
-		strings.TrimSpace(model.CurrentPolicyVersion) != "" ||
-		strings.TrimSpace(model.CurrentPolicyHash) != ""
+	return model.CurrentPolicyRef != "" ||
+		model.CurrentPolicyVersion != "" ||
+		model.CurrentPolicyHash != ""
 }
 
 func point12ValBCurrentEngineSupplied(model Point12ValBReplayRequest) bool {
-	return strings.TrimSpace(model.CurrentEngineVersion) != "" ||
-		strings.TrimSpace(model.CurrentEngineHash) != ""
+	return model.CurrentEngineVersion != "" ||
+		model.CurrentEngineHash != ""
 }
 
 func point12ValBCurrentSchemaSupplied(model Point12ValBReplayRequest) bool {
-	return strings.TrimSpace(model.CurrentSchemaVersion) != "" ||
-		strings.TrimSpace(model.CurrentSchemaHash) != ""
+	return model.CurrentSchemaVersion != "" ||
+		model.CurrentSchemaHash != ""
 }
 
 func point12ValBCurrentEvidenceSupplied(model Point12ValBReplayRequest) bool {
@@ -404,21 +520,21 @@ func point12ValBCurrentGovernanceSupplied(model Point12ValBReplayRequest) bool {
 
 func point12ValBCurrentPolicyDiffers(model Point12ValBReplayRequest) bool {
 	return point12ValBCurrentPolicySupplied(model) &&
-		(strings.TrimSpace(model.CurrentPolicyRef) != strings.TrimSpace(model.PolicyRef) ||
-			strings.TrimSpace(model.CurrentPolicyVersion) != strings.TrimSpace(model.PolicyVersion) ||
-			strings.TrimSpace(model.CurrentPolicyHash) != strings.TrimSpace(model.PolicyHash))
+		(model.CurrentPolicyRef != model.PolicyRef ||
+			model.CurrentPolicyVersion != model.PolicyVersion ||
+			model.CurrentPolicyHash != model.PolicyHash)
 }
 
 func point12ValBCurrentEngineDiffers(model Point12ValBReplayRequest) bool {
 	return point12ValBCurrentEngineSupplied(model) &&
-		(strings.TrimSpace(model.CurrentEngineVersion) != strings.TrimSpace(model.EngineVersion) ||
-			strings.TrimSpace(model.CurrentEngineHash) != strings.TrimSpace(model.EngineHash))
+		(model.CurrentEngineVersion != model.EngineVersion ||
+			model.CurrentEngineHash != model.EngineHash)
 }
 
 func point12ValBCurrentSchemaDiffers(model Point12ValBReplayRequest) bool {
 	return point12ValBCurrentSchemaSupplied(model) &&
-		(strings.TrimSpace(model.CurrentSchemaVersion) != strings.TrimSpace(model.SchemaVersion) ||
-			strings.TrimSpace(model.CurrentSchemaHash) != strings.TrimSpace(model.SchemaHash))
+		(model.CurrentSchemaVersion != model.SchemaVersion ||
+			model.CurrentSchemaHash != model.SchemaHash)
 }
 
 func point12ValBCurrentEvidenceDiffers(model Point12ValBReplayRequest) bool {
@@ -467,47 +583,47 @@ func point12ValBDependencySnapshotModel() Point12ValBDependencySnapshot {
 	return SnapshotPoint12ValBDependencyFromComputedValA(valA, point12ValBDependencyReviewContextModel())
 }
 
+func point12ValBProfileContextBoundToDependency(profile Point12Val0ReplayProfileContext, dependency Point12ValBDependencySnapshot) bool {
+	return point12Val0ProfileContextFieldsValid(profile) &&
+		point12Val0ProfileContextOriginalReplaySafe(profile, dependency.ValAManifest.TenantScope) &&
+		point12Val0ProfileContextMatchesManifest(profile, dependency.ValAManifest.ProfileContext) &&
+		point12Val0ProfileContextBoundToTenant(profile, dependency.ValAManifest.TenantScope)
+}
+
 func EvaluatePoint12ValBDependencyState(model Point12ValBDependencySnapshot) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!model.SnapshotFromComputedOutput ||
 		!point12ValBDependencySnapshotRefValid(model.SnapshotRef) ||
-		strings.TrimSpace(model.ValAPointID) != point12Val0PointID ||
-		strings.TrimSpace(model.ValAWaveID) != point12ValAWaveID ||
-		strings.TrimSpace(model.ValAManifest.PointID) != point12Val0PointID ||
-		strings.TrimSpace(model.ValAManifest.WaveID) != point12ValAWaveID ||
+		model.ValAPointID != point12Val0PointID ||
+		model.ValAWaveID != point12ValAWaveID ||
+		model.ValAManifest.PointID != point12Val0PointID ||
+		model.ValAManifest.WaveID != point12ValAWaveID ||
 		!point12Val0ProofPackRefValid(model.ValAManifest.ProofPackID) ||
 		!point12ValAManifestRefValid(model.ValAManifest.ManifestID) ||
 		!point12Val0HashValid(model.ValAManifest.ManifestPayloadHash) ||
+		!point12Val0ProfileContextOriginalReplaySafe(model.ValAManifest.ProfileContext, model.ValAManifest.TenantScope) ||
 		model.ValAPrematurePoint12PassSeen ||
-		point12Val0ContainsPrematurePassToken(
-			model.ValAManifest.ProofPackID,
-			model.ValAManifest.ManifestID,
-			model.ValAManifest.DecisionID,
-			model.ValAManifest.SignatureRef,
-			model.ValAManifest.DetachedSignatureRef,
-			model.ValAManifest.SignatureMetadataRef,
-			strings.Join(model.ValAManifest.ManifestOutputClaims, " "),
-		) {
+		point12Val0ContainsPrematurePassToken(point12ValAManifestPassTokenGuardValues(model.ValAManifest)...) {
 		return Point12ValBDependencyStateBlocked
 	}
-	if strings.TrimSpace(model.ValACurrentState) == Point12ValAStateBlocked ||
-		strings.TrimSpace(model.ValADependencyState) == Point12ValADependencyStateBlocked ||
-		strings.TrimSpace(model.ValAManifestIntegrityState) == Point12ValAManifestIntegrityStateBlocked ||
-		strings.TrimSpace(model.ValAManifestIntegrityState) == Point12ValAManifestIntegrityStateIncomplete ||
-		strings.TrimSpace(model.ValAManifestIntegrityState) == Point12ValAManifestIntegrityStateUnsupported ||
-		strings.TrimSpace(model.ValAManifestIntegrityState) == Point12ValAManifestIntegrityStateTampered ||
-		strings.TrimSpace(model.Val0RedactionBoundaryState) == Point12Val0RedactionBoundaryStateBlocked {
+	if model.ValACurrentState == Point12ValAStateBlocked ||
+		model.ValADependencyState == Point12ValADependencyStateBlocked ||
+		model.ValAManifestIntegrityState == Point12ValAManifestIntegrityStateBlocked ||
+		model.ValAManifestIntegrityState == Point12ValAManifestIntegrityStateIncomplete ||
+		model.ValAManifestIntegrityState == Point12ValAManifestIntegrityStateUnsupported ||
+		model.ValAManifestIntegrityState == Point12ValAManifestIntegrityStateTampered ||
+		model.Val0RedactionBoundaryState == Point12Val0RedactionBoundaryStateBlocked {
 		return Point12ValBDependencyStateBlocked
 	}
-	if strings.TrimSpace(model.ValACurrentState) == Point12ValAStateReviewRequired ||
-		strings.TrimSpace(model.ValADependencyState) == Point12ValADependencyStateReviewRequired ||
-		strings.TrimSpace(model.ValAManifestIntegrityState) == Point12ValAManifestIntegrityStateReviewRequired ||
+	if model.ValACurrentState == Point12ValAStateReviewRequired ||
+		model.ValADependencyState == Point12ValADependencyStateReviewRequired ||
+		model.ValAManifestIntegrityState == Point12ValAManifestIntegrityStateReviewRequired ||
 		len(model.ReviewPrerequisites) > 0 {
 		return Point12ValBDependencyStateReviewRequired
 	}
-	if strings.TrimSpace(model.ValACurrentState) != Point12ValAStateActive ||
-		strings.TrimSpace(model.ValADependencyState) != Point12ValADependencyStateActive ||
-		strings.TrimSpace(model.ValAManifestIntegrityState) != Point12ValAManifestIntegrityStateActive {
+	if model.ValACurrentState != Point12ValAStateActive ||
+		model.ValADependencyState != Point12ValADependencyStateActive ||
+		model.ValAManifestIntegrityState != Point12ValAManifestIntegrityStateActive {
 		return Point12ValBDependencyStateBlocked
 	}
 	return Point12ValBDependencyStateActive
@@ -552,17 +668,23 @@ func point12ValBReplayCommandStateAndReasons(
 	if model.RequestsPoint12Pass {
 		reasons = append(reasons, "replay_command_point12_pass_forbidden")
 	}
-	if point12Val0ContainsPrematurePassToken(model.CommandID, model.CommandName) {
+	if point12Val0ContainsPrematurePassToken(point12ValBReplayCommandPassTokenGuardValues(model)...) {
 		reasons = append(reasons, "replay_command_premature_point12_pass")
 	}
-	if strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(dependency.ValAManifest.ProofPackID) ||
-		strings.TrimSpace(model.ManifestID) != strings.TrimSpace(dependency.ValAManifest.ManifestID) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValAManifest.TenantScope) ||
-		strings.TrimSpace(model.ArtifactRef) != strings.TrimSpace(dependency.ValAManifest.ArtifactRef) ||
-		strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.ValAManifest.CompatibilityProfileRef) {
+	if point12Val0ContainsPrematurePassToken(point12Val0ProfileContextGuardValues(model.ProfileContext)...) {
+		reasons = append(reasons, "replay_command_profile_context_premature_point12_pass")
+	}
+	if model.ProofPackID != dependency.ValAManifest.ProofPackID ||
+		model.ManifestID != dependency.ValAManifest.ManifestID ||
+		model.TenantScope != dependency.ValAManifest.TenantScope ||
+		model.ArtifactRef != dependency.ValAManifest.ArtifactRef ||
+		model.CompatibilityProfileRef != dependency.ValAManifest.CompatibilityProfileRef {
 		reasons = append(reasons, "replay_command_manifest_binding_mismatch")
 	}
-	switch strings.TrimSpace(model.ReplayMode) {
+	if !point12ValBProfileContextBoundToDependency(model.ProfileContext, dependency) {
+		reasons = append(reasons, "replay_command_profile_context_binding_mismatch")
+	}
+	switch model.ReplayMode {
 	case point12Val0ReplayModeOriginalContext:
 		if model.AllowCurrentPolicy {
 			reasons = append(reasons, "replay_command_original_context_cannot_allow_current_policy")
@@ -577,7 +699,7 @@ func point12ValBReplayCommandStateAndReasons(
 			reasons = append(reasons, "replay_command_current_context_refs_invalid")
 		}
 	}
-	switch strings.TrimSpace(model.CommandKind) {
+	switch model.CommandKind {
 	case point12ValBCommandKindExplainMismatch:
 		if !model.ExplainMismatch {
 			reasons = append(reasons, "replay_command_explain_mismatch_flag_missing")
@@ -591,7 +713,7 @@ func point12ValBReplayCommandStateAndReasons(
 			reasons = append(reasons, "replay_command_explain_unsupported_flag_missing")
 		}
 	}
-	if strings.TrimSpace(model.ReplayMode) == point12Val0ReplayModeComparisonMode && !model.ExplainMismatch {
+	if model.ReplayMode == point12Val0ReplayModeComparisonMode && !model.ExplainMismatch {
 		reasons = append(reasons, "replay_command_comparison_mode_requires_mismatch_explanation")
 	}
 	if len(reasons) > 0 {
@@ -640,10 +762,10 @@ func point12ValBReplayRequestStateAndReasons(
 		!point12Val0HashValid(model.OriginalDecisionHash) ||
 		!point11Val0ValidTimestamp(model.GeneratedAt) ||
 		!point12ValBFreshnessContextValid(model.FreshnessContext) ||
-		!point11Val0ContainsTrimmed(point12ValAManifestCoreStates(), model.SourceManifestIntegrityState) {
+		!point12Val0ExactOneOf(model.SourceManifestIntegrityState, point12ValAManifestCoreStates()) {
 		reasons = append(reasons, "replay_request_identity_or_context_invalid")
 	}
-	if strings.TrimSpace(model.RedactionManifestRef) != "" && !point12Val0RedactionManifestRefValid(model.RedactionManifestRef) {
+	if model.RedactionManifestRef != "" && !point12Val0RedactionManifestRefValid(model.RedactionManifestRef) {
 		reasons = append(reasons, "replay_request_redaction_manifest_invalid")
 	}
 	if len(model.EvidenceRefs) != len(model.EvidenceHashRefs) {
@@ -677,47 +799,48 @@ func point12ValBReplayRequestStateAndReasons(
 	if point12ValBCurrentGovernanceSupplied(model) && !point12Val0StringListValid(model.CurrentGovernanceEventRefs, point12Val0GovernanceEventRefValid) {
 		reasons = append(reasons, "replay_request_current_governance_context_invalid")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.ReplayRequestID,
-		model.ProofPackID,
-		model.ManifestID,
-		model.DecisionID,
-		model.DeclaredCompatibilityContext,
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValBReplayRequestPassTokenGuardValues(model)...) {
 		reasons = append(reasons, "replay_request_premature_point12_pass")
 	}
-	if strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(dependency.ValAManifest.ProofPackID) ||
-		strings.TrimSpace(model.ManifestID) != strings.TrimSpace(dependency.ValAManifest.ManifestID) ||
-		strings.TrimSpace(model.DecisionID) != strings.TrimSpace(dependency.ValAManifest.DecisionID) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValAManifest.TenantScope) ||
-		strings.TrimSpace(model.ArtifactRef) != strings.TrimSpace(dependency.ValAManifest.ArtifactRef) ||
-		strings.TrimSpace(model.ArtifactHash) != strings.TrimSpace(dependency.ValAManifest.ArtifactHash) ||
-		strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.ValAManifest.CompatibilityProfileRef) {
+	if point12Val0ContainsPrematurePassToken(point12Val0ProfileContextGuardValues(model.ProfileContext)...) {
+		reasons = append(reasons, "replay_request_profile_context_premature_point12_pass")
+	}
+	if model.ProofPackID != dependency.ValAManifest.ProofPackID ||
+		model.ManifestID != dependency.ValAManifest.ManifestID ||
+		model.DecisionID != dependency.ValAManifest.DecisionID ||
+		model.TenantScope != dependency.ValAManifest.TenantScope ||
+		model.ArtifactRef != dependency.ValAManifest.ArtifactRef ||
+		model.ArtifactHash != dependency.ValAManifest.ArtifactHash ||
+		model.CompatibilityProfileRef != dependency.ValAManifest.CompatibilityProfileRef {
 		reasons = append(reasons, "replay_request_manifest_identity_binding_mismatch")
 	}
-	if strings.TrimSpace(model.SourceManifestIntegrityState) != strings.TrimSpace(dependency.ValAManifestIntegrityState) ||
-		strings.TrimSpace(model.SourceManifestIntegrityState) != Point12ValAManifestIntegrityStateActive {
+	if !point12ValBProfileContextBoundToDependency(model.ProfileContext, dependency) ||
+		!point12Val0ProfileContextMatchesManifest(model.ProfileContext, command.ProfileContext) {
+		reasons = append(reasons, "replay_request_profile_context_binding_mismatch")
+	}
+	if model.SourceManifestIntegrityState != dependency.ValAManifestIntegrityState ||
+		model.SourceManifestIntegrityState != Point12ValAManifestIntegrityStateActive {
 		reasons = append(reasons, "replay_request_source_manifest_integrity_invalid")
 	}
-	if strings.TrimSpace(model.ReplayMode) != strings.TrimSpace(command.ReplayMode) {
+	if model.ReplayMode != command.ReplayMode {
 		reasons = append(reasons, "replay_request_command_mode_mismatch")
 	}
 	if point12ValBCurrentPolicySupplied(model) &&
-		strings.TrimSpace(command.RequestedPolicyContextRef) != "" &&
-		strings.TrimSpace(command.RequestedPolicyContextRef) != strings.TrimSpace(model.CurrentPolicyRef) {
+		command.RequestedPolicyContextRef != "" &&
+		command.RequestedPolicyContextRef != model.CurrentPolicyRef {
 		reasons = append(reasons, "replay_request_command_policy_context_binding_mismatch")
 	}
 	if point12ValBCurrentEngineSupplied(model) &&
-		strings.TrimSpace(command.RequestedEngineContextRef) != "" &&
-		strings.TrimSpace(command.RequestedEngineContextRef) != strings.TrimSpace(model.CurrentEngineVersion) {
+		command.RequestedEngineContextRef != "" &&
+		command.RequestedEngineContextRef != model.CurrentEngineVersion {
 		reasons = append(reasons, "replay_request_command_engine_context_binding_mismatch")
 	}
 	if point12ValBCurrentSchemaSupplied(model) &&
-		strings.TrimSpace(command.RequestedSchemaContextRef) != "" &&
-		strings.TrimSpace(command.RequestedSchemaContextRef) != strings.TrimSpace(model.CurrentSchemaVersion) {
+		command.RequestedSchemaContextRef != "" &&
+		command.RequestedSchemaContextRef != model.CurrentSchemaVersion {
 		reasons = append(reasons, "replay_request_command_schema_context_binding_mismatch")
 	}
-	switch strings.TrimSpace(model.ReplayMode) {
+	switch model.ReplayMode {
 	case point12Val0ReplayModeCurrentPolicyContext, point12Val0ReplayModeComparisonMode:
 		if !point12ValBCurrentPolicySupplied(model) ||
 			!point12ValBCurrentEngineSupplied(model) ||
@@ -742,7 +865,7 @@ func EvaluatePoint12ValBReplayRequestState(
 }
 
 func point12ValBMismatchNeedsComparisonData(mismatchType string) bool {
-	switch strings.TrimSpace(mismatchType) {
+	switch mismatchType {
 	case point12ValBMismatchTypePolicyMismatch,
 		point12ValBMismatchTypeEngineMismatch,
 		point12ValBMismatchTypeSchemaMismatch,
@@ -766,9 +889,9 @@ func point12ValBMismatchNeedsComparisonData(mismatchType string) bool {
 }
 
 func point12ValBMismatchHasComparisonData(model Point12ValBReplayMismatch) bool {
-	return strings.TrimSpace(model.ExpectedRef) != "" && strings.TrimSpace(model.ActualRef) != "" ||
-		strings.TrimSpace(model.ExpectedHash) != "" && strings.TrimSpace(model.ActualHash) != "" ||
-		strings.TrimSpace(model.ExpectedVersion) != "" && strings.TrimSpace(model.ActualVersion) != ""
+	return formalRawExactNonEmpty(model.ExpectedRef) && formalRawExactNonEmpty(model.ActualRef) ||
+		formalRawExactNonEmpty(model.ExpectedHash) && formalRawExactNonEmpty(model.ActualHash) ||
+		formalRawExactNonEmpty(model.ExpectedVersion) && formalRawExactNonEmpty(model.ActualVersion)
 }
 
 func point12ValBMismatchStateAndReasons(model Point12ValBReplayMismatch) []string {
@@ -781,7 +904,7 @@ func point12ValBMismatchStateAndReasons(model Point12ValBReplayMismatch) []strin
 	if point12ValBMismatchNeedsComparisonData(model.MismatchType) && !point12ValBMismatchHasComparisonData(model) {
 		reasons = append(reasons, "replay_mismatch_expected_actual_missing")
 	}
-	if strings.TrimSpace(model.DriftReason) != "" && !point12ValBDriftClassificationValid(model.DriftReason) {
+	if model.DriftReason != "" && !point12ValBDriftClassificationValid(model.DriftReason) {
 		reasons = append(reasons, "replay_mismatch_drift_reason_invalid")
 	}
 	return reasons
@@ -800,7 +923,7 @@ func point12ValBReplayResultStateAndReasons(
 		!point12ValBReplayRequestRefValid(model.ReplayRequestID) ||
 		!point12Val0ProofPackRefValid(model.ProofPackID) ||
 		!point12ValAManifestRefValid(model.ManifestID) ||
-		!point11Val0ContainsTrimmed(point12ValBReplayResultStates(), model.ReplayState) ||
+		!point12Val0ExactOneOf(model.ReplayState, point12ValBReplayResultStates()) ||
 		!point12Val0ReplayModeValid(model.ReplayMode) ||
 		!point12ValBReplayResultTaxonomyValid(model.ReplayResultTaxonomy) ||
 		!point12ValBDecisionStateValueValid(model.OriginalDecisionState) ||
@@ -816,12 +939,17 @@ func point12ValBReplayResultStateAndReasons(
 		!point12Val0OptionalClaimTextListValid(model.ReplayOutputClaims) {
 		blockedReasons = append(blockedReasons, "replay_result_identity_or_metadata_invalid")
 	}
-	if strings.TrimSpace(model.ReplayRequestID) != strings.TrimSpace(request.ReplayRequestID) ||
-		strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(request.ProofPackID) ||
-		strings.TrimSpace(model.ManifestID) != strings.TrimSpace(request.ManifestID) ||
-		strings.TrimSpace(model.ReplayMode) != strings.TrimSpace(request.ReplayMode) ||
-		strings.TrimSpace(model.OriginalDecisionState) != strings.TrimSpace(request.OriginalDecisionState) {
+	if model.ReplayRequestID != request.ReplayRequestID ||
+		model.ProofPackID != request.ProofPackID ||
+		model.ManifestID != request.ManifestID ||
+		model.ReplayMode != request.ReplayMode ||
+		model.OriginalDecisionState != request.OriginalDecisionState {
 		blockedReasons = append(blockedReasons, "replay_result_request_binding_mismatch")
+	}
+	if !point12ValBProfileContextBoundToDependency(model.ProfileContext, dependency) ||
+		!point12Val0ProfileContextMatchesManifest(model.ProfileContext, request.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(model.ProfileContext, command.ProfileContext) {
+		blockedReasons = append(blockedReasons, "replay_result_profile_context_binding_mismatch")
 	}
 	if model.ExternalAPIUsed {
 		blockedReasons = append(blockedReasons, "replay_result_external_api_used")
@@ -829,15 +957,7 @@ func point12ValBReplayResultStateAndReasons(
 	if model.PointPassEmitted {
 		blockedReasons = append(blockedReasons, "replay_result_point12_pass_emitted")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.ReplayResultID,
-		model.ReplayRequestID,
-		model.BlockedReason,
-		model.DecisionDriftExplanation,
-		model.CustomerVisibleExplanation,
-		strings.Join(model.MismatchExplanations, " "),
-		strings.Join(model.ReplayOutputClaims, " "),
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValBReplayResultPassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "replay_result_premature_point12_pass")
 	}
 	if point12Val0ContainsForbiddenClaim(strings.Join(model.ReplayOutputClaims, " "), model.CustomerVisibleExplanation) {
@@ -852,19 +972,19 @@ func point12ValBReplayResultStateAndReasons(
 		}
 	}
 
-	originalPolicyMismatch := strings.TrimSpace(request.PolicyRef) != strings.TrimSpace(dependency.ValAManifest.PolicyRef) ||
-		strings.TrimSpace(request.PolicyVersion) != strings.TrimSpace(dependency.ValAManifest.PolicyVersion) ||
-		strings.TrimSpace(request.PolicyHash) != strings.TrimSpace(dependency.ValAManifest.PolicyHash)
-	originalEngineMismatch := strings.TrimSpace(request.EngineVersion) != strings.TrimSpace(dependency.ValAManifest.EngineVersion) ||
-		strings.TrimSpace(request.EngineHash) != strings.TrimSpace(dependency.ValAManifest.EngineHash)
-	originalSchemaMismatch := strings.TrimSpace(request.SchemaVersion) != strings.TrimSpace(dependency.ValAManifest.SchemaVersion) ||
-		strings.TrimSpace(request.SchemaHash) != strings.TrimSpace(dependency.ValAManifest.SchemaHash)
+	originalPolicyMismatch := request.PolicyRef != dependency.ValAManifest.PolicyRef ||
+		request.PolicyVersion != dependency.ValAManifest.PolicyVersion ||
+		request.PolicyHash != dependency.ValAManifest.PolicyHash
+	originalEngineMismatch := request.EngineVersion != dependency.ValAManifest.EngineVersion ||
+		request.EngineHash != dependency.ValAManifest.EngineHash
+	originalSchemaMismatch := request.SchemaVersion != dependency.ValAManifest.SchemaVersion ||
+		request.SchemaHash != dependency.ValAManifest.SchemaHash
 	originalEvidenceMismatch := !point12Val0ExactStringSetMatch(request.EvidenceRefs, dependency.ValAManifest.EvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(request.EvidenceHashRefs, dependency.ValAManifest.EvidenceHashRefs)
 	originalClaimMismatch := !point12Val0ExactStringSetMatch(request.ClaimRefs, dependency.ValAManifest.ClaimRefs)
 	originalGovernanceMismatch := !point12Val0ExactStringSetMatch(request.GovernanceEventRefs, dependency.ValAManifest.GovernanceEventRefs)
-	manifestPayloadMismatch := strings.TrimSpace(request.ManifestPayloadHash) != strings.TrimSpace(dependency.ValAManifest.ManifestPayloadHash)
-	redactionBindingMismatch := strings.TrimSpace(request.RedactionManifestRef) != strings.TrimSpace(dependency.ValAManifest.RedactionManifestRef)
+	manifestPayloadMismatch := request.ManifestPayloadHash != dependency.ValAManifest.ManifestPayloadHash
+	redactionBindingMismatch := request.RedactionManifestRef != dependency.ValAManifest.RedactionManifestRef
 	currentPolicyDiff := point12ValBCurrentPolicyDiffers(request)
 	currentEngineDiff := point12ValBCurrentEngineDiffers(request)
 	currentSchemaDiff := point12ValBCurrentSchemaDiffers(request)
@@ -892,105 +1012,107 @@ func point12ValBReplayResultStateAndReasons(
 		point12ValBHasMismatchType(model.Mismatches, point12ValBMismatchTypeRedactionMismatch)
 
 	if hasTamper &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultTamperDetected &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultBlockedReplay {
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultTamperDetected &&
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultBlockedReplay {
 		blockedReasons = append(blockedReasons, "replay_result_tamper_must_outrank_same_decision")
 	}
 	if hasUnsupported &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultUnsupportedVersion &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultBlockedReplay {
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultUnsupportedVersion &&
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultBlockedReplay {
 		blockedReasons = append(blockedReasons, "replay_result_unsupported_version_must_outrank_same_decision")
 	}
 	if hasInsufficient &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultInsufficientEvidence &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultBlockedReplay {
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultInsufficientEvidence &&
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultBlockedReplay {
 		blockedReasons = append(blockedReasons, "replay_result_insufficient_evidence_must_outrank_same_decision")
 	}
 	if hasRedactionLimitations &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultRedactedLimitations &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultInsufficientEvidence &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) != Point12Val0ReplayResultBlockedReplay {
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultRedactedLimitations &&
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultInsufficientEvidence &&
+		model.ReplayResultTaxonomy != Point12Val0ReplayResultBlockedReplay {
 		blockedReasons = append(blockedReasons, "replay_result_redaction_limitations_must_fail_closed")
 	}
 
 	if originalPolicyMismatch &&
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{
 			Point12Val0ReplayResultPolicyMismatch,
 			Point12Val0ReplayResultTamperDetected,
 			Point12Val0ReplayResultBlockedReplay,
-		}, model.ReplayResultTaxonomy) {
+		}) {
 		blockedReasons = append(blockedReasons, "replay_result_original_policy_mismatch_unexplained")
 	}
 	if originalEngineMismatch &&
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{
 			Point12Val0ReplayResultEngineMismatch,
 			Point12Val0ReplayResultTamperDetected,
 			Point12Val0ReplayResultBlockedReplay,
-		}, model.ReplayResultTaxonomy) {
+		}) {
 		blockedReasons = append(blockedReasons, "replay_result_original_engine_mismatch_unexplained")
 	}
 	if originalSchemaMismatch &&
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{
 			Point12Val0ReplayResultSchemaMismatch,
 			Point12Val0ReplayResultTamperDetected,
 			Point12Val0ReplayResultBlockedReplay,
-		}, model.ReplayResultTaxonomy) {
+		}) {
 		blockedReasons = append(blockedReasons, "replay_result_original_schema_mismatch_unexplained")
 	}
 	if originalEvidenceMismatch &&
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{
 			Point12Val0ReplayResultEvidenceMismatch,
 			Point12Val0ReplayResultInsufficientEvidence,
 			Point12Val0ReplayResultBlockedReplay,
 			Point12Val0ReplayResultTamperDetected,
-		}, model.ReplayResultTaxonomy) {
+		}) {
 		blockedReasons = append(blockedReasons, "replay_result_original_evidence_mismatch_unexplained")
 	}
 	if originalClaimMismatch &&
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{
 			Point12Val0ReplayResultClaimMismatch,
 			Point12Val0ReplayResultBlockedReplay,
-		}, model.ReplayResultTaxonomy) {
+		}) {
 		blockedReasons = append(blockedReasons, "replay_result_original_claim_mismatch_unexplained")
 	}
 	if originalGovernanceMismatch &&
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{
 			Point12Val0ReplayResultGovernanceMismatch,
 			Point12Val0ReplayResultBlockedReplay,
-		}, model.ReplayResultTaxonomy) {
+		}) {
 		blockedReasons = append(blockedReasons, "replay_result_original_governance_mismatch_unexplained")
 	}
 
-	if strings.TrimSpace(request.ReplayMode) == point12Val0ReplayModeOriginalContext {
+	if request.ReplayMode == point12Val0ReplayModeOriginalContext {
 		if currentPolicyDiff &&
-			!point11Val0ContainsTrimmed([]string{Point12Val0ReplayResultPolicyMismatch, Point12Val0ReplayResultBlockedReplay}, model.ReplayResultTaxonomy) {
+			!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{Point12Val0ReplayResultPolicyMismatch, Point12Val0ReplayResultBlockedReplay}) {
 			blockedReasons = append(blockedReasons, "replay_result_original_context_cannot_silently_use_current_policy")
 		}
 		if currentEngineDiff &&
-			!point11Val0ContainsTrimmed([]string{Point12Val0ReplayResultEngineMismatch, Point12Val0ReplayResultBlockedReplay}, model.ReplayResultTaxonomy) {
+			!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{Point12Val0ReplayResultEngineMismatch, Point12Val0ReplayResultBlockedReplay}) {
 			blockedReasons = append(blockedReasons, "replay_result_original_context_cannot_silently_use_current_engine")
 		}
 		if currentSchemaDiff &&
-			!point11Val0ContainsTrimmed([]string{Point12Val0ReplayResultSchemaMismatch, Point12Val0ReplayResultBlockedReplay}, model.ReplayResultTaxonomy) {
+			!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{Point12Val0ReplayResultSchemaMismatch, Point12Val0ReplayResultBlockedReplay}) {
 			blockedReasons = append(blockedReasons, "replay_result_original_context_cannot_silently_use_current_schema")
 		}
 		if currentEvidenceDiff &&
-			!point11Val0ContainsTrimmed([]string{Point12Val0ReplayResultEvidenceMismatch, Point12Val0ReplayResultBlockedReplay}, model.ReplayResultTaxonomy) {
+			!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{Point12Val0ReplayResultEvidenceMismatch, Point12Val0ReplayResultBlockedReplay}) {
 			blockedReasons = append(blockedReasons, "replay_result_original_context_cannot_silently_use_current_evidence")
 		}
 		if currentClaimDiff &&
-			!point11Val0ContainsTrimmed([]string{Point12Val0ReplayResultClaimMismatch, Point12Val0ReplayResultBlockedReplay}, model.ReplayResultTaxonomy) {
+			!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{Point12Val0ReplayResultClaimMismatch, Point12Val0ReplayResultBlockedReplay}) {
 			blockedReasons = append(blockedReasons, "replay_result_original_context_cannot_silently_use_current_claims")
 		}
 		if currentGovernanceDiff &&
-			!point11Val0ContainsTrimmed([]string{Point12Val0ReplayResultGovernanceMismatch, Point12Val0ReplayResultBlockedReplay}, model.ReplayResultTaxonomy) {
+			!point12Val0ExactOneOf(model.ReplayResultTaxonomy, []string{Point12Val0ReplayResultGovernanceMismatch, Point12Val0ReplayResultBlockedReplay}) {
 			blockedReasons = append(blockedReasons, "replay_result_original_context_cannot_silently_use_current_governance")
 		}
 	}
 
-	if strings.TrimSpace(model.ReplayResultTaxonomy) == Point12Val0ReplayResultSameDecision {
+	if model.ReplayResultTaxonomy == Point12Val0ReplayResultSameDecision {
 		if !model.MatchOriginal ||
-			strings.TrimSpace(model.OriginalDecisionState) != strings.TrimSpace(model.ReplayedDecisionState) ||
+			!point12Val0ProfileContextOriginalReplaySafe(model.ProfileContext, request.TenantScope) ||
+			!point12Val0ProfileContextMatchesManifest(model.ProfileContext, request.ProfileContext) ||
+			model.OriginalDecisionState != model.ReplayedDecisionState ||
 			hasTamper ||
 			hasUnsupported ||
 			hasInsufficient ||
@@ -1006,8 +1128,8 @@ func point12ValBReplayResultStateAndReasons(
 		}
 	}
 
-	if strings.TrimSpace(model.ReplayResultTaxonomy) == Point12Val0ReplayResultDifferentDecision {
-		if model.MatchOriginal || strings.TrimSpace(model.OriginalDecisionState) == strings.TrimSpace(model.ReplayedDecisionState) {
+	if model.ReplayResultTaxonomy == Point12Val0ReplayResultDifferentDecision {
+		if model.MatchOriginal || model.OriginalDecisionState == model.ReplayedDecisionState {
 			blockedReasons = append(blockedReasons, "replay_result_different_decision_must_not_match_original")
 		}
 		if strings.TrimSpace(model.DecisionDriftExplanation) == "" {
@@ -1015,7 +1137,7 @@ func point12ValBReplayResultStateAndReasons(
 		}
 	}
 
-	if strings.TrimSpace(model.ReplayResultTaxonomy) == Point12Val0ReplayResultBlockedReplay &&
+	if model.ReplayResultTaxonomy == Point12Val0ReplayResultBlockedReplay &&
 		strings.TrimSpace(model.BlockedReason) == "" &&
 		!point12ValBHasReplayBlockingMismatch(model.Mismatches) &&
 		!hasTamper &&
@@ -1033,31 +1155,31 @@ func point12ValBReplayResultStateAndReasons(
 		Point12Val0ReplayResultClaimMismatch:      point12ValBMismatchTypeClaimMismatch,
 		Point12Val0ReplayResultGovernanceMismatch: point12ValBMismatchTypeGovernanceMismatch,
 	} {
-		if strings.TrimSpace(model.ReplayResultTaxonomy) == taxonomy && !point12ValBHasMismatchType(model.Mismatches, mismatchType) {
+		if model.ReplayResultTaxonomy == taxonomy && !point12ValBHasMismatchType(model.Mismatches, mismatchType) {
 			blockedReasons = append(blockedReasons, "replay_result_specific_mismatch_missing_entry")
 		}
 	}
 
-	if strings.TrimSpace(request.ReplayMode) == point12Val0ReplayModeComparisonMode {
+	if request.ReplayMode == point12Val0ReplayModeComparisonMode {
 		if strings.TrimSpace(model.DecisionDriftExplanation) == "" {
 			reviewReasons = append(reviewReasons, "replay_result_comparison_mode_requires_drift_explanation")
 		}
 		if (currentPolicyDiff || currentEngineDiff || currentSchemaDiff || currentEvidenceDiff || currentClaimDiff || currentGovernanceDiff ||
-			strings.TrimSpace(model.ReplayResultTaxonomy) == Point12Val0ReplayResultDifferentDecision ||
+			model.ReplayResultTaxonomy == Point12Val0ReplayResultDifferentDecision ||
 			point12ValBHasDecisiveMismatch(model.Mismatches)) &&
 			!point12ValBDriftClassificationValid(model.DecisionDriftClassification) {
 			reviewReasons = append(reviewReasons, "replay_result_comparison_mode_requires_drift_classification")
 		}
 	}
 
-	if strings.TrimSpace(request.ReplayMode) == point12Val0ReplayModeCurrentPolicyContext &&
-		strings.TrimSpace(model.ReplayResultTaxonomy) == Point12Val0ReplayResultDifferentDecision &&
+	if request.ReplayMode == point12Val0ReplayModeCurrentPolicyContext &&
+		model.ReplayResultTaxonomy == Point12Val0ReplayResultDifferentDecision &&
 		strings.TrimSpace(model.DecisionDriftExplanation) == "" {
 		reviewReasons = append(reviewReasons, "replay_result_current_policy_drift_explanation_missing")
 	}
 
-	if strings.TrimSpace(request.ReplayMode) == point12Val0ReplayModeCurrentPolicyContext &&
-		strings.TrimSpace(model.OriginalDecisionState) != strings.TrimSpace(request.OriginalDecisionState) {
+	if request.ReplayMode == point12Val0ReplayModeCurrentPolicyContext &&
+		model.OriginalDecisionState != request.OriginalDecisionState {
 		blockedReasons = append(blockedReasons, "replay_result_current_policy_cannot_rewrite_original_decision")
 	}
 
@@ -1082,14 +1204,14 @@ func EvaluatePoint12ValBReplayResultState(
 
 func EvaluatePoint12ValBState(model Point12ValBFoundation) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		strings.TrimSpace(model.DependencyState) == Point12ValBDependencyStateBlocked ||
-		strings.TrimSpace(model.ReplayCommandState) == Point12ValBReplayCommandStateBlocked ||
-		strings.TrimSpace(model.ReplayRequestState) == Point12ValBReplayRequestStateBlocked ||
-		strings.TrimSpace(model.ReplayResultState) == Point12ValBReplayResultStateBlocked {
+		model.DependencyState == Point12ValBDependencyStateBlocked ||
+		model.ReplayCommandState == Point12ValBReplayCommandStateBlocked ||
+		model.ReplayRequestState == Point12ValBReplayRequestStateBlocked ||
+		model.ReplayResultState == Point12ValBReplayResultStateBlocked {
 		return Point12ValBStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point12ValBDependencyStateReviewRequired ||
-		strings.TrimSpace(model.ReplayResultState) == Point12ValBReplayResultStateReviewRequired {
+	if model.DependencyState == Point12ValBDependencyStateReviewRequired ||
+		model.ReplayResultState == Point12ValBReplayResultStateReviewRequired {
 		return Point12ValBStateReviewRequired
 	}
 	return Point12ValBStateActive
@@ -1127,6 +1249,7 @@ func Point12ValBFoundationModel() Point12ValBFoundation {
 		ArtifactRef:                 dependency.ValAManifest.ArtifactRef,
 		ReplayMode:                  point12Val0ReplayModeOriginalContext,
 		CompatibilityProfileRef:     dependency.ValAManifest.CompatibilityProfileRef,
+		ProfileContext:              dependency.ValAManifest.ProfileContext,
 		AllowCurrentPolicy:          false,
 		AllowExternalAPI:            false,
 		OfflineBundleRequired:       false,
@@ -1158,6 +1281,7 @@ func Point12ValBFoundationModel() Point12ValBFoundation {
 		GovernanceEventRefs:          append([]string{}, dependency.ValAManifest.GovernanceEventRefs...),
 		ManifestPayloadHash:          dependency.ValAManifest.ManifestPayloadHash,
 		CompatibilityProfileRef:      dependency.ValAManifest.CompatibilityProfileRef,
+		ProfileContext:               dependency.ValAManifest.ProfileContext,
 		ReplayMode:                   point12Val0ReplayModeOriginalContext,
 		DeclaredCompatibilityContext: "compatibility_context_point12_valb_original",
 		OriginalDecisionState:        "decision_state_allow",
@@ -1173,6 +1297,7 @@ func Point12ValBFoundationModel() Point12ValBFoundation {
 		ProofPackID:                  request.ProofPackID,
 		ManifestID:                   request.ManifestID,
 		ReplayMode:                   request.ReplayMode,
+		ProfileContext:               request.ProfileContext,
 		ReplayState:                  Point12ValBReplayResultStateActive,
 		ReplayResultTaxonomy:         Point12Val0ReplayResultSameDecision,
 		OriginalDecisionState:        request.OriginalDecisionState,

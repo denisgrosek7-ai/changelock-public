@@ -75,6 +75,25 @@ const (
 )
 
 const (
+	Point12Val0ProfileBindingStatusMatch           = "MATCH"
+	Point12Val0ProfileBindingStatusMismatch        = "MISMATCH"
+	Point12Val0ProfileBindingStatusMissingOriginal = "MISSING_ORIGINAL"
+	Point12Val0ProfileBindingStatusMissingCurrent  = "MISSING_CURRENT"
+	Point12Val0ProfileBindingStatusUnsupported     = "UNSUPPORTED"
+	Point12Val0ProfileBindingStatusReviewRequired  = "REVIEW_REQUIRED"
+	Point12Val0ProfileBindingStatusBlocked         = "BLOCKED"
+
+	Point12Val0ProfileReplayModeOriginalProfileReplay = "ORIGINAL_PROFILE_REPLAY"
+	Point12Val0ProfileReplayModeCurrentComparison     = "CURRENT_PROFILE_COMPARISON"
+
+	Point12Val0ProfileApprovalStateActive      = "profile_approval_active"
+	Point12Val0ProfileApprovalStateExpired     = "profile_approval_expired"
+	Point12Val0ProfileApprovalStateRevoked     = "profile_approval_revoked"
+	Point12Val0ProfileApprovalStateSuperseded  = "profile_approval_superseded"
+	Point12Val0ProfileApprovalStateUnsupported = "profile_approval_unsupported"
+)
+
+const (
 	point12Val0ReplayModeOriginalContext      = "original_context"
 	point12Val0ReplayModeCurrentPolicyContext = "current_policy_context"
 	point12Val0ReplayModeComparisonMode       = "comparison_mode"
@@ -97,6 +116,7 @@ const (
 
 	point12Val0PointID                      = "point_12"
 	point12Val0WaveID                       = "val_0"
+	point12Val0OriginalTenantScope          = "tenant_scope_point12_alpha"
 	point12Val0ProjectionDisclaimerBaseline = "projection_only not_canonical_truth point12_val0_replay_discipline_foundation"
 )
 
@@ -152,68 +172,99 @@ type Point12Val0ProofPackCompatibilityProfile struct {
 	CompatibilityEvidenceRefs        []string `json:"compatibility_evidence_refs,omitempty"`
 }
 
+// Deferred integration note: Point16 will govern historical replay use of this
+// context, Point17 will own Company/Tenant Profile objects, and Point24 will
+// cover abuse tests. Point12 only binds replay output to original profile context.
+type Point12Val0ReplayProfileContext struct {
+	OriginalProfileID             string `json:"original_profile_id"`
+	OriginalProfileVersion        string `json:"original_profile_version"`
+	OriginalProfileHash           string `json:"original_profile_hash"`
+	OriginalTenantScope           string `json:"original_tenant_scope"`
+	CurrentProfileID              string `json:"current_profile_id"`
+	CurrentProfileVersion         string `json:"current_profile_version"`
+	CurrentProfileHash            string `json:"current_profile_hash"`
+	CurrentTenantScope            string `json:"current_tenant_scope"`
+	ProfileMatchOriginal          bool   `json:"profile_match_original"`
+	ProfileBindingStatus          string `json:"profile_binding_status"`
+	ProfileMismatchReason         string `json:"profile_mismatch_reason"`
+	ProfileReplayMode             string `json:"profile_replay_mode"`
+	ProfileApprovalRef            string `json:"profile_approval_ref"`
+	ProfileSignatureRef           string `json:"profile_signature_ref"`
+	ProfileApprovalEvidenceRef    string `json:"profile_approval_evidence_ref"`
+	ProfileApprovalEvidenceHash   string `json:"profile_approval_evidence_hash"`
+	ProfileApprovalBoundProfileID string `json:"profile_approval_bound_profile_id"`
+	ProfileApprovalBoundVersion   string `json:"profile_approval_bound_version"`
+	ProfileApprovalBoundHash      string `json:"profile_approval_bound_hash"`
+	ProfileApprovalBoundTenant    string `json:"profile_approval_bound_tenant"`
+	ProfileApprovalBoundApproval  string `json:"profile_approval_bound_approval"`
+	ProfileApprovalBoundSignature string `json:"profile_approval_bound_signature"`
+	OriginalProfileApprovalState  string `json:"original_profile_approval_state"`
+}
+
 type Point12Val0SignedProofPackManifest struct {
-	ProofPackID                   string   `json:"proof_pack_id"`
-	DecisionID                    string   `json:"decision_id"`
-	PointID                       string   `json:"point_id"`
-	WaveID                        string   `json:"wave_id"`
-	ProofPackState                string   `json:"proof_pack_state"`
-	TenantScope                   string   `json:"tenant_scope"`
-	ArtifactRef                   string   `json:"artifact_ref"`
-	ArtifactHash                  string   `json:"artifact_hash"`
-	EvidenceRefs                  []string `json:"evidence_refs,omitempty"`
-	EvidenceHashRefs              []string `json:"evidence_hash_refs,omitempty"`
-	PolicyRef                     string   `json:"policy_ref"`
-	PolicyVersion                 string   `json:"policy_version"`
-	PolicyHash                    string   `json:"policy_hash"`
-	EngineVersion                 string   `json:"engine_version"`
-	EngineHash                    string   `json:"engine_hash"`
-	SchemaVersion                 string   `json:"schema_version"`
-	SchemaHash                    string   `json:"schema_hash"`
-	ClaimRefs                     []string `json:"claim_refs,omitempty"`
-	GovernanceEventRefs           []string `json:"governance_event_refs,omitempty"`
-	UpstreamClosureManifestRef    string   `json:"upstream_closure_manifest_ref"`
-	DependencySnapshotRef         string   `json:"dependency_snapshot_ref"`
-	PolicyAuthorityContextRef     string   `json:"policy_authority_context_ref"`
-	ClaimAuthorityContextRef      string   `json:"claim_authority_context_ref"`
-	GovernanceAuthorityContextRef string   `json:"governance_authority_context_ref"`
-	CompatibilityProfileRef       string   `json:"compatibility_profile_ref"`
-	GeneratedAt                   string   `json:"generated_at"`
-	FreshnessWindow               string   `json:"freshness_window"`
-	SigningKeyRef                 string   `json:"signing_key_ref"`
-	SignatureRef                  string   `json:"signature_ref"`
-	RedactionManifestRef          string   `json:"redaction_manifest_ref"`
-	ProjectionDisclaimer          string   `json:"projection_disclaimer"`
-	RetentionClassRef             string   `json:"retention_class_ref"`
-	ToolchainProvenanceRefs       []string `json:"toolchain_provenance_refs,omitempty"`
-	AgentLineageRefs              []string `json:"agent_lineage_refs,omitempty"`
+	ProofPackID                   string                          `json:"proof_pack_id"`
+	DecisionID                    string                          `json:"decision_id"`
+	PointID                       string                          `json:"point_id"`
+	WaveID                        string                          `json:"wave_id"`
+	ProofPackState                string                          `json:"proof_pack_state"`
+	TenantScope                   string                          `json:"tenant_scope"`
+	ArtifactRef                   string                          `json:"artifact_ref"`
+	ArtifactHash                  string                          `json:"artifact_hash"`
+	EvidenceRefs                  []string                        `json:"evidence_refs,omitempty"`
+	EvidenceHashRefs              []string                        `json:"evidence_hash_refs,omitempty"`
+	PolicyRef                     string                          `json:"policy_ref"`
+	PolicyVersion                 string                          `json:"policy_version"`
+	PolicyHash                    string                          `json:"policy_hash"`
+	EngineVersion                 string                          `json:"engine_version"`
+	EngineHash                    string                          `json:"engine_hash"`
+	SchemaVersion                 string                          `json:"schema_version"`
+	SchemaHash                    string                          `json:"schema_hash"`
+	ClaimRefs                     []string                        `json:"claim_refs,omitempty"`
+	GovernanceEventRefs           []string                        `json:"governance_event_refs,omitempty"`
+	UpstreamClosureManifestRef    string                          `json:"upstream_closure_manifest_ref"`
+	DependencySnapshotRef         string                          `json:"dependency_snapshot_ref"`
+	PolicyAuthorityContextRef     string                          `json:"policy_authority_context_ref"`
+	ClaimAuthorityContextRef      string                          `json:"claim_authority_context_ref"`
+	GovernanceAuthorityContextRef string                          `json:"governance_authority_context_ref"`
+	CompatibilityProfileRef       string                          `json:"compatibility_profile_ref"`
+	ProfileContext                Point12Val0ReplayProfileContext `json:"profile_context"`
+	GeneratedAt                   string                          `json:"generated_at"`
+	FreshnessWindow               string                          `json:"freshness_window"`
+	SigningKeyRef                 string                          `json:"signing_key_ref"`
+	SignatureRef                  string                          `json:"signature_ref"`
+	RedactionManifestRef          string                          `json:"redaction_manifest_ref"`
+	ProjectionDisclaimer          string                          `json:"projection_disclaimer"`
+	RetentionClassRef             string                          `json:"retention_class_ref"`
+	ToolchainProvenanceRefs       []string                        `json:"toolchain_provenance_refs,omitempty"`
+	AgentLineageRefs              []string                        `json:"agent_lineage_refs,omitempty"`
 }
 
 type Point12Val0ReplayAssessment struct {
-	ReplayAssessmentID      string   `json:"replay_assessment_id"`
-	ProofPackState          string   `json:"proof_pack_state"`
-	ReplayResult            string   `json:"replay_result"`
-	DriftExplanation        string   `json:"drift_explanation"`
-	DeterminismContractRef  string   `json:"determinism_contract_ref"`
-	CompatibilityProfileRef string   `json:"compatibility_profile_ref"`
-	OriginalPolicyRef       string   `json:"original_policy_ref"`
-	ReplayPolicyRef         string   `json:"replay_policy_ref"`
-	OriginalPolicyHash      string   `json:"original_policy_hash"`
-	ReplayPolicyHash        string   `json:"replay_policy_hash"`
-	OriginalEngineHash      string   `json:"original_engine_hash"`
-	ReplayEngineHash        string   `json:"replay_engine_hash"`
-	OriginalSchemaVersion   string   `json:"original_schema_version"`
-	ReplaySchemaVersion     string   `json:"replay_schema_version"`
-	EvidenceRefs            []string `json:"evidence_refs,omitempty"`
-	ReplayEvidenceRefs      []string `json:"replay_evidence_refs,omitempty"`
-	EvidenceHashRefs        []string `json:"evidence_hash_refs,omitempty"`
-	ReplayEvidenceHashRefs  []string `json:"replay_evidence_hash_refs,omitempty"`
-	ClaimRefs               []string `json:"claim_refs,omitempty"`
-	ReplayClaimRefs         []string `json:"replay_claim_refs,omitempty"`
-	GovernanceEventRefs     []string `json:"governance_event_refs,omitempty"`
-	ReplayGovernanceRefs    []string `json:"replay_governance_refs,omitempty"`
-	DecisiveEvidencePresent bool     `json:"decisive_evidence_present"`
-	ProjectionDisclaimer    string   `json:"projection_disclaimer"`
+	ReplayAssessmentID      string                          `json:"replay_assessment_id"`
+	ProofPackState          string                          `json:"proof_pack_state"`
+	ReplayResult            string                          `json:"replay_result"`
+	DriftExplanation        string                          `json:"drift_explanation"`
+	DeterminismContractRef  string                          `json:"determinism_contract_ref"`
+	CompatibilityProfileRef string                          `json:"compatibility_profile_ref"`
+	OriginalPolicyRef       string                          `json:"original_policy_ref"`
+	ReplayPolicyRef         string                          `json:"replay_policy_ref"`
+	OriginalPolicyHash      string                          `json:"original_policy_hash"`
+	ReplayPolicyHash        string                          `json:"replay_policy_hash"`
+	OriginalEngineHash      string                          `json:"original_engine_hash"`
+	ReplayEngineHash        string                          `json:"replay_engine_hash"`
+	OriginalSchemaVersion   string                          `json:"original_schema_version"`
+	ReplaySchemaVersion     string                          `json:"replay_schema_version"`
+	EvidenceRefs            []string                        `json:"evidence_refs,omitempty"`
+	ReplayEvidenceRefs      []string                        `json:"replay_evidence_refs,omitempty"`
+	EvidenceHashRefs        []string                        `json:"evidence_hash_refs,omitempty"`
+	ReplayEvidenceHashRefs  []string                        `json:"replay_evidence_hash_refs,omitempty"`
+	ClaimRefs               []string                        `json:"claim_refs,omitempty"`
+	ReplayClaimRefs         []string                        `json:"replay_claim_refs,omitempty"`
+	GovernanceEventRefs     []string                        `json:"governance_event_refs,omitempty"`
+	ReplayGovernanceRefs    []string                        `json:"replay_governance_refs,omitempty"`
+	DecisiveEvidencePresent bool                            `json:"decisive_evidence_present"`
+	ProjectionDisclaimer    string                          `json:"projection_disclaimer"`
+	ProfileContext          Point12Val0ReplayProfileContext `json:"profile_context"`
 }
 
 type Point12Val0RedactionBoundary struct {
@@ -338,6 +389,77 @@ func point12Val0ContainsPrematurePassToken(values ...string) bool {
 		}
 	}
 	return false
+}
+
+func point12Val0ManifestPassTokenGuardValues(model Point12Val0SignedProofPackManifest) []string {
+	values := []string{
+		model.ProofPackID,
+		model.DecisionID,
+		model.PointID,
+		model.WaveID,
+		model.ProofPackState,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
+		model.UpstreamClosureManifestRef,
+		model.DependencySnapshotRef,
+		model.PolicyAuthorityContextRef,
+		model.ClaimAuthorityContextRef,
+		model.GovernanceAuthorityContextRef,
+		model.CompatibilityProfileRef,
+		model.GeneratedAt,
+		model.FreshnessWindow,
+		model.SigningKeyRef,
+		model.SignatureRef,
+		model.RedactionManifestRef,
+		model.ProjectionDisclaimer,
+		model.RetentionClassRef,
+	}
+	values = append(values, model.EvidenceRefs...)
+	values = append(values, model.EvidenceHashRefs...)
+	values = append(values, model.ClaimRefs...)
+	values = append(values, model.GovernanceEventRefs...)
+	values = append(values, model.ToolchainProvenanceRefs...)
+	values = append(values, model.AgentLineageRefs...)
+	values = append(values, point12Val0ProfileContextGuardValues(model.ProfileContext)...)
+	return values
+}
+
+func point12Val0ReplayAssessmentPassTokenGuardValues(model Point12Val0ReplayAssessment) []string {
+	values := []string{
+		model.ReplayAssessmentID,
+		model.ProofPackState,
+		model.ReplayResult,
+		model.DriftExplanation,
+		model.DeterminismContractRef,
+		model.CompatibilityProfileRef,
+		model.OriginalPolicyRef,
+		model.ReplayPolicyRef,
+		model.OriginalPolicyHash,
+		model.ReplayPolicyHash,
+		model.OriginalEngineHash,
+		model.ReplayEngineHash,
+		model.OriginalSchemaVersion,
+		model.ReplaySchemaVersion,
+		model.ProjectionDisclaimer,
+	}
+	values = append(values, model.EvidenceRefs...)
+	values = append(values, model.ReplayEvidenceRefs...)
+	values = append(values, model.EvidenceHashRefs...)
+	values = append(values, model.ReplayEvidenceHashRefs...)
+	values = append(values, model.ClaimRefs...)
+	values = append(values, model.ReplayClaimRefs...)
+	values = append(values, model.GovernanceEventRefs...)
+	values = append(values, model.ReplayGovernanceRefs...)
+	values = append(values, point12Val0ProfileContextGuardValues(model.ProfileContext)...)
+	return values
 }
 
 func point12Val0ProofPackStates() []string {
@@ -480,8 +602,8 @@ func point12Val0ExactOneOf(value string, allowed []string) bool {
 
 func point12Val0FirstValue(values []string) string {
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if formalRawExactNonEmpty(value) {
+			return value
 		}
 	}
 	return ""
@@ -545,6 +667,62 @@ func point12Val0AuthorityContextRefValid(value string) bool {
 
 func point12Val0CompatibilityProfileRefValid(value string) bool {
 	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"compatibility_profile_"})
+}
+
+func point12Val0ReplayProfileIDValid(value string) bool {
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{"profile_"})
+}
+
+func point12Val0ProfileApprovalRefValid(value string) bool {
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{
+		"profile_approval_",
+		"approval_",
+		"governance_event_",
+	})
+}
+
+func point12Val0ProfileSignatureRefValid(value string) bool {
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{
+		"profile_signature_",
+		"signature_",
+		"signature_metadata_",
+	})
+}
+
+func point12Val0ProfileApprovalEvidenceRefValid(value string) bool {
+	return point12Val0RawCanonicalRefWithPrefixes(value, []string{
+		"profile_approval_evidence_",
+		"evidence_",
+	})
+}
+
+func point12Val0ProfileBindingStatusValid(value string) bool {
+	return point12Val0ExactOneOf(value, []string{
+		Point12Val0ProfileBindingStatusMatch,
+		Point12Val0ProfileBindingStatusMismatch,
+		Point12Val0ProfileBindingStatusMissingOriginal,
+		Point12Val0ProfileBindingStatusMissingCurrent,
+		Point12Val0ProfileBindingStatusUnsupported,
+		Point12Val0ProfileBindingStatusReviewRequired,
+		Point12Val0ProfileBindingStatusBlocked,
+	})
+}
+
+func point12Val0ProfileReplayModeValid(value string) bool {
+	return point12Val0ExactOneOf(value, []string{
+		Point12Val0ProfileReplayModeOriginalProfileReplay,
+		Point12Val0ProfileReplayModeCurrentComparison,
+	})
+}
+
+func point12Val0ProfileApprovalStateValid(value string) bool {
+	return point12Val0ExactOneOf(value, []string{
+		Point12Val0ProfileApprovalStateActive,
+		Point12Val0ProfileApprovalStateExpired,
+		Point12Val0ProfileApprovalStateRevoked,
+		Point12Val0ProfileApprovalStateSuperseded,
+		Point12Val0ProfileApprovalStateUnsupported,
+	})
 }
 
 func point12Val0RedactionManifestRefValid(value string) bool {
@@ -1384,7 +1562,7 @@ func point12Val0DependencyReviewContextModel() Point12Val0Point11ReviewContext {
 }
 
 func point12Val0DependencySnapshotModel() Point12Val0DependencySnapshot {
-	valD := ComputePoint11ValDFoundation(Point11ValDFoundationModel())
+	valD := point11ValDPostMergeFoundationModel()
 	return SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, point12Val0DependencyReviewContextModel())
 }
 
@@ -1482,6 +1660,332 @@ func EvaluatePoint12Val0CompatibilityProfileState(model Point12Val0ProofPackComp
 	return Point12Val0CompatibilityProfileStateActive
 }
 
+func point12Val0ProfileContextFieldsValid(model Point12Val0ReplayProfileContext) bool {
+	return point12Val0ReplayProfileIDValid(model.OriginalProfileID) &&
+		point12Val0VersionIdentityValid(model.OriginalProfileVersion) &&
+		point12Val0HashValid(model.OriginalProfileHash) &&
+		formalRawExactTokenValid(model.OriginalTenantScope, point11Val0ScopeValid) &&
+		point12Val0ReplayProfileIDValid(model.CurrentProfileID) &&
+		point12Val0VersionIdentityValid(model.CurrentProfileVersion) &&
+		point12Val0HashValid(model.CurrentProfileHash) &&
+		formalRawExactTokenValid(model.CurrentTenantScope, point11Val0ScopeValid) &&
+		formalRawExactValid(model.ProfileBindingStatus, point12Val0ProfileBindingStatusValid) &&
+		formalRawExactValid(model.ProfileReplayMode, point12Val0ProfileReplayModeValid) &&
+		point12Val0ProfileApprovalRefValid(model.ProfileApprovalRef) &&
+		point12Val0ProfileSignatureRefValid(model.ProfileSignatureRef) &&
+		point12Val0ProfileApprovalEvidenceRefValid(model.ProfileApprovalEvidenceRef) &&
+		point12Val0HashValid(model.ProfileApprovalEvidenceHash) &&
+		point12Val0ReplayProfileIDValid(model.ProfileApprovalBoundProfileID) &&
+		point12Val0VersionIdentityValid(model.ProfileApprovalBoundVersion) &&
+		point12Val0HashValid(model.ProfileApprovalBoundHash) &&
+		formalRawExactTokenValid(model.ProfileApprovalBoundTenant, point11Val0ScopeValid) &&
+		point12Val0ProfileApprovalRefValid(model.ProfileApprovalBoundApproval) &&
+		point12Val0ProfileSignatureRefValid(model.ProfileApprovalBoundSignature) &&
+		formalRawExactValid(model.OriginalProfileApprovalState, point12Val0ProfileApprovalStateValid) &&
+		point12Val0ProfileMismatchReasonValid(model)
+}
+
+func point12Val0ProfileMismatchReasonValid(model Point12Val0ReplayProfileContext) bool {
+	if point12Val0ContainsPrematurePassToken(model.ProfileMismatchReason) ||
+		point12Val0ContainsForbiddenClaim(model.ProfileMismatchReason) {
+		return false
+	}
+	switch model.ProfileBindingStatus {
+	case Point12Val0ProfileBindingStatusMatch:
+		return model.ProfileMismatchReason == ""
+	case Point12Val0ProfileBindingStatusMismatch:
+		return point12Val0ExactOneOf(model.ProfileMismatchReason, []string{
+			"profile_hash_mismatch",
+			"profile_tenant_mismatch",
+			"profile_current_context_substitution_attempt",
+		})
+	case Point12Val0ProfileBindingStatusMissingOriginal:
+		return model.ProfileMismatchReason == "profile_original_hash_missing"
+	case Point12Val0ProfileBindingStatusMissingCurrent:
+		return model.ProfileMismatchReason == "profile_current_hash_missing"
+	case Point12Val0ProfileBindingStatusUnsupported:
+		return model.ProfileMismatchReason == "profile_unsupported"
+	case Point12Val0ProfileBindingStatusReviewRequired:
+		return model.ProfileMismatchReason == "profile_review_required"
+	case Point12Val0ProfileBindingStatusBlocked:
+		return point12Val0ExactOneOf(model.ProfileMismatchReason, []string{
+			"profile_tenant_mismatch",
+			"profile_approval_expired",
+			"profile_approval_revoked",
+			"profile_approval_superseded",
+			"profile_approval_unsupported",
+			"profile_approval_evidence_mismatch",
+			"profile_current_context_substitution_attempt",
+		})
+	default:
+		return false
+	}
+}
+
+func point12Val0ProfileIdentityMatchesOriginal(model Point12Val0ReplayProfileContext) bool {
+	return model.OriginalProfileID == model.CurrentProfileID &&
+		model.OriginalProfileVersion == model.CurrentProfileVersion &&
+		model.OriginalProfileHash == model.CurrentProfileHash &&
+		model.OriginalTenantScope == model.CurrentTenantScope &&
+		model.OriginalProfileApprovalState == Point12Val0ProfileApprovalStateActive
+}
+
+func point12Val0ProfileContextMatchesManifest(replay, manifest Point12Val0ReplayProfileContext) bool {
+	return replay.OriginalProfileID == manifest.OriginalProfileID &&
+		replay.OriginalProfileVersion == manifest.OriginalProfileVersion &&
+		replay.OriginalProfileHash == manifest.OriginalProfileHash &&
+		replay.OriginalTenantScope == manifest.OriginalTenantScope &&
+		replay.CurrentProfileID == manifest.CurrentProfileID &&
+		replay.CurrentProfileVersion == manifest.CurrentProfileVersion &&
+		replay.CurrentProfileHash == manifest.CurrentProfileHash &&
+		replay.CurrentTenantScope == manifest.CurrentTenantScope &&
+		replay.ProfileMatchOriginal == manifest.ProfileMatchOriginal &&
+		replay.ProfileBindingStatus == manifest.ProfileBindingStatus &&
+		replay.ProfileMismatchReason == manifest.ProfileMismatchReason &&
+		replay.ProfileReplayMode == manifest.ProfileReplayMode &&
+		replay.ProfileApprovalRef == manifest.ProfileApprovalRef &&
+		replay.ProfileSignatureRef == manifest.ProfileSignatureRef &&
+		replay.ProfileApprovalEvidenceRef == manifest.ProfileApprovalEvidenceRef &&
+		replay.ProfileApprovalEvidenceHash == manifest.ProfileApprovalEvidenceHash &&
+		replay.ProfileApprovalBoundProfileID == manifest.ProfileApprovalBoundProfileID &&
+		replay.ProfileApprovalBoundVersion == manifest.ProfileApprovalBoundVersion &&
+		replay.ProfileApprovalBoundHash == manifest.ProfileApprovalBoundHash &&
+		replay.ProfileApprovalBoundTenant == manifest.ProfileApprovalBoundTenant &&
+		replay.ProfileApprovalBoundApproval == manifest.ProfileApprovalBoundApproval &&
+		replay.ProfileApprovalBoundSignature == manifest.ProfileApprovalBoundSignature &&
+		replay.OriginalProfileApprovalState == manifest.OriginalProfileApprovalState
+}
+
+func point12Val0ProfileContextBoundToTenant(model Point12Val0ReplayProfileContext, tenantScope string) bool {
+	return formalRawExactTokenValid(tenantScope, point11Val0ScopeValid) &&
+		model.OriginalTenantScope == tenantScope &&
+		model.CurrentTenantScope == tenantScope
+}
+
+func point12Val0ProfileContextOriginalSourceBound(model Point12Val0ReplayProfileContext, tenantScope string) bool {
+	expected := point12Val0OriginalProfileSourceContext()
+	return tenantScope == point12Val0OriginalTenantScope &&
+		model.OriginalProfileID == expected.OriginalProfileID &&
+		model.OriginalProfileVersion == expected.OriginalProfileVersion &&
+		model.OriginalProfileHash == expected.OriginalProfileHash &&
+		model.OriginalTenantScope == expected.OriginalTenantScope &&
+		model.CurrentProfileID == expected.CurrentProfileID &&
+		model.CurrentProfileVersion == expected.CurrentProfileVersion &&
+		model.CurrentProfileHash == expected.CurrentProfileHash &&
+		model.CurrentTenantScope == expected.CurrentTenantScope &&
+		model.ProfileMatchOriginal == expected.ProfileMatchOriginal &&
+		model.ProfileBindingStatus == expected.ProfileBindingStatus &&
+		model.ProfileMismatchReason == expected.ProfileMismatchReason &&
+		model.ProfileReplayMode == expected.ProfileReplayMode &&
+		model.ProfileApprovalRef == expected.ProfileApprovalRef &&
+		model.ProfileSignatureRef == expected.ProfileSignatureRef &&
+		model.ProfileApprovalEvidenceRef == expected.ProfileApprovalEvidenceRef &&
+		model.ProfileApprovalEvidenceHash == expected.ProfileApprovalEvidenceHash &&
+		model.ProfileApprovalBoundProfileID == expected.ProfileApprovalBoundProfileID &&
+		model.ProfileApprovalBoundVersion == expected.ProfileApprovalBoundVersion &&
+		model.ProfileApprovalBoundHash == expected.ProfileApprovalBoundHash &&
+		model.ProfileApprovalBoundTenant == expected.ProfileApprovalBoundTenant &&
+		model.ProfileApprovalBoundApproval == expected.ProfileApprovalBoundApproval &&
+		model.ProfileApprovalBoundSignature == expected.ProfileApprovalBoundSignature &&
+		model.OriginalProfileApprovalState == expected.OriginalProfileApprovalState
+}
+
+func point12Val0ProfileContextPayloadParts(model Point12Val0ReplayProfileContext) []string {
+	return []string{
+		model.OriginalProfileID,
+		model.OriginalProfileVersion,
+		model.OriginalProfileHash,
+		model.OriginalTenantScope,
+		model.CurrentProfileID,
+		model.CurrentProfileVersion,
+		model.CurrentProfileHash,
+		model.CurrentTenantScope,
+		point12ValDBoolString(model.ProfileMatchOriginal),
+		model.ProfileBindingStatus,
+		model.ProfileMismatchReason,
+		model.ProfileReplayMode,
+		model.ProfileApprovalRef,
+		model.ProfileSignatureRef,
+		model.ProfileApprovalEvidenceRef,
+		model.ProfileApprovalEvidenceHash,
+		model.ProfileApprovalBoundProfileID,
+		model.ProfileApprovalBoundVersion,
+		model.ProfileApprovalBoundHash,
+		model.ProfileApprovalBoundTenant,
+		model.ProfileApprovalBoundApproval,
+		model.ProfileApprovalBoundSignature,
+		model.OriginalProfileApprovalState,
+	}
+}
+
+func point12Val0ProfileApprovalEvidenceBound(model Point12Val0ReplayProfileContext) bool {
+	return model.ProfileApprovalBoundProfileID == model.OriginalProfileID &&
+		model.ProfileApprovalBoundVersion == model.OriginalProfileVersion &&
+		model.ProfileApprovalBoundHash == model.OriginalProfileHash &&
+		model.ProfileApprovalBoundTenant == model.OriginalTenantScope &&
+		model.ProfileApprovalBoundApproval == model.ProfileApprovalRef &&
+		model.ProfileApprovalBoundSignature == model.ProfileSignatureRef
+}
+
+func point12Val0ProfileContextGuardValues(values ...Point12Val0ReplayProfileContext) []string {
+	guardValues := []string{}
+	for _, value := range values {
+		guardValues = append(guardValues, point12Val0ProfileContextPayloadParts(value)...)
+	}
+	return guardValues
+}
+
+func point12Val0ProfileBindingStateAndReasons(
+	model Point12Val0ReplayProfileContext,
+	manifest Point12Val0ReplayProfileContext,
+	replayResult string,
+	tenantScope string,
+) []string {
+	reasons := []string{}
+	if !point12Val0ProfileContextFieldsValid(model) {
+		reasons = append(reasons, "profile_context_identity_invalid")
+	}
+	if !point12Val0ProfileContextFieldsValid(manifest) {
+		reasons = append(reasons, "profile_manifest_context_identity_invalid")
+	}
+	if !point12Val0ProfileContextBoundToTenant(model, tenantScope) ||
+		!point12Val0ProfileContextBoundToTenant(manifest, tenantScope) {
+		reasons = append(reasons, "profile_context_tenant_scope_binding_mismatch")
+	}
+	if !point12Val0ProfileContextOriginalSourceBound(model, tenantScope) ||
+		!point12Val0ProfileContextOriginalSourceBound(manifest, tenantScope) {
+		reasons = append(reasons, "profile_context_original_source_binding_mismatch")
+	}
+	if !point12Val0ProfileApprovalEvidenceBound(model) ||
+		!point12Val0ProfileApprovalEvidenceBound(manifest) {
+		reasons = append(reasons, "profile_approval_evidence_binding_invalid")
+	}
+	profileGuardValues := point12Val0ProfileContextGuardValues(model, manifest)
+	if point12Val0ContainsPrematurePassToken(profileGuardValues...) {
+		reasons = append(reasons, "profile_context_premature_point12_pass")
+	}
+	if point12Val0ContainsForbiddenClaim(profileGuardValues...) {
+		reasons = append(reasons, "profile_context_overclaim_detected")
+	}
+	if !point12Val0ProfileContextMatchesManifest(model, manifest) {
+		reasons = append(reasons, "profile_context_manifest_mismatch")
+	}
+
+	profileMatchesOriginal := point12Val0ProfileIdentityMatchesOriginal(model)
+	if model.ProfileMatchOriginal != profileMatchesOriginal {
+		reasons = append(reasons, "profile_match_original_incorrect")
+	}
+	if model.ProfileMatchOriginal && model.ProfileBindingStatus != Point12Val0ProfileBindingStatusMatch {
+		reasons = append(reasons, "profile_match_requires_match_status")
+	}
+	if model.ProfileBindingStatus == Point12Val0ProfileBindingStatusMatch && !profileMatchesOriginal {
+		reasons = append(reasons, "profile_match_status_without_exact_profile_match")
+	}
+	if !profileMatchesOriginal && replayResult == Point12Val0ReplayResultSameDecision {
+		reasons = append(reasons, "profile_mismatch_cannot_replay_same_decision")
+	}
+	if !profileMatchesOriginal && model.ProfileMismatchReason == "" {
+		reasons = append(reasons, "profile_mismatch_reason_missing")
+	}
+	if model.OriginalProfileHash == "" {
+		reasons = append(reasons, "profile_original_hash_missing")
+	}
+	if model.CurrentProfileHash == "" {
+		reasons = append(reasons, "profile_current_hash_missing")
+	}
+	if model.OriginalProfileHash != "" && model.CurrentProfileHash != "" &&
+		model.OriginalProfileHash != model.CurrentProfileHash &&
+		model.ProfileMismatchReason != "profile_hash_mismatch" {
+		reasons = append(reasons, "profile_hash_mismatch_reason_invalid")
+	}
+	if model.OriginalTenantScope != "" && model.CurrentTenantScope != "" &&
+		model.OriginalTenantScope != model.CurrentTenantScope &&
+		model.ProfileMismatchReason != "profile_tenant_mismatch" {
+		reasons = append(reasons, "profile_tenant_mismatch_reason_invalid")
+	}
+	if model.ProfileReplayMode == Point12Val0ProfileReplayModeOriginalProfileReplay &&
+		!profileMatchesOriginal &&
+		model.ProfileMismatchReason != "profile_current_context_substitution_attempt" &&
+		model.ProfileMismatchReason != "profile_hash_mismatch" &&
+		model.ProfileMismatchReason != "profile_tenant_mismatch" {
+		reasons = append(reasons, "profile_current_context_substitution_unclassified")
+	}
+	if model.ProfileReplayMode == Point12Val0ProfileReplayModeCurrentComparison &&
+		model.ProfileMatchOriginal && replayResult == Point12Val0ReplayResultSameDecision {
+		reasons = append(reasons, "profile_current_comparison_cannot_claim_original_replay")
+	}
+	switch model.ProfileBindingStatus {
+	case Point12Val0ProfileBindingStatusMissingOriginal:
+		if model.OriginalProfileHash != "" || replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_missing_original_status_invalid")
+		}
+	case Point12Val0ProfileBindingStatusMissingCurrent:
+		if model.CurrentProfileHash != "" || replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_missing_current_status_invalid")
+		}
+	case Point12Val0ProfileBindingStatusUnsupported,
+		Point12Val0ProfileBindingStatusReviewRequired,
+		Point12Val0ProfileBindingStatusBlocked:
+		if replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_non_pass_status_cannot_replay_same_decision")
+		}
+	}
+	switch model.OriginalProfileApprovalState {
+	case Point12Val0ProfileApprovalStateExpired:
+		if replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_approval_expired_cannot_replay_same_decision")
+		}
+	case Point12Val0ProfileApprovalStateRevoked:
+		if replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_approval_revoked_cannot_replay_same_decision")
+		}
+	case Point12Val0ProfileApprovalStateSuperseded:
+		if replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_approval_superseded_cannot_replay_same_decision")
+		}
+	case Point12Val0ProfileApprovalStateUnsupported:
+		if replayResult == Point12Val0ReplayResultSameDecision {
+			reasons = append(reasons, "profile_approval_unsupported_cannot_replay_same_decision")
+		}
+	}
+	return reasons
+}
+
+func point12Val0ProfileContextOriginalReplaySafe(model Point12Val0ReplayProfileContext, tenantScope string) bool {
+	return len(point12Val0ProfileBindingStateAndReasons(model, model, Point12Val0ReplayResultSameDecision, tenantScope)) == 0
+}
+
+func point12Val0DefaultProfileContext(tenantScope string) Point12Val0ReplayProfileContext {
+	return Point12Val0ReplayProfileContext{
+		OriginalProfileID:             "profile_point12_replay_original_001",
+		OriginalProfileVersion:        "profile_version_point12_replay_v1",
+		OriginalProfileHash:           "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+		OriginalTenantScope:           tenantScope,
+		CurrentProfileID:              "profile_point12_replay_original_001",
+		CurrentProfileVersion:         "profile_version_point12_replay_v1",
+		CurrentProfileHash:            "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+		CurrentTenantScope:            tenantScope,
+		ProfileMatchOriginal:          true,
+		ProfileBindingStatus:          Point12Val0ProfileBindingStatusMatch,
+		ProfileReplayMode:             Point12Val0ProfileReplayModeOriginalProfileReplay,
+		ProfileApprovalRef:            "profile_approval_point12_replay_001",
+		ProfileSignatureRef:           "profile_signature_point12_replay_001",
+		ProfileApprovalEvidenceRef:    "profile_approval_evidence_point12_replay_001",
+		ProfileApprovalEvidenceHash:   "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+		ProfileApprovalBoundProfileID: "profile_point12_replay_original_001",
+		ProfileApprovalBoundVersion:   "profile_version_point12_replay_v1",
+		ProfileApprovalBoundHash:      "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+		ProfileApprovalBoundTenant:    tenantScope,
+		ProfileApprovalBoundApproval:  "profile_approval_point12_replay_001",
+		ProfileApprovalBoundSignature: "profile_signature_point12_replay_001",
+		OriginalProfileApprovalState:  Point12Val0ProfileApprovalStateActive,
+	}
+}
+
+func point12Val0OriginalProfileSourceContext() Point12Val0ReplayProfileContext {
+	return point12Val0DefaultProfileContext(point12Val0OriginalTenantScope)
+}
+
 func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) string {
 	if !point12Val0ProofPackRefValid(model.ProofPackID) ||
 		!point12Val0DecisionRefValid(model.DecisionID) ||
@@ -1508,6 +2012,8 @@ func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) 
 		!point12Val0AuthorityContextRefValid(model.ClaimAuthorityContextRef) ||
 		!point12Val0AuthorityContextRefValid(model.GovernanceAuthorityContextRef) ||
 		!point12Val0CompatibilityProfileRefValid(model.CompatibilityProfileRef) ||
+		!point12Val0ProfileContextFieldsValid(model.ProfileContext) ||
+		!point12Val0ProfileContextOriginalReplaySafe(model.ProfileContext, model.TenantScope) ||
 		!point12Val0RawTimestampValid(model.GeneratedAt) ||
 		!point12Val0VersionIdentityValid(model.FreshnessWindow) ||
 		!point12Val0SigningKeyRefValid(model.SigningKeyRef) ||
@@ -1517,12 +2023,7 @@ func EvaluatePoint12Val0ManifestState(model Point12Val0SignedProofPackManifest) 
 		!point12Val0RetentionClassRefValid(model.RetentionClassRef) ||
 		!point12Val0StringListValid(model.ToolchainProvenanceRefs, point12Val0ToolchainProvenanceRefValid) ||
 		!point12Val0StringListValid(model.AgentLineageRefs, point12Val0AgentLineageRefValid) ||
-		point12Val0ContainsPrematurePassToken(
-			model.ProofPackID,
-			model.DecisionID,
-			model.SigningKeyRef,
-			model.SignatureRef,
-		) {
+		point12Val0ContainsPrematurePassToken(point12Val0ManifestPassTokenGuardValues(model)...) {
 		return Point12Val0ManifestStateBlocked
 	}
 	switch model.ProofPackState {
@@ -1583,7 +2084,7 @@ func point12Val0ReplayAssessmentStateAndReasons(
 		reasons = append(reasons, "replay_assessment_missing_drift_explanation")
 	}
 
-	if point12Val0ContainsPrematurePassToken(model.ReplayAssessmentID, model.DriftExplanation) {
+	if point12Val0ContainsPrematurePassToken(point12Val0ReplayAssessmentPassTokenGuardValues(model)...) {
 		reasons = append(reasons, "replay_assessment_premature_pass_token")
 	}
 
@@ -1669,6 +2170,12 @@ func point12Val0ReplayAssessmentStateAndReasons(
 	if point12Val0ContainsForbiddenClaim(model.DriftExplanation, strings.Join(manifest.ClaimRefs, " ")) {
 		reasons = append(reasons, "replay_assessment_overclaim_detected")
 	}
+	reasons = append(reasons, point12Val0ProfileBindingStateAndReasons(
+		model.ProfileContext,
+		manifest.ProfileContext,
+		model.ReplayResult,
+		manifest.TenantScope,
+	)...)
 
 	if len(reasons) > 0 {
 		return Point12Val0ReplayAssessmentStateBlocked, reasons
@@ -1705,7 +2212,7 @@ func EvaluatePoint12Val0RedactionBoundaryState(model Point12Val0RedactionBoundar
 	if (model.RedactionAffectsDecision || model.RedactionAffectsReplay) && !model.PartialOrAdvisoryOnly {
 		return Point12Val0RedactionBoundaryStateBlocked
 	}
-	if strings.TrimSpace(model.MinimumSafeClaimAfterRedaction) != "" &&
+	if model.MinimumSafeClaimAfterRedaction != "" &&
 		point12Val0ContainsForbiddenClaim(model.MinimumSafeClaimAfterRedaction) {
 		return Point12Val0RedactionBoundaryStateBlocked
 	}
@@ -1925,6 +2432,8 @@ func point12Val0BlockingReasons(model Point12Val0Foundation) []string {
 func Point12Val0FoundationModel() Point12Val0Foundation {
 	disclaimer := point12Val0ProjectionDisclaimerBaseline
 	dependency := point12Val0DependencySnapshotModel()
+	tenantScope := point12Val0OriginalTenantScope
+	profileContext := point12Val0DefaultProfileContext(tenantScope)
 	return Point12Val0Foundation{
 		CurrentState:                  Point12Val0StateActive,
 		ProjectionDisclaimer:          disclaimer,
@@ -1966,7 +2475,7 @@ func Point12Val0FoundationModel() Point12Val0Foundation {
 			PointID:                       point12Val0PointID,
 			WaveID:                        point12Val0WaveID,
 			ProofPackState:                Point12Val0ProofPackStateGenerated,
-			TenantScope:                   "tenant_scope_point12_alpha",
+			TenantScope:                   tenantScope,
 			ArtifactRef:                   "artifact_point12_target_001",
 			ArtifactHash:                  "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			EvidenceRefs:                  []string{"evidence:point12-proof-pack-evidence-001"},
@@ -1986,6 +2495,7 @@ func Point12Val0FoundationModel() Point12Val0Foundation {
 			ClaimAuthorityContextRef:      dependency.ClaimAuthorityContextRef,
 			GovernanceAuthorityContextRef: dependency.GovernanceAuthorityContextRef,
 			CompatibilityProfileRef:       "compatibility_profile_point12_val0_default_001",
+			ProfileContext:                profileContext,
 			GeneratedAt:                   "2026-05-03T10:00:00Z",
 			FreshnessWindow:               "freshness_window_48h",
 			SigningKeyRef:                 "metadata_signing_key_point12_val0_001",
@@ -2021,6 +2531,7 @@ func Point12Val0FoundationModel() Point12Val0Foundation {
 			ReplayGovernanceRefs:    []string{dependency.GovernanceAuthorityContextRef},
 			DecisiveEvidencePresent: true,
 			ProjectionDisclaimer:    disclaimer,
+			ProfileContext:          profileContext,
 		},
 		RedactionBoundary: Point12Val0RedactionBoundary{
 			RedactionManifestRef:           "redaction_manifest_point12_val0_001",

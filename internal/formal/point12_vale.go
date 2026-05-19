@@ -1,6 +1,9 @@
 package formal
 
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 const (
 	Point12ValEStateActive         = "point12_vale_integrated_replayable_proof_pack_closure_active"
@@ -628,7 +631,7 @@ func SnapshotPoint12ValEDependencyFromComputed(
 		SnapshotRef:                  point12ValEDependencySnapshotRefBaseline,
 		SnapshotFromComputedOutput:   review.SnapshotFromComputedOutput,
 		ValDExternalAPIUsed:          valD.Dependency.ValCExternalAPIUsed || valC.OfflineBundle.ExternalAPIUsed || valB.ReplayResult.ExternalAPIUsed,
-		ValDPointPassEmitted:         review.ValDPrematurePoint12PassSeen,
+		ValDPointPassEmitted:         valD.Dependency.ValCPointPassEmitted || valD.Dependency.ValBReplayResult.PointPassEmitted,
 		ValDPrematurePoint12PassSeen: review.ValDPrematurePoint12PassSeen,
 		OpenCLB0Findings:             review.OpenCLB0Findings,
 		OpenCLB1Findings:             review.OpenCLB1Findings,
@@ -642,12 +645,191 @@ func SnapshotPoint12ValEDependencyFromComputed(
 	}
 }
 
+func point12ValEPostMergePoint12Val0Foundation() Point12Val0Foundation {
+	return ComputePoint12Val0Foundation(Point12Val0FoundationModel())
+}
+
+func point12ValEBindValAManifestToDependency(model *Point12ValAFoundation) {
+	model.Manifest.ProofPackID = model.Dependency.Val0Manifest.ProofPackID
+	model.Manifest.DecisionID = model.Dependency.Val0Manifest.DecisionID
+	model.Manifest.TenantScope = model.Dependency.Val0Manifest.TenantScope
+	model.Manifest.ArtifactRef = model.Dependency.Val0Manifest.ArtifactRef
+	model.Manifest.ArtifactHash = model.Dependency.Val0Manifest.ArtifactHash
+	model.Manifest.EvidenceRefs = append([]string{}, model.Dependency.Val0Manifest.EvidenceRefs...)
+	model.Manifest.EvidenceHashRefs = append([]string{}, model.Dependency.Val0Manifest.EvidenceHashRefs...)
+	model.Manifest.PolicyRef = model.Dependency.Val0Manifest.PolicyRef
+	model.Manifest.PolicyVersion = model.Dependency.Val0Manifest.PolicyVersion
+	model.Manifest.PolicyHash = model.Dependency.Val0Manifest.PolicyHash
+	model.Manifest.EngineVersion = model.Dependency.Val0Manifest.EngineVersion
+	model.Manifest.EngineHash = model.Dependency.Val0Manifest.EngineHash
+	model.Manifest.SchemaVersion = model.Dependency.Val0Manifest.SchemaVersion
+	model.Manifest.SchemaHash = model.Dependency.Val0Manifest.SchemaHash
+	model.Manifest.ClaimRefs = append([]string{}, model.Dependency.Val0Manifest.ClaimRefs...)
+	model.Manifest.GovernanceEventRefs = append([]string{}, model.Dependency.Val0Manifest.GovernanceEventRefs...)
+	model.Manifest.CompatibilityProfileRef = model.Dependency.Val0Manifest.CompatibilityProfileRef
+	model.Manifest.ProfileContext = model.Dependency.Val0Manifest.ProfileContext
+	model.Manifest.UpstreamVal0SnapshotRef = model.Dependency.SnapshotRef
+	model.Manifest.SigningKeyRef = model.Dependency.Val0Manifest.SigningKeyRef
+	model.Manifest.SignatureRef = model.Dependency.Val0Manifest.SignatureRef
+	model.Manifest.RedactionManifestRef = model.Dependency.Val0Manifest.RedactionManifestRef
+	model.Manifest.RetentionClassRef = model.Dependency.Val0Manifest.RetentionClassRef
+	model.Manifest.ToolchainProvenanceRefs = append([]string{}, model.Dependency.Val0Manifest.ToolchainProvenanceRefs...)
+	model.Manifest.AgentLineageRefs = append([]string{}, model.Dependency.Val0Manifest.AgentLineageRefs...)
+	model.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Manifest)
+	model.Manifest.SignatureBoundManifestID = model.Manifest.ManifestID
+	model.Manifest.SignatureBoundManifestPayloadHash = model.Manifest.ManifestPayloadHash
+}
+
+func point12ValEPostMergePoint12ValAFoundation(val0 Point12Val0Foundation) Point12ValAFoundation {
+	model := Point12ValAFoundationModel()
+	model.Dependency = SnapshotPoint12ValADependencyFromComputedVal0(val0, point12ValADependencyReviewContextModel())
+	point12ValEBindValAManifestToDependency(&model)
+	return ComputePoint12ValAFoundation(model)
+}
+
+func point12ValEBindValBReplaySurfacesToDependency(model *Point12ValBFoundation) {
+	model.ReplayCommand.ProofPackID = model.Dependency.ValAManifest.ProofPackID
+	model.ReplayCommand.ManifestID = model.Dependency.ValAManifest.ManifestID
+	model.ReplayCommand.TenantScope = model.Dependency.ValAManifest.TenantScope
+	model.ReplayCommand.ArtifactRef = model.Dependency.ValAManifest.ArtifactRef
+	model.ReplayCommand.CompatibilityProfileRef = model.Dependency.ValAManifest.CompatibilityProfileRef
+	model.ReplayCommand.ProfileContext = model.Dependency.ValAManifest.ProfileContext
+
+	model.ReplayRequest.ProofPackID = model.Dependency.ValAManifest.ProofPackID
+	model.ReplayRequest.ManifestID = model.Dependency.ValAManifest.ManifestID
+	model.ReplayRequest.DecisionID = model.Dependency.ValAManifest.DecisionID
+	model.ReplayRequest.TenantScope = model.Dependency.ValAManifest.TenantScope
+	model.ReplayRequest.ArtifactRef = model.Dependency.ValAManifest.ArtifactRef
+	model.ReplayRequest.ArtifactHash = model.Dependency.ValAManifest.ArtifactHash
+	model.ReplayRequest.EvidenceRefs = append([]string{}, model.Dependency.ValAManifest.EvidenceRefs...)
+	model.ReplayRequest.EvidenceHashRefs = append([]string{}, model.Dependency.ValAManifest.EvidenceHashRefs...)
+	model.ReplayRequest.PolicyRef = model.Dependency.ValAManifest.PolicyRef
+	model.ReplayRequest.PolicyVersion = model.Dependency.ValAManifest.PolicyVersion
+	model.ReplayRequest.PolicyHash = model.Dependency.ValAManifest.PolicyHash
+	model.ReplayRequest.EngineVersion = model.Dependency.ValAManifest.EngineVersion
+	model.ReplayRequest.EngineHash = model.Dependency.ValAManifest.EngineHash
+	model.ReplayRequest.SchemaVersion = model.Dependency.ValAManifest.SchemaVersion
+	model.ReplayRequest.SchemaHash = model.Dependency.ValAManifest.SchemaHash
+	model.ReplayRequest.ClaimRefs = append([]string{}, model.Dependency.ValAManifest.ClaimRefs...)
+	model.ReplayRequest.GovernanceEventRefs = append([]string{}, model.Dependency.ValAManifest.GovernanceEventRefs...)
+	model.ReplayRequest.ManifestPayloadHash = model.Dependency.ValAManifest.ManifestPayloadHash
+	model.ReplayRequest.CompatibilityProfileRef = model.Dependency.ValAManifest.CompatibilityProfileRef
+	model.ReplayRequest.ProfileContext = model.Dependency.ValAManifest.ProfileContext
+	model.ReplayRequest.RedactionManifestRef = model.Dependency.ValAManifest.RedactionManifestRef
+	model.ReplayRequest.SourceManifestIntegrityState = model.Dependency.ValAManifestIntegrityState
+
+	model.ReplayResult.ReplayRequestID = model.ReplayRequest.ReplayRequestID
+	model.ReplayResult.ProofPackID = model.ReplayRequest.ProofPackID
+	model.ReplayResult.ManifestID = model.ReplayRequest.ManifestID
+	model.ReplayResult.ReplayMode = model.ReplayRequest.ReplayMode
+	model.ReplayResult.ProfileContext = model.ReplayRequest.ProfileContext
+	model.ReplayResult.OriginalDecisionState = model.ReplayRequest.OriginalDecisionState
+	if model.ReplayResult.ReplayedDecisionState == "" {
+		model.ReplayResult.ReplayedDecisionState = model.ReplayRequest.OriginalDecisionState
+	}
+	model.ReplayResult.EvaluatedPolicyVersion = model.ReplayRequest.PolicyVersion
+	model.ReplayResult.EvaluatedEngineVersion = model.ReplayRequest.EngineVersion
+	model.ReplayResult.EvaluatedSchemaVersion = model.ReplayRequest.SchemaVersion
+}
+
+func point12ValEPostMergePoint12ValBFoundation(valA Point12ValAFoundation) Point12ValBFoundation {
+	model := Point12ValBFoundationModel()
+	model.Dependency = SnapshotPoint12ValBDependencyFromComputedValA(valA, point12ValBDependencyReviewContextModel())
+	point12ValEBindValBReplaySurfacesToDependency(&model)
+	return ComputePoint12ValBFoundation(model)
+}
+
+func point12ValEBindValCExportSurfacesToDependency(model *Point12ValCFoundation) {
+	model.ExportBundle.ProofPackID = model.Dependency.ValAManifest.ProofPackID
+	model.ExportBundle.ManifestID = model.Dependency.ValAManifest.ManifestID
+	model.ExportBundle.ReplayResultID = model.Dependency.ValBReplayResult.ReplayResultID
+	model.ExportBundle.DecisionID = model.Dependency.ValBReplayRequest.DecisionID
+	model.ExportBundle.TenantScope = model.Dependency.ValBReplayRequest.TenantScope
+	model.ExportBundle.ArtifactRef = model.Dependency.ValBReplayRequest.ArtifactRef
+	model.ExportBundle.ArtifactHash = model.Dependency.ValBReplayRequest.ArtifactHash
+	model.ExportBundle.EvidenceRefs = append([]string{}, model.Dependency.ValBReplayRequest.EvidenceRefs...)
+	model.ExportBundle.EvidenceHashRefs = append([]string{}, model.Dependency.ValBReplayRequest.EvidenceHashRefs...)
+	model.ExportBundle.PolicyRef = model.Dependency.ValBReplayRequest.PolicyRef
+	model.ExportBundle.PolicyVersion = model.Dependency.ValBReplayRequest.PolicyVersion
+	model.ExportBundle.PolicyHash = model.Dependency.ValBReplayRequest.PolicyHash
+	model.ExportBundle.EngineVersion = model.Dependency.ValBReplayRequest.EngineVersion
+	model.ExportBundle.EngineHash = model.Dependency.ValBReplayRequest.EngineHash
+	model.ExportBundle.SchemaVersion = model.Dependency.ValBReplayRequest.SchemaVersion
+	model.ExportBundle.SchemaHash = model.Dependency.ValBReplayRequest.SchemaHash
+	model.ExportBundle.ClaimRefs = append([]string{}, model.Dependency.ValBReplayRequest.ClaimRefs...)
+	model.ExportBundle.GovernanceEventRefs = append([]string{}, model.Dependency.ValBReplayRequest.GovernanceEventRefs...)
+	model.ExportBundle.CompatibilityProfileRef = model.Dependency.ValBReplayRequest.CompatibilityProfileRef
+	model.ExportBundle.RedactionManifestRef = model.Dependency.ValBReplayRequest.RedactionManifestRef
+	model.ExportBundle.ManifestPayloadHash = model.Dependency.ValBReplayRequest.ManifestPayloadHash
+	model.ExportBundle.SignatureMetadataRef = model.Dependency.ValAManifest.SignatureMetadataRef
+	model.ExportBundle.RetentionClassRef = model.Dependency.ValAManifest.RetentionClassRef
+
+	model.RedactionManifest.ProofPackID = model.Dependency.ValAManifest.ProofPackID
+	model.RedactionManifest.ExportID = model.ExportBundle.ExportID
+	model.RedactionManifest.TenantScope = model.Dependency.ValBReplayRequest.TenantScope
+	model.RedactionManifest.RedactionManifestID = model.Dependency.ValBReplayRequest.RedactionManifestRef
+	model.RedactionManifest.RedactionPolicyRef = model.Dependency.ValBReplayRequest.PolicyRef
+	model.RedactionManifest.RedactionPolicyVersion = model.Dependency.ValBReplayRequest.PolicyVersion
+	model.RedactionImpactVerdict.RedactionManifestID = model.RedactionManifest.RedactionManifestID
+
+	model.OfflineBundle.ProofPackID = model.Dependency.ValAManifest.ProofPackID
+	model.OfflineBundle.ManifestID = model.Dependency.ValAManifest.ManifestID
+	model.OfflineBundle.ReplayRequestID = model.Dependency.ValBReplayRequest.ReplayRequestID
+	model.OfflineBundle.ReplayResultID = model.Dependency.ValBReplayResult.ReplayResultID
+	model.OfflineBundle.TenantScope = model.Dependency.ValBReplayRequest.TenantScope
+	model.OfflineBundle.ArtifactRef = model.Dependency.ValBReplayRequest.ArtifactRef
+	model.OfflineBundle.ArtifactHash = model.Dependency.ValBReplayRequest.ArtifactHash
+	model.OfflineBundle.EvidenceRefs = append([]string{}, model.Dependency.ValBReplayRequest.EvidenceRefs...)
+	model.OfflineBundle.EvidenceHashRefs = append([]string{}, model.Dependency.ValBReplayRequest.EvidenceHashRefs...)
+	model.OfflineBundle.PolicyRef = model.Dependency.ValBReplayRequest.PolicyRef
+	model.OfflineBundle.PolicyVersion = model.Dependency.ValBReplayRequest.PolicyVersion
+	model.OfflineBundle.PolicyHash = model.Dependency.ValBReplayRequest.PolicyHash
+	model.OfflineBundle.EngineVersion = model.Dependency.ValBReplayRequest.EngineVersion
+	model.OfflineBundle.EngineHash = model.Dependency.ValBReplayRequest.EngineHash
+	model.OfflineBundle.SchemaVersion = model.Dependency.ValBReplayRequest.SchemaVersion
+	model.OfflineBundle.SchemaHash = model.Dependency.ValBReplayRequest.SchemaHash
+	model.OfflineBundle.ManifestPayloadHash = model.Dependency.ValBReplayRequest.ManifestPayloadHash
+	model.OfflineBundle.SignatureMetadataRef = model.Dependency.ValAManifest.SignatureMetadataRef
+	model.OfflineBundle.DetachedSignatureRef = model.Dependency.ValAManifest.DetachedSignatureRef
+	model.OfflineBundle.CompatibilityProfileRef = model.Dependency.ValBReplayRequest.CompatibilityProfileRef
+	model.OfflineBundle.RedactionManifestRef = model.Dependency.ValBReplayRequest.RedactionManifestRef
+	model.OfflineBundle.RetentionClassRef = model.Dependency.ValAManifest.RetentionClassRef
+
+	model.PublicPrivateBoundary.TenantScope = model.Dependency.ValBReplayRequest.TenantScope
+	model.PublicPrivateBoundary.ExportID = model.ExportBundle.ExportID
+	model.PublicPrivateBoundary.OfflineBundleID = model.OfflineBundle.OfflineBundleID
+}
+
+func point12ValEPostMergePoint12ValCFoundation(valB Point12ValBFoundation) Point12ValCFoundation {
+	model := Point12ValCFoundationModel()
+	model.Dependency = SnapshotPoint12ValCDependencyFromComputedValB(valB, point12ValCDependencyReviewContextModel())
+	point12ValEBindValCExportSurfacesToDependency(&model)
+	return ComputePoint12ValCFoundation(model)
+}
+
+func point12ValEPostMergePoint12ValDFoundation(valC Point12ValCFoundation) Point12ValDFoundation {
+	model := Point12ValDFoundationModel()
+	model.Dependency = SnapshotPoint12ValDDependencyFromComputedValC(valC, point12ValDDependencyReviewContextModel())
+	return ComputePoint12ValDFoundation(model)
+}
+
+func point12ValEPostMergePoint12Chain() (
+	Point12Val0Foundation,
+	Point12ValAFoundation,
+	Point12ValBFoundation,
+	Point12ValCFoundation,
+	Point12ValDFoundation,
+) {
+	val0 := point12ValEPostMergePoint12Val0Foundation()
+	valA := point12ValEPostMergePoint12ValAFoundation(val0)
+	valB := point12ValEPostMergePoint12ValBFoundation(valA)
+	valC := point12ValEPostMergePoint12ValCFoundation(valB)
+	valD := point12ValEPostMergePoint12ValDFoundation(valC)
+	return val0, valA, valB, valC, valD
+}
+
 func point12ValEDependencySnapshotModel() Point12ValEDependencySnapshot {
-	val0 := ComputePoint12Val0Foundation(Point12Val0FoundationModel())
-	valA := ComputePoint12ValAFoundation(Point12ValAFoundationModel())
-	valB := ComputePoint12ValBFoundation(Point12ValBFoundationModel())
-	valC := ComputePoint12ValCFoundation(Point12ValCFoundationModel())
-	valD := ComputePoint12ValDFoundation(Point12ValDFoundationModel())
+	val0, valA, valB, valC, valD := point12ValEPostMergePoint12Chain()
 	return SnapshotPoint12ValEDependencyFromComputed(val0, valA, valB, valC, valD, point12ValEDependencyReviewContextModel())
 }
 
@@ -672,7 +854,7 @@ func point12ValEDependencyStateAndReasons(model Point12ValEDependencySnapshot) (
 		model.OpenCLB2Findings > 0 {
 		blockedReasons = append(blockedReasons, "dependency_identity_or_preflight_invalid")
 	}
-	if strings.TrimSpace(model.ValD.PortalCompatibility.PortalContractID) == "" ||
+	if !formalRawExactNonEmpty(model.ValD.PortalCompatibility.PortalContractID) ||
 		!model.ValD.PortalCompatibility.ReadOnly ||
 		!model.ValD.PortalCompatibility.NotesAnnotationOnly ||
 		model.ValD.PortalCompatibility.EvidenceMutationAllowed ||
@@ -690,7 +872,7 @@ func point12ValEDependencyStateAndReasons(model Point12ValEDependencySnapshot) (
 		!model.ValD.SupportProfile.NoLegalProtectionGuarantee {
 		blockedReasons = append(blockedReasons, "dependency_support_profile_boundary_invalid")
 	}
-	if point12Val0ContainsPrematurePassToken(
+	passTokenValues := []string{
 		model.ValD.ProofChain.ProofChainID,
 		model.ValD.Query.RequestedExplanation,
 		model.ValD.Explanation.CustomerVisibleStatement,
@@ -699,7 +881,10 @@ func point12ValEDependencyStateAndReasons(model Point12ValEDependencySnapshot) (
 		model.ValA.Manifest.ProofPackID,
 		model.ValB.ReplayRequest.ProofPackID,
 		model.ValC.ExportBundle.ExportID,
-	) {
+	}
+	passTokenValues = append(passTokenValues, point12ValDExplanationPassTokenGuardValues(model.ValD.Explanation)...)
+	passTokenValues = append(passTokenValues, point12ValDSupportProfilePassTokenGuardValues(model.ValD.SupportProfile)...)
+	if point12Val0ContainsPrematurePassToken(passTokenValues...) {
 		blockedReasons = append(blockedReasons, "dependency_contains_point12_pass_input")
 	}
 	if model.ValDCurrentState == Point12ValDStateBlocked ||
@@ -711,6 +896,13 @@ func point12ValEDependencyStateAndReasons(model Point12ValEDependencySnapshot) (
 		model.ValDPortalCompatibilityState == Point12ValDPortalCompatibilityStateBlocked {
 		blockedReasons = append(blockedReasons, "dependency_vald_blocked")
 	}
+	if point12ValEVal0ProfileContextBindingInvalid(model.Val0, model.ValA) {
+		blockedReasons = append(blockedReasons, "dependency_val0_profile_context_binding_invalid")
+	}
+	if point12ValEValBProfileContextBindingInvalid(model.ValA, model.ValB) {
+		blockedReasons = append(blockedReasons, "dependency_valb_profile_context_binding_invalid")
+	}
+	blockedReasons = append(blockedReasons, point12ValEValCDependencyBindingReasons(model.ValA, model.ValB, model.ValC)...)
 	if model.ValDCurrentState == Point12ValDStateReviewRequired ||
 		model.ValDDependencyState == Point12ValDDependencyStateReviewRequired ||
 		model.ValDBindingMatrixState == Point12ValDBindingMatrixStateReviewRequired ||
@@ -848,15 +1040,22 @@ func point12ValEComputeDependencyReplaySemantics(result Point12ValBReplayResult)
 	taxonomy := result.ReplayResultTaxonomy
 	invalidReplayState := !point12Val0ExactOneOf(result.ReplayState, point12ValBReplayResultStates())
 	return point12ValEDependencyReplaySemantics{
-		ReplayMode:                    result.ReplayMode,
-		ReplayResultTaxonomy:          taxonomy,
-		OriginalDecisionState:         result.OriginalDecisionState,
-		ReplayedDecisionState:         result.ReplayedDecisionState,
-		MatchOriginal:                 result.MatchOriginal,
-		TamperDetected:                result.TamperDetected || taxonomy == Point12Val0ReplayResultTamperDetected || result.ManifestIntegrityCheckResult == point12ValBCheckResultTampered || result.SignatureMetadataCheckResult == point12ValBCheckResultTampered || result.EvidenceHashCheckResult == point12ValBCheckResultTampered || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeTamperDetected),
-		UnsupportedVersion:            result.UnsupportedVersion || taxonomy == Point12Val0ReplayResultUnsupportedVersion || result.ManifestIntegrityCheckResult == point12ValBCheckResultUnsupported || result.CompatibilityCheckResult == point12ValBCheckResultUnsupported || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeUnsupportedVersion),
-		InsufficientEvidence:          result.InsufficientEvidence || taxonomy == Point12Val0ReplayResultInsufficientEvidence || result.EvidenceHashCheckResult == point12ValBCheckResultMissing || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeMissingEvidence),
-		BlockedReplay:                 invalidReplayState || result.ReplayState == Point12ValBReplayResultStateBlocked || taxonomy == Point12Val0ReplayResultBlockedReplay || point12ValBHasReplayBlockingMismatch(result.Mismatches),
+		ReplayMode:            result.ReplayMode,
+		ReplayResultTaxonomy:  taxonomy,
+		OriginalDecisionState: result.OriginalDecisionState,
+		ReplayedDecisionState: result.ReplayedDecisionState,
+		MatchOriginal:         result.MatchOriginal,
+		TamperDetected:        result.TamperDetected || taxonomy == Point12Val0ReplayResultTamperDetected || result.ManifestIntegrityCheckResult == point12ValBCheckResultTampered || result.SignatureMetadataCheckResult == point12ValBCheckResultTampered || result.EvidenceHashCheckResult == point12ValBCheckResultTampered || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeTamperDetected),
+		UnsupportedVersion:    result.UnsupportedVersion || taxonomy == Point12Val0ReplayResultUnsupportedVersion || result.ManifestIntegrityCheckResult == point12ValBCheckResultUnsupported || result.CompatibilityCheckResult == point12ValBCheckResultUnsupported || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeUnsupportedVersion),
+		InsufficientEvidence:  result.InsufficientEvidence || taxonomy == Point12Val0ReplayResultInsufficientEvidence || result.EvidenceHashCheckResult == point12ValBCheckResultMissing || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeMissingEvidence),
+		BlockedReplay: invalidReplayState ||
+			result.ReplayState == Point12ValBReplayResultStateBlocked ||
+			taxonomy == Point12Val0ReplayResultBlockedReplay ||
+			point12ValEReplayCheckResultBlocksReplay(result.EvidenceHashCheckResult) ||
+			point12ValEReplayCheckResultBlocksReplay(result.ManifestIntegrityCheckResult) ||
+			point12ValEReplayCheckResultBlocksReplay(result.SignatureMetadataCheckResult) ||
+			point12ValEReplayCheckResultBlocksReplay(result.CompatibilityCheckResult) ||
+			point12ValBHasReplayBlockingMismatch(result.Mismatches),
 		DifferentDecision:             taxonomy == Point12Val0ReplayResultDifferentDecision,
 		PolicyMismatch:                taxonomy == Point12Val0ReplayResultPolicyMismatch || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypePolicyMismatch),
 		EngineMismatch:                taxonomy == Point12Val0ReplayResultEngineMismatch || point12ValBHasMismatchType(result.Mismatches, point12ValBMismatchTypeEngineMismatch),
@@ -877,6 +1076,10 @@ func point12ValEComputeDependencyReplaySemantics(result Point12ValBReplayResult)
 		PointPassEmitted:              result.PointPassEmitted,
 		ProjectionDisclaimer:          result.ProjectionDisclaimer,
 	}
+}
+
+func point12ValEReplayCheckResultBlocksReplay(value string) bool {
+	return !point12ValBCheckResultValid(value) || value != point12ValBCheckResultActive
 }
 
 func point12ValEReplaySemanticsMismatchReasons(model Point12ValEFinalReplayInvariants, semantics point12ValEDependencyReplaySemantics) []string {
@@ -1238,9 +1441,238 @@ func point12ValEIntentionallyNotBoundReasonsPresent(fields []Point12ValDBindingM
 	return true
 }
 
+func point12ValEVal0ProfileContextBindingInvalid(val0 Point12Val0Foundation, valA Point12ValAFoundation) bool {
+	return !point12Val0ProfileContextOriginalReplaySafe(val0.Manifest.ProfileContext, val0.Manifest.TenantScope) ||
+		!point12Val0ProfileContextOriginalReplaySafe(val0.ReplayAssessment.ProfileContext, val0.Manifest.TenantScope) ||
+		!point12Val0ProfileContextMatchesManifest(val0.ReplayAssessment.ProfileContext, val0.Manifest.ProfileContext) ||
+		val0.ReplayAssessment.ReplayResult != Point12Val0ReplayResultSameDecision ||
+		!point12Val0ProfileContextMatchesManifest(valA.Dependency.Val0Manifest.ProfileContext, val0.Manifest.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(valA.Manifest.ProfileContext, val0.Manifest.ProfileContext) ||
+		valA.Dependency.Val0Manifest.TenantScope != val0.Manifest.TenantScope ||
+		valA.Manifest.TenantScope != val0.Manifest.TenantScope
+}
+
+func point12ValEValBProfileContextBindingInvalid(valA Point12ValAFoundation, valB Point12ValBFoundation) bool {
+	return !point12Val0ProfileContextOriginalReplaySafe(valB.Dependency.ValAManifest.ProfileContext, valB.Dependency.ValAManifest.TenantScope) ||
+		!point12Val0ProfileContextMatchesManifest(valB.Dependency.ValAManifest.ProfileContext, valA.Manifest.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(valB.ReplayCommand.ProfileContext, valA.Manifest.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(valB.ReplayRequest.ProfileContext, valA.Manifest.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(valB.ReplayResult.ProfileContext, valA.Manifest.ProfileContext) ||
+		!point12Val0ProfileContextOriginalReplaySafe(valB.ReplayCommand.ProfileContext, valB.Dependency.ValAManifest.TenantScope) ||
+		!point12Val0ProfileContextOriginalReplaySafe(valB.ReplayRequest.ProfileContext, valB.Dependency.ValAManifest.TenantScope) ||
+		!point12Val0ProfileContextOriginalReplaySafe(valB.ReplayResult.ProfileContext, valB.Dependency.ValAManifest.TenantScope) ||
+		valB.Dependency.ValAManifest.TenantScope != valA.Manifest.TenantScope
+}
+
+func point12ValEValBReplayMismatchListEqual(left, right []Point12ValBReplayMismatch) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func point12ValEStringListEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func point12ValEValBReplayCommandBindingInvalid(snapshot, source Point12ValBReplayCommandContract) bool {
+	return !reflect.DeepEqual(snapshot, source)
+}
+
+func point12ValEValBReplayRequestBindingInvalid(snapshot, source Point12ValBReplayRequest) bool {
+	return !reflect.DeepEqual(snapshot, source)
+}
+
+func point12ValEValBReplayResultBindingInvalid(snapshot, source Point12ValBReplayResult) bool {
+	return snapshot.ReplayResultID != source.ReplayResultID ||
+		snapshot.ReplayRequestID != source.ReplayRequestID ||
+		snapshot.ProofPackID != source.ProofPackID ||
+		snapshot.ManifestID != source.ManifestID ||
+		snapshot.ReplayMode != source.ReplayMode ||
+		!point12Val0ProfileContextMatchesManifest(snapshot.ProfileContext, source.ProfileContext) ||
+		snapshot.ReplayState != source.ReplayState ||
+		snapshot.ReplayResultTaxonomy != source.ReplayResultTaxonomy ||
+		snapshot.OriginalDecisionState != source.OriginalDecisionState ||
+		snapshot.ReplayedDecisionState != source.ReplayedDecisionState ||
+		snapshot.MatchOriginal != source.MatchOriginal ||
+		snapshot.TamperDetected != source.TamperDetected ||
+		snapshot.UnsupportedVersion != source.UnsupportedVersion ||
+		snapshot.InsufficientEvidence != source.InsufficientEvidence ||
+		snapshot.RedactionLimitations != source.RedactionLimitations ||
+		!point12ValEValBReplayMismatchListEqual(snapshot.Mismatches, source.Mismatches) ||
+		!point12ValEStringListEqual(snapshot.MismatchExplanations, source.MismatchExplanations) ||
+		snapshot.DecisionDriftExplanation != source.DecisionDriftExplanation ||
+		snapshot.DecisionDriftClassification != source.DecisionDriftClassification ||
+		snapshot.EvaluatedPolicyVersion != source.EvaluatedPolicyVersion ||
+		snapshot.EvaluatedEngineVersion != source.EvaluatedEngineVersion ||
+		snapshot.EvaluatedSchemaVersion != source.EvaluatedSchemaVersion ||
+		snapshot.EvidenceHashCheckResult != source.EvidenceHashCheckResult ||
+		snapshot.ManifestIntegrityCheckResult != source.ManifestIntegrityCheckResult ||
+		snapshot.SignatureMetadataCheckResult != source.SignatureMetadataCheckResult ||
+		snapshot.CompatibilityCheckResult != source.CompatibilityCheckResult ||
+		snapshot.ExternalAPIUsed != source.ExternalAPIUsed ||
+		snapshot.PointPassEmitted != source.PointPassEmitted ||
+		snapshot.ProjectionDisclaimer != source.ProjectionDisclaimer ||
+		!point12ValEStringListEqual(snapshot.ReplayOutputClaims, source.ReplayOutputClaims) ||
+		snapshot.CustomerVisibleExplanation != source.CustomerVisibleExplanation ||
+		snapshot.BlockedReason != source.BlockedReason
+}
+
+func point12ValEValCDependencyUnsafeReasons(model Point12ValCDependencySnapshot) []string {
+	reasons := []string{}
+	if EvaluatePoint12ValCDependencyState(model) != Point12ValCDependencyStateActive {
+		reasons = append(reasons, "dependency_valc_dependency_state_not_active")
+	}
+	if model.ValBPointPassEmitted ||
+		model.ValBPrematurePoint12PassSeen ||
+		model.ValBReplayResult.PointPassEmitted ||
+		point12Val0ContainsPrematurePassToken(point12ValCDependencyPassTokenGuardValues(model)...) {
+		reasons = append(reasons, "dependency_valc_premature_point12_pass")
+	}
+	if point12ValCEmbeddedValBReplayResultSummaryMismatch(model) {
+		reasons = append(reasons, "dependency_valc_replay_result_summary_mismatch")
+	}
+	if point12ValCEmbeddedValBReplayResultBlocks(model.ValBReplayResult) {
+		reasons = append(reasons, "dependency_valc_replay_result_blocked")
+	}
+	if point12ValCEmbeddedValBReplayResultReviewRequired(model.ValBReplayResult) ||
+		model.ValBCurrentState == Point12ValBStateReviewRequired ||
+		model.ValBDependencyState == Point12ValBDependencyStateReviewRequired ||
+		model.ValBReplayResultState == Point12ValBReplayResultStateReviewRequired ||
+		point12ValCDependencyCheckResultReviewRequired(model.ValBManifestIntegrityResult) ||
+		point12ValCDependencyCheckResultReviewRequired(model.ValBSignatureMetadataResult) ||
+		point12ValCDependencyCheckResultReviewRequired(model.ValBCompatibilityResult) ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultUnsupportedVersion ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultInsufficientEvidence ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultRedactedLimitations ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultDifferentDecision ||
+		len(model.ReviewPrerequisites) > 0 {
+		reasons = append(reasons, "dependency_valc_review_required_or_non_same_decision")
+	}
+	return reasons
+}
+
+func point12ValEValCDependencyUnsafeForFinalClosure(model Point12ValCDependencySnapshot) bool {
+	return len(point12ValEValCDependencyUnsafeReasons(model)) > 0
+}
+
+func point12ValEValCDependencyBindingReasons(valA Point12ValAFoundation, valB Point12ValBFoundation, valC Point12ValCFoundation) []string {
+	reasons := point12ValEValCDependencyUnsafeReasons(valC.Dependency)
+	if !point12Val0ProfileContextOriginalReplaySafe(valC.Dependency.ValAManifest.ProfileContext, valC.Dependency.ValAManifest.TenantScope) ||
+		!point12Val0ProfileContextMatchesManifest(valC.Dependency.ValAManifest.ProfileContext, valA.Manifest.ProfileContext) ||
+		valC.Dependency.ValAManifest.TenantScope != valA.Manifest.TenantScope {
+		reasons = append(reasons, "dependency_valc_profile_context_binding_invalid")
+	}
+	if point12Val0ContainsPrematurePassToken(point12Val0ProfileContextGuardValues(valC.Dependency.ValAManifest.ProfileContext)...) {
+		reasons = append(reasons, "dependency_valc_profile_context_premature_point12_pass")
+	}
+	if point12ValEValBReplayCommandBindingInvalid(valC.Dependency.ValBReplayCommand, valB.ReplayCommand) {
+		reasons = append(reasons, "dependency_valc_replay_command_binding_invalid")
+	}
+	if point12ValEValBReplayRequestBindingInvalid(valC.Dependency.ValBReplayRequest, valB.ReplayRequest) {
+		reasons = append(reasons, "dependency_valc_replay_request_binding_invalid")
+	}
+	if point12ValEValBReplayResultBindingInvalid(valC.Dependency.ValBReplayResult, valB.ReplayResult) {
+		reasons = append(reasons, "dependency_valc_replay_result_binding_invalid")
+	}
+	return reasons
+}
+
+func point12ValEValCDependencyBindingInvalid(valA Point12ValAFoundation, valB Point12ValBFoundation, valC Point12ValCFoundation) bool {
+	return len(point12ValEValCDependencyBindingReasons(valA, valB, valC)) > 0
+}
+
+func point12ValEValCExportTopLevelBindingInvalid(export Point12ValCAuditExportBundle, offline Point12ValCOfflineVerificationBundle, valA Point12ValAFoundation, valB Point12ValBFoundation) bool {
+	return export.ProofPackID != valB.ReplayRequest.ProofPackID ||
+		export.ManifestID != valB.ReplayRequest.ManifestID ||
+		export.ReplayResultID != valB.ReplayResult.ReplayResultID ||
+		export.DecisionID != valB.ReplayRequest.DecisionID ||
+		export.TenantScope != valB.ReplayRequest.TenantScope ||
+		export.ArtifactRef != valB.ReplayRequest.ArtifactRef ||
+		export.ArtifactHash != valB.ReplayRequest.ArtifactHash ||
+		!point12Val0ExactStringSetMatch(export.EvidenceRefs, valB.ReplayRequest.EvidenceRefs) ||
+		!point12Val0ExactStringSetMatch(export.EvidenceHashRefs, valB.ReplayRequest.EvidenceHashRefs) ||
+		export.PolicyRef != valB.ReplayRequest.PolicyRef ||
+		export.PolicyVersion != valB.ReplayRequest.PolicyVersion ||
+		export.PolicyHash != valB.ReplayRequest.PolicyHash ||
+		export.EngineVersion != valB.ReplayRequest.EngineVersion ||
+		export.EngineHash != valB.ReplayRequest.EngineHash ||
+		export.SchemaVersion != valB.ReplayRequest.SchemaVersion ||
+		export.SchemaHash != valB.ReplayRequest.SchemaHash ||
+		!point12Val0ExactStringSetMatch(export.ClaimRefs, valB.ReplayRequest.ClaimRefs) ||
+		!point12Val0ExactStringSetMatch(export.GovernanceEventRefs, valB.ReplayRequest.GovernanceEventRefs) ||
+		export.CompatibilityProfileRef != valB.ReplayRequest.CompatibilityProfileRef ||
+		export.RedactionManifestRef != valB.ReplayRequest.RedactionManifestRef ||
+		export.OfflineBundleRef != offline.OfflineBundleID ||
+		export.ManifestPayloadHash != valB.ReplayRequest.ManifestPayloadHash ||
+		export.SignatureMetadataRef != valA.Manifest.SignatureMetadataRef ||
+		export.RetentionClassRef != valA.Manifest.RetentionClassRef
+}
+
+func point12ValEValCOfflineTopLevelBindingInvalid(offline Point12ValCOfflineVerificationBundle, valA Point12ValAFoundation, valB Point12ValBFoundation) bool {
+	return offline.ProofPackID != valB.ReplayRequest.ProofPackID ||
+		offline.ManifestID != valB.ReplayRequest.ManifestID ||
+		offline.ReplayRequestID != valB.ReplayRequest.ReplayRequestID ||
+		offline.ReplayResultID != valB.ReplayResult.ReplayResultID ||
+		offline.TenantScope != valB.ReplayRequest.TenantScope ||
+		offline.ArtifactRef != valB.ReplayRequest.ArtifactRef ||
+		offline.ArtifactHash != valB.ReplayRequest.ArtifactHash ||
+		!point12Val0ExactStringSetMatch(offline.EvidenceRefs, valB.ReplayRequest.EvidenceRefs) ||
+		!point12Val0ExactStringSetMatch(offline.EvidenceHashRefs, valB.ReplayRequest.EvidenceHashRefs) ||
+		offline.PolicyRef != valB.ReplayRequest.PolicyRef ||
+		offline.PolicyVersion != valB.ReplayRequest.PolicyVersion ||
+		offline.PolicyHash != valB.ReplayRequest.PolicyHash ||
+		offline.EngineVersion != valB.ReplayRequest.EngineVersion ||
+		offline.EngineHash != valB.ReplayRequest.EngineHash ||
+		offline.SchemaVersion != valB.ReplayRequest.SchemaVersion ||
+		offline.SchemaHash != valB.ReplayRequest.SchemaHash ||
+		offline.ManifestPayloadHash != valB.ReplayRequest.ManifestPayloadHash ||
+		offline.SignatureMetadataRef != valA.Manifest.SignatureMetadataRef ||
+		offline.DetachedSignatureRef != valA.Manifest.DetachedSignatureRef ||
+		offline.CompatibilityProfileRef != valB.ReplayRequest.CompatibilityProfileRef ||
+		offline.RedactionManifestRef != valB.ReplayRequest.RedactionManifestRef ||
+		offline.RetentionClassRef != valA.Manifest.RetentionClassRef
+}
+
+func point12ValEValDDependencyCrossSnapshotInvalid(valD Point12ValDDependencySnapshot, valC Point12ValCFoundation, valB Point12ValBFoundation) bool {
+	return !reflect.DeepEqual(valD.ValCAuditExportBundle, valC.ExportBundle) ||
+		!reflect.DeepEqual(valD.ValCRedactionManifest, valC.RedactionManifest) ||
+		!reflect.DeepEqual(valD.ValCRedactionImpactVerdict, valC.RedactionImpactVerdict) ||
+		!reflect.DeepEqual(valD.ValCOfflineBundle, valC.OfflineBundle) ||
+		!reflect.DeepEqual(valD.ValCPublicPrivateBoundary, valC.PublicPrivateBoundary) ||
+		point12ValEValBReplayRequestBindingInvalid(valD.ValBReplayRequest, valB.ReplayRequest) ||
+		point12ValEValBReplayResultBindingInvalid(valD.ValBReplayResult, valB.ReplayResult)
+}
+
 func point12ValEBindingMutationStateAndReasons(model Point12ValEBindingMutationClosureReview, dependency Point12ValEDependencySnapshot) (string, []string) {
 	blockedReasons := []string{}
 	resolvedValAManifestState := EvaluatePoint12ValAManifestIntegrityState(dependency.ValA.Manifest, dependency.ValA.Dependency)
+	resolvedValCRedactionManifestState := EvaluatePoint12ValCRedactionManifestState(dependency.ValC.RedactionManifest, dependency.ValC.Dependency, dependency.ValC.ExportBundle)
+	resolvedValCRedactionImpactState := EvaluatePoint12ValCRedactionImpactState(dependency.ValC.RedactionImpactVerdict, dependency.ValC.RedactionManifest, dependency.ValC.Dependency)
+	resolvedValCOfflineBundleState := EvaluatePoint12ValCOfflineBundleState(dependency.ValC.OfflineBundle, dependency.ValC.Dependency, resolvedValCRedactionImpactState)
+	resolvedValCPublicPrivateBoundaryState := EvaluatePoint12ValCPublicPrivateBoundaryState(dependency.ValC.PublicPrivateBoundary, dependency.ValC.Dependency, dependency.ValC.ExportBundle, dependency.ValC.OfflineBundle, dependency.ValC.RedactionManifest)
+	resolvedValCExportState := EvaluatePoint12ValCAuditExportState(
+		dependency.ValC.ExportBundle,
+		dependency.ValC.Dependency,
+		resolvedValCRedactionManifestState,
+		resolvedValCRedactionImpactState,
+		resolvedValCOfflineBundleState,
+		resolvedValCPublicPrivateBoundaryState,
+	)
+	resolvedValDDependencyState := EvaluatePoint12ValDDependencyState(dependency.ValD.Dependency)
 	resolvedValDBindingMatrixState := EvaluatePoint12ValDBindingMatrixState(dependency.ValD.BindingMatrix)
 	resolvedValDProofChainState := EvaluatePoint12ValDProofChainProjectionState(dependency.ValD.ProofChain, dependency.ValD.Dependency)
 	resolvedValDQueryState := EvaluatePoint12ValDProofChainQueryState(dependency.ValD.Query, dependency.ValD.ProofChain, dependency.ValD.Dependency)
@@ -1256,6 +1688,22 @@ func point12ValEBindingMutationStateAndReasons(model Point12ValEBindingMutationC
 		!point12ValEStateValid(model.ValCExportOfflineRedactionState) ||
 		!point12ValEStateValid(model.ValDProofChainBindingState) {
 		blockedReasons = append(blockedReasons, "binding_mutation_identity_or_metadata_invalid")
+	}
+	if !point12Val0ProfileContextOriginalReplaySafe(dependency.ValA.Dependency.Val0Manifest.ProfileContext, dependency.ValA.Dependency.Val0Manifest.TenantScope) {
+		blockedReasons = append(blockedReasons, "binding_mutation_vala_dependency_invalid")
+	}
+	if point12ValEVal0ProfileContextBindingInvalid(dependency.Val0, dependency.ValA) {
+		blockedReasons = append(blockedReasons, "binding_mutation_val0_profile_context_binding_invalid")
+	}
+	if point12ValEValBProfileContextBindingInvalid(dependency.ValA, dependency.ValB) {
+		blockedReasons = append(blockedReasons, "binding_mutation_valb_profile_context_binding_invalid")
+	}
+	for _, reason := range point12ValEValCDependencyBindingReasons(dependency.ValA, dependency.ValB, dependency.ValC) {
+		blockedReasons = append(blockedReasons, "binding_mutation_"+strings.TrimPrefix(reason, "dependency_"))
+	}
+	if !point12Val0ProfileContextMatchesManifest(dependency.ValA.Manifest.ProfileContext, dependency.ValA.Dependency.Val0Manifest.ProfileContext) ||
+		!point12Val0ProfileContextBoundToTenant(dependency.ValA.Manifest.ProfileContext, dependency.ValA.Manifest.TenantScope) {
+		blockedReasons = append(blockedReasons, "binding_mutation_profile_context_binding_invalid")
 	}
 	if dependency.ValA.ManifestIntegrityState != Point12ValAManifestIntegrityStateActive ||
 		resolvedValAManifestState != Point12ValAManifestIntegrityStateActive ||
@@ -1289,10 +1737,14 @@ func point12ValEBindingMutationStateAndReasons(model Point12ValEBindingMutationC
 		dependency.ValC.ExportBundle.ArtifactHash != dependency.ValB.ReplayRequest.ArtifactHash ||
 		dependency.ValC.ExportBundle.ManifestPayloadHash != dependency.ValB.ReplayRequest.ManifestPayloadHash ||
 		dependency.ValC.ExportBundle.SignatureMetadataRef != dependency.ValA.Manifest.SignatureMetadataRef ||
+		dependency.ValC.ExportBundle.RetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
 		dependency.ValC.ExportBundle.CompatibilityProfileRef != dependency.ValB.ReplayRequest.CompatibilityProfileRef ||
 		dependency.ValC.ExportBundle.RedactionManifestRef != dependency.ValB.ReplayRequest.RedactionManifestRef ||
 		dependency.ValC.ExportBundle.OfflineBundleRef != dependency.ValC.OfflineBundle.OfflineBundleID {
 		blockedReasons = append(blockedReasons, "binding_mutation_valc_export_binding_invalid")
+	}
+	if point12ValEValCExportTopLevelBindingInvalid(dependency.ValC.ExportBundle, dependency.ValC.OfflineBundle, dependency.ValA, dependency.ValB) {
+		blockedReasons = append(blockedReasons, "binding_mutation_valc_export_top_level_binding_invalid")
 	}
 	if dependency.ValC.OfflineBundle.ProofPackID != dependency.ValB.ReplayRequest.ProofPackID ||
 		dependency.ValC.OfflineBundle.ManifestID != dependency.ValB.ReplayRequest.ManifestID ||
@@ -1302,14 +1754,39 @@ func point12ValEBindingMutationStateAndReasons(model Point12ValEBindingMutationC
 		dependency.ValC.OfflineBundle.ArtifactHash != dependency.ValB.ReplayRequest.ArtifactHash ||
 		dependency.ValC.OfflineBundle.ManifestPayloadHash != dependency.ValB.ReplayRequest.ManifestPayloadHash ||
 		dependency.ValC.OfflineBundle.SignatureMetadataRef != dependency.ValA.Manifest.SignatureMetadataRef ||
+		dependency.ValC.OfflineBundle.DetachedSignatureRef != dependency.ValA.Manifest.DetachedSignatureRef ||
+		dependency.ValC.OfflineBundle.RetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
 		dependency.ValC.OfflineBundle.CompatibilityProfileRef != dependency.ValB.ReplayRequest.CompatibilityProfileRef ||
 		dependency.ValC.OfflineBundle.RedactionManifestRef != dependency.ValB.ReplayRequest.RedactionManifestRef {
 		blockedReasons = append(blockedReasons, "binding_mutation_valc_offline_binding_invalid")
 	}
+	if point12ValEValCOfflineTopLevelBindingInvalid(dependency.ValC.OfflineBundle, dependency.ValA, dependency.ValB) {
+		blockedReasons = append(blockedReasons, "binding_mutation_valc_offline_top_level_binding_invalid")
+	}
 	if dependency.ValC.RedactionManifest.RedactionManifestID != dependency.ValB.ReplayRequest.RedactionManifestRef ||
 		dependency.ValC.RedactionImpactVerdict.RedactionManifestID != dependency.ValC.RedactionManifest.RedactionManifestID ||
-		dependency.ValC.RedactionManifest.RedactionManifestID != dependency.ValD.ProofChain.RedactionManifestID {
+		dependency.ValC.RedactionManifest.RedactionManifestID != dependency.ValD.ProofChain.RedactionManifestID ||
+		dependency.ValC.RedactionManifest.RetentionClassRef != dependency.ValA.Manifest.RetentionClassRef {
 		blockedReasons = append(blockedReasons, "binding_mutation_valc_redaction_identity_invalid")
+	}
+	if dependency.ValC.RedactionManifestState != Point12ValCRedactionManifestStateActive ||
+		resolvedValCRedactionManifestState != Point12ValCRedactionManifestStateActive ||
+		dependency.ValC.RedactionImpactState != Point12ValCRedactionImpactNoDecisionImpact ||
+		resolvedValCRedactionImpactState != Point12ValCRedactionImpactNoDecisionImpact ||
+		dependency.ValC.OfflineBundleState != Point12ValCOfflineBundleStateActive ||
+		resolvedValCOfflineBundleState != Point12ValCOfflineBundleStateActive ||
+		dependency.ValC.PublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateActive ||
+		resolvedValCPublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateActive ||
+		dependency.ValC.ExportState != Point12ValCExportStateReady ||
+		resolvedValCExportState != Point12ValCExportStateReady {
+		blockedReasons = append(blockedReasons, "binding_mutation_valc_export_offline_redaction_invalid")
+	}
+	if dependency.ValD.DependencyState != Point12ValDDependencyStateActive ||
+		resolvedValDDependencyState != Point12ValDDependencyStateActive {
+		blockedReasons = append(blockedReasons, "binding_mutation_vald_dependency_invalid")
+	}
+	if point12ValEValDDependencyCrossSnapshotInvalid(dependency.ValD.Dependency, dependency.ValC, dependency.ValB) {
+		blockedReasons = append(blockedReasons, "binding_mutation_vald_dependency_cross_snapshot_invalid")
 	}
 	if dependency.ValC.PublicPrivateBoundary.ExportID != dependency.ValC.ExportBundle.ExportID ||
 		dependency.ValC.PublicPrivateBoundary.OfflineBundleID != dependency.ValC.OfflineBundle.OfflineBundleID {
@@ -1351,7 +1828,7 @@ func point12ValEBindingMutationStateAndReasons(model Point12ValEBindingMutationC
 func point12ValEProjectionBoundaryModel(dependency Point12ValEDependencySnapshot) Point12ValEProjectionBoundaryResult {
 	agentAdvisoryOnly := true
 	for _, edge := range dependency.ValD.ProofChain.LineageEdges {
-		if strings.TrimSpace(edge.EdgeType) == point12ValDLineageEdgeTypeAgentFindingAdvisory && (!edge.AdvisoryOnly || edge.ClaimsCertification || edge.ClaimsSourceOfTruth || edge.EmitsPrematurePass) {
+		if edge.EdgeType == point12ValDLineageEdgeTypeAgentFindingAdvisory && (!edge.AdvisoryOnly || edge.ClaimsCertification || edge.ClaimsSourceOfTruth || edge.EmitsPrematurePass) {
 			agentAdvisoryOnly = false
 			break
 		}
@@ -1395,11 +1872,45 @@ func point12ValEProjectionBoundaryStateAndReasons(model Point12ValEProjectionBou
 	return Point12ValEStateActive, nil
 }
 
+func point12ValEAppendObservedTexts(values []string, candidates ...string) []string {
+	for _, candidate := range candidates {
+		if candidate != "" {
+			values = append(values, candidate)
+		}
+	}
+	return values
+}
+
+func point12ValENoOverclaimObservedExportTexts(dependency Point12ValEDependencySnapshot) []string {
+	values := []string{}
+	values = point12ValEAppendObservedTexts(values,
+		dependency.ValC.ExportBundle.CustomerVisibleSummary,
+		dependency.ValC.OfflineBundle.CustomerVisibleExplanation,
+		dependency.ValB.ReplayResult.CustomerVisibleExplanation,
+		dependency.ValC.RedactionManifest.MinimumSafeClaimAfterRedaction,
+		dependency.ValC.RedactionImpactVerdict.MinimumSafeClaimAfterRedaction,
+	)
+	values = append(values, dependency.ValB.ReplayResult.ReplayOutputClaims...)
+	values = append(values, dependency.ValC.ExportBundle.ExportOutputClaims...)
+	values = append(values, dependency.ValC.ExportBundle.Limitations...)
+	values = append(values, dependency.ValC.RedactionManifest.SurvivingClaimsAfterRedaction...)
+	values = append(values, dependency.ValC.RedactionManifest.CustomerVisibleClaimsAfterRedaction...)
+	values = append(values, dependency.ValC.RedactionManifest.ExportedClaimsAfterRedaction...)
+	values = append(values, dependency.ValC.RedactionManifest.ReplayResultClaims...)
+	values = append(values, dependency.ValC.RedactionManifest.Limitations...)
+	values = append(values, dependency.ValC.RedactionImpactVerdict.Limitations...)
+	values = append(values, dependency.ValC.OfflineBundle.OfflineOutputClaims...)
+	values = append(values, dependency.ValC.OfflineBundle.Limitations...)
+	values = append(values, point12ValDExplanationNoOverclaimValues(dependency.ValD.Explanation)...)
+	values = append(values, point12ValDSupportProfileNoOverclaimValues(dependency.ValD.SupportProfile)...)
+	return values
+}
+
 func point12ValENoOverclaimReviewModel(dependency Point12ValEDependencySnapshot) Point12ValENoOverclaimReview {
 	return Point12ValENoOverclaimReview{
 		ReviewID:                     "no_overclaim_review_point12_vale_001",
 		ObservedCustomerTexts:        []string{dependency.ValD.Explanation.CustomerVisibleStatement},
-		ObservedExportTexts:          []string{dependency.ValC.ExportBundle.CustomerVisibleSummary, dependency.ValC.OfflineBundle.CustomerVisibleExplanation},
+		ObservedExportTexts:          point12ValENoOverclaimObservedExportTexts(dependency),
 		ObservedSupportTexts:         []string{dependency.ValD.SupportProfile.SupportStatement},
 		ObservedPortalTexts:          []string{"read_only_projection", "notes_annotation_only"},
 		BlockedClaimLedger:           append(append([]string{}, dependency.ValD.SupportProfile.BlockedWordingRefs...), dependency.ValC.RedactionManifest.DisallowedClaimsAfterRedaction...),
@@ -1501,7 +2012,7 @@ func point12ValERetentionProvenanceReviewModel(dependency Point12ValEDependencyS
 		}
 	}
 	for _, edge := range dependency.ValD.ProofChain.LineageEdges {
-		if strings.TrimSpace(edge.EdgeType) == point12ValDLineageEdgeTypeAgentFindingAdvisory && (!edge.AdvisoryOnly || edge.ClaimsCertification || edge.ClaimsSourceOfTruth || edge.EmitsPrematurePass) {
+		if edge.EdgeType == point12ValDLineageEdgeTypeAgentFindingAdvisory && (!edge.AdvisoryOnly || edge.ClaimsCertification || edge.ClaimsSourceOfTruth || edge.EmitsPrematurePass) {
 			agentAdvisoryOnly = false
 			break
 		}
@@ -1546,9 +2057,13 @@ func point12ValERetentionProvenanceStateAndReasons(model Point12ValERetentionPro
 		blockedReasons = append(blockedReasons, "retention_provenance_identity_or_metadata_invalid")
 	}
 	if model.ProofPackRetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
-		model.ExportRetentionClassRef != dependency.ValC.ExportBundle.RetentionClassRef ||
-		model.OfflineBundleRetentionClassRef != dependency.ValC.OfflineBundle.RetentionClassRef ||
-		model.RedactionManifestRetentionClassRef != dependency.ValC.RedactionManifest.RetentionClassRef ||
+		model.ExportRetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
+		model.OfflineBundleRetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
+		model.RedactionManifestRetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
+		model.AuditRetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
+		dependency.ValC.ExportBundle.RetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
+		dependency.ValC.OfflineBundle.RetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
+		dependency.ValC.RedactionManifest.RetentionClassRef != dependency.ValA.Manifest.RetentionClassRef ||
 		model.RetentionOwnerRef != dependency.ValC.ExportBundle.RetentionOwnerRef ||
 		model.DisposalPathRef != dependency.ValC.ExportBundle.DisposalPathRef ||
 		model.TenantScope != dependency.ValD.ProofChain.TenantScope ||
@@ -1608,7 +2123,7 @@ func point12ValEPassClosureManifestModel(dependency Point12ValEDependencySnapsho
 		CompatibilityProfileRef:     dependency.ValD.ProofChain.CompatibilityProfileRef,
 		ManifestPayloadHash:         dependency.ValA.Manifest.ManifestPayloadHash,
 		SignatureMetadataRef:        dependency.ValA.Manifest.SignatureMetadataRef,
-		RetentionClassRef:           dependency.ValC.ExportBundle.RetentionClassRef,
+		RetentionClassRef:           dependency.ValA.Manifest.RetentionClassRef,
 		RetentionOwnerRef:           dependency.ValC.ExportBundle.RetentionOwnerRef,
 		DisposalPathRef:             dependency.ValC.ExportBundle.DisposalPathRef,
 		PublicPrivateClassification: dependency.ValC.ExportBundle.PublicPrivateClassification,
@@ -1743,7 +2258,7 @@ func point12ValEPassClosureManifestStateAndReasons(model Point12ValEPassClosureM
 		model.CompatibilityProfileRef != foundation.Dependency.ValD.ProofChain.CompatibilityProfileRef ||
 		model.ManifestPayloadHash != foundation.Dependency.ValA.Manifest.ManifestPayloadHash ||
 		model.SignatureMetadataRef != foundation.Dependency.ValA.Manifest.SignatureMetadataRef ||
-		model.RetentionClassRef != foundation.Dependency.ValC.ExportBundle.RetentionClassRef ||
+		model.RetentionClassRef != foundation.Dependency.ValA.Manifest.RetentionClassRef ||
 		model.RetentionOwnerRef != foundation.Dependency.ValC.ExportBundle.RetentionOwnerRef ||
 		model.DisposalPathRef != foundation.Dependency.ValC.ExportBundle.DisposalPathRef ||
 		model.PublicPrivateClassification != foundation.Dependency.ValC.ExportBundle.PublicPrivateClassification ||
@@ -1826,11 +2341,7 @@ func point12ValEFoundationModelFromUpstream(
 
 func Point12ValEFoundationModel() Point12ValEFoundation {
 	return cachedFormalModel(&point12ValEFoundationModelOnce, &point12ValEFoundationModelCached, func() Point12ValEFoundation {
-		val0 := ComputePoint12Val0Foundation(Point12Val0FoundationModel())
-		valA := ComputePoint12ValAFoundation(Point12ValAFoundationModel())
-		valB := ComputePoint12ValBFoundation(Point12ValBFoundationModel())
-		valC := ComputePoint12ValCFoundation(Point12ValCFoundationModel())
-		valD := ComputePoint12ValDFoundation(Point12ValDFoundationModel())
+		val0, valA, valB, valC, valD := point12ValEPostMergePoint12Chain()
 		return point12ValEFoundationModelFromUpstream(val0, valA, valB, valC, valD)
 	})
 }

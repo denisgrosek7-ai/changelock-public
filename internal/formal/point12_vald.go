@@ -586,7 +586,7 @@ func point12ValDProfileTypeValid(value string) bool {
 }
 
 func point12ValDRefValueValid(value string) bool {
-	return strings.TrimSpace(value) != ""
+	return formalRawExactNonEmpty(value)
 }
 
 func point12ValDTextListValid(values []string) bool {
@@ -1004,7 +1004,7 @@ func SnapshotPoint12ValDDependencyFromComputedValC(valC Point12ValCFoundation, r
 		SnapshotRef:                    point12ValDDependencySnapshotRefBaseline,
 		SnapshotFromComputedOutput:     review.SnapshotFromComputedOutput,
 		ValCExternalAPIUsed:            valC.OfflineBundle.ExternalAPIUsed,
-		ValCPointPassEmitted:           review.ValCPrematurePoint12PassSeen,
+		ValCPointPassEmitted:           valC.Dependency.ValBPointPassEmitted || valC.Dependency.ValBReplayResult.PointPassEmitted,
 		ValCPrematurePoint12PassSeen:   review.ValCPrematurePoint12PassSeen,
 		ReviewPrerequisites:            reviewPrerequisites,
 		ValCAuditExportBundle:          valC.ExportBundle,
@@ -1022,7 +1022,137 @@ func point12ValDDependencySnapshotModel() Point12ValDDependencySnapshot {
 	return SnapshotPoint12ValDDependencyFromComputedValC(valC, point12ValDDependencyReviewContextModel())
 }
 
-func EvaluatePoint12ValDDependencyState(model Point12ValDDependencySnapshot) string {
+func point12ValDReplayProfileContextInvalid(model Point12ValDDependencySnapshot) bool {
+	return !point12ValBReplayRequestRefValid(model.ValBReplayRequest.ReplayRequestID) ||
+		!point12ValBReplayResultRefValid(model.ValBReplayResult.ReplayResultID) ||
+		!point12Val0ProfileContextOriginalReplaySafe(model.ValBReplayRequest.ProfileContext, model.ValBReplayRequest.TenantScope) ||
+		!point12Val0ProfileContextOriginalReplaySafe(model.ValBReplayResult.ProfileContext, model.ValBReplayRequest.TenantScope) ||
+		!point12Val0ProfileContextMatchesManifest(model.ValBReplayResult.ProfileContext, model.ValBReplayRequest.ProfileContext) ||
+		point12Val0ContainsPrematurePassToken(point12Val0ProfileContextGuardValues(
+			model.ValBReplayRequest.ProfileContext,
+			model.ValBReplayResult.ProfileContext,
+		)...)
+}
+
+func point12ValDDependencyEmbeddedPayloadUnsafeReasons(model Point12ValDDependencySnapshot) []string {
+	reasons := []string{}
+	if point12Val0ContainsPrematurePassToken(point12ValCExportPassTokenGuardValues(model.ValCAuditExportBundle)...) {
+		reasons = append(reasons, "dependency_valc_export_premature_point12_pass")
+	}
+	if point12Val0ContainsForbiddenClaim(strings.Join(model.ValCAuditExportBundle.ExportOutputClaims, " "), model.ValCAuditExportBundle.CustomerVisibleSummary) {
+		reasons = append(reasons, "dependency_valc_export_overclaim_detected")
+	}
+	if !model.ValCAuditExportBundle.AdvisoryOnly ||
+		model.ValCAuditExportBundle.NoOverclaimState != Point12Val0NoOverclaimStateActive ||
+		(point12ValCCustomerFacingAudience(model.ValCAuditExportBundle.ExportAudience) &&
+			point12Val0ContainsForbiddenClaim(strings.Join(model.ValCAuditExportBundle.Limitations, " "))) {
+		reasons = append(reasons, "dependency_valc_export_authority_or_overclaim_invalid")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValCRedactionManifestPassTokenGuardValues(model.ValCRedactionManifest)...) {
+		reasons = append(reasons, "dependency_valc_redaction_manifest_premature_point12_pass")
+	}
+	if (model.ValCRedactionManifest.MinimumSafeClaimAfterRedaction != "" &&
+		point12Val0ContainsForbiddenClaim(model.ValCRedactionManifest.MinimumSafeClaimAfterRedaction)) ||
+		point12Val0ContainsForbiddenClaim(
+			strings.Join(model.ValCRedactionManifest.SurvivingClaimsAfterRedaction, " "),
+			strings.Join(model.ValCRedactionManifest.CustomerVisibleClaimsAfterRedaction, " "),
+			strings.Join(model.ValCRedactionManifest.ExportedClaimsAfterRedaction, " "),
+			strings.Join(model.ValCRedactionManifest.ReplayResultClaims, " "),
+		) {
+		reasons = append(reasons, "dependency_valc_redaction_manifest_overclaim_detected")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValCRedactionImpactPassTokenGuardValues(model.ValCRedactionImpactVerdict)...) {
+		reasons = append(reasons, "dependency_valc_redaction_impact_premature_point12_pass")
+	}
+	if model.ValCRedactionImpactVerdict.MinimumSafeClaimAfterRedaction != "" &&
+		point12Val0ContainsForbiddenClaim(model.ValCRedactionImpactVerdict.MinimumSafeClaimAfterRedaction) {
+		reasons = append(reasons, "dependency_valc_redaction_impact_overclaim_detected")
+	}
+	if !model.ValCOfflineBundle.NoExternalAPIRequired || model.ValCOfflineBundle.ExternalAPIUsed {
+		reasons = append(reasons, "dependency_valc_offline_external_api_invalid")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValCOfflinePassTokenGuardValues(model.ValCOfflineBundle)...) {
+		reasons = append(reasons, "dependency_valc_offline_premature_point12_pass")
+	}
+	if point12Val0ContainsForbiddenClaim(strings.Join(model.ValCOfflineBundle.OfflineOutputClaims, " "), strings.Join(model.ValCOfflineBundle.Limitations, " "), model.ValCOfflineBundle.CustomerVisibleExplanation) {
+		reasons = append(reasons, "dependency_valc_offline_overclaim_detected")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValBReplayRequestPassTokenGuardValues(model.ValBReplayRequest)...) {
+		reasons = append(reasons, "dependency_valb_replay_request_premature_point12_pass")
+	}
+	if model.ValBReplayResult.ExternalAPIUsed || model.ValBReplayResult.PointPassEmitted {
+		reasons = append(reasons, "dependency_valb_replay_result_external_api_or_point_pass")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValBReplayResultPassTokenGuardValues(model.ValBReplayResult)...) {
+		reasons = append(reasons, "dependency_valb_replay_result_premature_point12_pass")
+	}
+	if point12Val0ContainsForbiddenClaim(strings.Join(model.ValBReplayResult.ReplayOutputClaims, " "), model.ValBReplayResult.CustomerVisibleExplanation) {
+		reasons = append(reasons, "dependency_valb_replay_result_overclaim_detected")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValCPublicPrivateBoundaryPassTokenGuardValues(model.ValCPublicPrivateBoundary)...) {
+		reasons = append(reasons, "dependency_valc_boundary_premature_point12_pass")
+	}
+	reasons = append(reasons, point12ValDDependencyEmbeddedBoundaryUnsafeReasons(model)...)
+	return reasons
+}
+
+func point12ValDDependencyEmbeddedBoundaryUnsafeReasons(model Point12ValDDependencySnapshot) []string {
+	boundary := model.ValCPublicPrivateBoundary
+	reasons := []string{}
+	if !point12ValCBoundaryRefValid(boundary.BoundaryID) ||
+		!point11Val0ScopeValid(boundary.TenantScope) ||
+		!point12ValCExportRefValid(boundary.ExportID) ||
+		!point12ValCOfflineBundleRefValid(boundary.OfflineBundleID) ||
+		!point12ValCStringFieldListValid(boundary.ExportedFields) ||
+		!point12Val0OptionalStringListValid(boundary.PublicFields, point12ValCStringFieldValid) ||
+		!point12Val0OptionalStringListValid(boundary.PrivateFields, point12ValCStringFieldValid) ||
+		!point12Val0OptionalStringListValid(boundary.RedactedFields, point12ValCStringFieldValid) ||
+		!point12Val0OptionalStringListValid(boundary.SensitiveFields, point12ValCStringFieldValid) ||
+		!point12Val0OptionalStringListValid(boundary.CustomerVisibleFields, point12ValCStringFieldValid) ||
+		!point12Val0OptionalStringListValid(boundary.AuditorVisibleFields, point12ValCStringFieldValid) ||
+		!point12Val0OptionalStringListValid(boundary.InternalOnlyFields, point12ValCStringFieldValid) ||
+		!point12ValCPublicPrivateClassificationValid(boundary.Classification) ||
+		!point12ValCDataResidencyRefValid(boundary.DataResidencyRef) ||
+		!point12ValCExportAudienceValid(boundary.AllowedAudience) ||
+		!point12Val0ExactOneOf(boundary.BoundaryState, []string{
+			Point12ValCPublicPrivateBoundaryStateActive,
+			Point12ValCPublicPrivateBoundaryStateBlocked,
+		}) {
+		reasons = append(reasons, "dependency_valc_boundary_identity_or_metadata_invalid")
+	}
+	if boundary.TenantScope != model.ValBReplayRequest.TenantScope ||
+		boundary.ExportID != model.ValCAuditExportBundle.ExportID ||
+		boundary.OfflineBundleID != model.ValCOfflineBundle.OfflineBundleID {
+		reasons = append(reasons, "dependency_valc_boundary_binding_mismatch")
+	}
+	if len(boundary.ExportedFields) == 0 || !point12ValCAllExportedFieldsClassified(boundary) {
+		reasons = append(reasons, "dependency_valc_boundary_unclassified_exported_field")
+	}
+	if !point12ValCStringFieldListSubset(boundary.PublicFields, boundary.ExportedFields) ||
+		!point12ValCStringFieldListSubset(boundary.PrivateFields, boundary.ExportedFields) ||
+		!point12ValCStringFieldListSubset(boundary.RedactedFields, boundary.ExportedFields) ||
+		!point12ValCStringFieldListSubset(boundary.SensitiveFields, boundary.ExportedFields) ||
+		!point12ValCStringFieldListSubset(boundary.CustomerVisibleFields, boundary.ExportedFields) ||
+		!point12ValCStringFieldListSubset(boundary.AuditorVisibleFields, boundary.ExportedFields) ||
+		!point12ValCStringFieldListSubset(boundary.InternalOnlyFields, boundary.ExportedFields) {
+		reasons = append(reasons, "dependency_valc_boundary_field_subset_invalid")
+	}
+	if point12ValCFieldListsOverlap(boundary.CustomerVisibleFields, boundary.PrivateFields) ||
+		point12ValCFieldListsOverlap(boundary.CustomerVisibleFields, boundary.InternalOnlyFields) ||
+		point12ValCFieldListsOverlap(boundary.PublicFields, boundary.PrivateFields) ||
+		point12ValCFieldListsOverlap(boundary.PublicFields, boundary.InternalOnlyFields) {
+		reasons = append(reasons, "dependency_valc_boundary_private_field_leak")
+	}
+	if point12ValCCustomerFacingAudience(model.ValCAuditExportBundle.ExportAudience) &&
+		point12ValCStringMentionedInTexts(append([]string{}, boundary.PrivateFields...), model.ValCAuditExportBundle.CustomerVisibleSummary, strings.Join(model.ValCAuditExportBundle.Limitations, " "), model.ValCRedactionManifest.RedactionSummary) {
+		reasons = append(reasons, "dependency_valc_boundary_text_leak")
+	}
+	return reasons
+}
+
+func point12ValDDependencyStateAndReasons(model Point12ValDDependencySnapshot) (string, []string) {
+	blockedReasons := []string{}
+	reviewReasons := []string{}
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!model.SnapshotFromComputedOutput ||
 		!point12ValDDependencySnapshotRefValid(model.SnapshotRef) ||
@@ -1035,16 +1165,24 @@ func EvaluatePoint12ValDDependencyState(model Point12ValDDependencySnapshot) str
 		!point12ValCOfflineBundleRefValid(model.ValCOfflineBundle.OfflineBundleID) ||
 		!point12Val0RedactionManifestRefValid(model.ValCRedactionManifest.RedactionManifestID) ||
 		!point12ValCRedactionImpactRefValid(model.ValCRedactionImpactVerdict.RedactionImpactID) ||
-		!point12ValCBoundaryRefValid(model.ValCPublicPrivateBoundary.BoundaryID) ||
-		point12Val0ContainsPrematurePassToken(
-			model.ValCAuditExportBundle.ExportID,
-			model.ValCRedactionManifest.RedactionManifestID,
-			model.ValCRedactionImpactVerdict.RedactionImpactID,
-			model.ValCOfflineBundle.OfflineBundleID,
-			model.ValCAuditExportBundle.CustomerVisibleSummary,
-			model.ValCOfflineBundle.CustomerVisibleExplanation,
-		) {
-		return Point12ValDDependencyStateBlocked
+		!point12ValCBoundaryRefValid(model.ValCPublicPrivateBoundary.BoundaryID) {
+		blockedReasons = append(blockedReasons, "dependency_identity_or_preflight_invalid")
+	}
+	if point12ValDReplayProfileContextInvalid(model) {
+		blockedReasons = append(blockedReasons, "dependency_valb_profile_context_binding_invalid")
+	}
+	if embeddedReasons := point12ValDDependencyEmbeddedPayloadUnsafeReasons(model); len(embeddedReasons) > 0 {
+		blockedReasons = append(blockedReasons, embeddedReasons...)
+	}
+	if point12Val0ContainsPrematurePassToken(
+		model.ValCAuditExportBundle.ExportID,
+		model.ValCRedactionManifest.RedactionManifestID,
+		model.ValCRedactionImpactVerdict.RedactionImpactID,
+		model.ValCOfflineBundle.OfflineBundleID,
+		model.ValCAuditExportBundle.CustomerVisibleSummary,
+		model.ValCOfflineBundle.CustomerVisibleExplanation,
+	) {
+		blockedReasons = append(blockedReasons, "dependency_valc_embedded_surface_premature_point12_pass")
 	}
 	if model.ValCCurrentState == Point12ValCStateBlocked ||
 		model.ValCDependencyState == Point12ValCDependencyStateBlocked ||
@@ -1056,7 +1194,7 @@ func EvaluatePoint12ValDDependencyState(model Point12ValDDependencySnapshot) str
 		model.ValCRedactionImpactState == Point12ValCRedactionImpactExportBlocked ||
 		model.ValCPublicPrivateBoundaryState == Point12ValCPublicPrivateBoundaryStateBlocked ||
 		model.ValCOfflineBundleState == Point12ValCOfflineBundleStateBlocked {
-		return Point12ValDDependencyStateBlocked
+		blockedReasons = append(blockedReasons, "dependency_valc_state_blocked")
 	}
 	if model.ValCCurrentState == Point12ValCStateReviewRequired ||
 		model.ValCDependencyState == Point12ValCDependencyStateReviewRequired ||
@@ -1077,18 +1215,29 @@ func EvaluatePoint12ValDDependencyState(model Point12ValDDependencySnapshot) str
 		model.ValCOfflineBundleState == Point12ValCOfflineBundleStatePartialAdvisoryOnly ||
 		model.ValCOfflineBundleState == Point12ValCOfflineBundleStateRedactedLimitations ||
 		len(model.ReviewPrerequisites) > 0 {
-		return Point12ValDDependencyStateReviewRequired
+		reviewReasons = append(reviewReasons, "dependency_valc_state_review_required")
 	}
-	if model.ValCCurrentState != Point12ValCStateActive ||
+	if len(reviewReasons) == 0 && (model.ValCCurrentState != Point12ValCStateActive ||
 		model.ValCDependencyState != Point12ValCDependencyStateActive ||
 		model.ValCExportState != Point12ValCExportStateReady ||
 		model.ValCRedactionManifestState != Point12ValCRedactionManifestStateActive ||
 		model.ValCRedactionImpactState != Point12ValCRedactionImpactNoDecisionImpact ||
 		model.ValCOfflineBundleState != Point12ValCOfflineBundleStateActive ||
-		model.ValCPublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateActive {
-		return Point12ValDDependencyStateBlocked
+		model.ValCPublicPrivateBoundaryState != Point12ValCPublicPrivateBoundaryStateActive) {
+		blockedReasons = append(blockedReasons, "dependency_valc_state_not_active")
 	}
-	return Point12ValDDependencyStateActive
+	if len(blockedReasons) > 0 {
+		return Point12ValDDependencyStateBlocked, blockedReasons
+	}
+	if len(reviewReasons) > 0 {
+		return Point12ValDDependencyStateReviewRequired, reviewReasons
+	}
+	return Point12ValDDependencyStateActive, nil
+}
+
+func EvaluatePoint12ValDDependencyState(model Point12ValDDependencySnapshot) string {
+	state, _ := point12ValDDependencyStateAndReasons(model)
+	return state
 }
 
 func point12ValDLineageEdgeStateAndReasons(model Point12ValDLineageEdge, projection Point12ValDProofChainProjection) (string, []string) {
@@ -1116,6 +1265,22 @@ func point12ValDLineageEdgeStateAndReasons(model Point12ValDLineageEdge, project
 	}
 	if model.Inferred && !model.Decisive && !model.AdvisoryOnly {
 		reviewReasons = append(reviewReasons, "lineage_edge_inferred_non_decisive_must_be_advisory_only")
+	}
+	if point12Val0ContainsPrematurePassToken(
+		model.EdgeID,
+		model.FromRef,
+		model.ToRef,
+		model.TenantScope,
+		model.EvidenceSpineRef,
+		model.FromHash,
+		model.ToHash,
+		strings.Join(model.InputEvidenceRefs, " "),
+		model.AgentID,
+		model.AuditID,
+		model.RecommendationID,
+		model.Explanation,
+	) {
+		blockedReasons = append(blockedReasons, "lineage_edge_premature_point12_pass")
 	}
 	if model.EdgeType == point12ValDLineageEdgeTypeAgentFindingAdvisory {
 		expectedLineage := point12ValDPrimaryAgentLineageRecord()
@@ -1252,7 +1417,36 @@ func point12ValDProofChainProjectionStateAndReasons(model Point12ValDProofChainP
 	if len(model.SourceEvidenceSpineRefs) == 0 {
 		blockedReasons = append(blockedReasons, "proof_chain_source_evidence_spine_missing")
 	}
-	if point12Val0ContainsPrematurePassToken(model.ProofChainID, model.ExportID, model.ProjectionDisclaimer) {
+	if point12Val0ContainsPrematurePassToken(
+		model.ProofChainID,
+		model.ProofPackID,
+		model.ManifestID,
+		model.ReplayResultID,
+		model.ExportID,
+		model.OfflineBundleID,
+		model.RedactionManifestID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
+		strings.Join(model.EvidenceRefs, " "),
+		strings.Join(model.EvidenceHashRefs, " "),
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
+		strings.Join(model.ClaimRefs, " "),
+		strings.Join(model.GovernanceEventRefs, " "),
+		model.CompatibilityProfileRef,
+		model.ManifestPayloadHash,
+		model.SignatureMetadataRef,
+		model.PublicPrivateBoundaryRef,
+		model.RetentionClassRef,
+		strings.Join(model.SourceEvidenceSpineRefs, " "),
+		model.ProjectionDisclaimer,
+	) {
 		blockedReasons = append(blockedReasons, "proof_chain_premature_point12_pass")
 	}
 	if len(blockedReasons) > 0 {
@@ -1394,21 +1588,10 @@ func point12ValDExplanationStateAndReasons(model Point12ValDExplanationResult, q
 	if model.ExplanationHash != point12ValDComputedExplanationHash(model) {
 		blockedReasons = append(blockedReasons, "explanation_hash_mismatch")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.ExplanationID,
-		model.CustomerVisibleStatement,
-		model.WhyDecisionSummary,
-		model.WhyChangedSummary,
-		model.DecisionContextSummary,
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValDExplanationPassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "explanation_premature_point12_pass")
 	}
-	if point12Val0ContainsForbiddenClaim(
-		model.CustomerVisibleStatement,
-		model.DecisionContextSummary,
-		model.WhyDecisionSummary,
-		model.WhyChangedSummary,
-	) {
+	if point12Val0ContainsForbiddenClaim(point12ValDExplanationNoOverclaimValues(model)...) {
 		blockedReasons = append(blockedReasons, "explanation_overclaim_detected")
 	}
 	switch query.QueryKind {
@@ -1448,6 +1631,79 @@ func point12ValDExplanationStateAndReasons(model Point12ValDExplanationResult, q
 		return Point12ValDExplanationStateReviewRequired, reviewReasons
 	}
 	return Point12ValDExplanationStateActive, nil
+}
+
+func point12ValDExplanationPassTokenGuardValues(model Point12ValDExplanationResult) []string {
+	values := []string{
+		model.ExplanationID,
+		model.QueryID,
+		model.ExplanationKind,
+		model.ProofChainID,
+		model.TenantScope,
+		model.DecisionContextSummary,
+		model.WhyDecisionSummary,
+		model.WhyChangedSummary,
+		model.CustomerVisibleStatement,
+		model.InternalDiagnosticSummary,
+		model.ProjectionDisclaimer,
+		model.NoOverclaimState,
+		model.ExplanationHash,
+		model.ExplanationState,
+	}
+	values = append(values, model.BasedOnRefs...)
+	values = append(values, model.BasedOnHashes...)
+	values = append(values, model.ExpectedRefs...)
+	values = append(values, model.ActualRefs...)
+	values = append(values, model.ExpectedHashes...)
+	values = append(values, model.ActualHashes...)
+	values = append(values, model.ExpectedVersions...)
+	values = append(values, model.ActualVersions...)
+	values = append(values, model.MismatchExplanations...)
+	values = append(values, model.MissingEvidenceExplanations...)
+	values = append(values, model.RedactionLimitations...)
+	values = append(values, model.DriftReasons...)
+	values = append(values, model.Limitations...)
+	return values
+}
+
+func point12ValDExplanationNoOverclaimValues(model Point12ValDExplanationResult) []string {
+	values := point12ValDAppendNonEmptyTexts(nil,
+		model.CustomerVisibleStatement,
+		model.DecisionContextSummary,
+		model.WhyDecisionSummary,
+		model.WhyChangedSummary,
+	)
+	values = append(values, model.ExpectedRefs...)
+	values = append(values, model.ActualRefs...)
+	values = append(values, model.ExpectedVersions...)
+	values = append(values, model.ActualVersions...)
+	values = append(values, model.MismatchExplanations...)
+	values = append(values, model.MissingEvidenceExplanations...)
+	values = append(values, model.RedactionLimitations...)
+	values = append(values, model.Limitations...)
+	return values
+}
+
+func point12ValDAppendNonEmptyTexts(values []string, candidates ...string) []string {
+	for _, candidate := range candidates {
+		if candidate != "" {
+			values = append(values, candidate)
+		}
+	}
+	return values
+}
+
+func point12ValDAllowedNoOverclaimText(value string) bool {
+	normalized := formalNoOverclaimNormalizePublicText(value)
+	if normalized == "" {
+		return false
+	}
+	for _, allowed := range point12Val0AllowedClaims() {
+		if normalized == formalNoOverclaimNormalizePublicText(allowed) {
+			return true
+		}
+	}
+	return false
 }
 
 func EvaluatePoint12ValDExplanationState(model Point12ValDExplanationResult, query Point12ValDProofChainQuery, proofChain Point12ValDProofChainProjection, dependency Point12ValDDependencySnapshot) string {
@@ -1491,10 +1747,10 @@ func point12ValDSupportProfileStateAndReasons(model Point12ValDFinancialInsuranc
 	if !model.AdvisoryOnly {
 		blockedReasons = append(blockedReasons, "support_profile_must_remain_advisory_only")
 	}
-	if point12Val0ContainsForbiddenClaim(model.SupportStatement) {
+	if point12Val0ContainsForbiddenClaim(point12ValDSupportProfileNoOverclaimValues(model)...) {
 		blockedReasons = append(blockedReasons, "support_profile_overclaim_detected")
 	}
-	if point12Val0ContainsPrematurePassToken(model.ProfileID, model.SupportStatement) {
+	if point12Val0ContainsPrematurePassToken(point12ValDSupportProfilePassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "support_profile_premature_point12_pass")
 	}
 	if model.ProofChainID != proofChain.ProofChainID ||
@@ -1518,6 +1774,42 @@ func point12ValDSupportProfileStateAndReasons(model Point12ValDFinancialInsuranc
 		return Point12ValDSupportProfileStateReviewRequired, reviewReasons
 	}
 	return Point12ValDSupportProfileStateActive, nil
+}
+
+func point12ValDSupportProfilePassTokenGuardValues(model Point12ValDFinancialInsuranceEvidenceSupportProfile) []string {
+	values := []string{
+		model.ProfileID,
+		model.ProfileType,
+		model.ProofChainID,
+		model.ProofPackID,
+		model.ExportID,
+		model.TenantScope,
+		model.SupportStatement,
+		model.InternalDiagnosticSummary,
+		model.ProfileHash,
+		model.ProfileState,
+	}
+	values = append(values, model.EvidenceSupportCategories...)
+	values = append(values, model.RiskContextMetadata...)
+	values = append(values, model.SupportingEvidenceRefs...)
+	values = append(values, model.SupportingEvidenceHashRefs...)
+	values = append(values, model.Limitations...)
+	values = append(values, model.AllowedWordingRefs...)
+	values = append(values, model.BlockedWordingRefs...)
+	return values
+}
+
+func point12ValDSupportProfileNoOverclaimValues(model Point12ValDFinancialInsuranceEvidenceSupportProfile) []string {
+	values := point12ValDAppendNonEmptyTexts(nil, model.SupportStatement)
+	values = point12ValDAppendNonEmptyTexts(values, model.EvidenceSupportCategories...)
+	values = point12ValDAppendNonEmptyTexts(values, model.RiskContextMetadata...)
+	values = point12ValDAppendNonEmptyTexts(values, model.AllowedWordingRefs...)
+	for _, limitation := range model.Limitations {
+		if limitation != "" && !point12ValDAllowedNoOverclaimText(limitation) {
+			values = append(values, limitation)
+		}
+	}
+	return values
 }
 
 func EvaluatePoint12ValDSupportProfileState(model Point12ValDFinancialInsuranceEvidenceSupportProfile, proofChain Point12ValDProofChainProjection) string {

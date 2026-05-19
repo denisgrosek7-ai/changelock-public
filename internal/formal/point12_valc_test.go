@@ -264,15 +264,24 @@ func TestPoint12ValCDependencyState(t *testing.T) {
 		{name: "fallback regenerated valb snapshot blocks", mutate: func(model *Point12ValCDependencySnapshot) { model.SnapshotFromComputedOutput = false }, want: Point12ValCDependencyStateBlocked},
 		{name: "unsupported manifest integrity check requires review", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBManifestIntegrityResult = point12ValBCheckResultUnsupported
+			model.ValBReplayResult.ManifestIntegrityCheckResult = point12ValBCheckResultUnsupported
 		}, want: Point12ValCDependencyStateReviewRequired},
 		{name: "unsupported signature metadata check requires review", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBSignatureMetadataResult = point12ValBCheckResultUnsupported
+			model.ValBReplayResult.SignatureMetadataCheckResult = point12ValBCheckResultUnsupported
 		}, want: Point12ValCDependencyStateReviewRequired},
 		{name: "unsupported compatibility check requires review", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBCompatibilityResult = point12ValBCheckResultUnsupported
+			model.ValBReplayResult.CompatibilityCheckResult = point12ValBCheckResultUnsupported
 		}, want: Point12ValCDependencyStateReviewRequired},
 		{name: "tampered manifest integrity check blocks", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBManifestIntegrityResult = point12ValBCheckResultTampered
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "padded valb active state blocks raw inherited dependency binding", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBCurrentState = Point12ValBStateActive + " "
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "tab newline valb replay taxonomy blocks raw inherited dependency binding", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayTaxonomy = "\t" + Point12Val0ReplayResultSameDecision + "\n"
 		}, want: Point12ValCDependencyStateBlocked},
 		{name: "blocked signature metadata check blocks", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBSignatureMetadataResult = point12ValBCheckResultBlocked
@@ -285,15 +294,56 @@ func TestPoint12ValCDependencyState(t *testing.T) {
 		}, want: Point12ValCDependencyStateBlocked},
 		{name: "valb unsupported version requires review", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBReplayTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+			model.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultUnsupportedVersion
 		}, want: Point12ValCDependencyStateReviewRequired},
 		{name: "valb insufficient evidence requires review", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBReplayTaxonomy = Point12Val0ReplayResultInsufficientEvidence
+			model.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultInsufficientEvidence
 		}, want: Point12ValCDependencyStateReviewRequired},
 		{name: "valb redacted limitations requires review", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBReplayTaxonomy = Point12Val0ReplayResultRedactedLimitations
+			model.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultRedactedLimitations
 		}, want: Point12ValCDependencyStateReviewRequired},
 		{name: "premature point12 pass in dependency blocks", mutate: func(model *Point12ValCDependencySnapshot) {
 			model.ValBPrematurePoint12PassSeen = true
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "stale embedded valb replay result pass emission blocks", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.PointPassEmitted = true
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "stale embedded valb replay result external api use blocks", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.ExternalAPIUsed = true
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "stale embedded valb replay result request id blocks", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.ReplayRequestID = "replay_request_point12_valb_stale_002"
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "stale embedded valb replay result replay mode blocks", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.ReplayMode = point12Val0ReplayModeComparisonMode
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "stale embedded valb replay result profile context blocks", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.ProfileContext.ProfileApprovalBoundHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "embedded valb replay result review-required state propagates", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.ReplayState = Point12ValBReplayResultStateReviewRequired
+		}, want: Point12ValCDependencyStateReviewRequired},
+		{name: "embedded valb replay result unsupported flag propagates review", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.UnsupportedVersion = true
+		}, want: Point12ValCDependencyStateReviewRequired},
+		{name: "embedded valb replay result match-original drift propagates review", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayResult.MatchOriginal = false
+		}, want: Point12ValCDependencyStateReviewRequired},
+		{name: "nested vala manifest missing current profile hash blocks dependency", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValAManifest.ProfileContext.CurrentProfileHash = ""
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "nested vala manifest profile pass token blocks dependency", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValAManifest.ProfileContext.ProfileApprovalRef = "profile_approval_point_12_pass"
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "nested valb replay request policy ref point12 pass blocks dependency", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValBReplayRequest.PolicyRef = "policy_point_12_pass"
+		}, want: Point12ValCDependencyStateBlocked},
+		{name: "nested vala manifest coordinated tenant retag blocks dependency", mutate: func(model *Point12ValCDependencySnapshot) {
+			model.ValAManifest.TenantScope = "tenant_scope_point12_beta"
+			model.ValAManifest.ProfileContext.OriginalTenantScope = "tenant_scope_point12_beta"
+			model.ValAManifest.ProfileContext.CurrentTenantScope = "tenant_scope_point12_beta"
 		}, want: Point12ValCDependencyStateBlocked},
 	}
 
@@ -311,6 +361,7 @@ func TestPoint12ValCDependencyState(t *testing.T) {
 		model := Point12ValCFoundationModel()
 		model.Dependency = activePoint12ValCDependencySnapshot()
 		model.Dependency.ValBManifestIntegrityResult = point12ValBCheckResultUnsupported
+		model.Dependency.ValBReplayResult.ManifestIntegrityCheckResult = point12ValBCheckResultUnsupported
 		syncPoint12ValCFoundationToDependency(&model)
 		model = ComputePoint12ValCFoundation(model)
 		if model.DependencyState != Point12ValCDependencyStateReviewRequired {
@@ -349,9 +400,10 @@ func TestPoint12ValCAuditExportBundle(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name      string
-		mutate    func(*Point12ValCFoundation)
-		wantState string
+		name       string
+		mutate     func(*Point12ValCFoundation)
+		wantState  string
+		wantReason string
 	}{
 		{name: "missing export id blocks", mutate: func(model *Point12ValCFoundation) { model.ExportBundle.ExportID = "" }, wantState: Point12ValCExportStateBlocked},
 		{name: "missing tenant scope blocks", mutate: func(model *Point12ValCFoundation) { model.ExportBundle.TenantScope = "" }, wantState: Point12ValCExportStateTenantMismatch},
@@ -366,9 +418,17 @@ func TestPoint12ValCAuditExportBundle(t *testing.T) {
 			model.ExportBundle.DisposalPathRef = ""
 		}, wantState: Point12ValCExportStateRetentionMissing},
 		{name: "public private classification missing blocks", mutate: func(model *Point12ValCFoundation) { model.ExportBundle.PublicPrivateClassification = "" }, wantState: Point12ValCExportStateBlocked},
+		{name: "padded policy hash cannot trim into export dependency binding", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.PolicyHash = model.Dependency.ValBReplayRequest.PolicyHash + " "
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_identity_or_metadata_invalid"},
+		{name: "tab newline export state cannot trim into export ready", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.ExportState = "\t" + Point12ValCExportStateReady + "\n"
+		}, wantState: Point12ValCExportStateBlocked},
 		{name: "advisory only false blocks", mutate: func(model *Point12ValCFoundation) { model.ExportBundle.AdvisoryOnly = false }, wantState: Point12ValCExportStateBlocked},
 		{name: "insufficient evidence cannot become export ready", mutate: func(model *Point12ValCFoundation) {
 			model.Dependency.ValBReplayTaxonomy = Point12Val0ReplayResultInsufficientEvidence
+			model.Dependency.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultInsufficientEvidence
+			model.Dependency.ValBReplayResult.InsufficientEvidence = true
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
 		}, wantState: Point12ValCExportStateBlocked},
 		{name: "verifier export requires offline bundle ref", mutate: func(model *Point12ValCFoundation) {
@@ -377,13 +437,29 @@ func TestPoint12ValCAuditExportBundle(t *testing.T) {
 		}, wantState: Point12ValCExportStateBlocked},
 		{name: "export cannot accept point12 pass fixture", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.CustomerVisibleSummary = "point_12_pass"
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_premature_point12_pass"},
+		{name: "export policy ref cannot carry point12 pass before final closure", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.PolicyRef = "policy_point_12_pass"
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_premature_point12_pass"},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			model := activePoint12ValCFoundation()
 			testCase.mutate(&model)
+			if testCase.wantReason != "" {
+				redactionManifestState := EvaluatePoint12ValCRedactionManifestState(model.RedactionManifest, model.Dependency, model.ExportBundle)
+				redactionImpactState := EvaluatePoint12ValCRedactionImpactState(model.RedactionImpactVerdict, model.RedactionManifest, model.Dependency)
+				offlineState := EvaluatePoint12ValCOfflineBundleState(model.OfflineBundle, model.Dependency, redactionImpactState)
+				boundaryState := EvaluatePoint12ValCPublicPrivateBoundaryState(model.PublicPrivateBoundary, model.Dependency, model.ExportBundle, model.OfflineBundle, model.RedactionManifest)
+				exportState, exportReasons := point12ValCAuditExportStateAndReasons(model.ExportBundle, model.Dependency, redactionManifestState, redactionImpactState, offlineState, boundaryState)
+				if exportState != testCase.wantState {
+					t.Fatalf("expected direct export state %q, got state=%s reasons=%#v", testCase.wantState, exportState, exportReasons)
+				}
+				if !point12Val0StringSliceContains(exportReasons, testCase.wantReason) {
+					t.Fatalf("expected exact export reason %q, got %#v", testCase.wantReason, exportReasons)
+				}
+			}
 			model = ComputePoint12ValCFoundation(model)
 			if model.ExportState != testCase.wantState {
 				t.Fatalf("expected export state %q, got %#v", testCase.wantState, model)
@@ -394,6 +470,8 @@ func TestPoint12ValCAuditExportBundle(t *testing.T) {
 	t.Run("unsupported version may remain bounded review required", func(t *testing.T) {
 		model := activePoint12ValCFoundation()
 		model.Dependency.ValBReplayTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+		model.Dependency.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultUnsupportedVersion
+		model.Dependency.ValBReplayResult.UnsupportedVersion = true
 		model.ExportBundle.ExportState = Point12ValCExportStateUnsupported
 		model = ComputePoint12ValCFoundation(model)
 		if model.ExportState != Point12ValCExportStateUnsupported || model.CurrentState != Point12ValCStateReviewRequired {
@@ -497,6 +575,15 @@ func TestPoint12ValCRedactionManifestAndImpact(t *testing.T) {
 		}
 	})
 
+	t.Run("redaction summary cannot carry point12 pass before final closure", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.RedactionSummary = "point_12_pass"
+		state, reasons := point12ValCRedactionManifestStateAndReasons(model.RedactionManifest, model.Dependency, model.ExportBundle)
+		if state != Point12ValCRedactionManifestStateBlocked || !point12Val0StringSliceContains(reasons, "redaction_manifest_premature_point12_pass") {
+			t.Fatalf("expected premature point12 pass redaction summary to block, state=%s reasons=%#v", state, reasons)
+		}
+	})
+
 	t.Run("customer visible exported surviving replay claims with compliance guaranteed block", func(t *testing.T) {
 		for _, mutate := range []func(*Point12ValCRedactionManifest){
 			func(model *Point12ValCRedactionManifest) {
@@ -594,6 +681,18 @@ func TestPoint12ValCRedactionManifestAndImpact(t *testing.T) {
 		}
 	})
 
+	t.Run("redaction retention class cannot drift from proof pack class", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.RedactionManifest.RetentionClassRef = "retention_class_point12_downgraded"
+		state, reasons := point12ValCRedactionManifestStateAndReasons(model.RedactionManifest, model.Dependency, model.ExportBundle)
+		if state != Point12ValCRedactionManifestStateBlocked {
+			t.Fatalf("expected redaction retention class drift to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "redaction_manifest_dependency_binding_mismatch") {
+			t.Fatalf("expected exact redaction retention binding reason, got %#v", reasons)
+		}
+	})
+
 	t.Run("replay affecting redaction can produce redacted limitations with required limits", func(t *testing.T) {
 		model := activePoint12ValCFoundation()
 		model.RedactionManifest.RedactedFields = []string{"customer_identifier"}
@@ -625,9 +724,10 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name      string
-		mutate    func(*Point12ValCFoundation)
-		wantState string
+		name       string
+		mutate     func(*Point12ValCFoundation)
+		wantState  string
+		wantReason string
 	}{
 		{name: "no external api required false blocks", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.NoExternalAPIRequired = false
@@ -646,6 +746,12 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 		}, wantState: Point12ValCOfflineBundleStateUnsupported},
 		{name: "tenant mismatch blocks", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.TenantScope = "tenant_scope_point12_cross_001"
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
+		{name: "padded proof pack id cannot trim into offline dependency binding", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.ProofPackID = " " + model.Dependency.ValAManifest.ProofPackID
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_identity_or_metadata_invalid"},
+		{name: "tab newline offline state cannot trim into active state", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.OfflineState = "\t" + Point12ValCOfflineBundleStateActive + "\n"
 		}, wantState: Point12ValCOfflineBundleStateBlocked},
 		{name: "cross tenant evidence blocks", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.EvidenceRefs = []string{"evidence:cross-tenant-pack-001"}
@@ -669,13 +775,26 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 		}, wantState: Point12ValCOfflineBundleStateBlocked},
 		{name: "offline bundle cannot accept point12 pass fixture", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.CustomerVisibleExplanation = "point_12_pass"
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_premature_point12_pass"},
+		{name: "offline verification policy ref cannot carry point12 pass before final closure", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.VerificationPolicyRef = "policy_point_12_pass"
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_premature_point12_pass"},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			model := activePoint12ValCFoundation()
 			testCase.mutate(&model)
+			if testCase.wantReason != "" {
+				redactionImpactState := EvaluatePoint12ValCRedactionImpactState(model.RedactionImpactVerdict, model.RedactionManifest, model.Dependency)
+				offlineState, offlineReasons := point12ValCOfflineBundleStateAndReasons(model.OfflineBundle, model.Dependency, redactionImpactState)
+				if offlineState != testCase.wantState {
+					t.Fatalf("expected direct offline state %q, got state=%s reasons=%#v", testCase.wantState, offlineState, offlineReasons)
+				}
+				if !point12Val0StringSliceContains(offlineReasons, testCase.wantReason) {
+					t.Fatalf("expected exact offline reason %q, got %#v", testCase.wantReason, offlineReasons)
+				}
+			}
 			model = ComputePoint12ValCFoundation(model)
 			if model.OfflineBundleState != testCase.wantState {
 				t.Fatalf("expected offline state %q, got %#v", testCase.wantState, model)
@@ -746,6 +865,31 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 		}
 	})
 
+	t.Run("padded allowed audience blocks raw public private boundary binding", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.PublicPrivateBoundary.AllowedAudience = point12ValCExportAudienceInternalAudit + " "
+		state, reasons := point12ValCPublicPrivateBoundaryStateAndReasons(model.PublicPrivateBoundary, model.Dependency, model.ExportBundle, model.OfflineBundle, model.RedactionManifest)
+		if state != Point12ValCPublicPrivateBoundaryStateBlocked {
+			t.Fatalf("expected padded allowed audience to block, got state=%q reasons=%v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "public_private_boundary_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact metadata reason, got %v", reasons)
+		}
+	})
+
+	t.Run("point12 pass field token blocks public private boundary", func(t *testing.T) {
+		model := activePoint12ValCFoundation()
+		model.PublicPrivateBoundary.ExportedFields = append(model.PublicPrivateBoundary.ExportedFields, "point_12_pass")
+		model.PublicPrivateBoundary.InternalOnlyFields = append(model.PublicPrivateBoundary.InternalOnlyFields, "point_12_pass")
+		state, reasons := point12ValCPublicPrivateBoundaryStateAndReasons(model.PublicPrivateBoundary, model.Dependency, model.ExportBundle, model.OfflineBundle, model.RedactionManifest)
+		if state != Point12ValCPublicPrivateBoundaryStateBlocked {
+			t.Fatalf("expected point12 pass field token to block boundary, got state=%q reasons=%v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "public_private_boundary_premature_point12_pass") {
+			t.Fatalf("expected exact pass-token boundary reason, got %v", reasons)
+		}
+	})
+
 	t.Run("redaction summary cannot leak private field into public output", func(t *testing.T) {
 		model := activePoint12ValCFoundation()
 		model.ExportBundle.ExportAudience = point12ValCExportAudienceCustomer
@@ -759,59 +903,75 @@ func TestPoint12ValCOfflineBundleAndBoundary(t *testing.T) {
 
 func TestPoint12ValCExactBindingMutationClosure(t *testing.T) {
 	exportMutations := []struct {
-		name      string
-		mutate    func(*Point12ValCFoundation)
-		wantState string
+		name       string
+		mutate     func(*Point12ValCFoundation)
+		wantState  string
+		wantReason string
 	}{
 		{name: "artifact_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.ArtifactHash = "sha256:1010101010101010101010101010101010101010101010101010101010101010"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "evidence_hash_refs exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.EvidenceHashRefs = []string{"sha256:2222222222222222222222222222222222222222222222222222222222222222"}
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "policy_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.PolicyHash = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "engine_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.EngineHash = "sha256:4444444444444444444444444444444444444444444444444444444444444444"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "schema_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.SchemaHash = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "manifest_payload_hash exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.ManifestPayloadHash = "sha256:6666666666666666666666666666666666666666666666666666666666666666"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
+		{name: "retention_class_ref exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
+			model.ExportBundle.RetentionClassRef = "retention_class_point12_downgraded"
+			model.ExportBundle.ExportState = Point12ValCExportStateReady
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "redaction_manifest_ref exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.RedactionManifestRef = "redaction_manifest_point12_valc_999"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "replay_result_id exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.ReplayResultID = "replay_result_point12_valb_999"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "tenant_scope exact_required mutation blocks full export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.TenantScope = "tenant_scope_point12_cross_001"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateTenantMismatch},
+		}, wantState: Point12ValCExportStateTenantMismatch, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "manifest_id exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.ManifestID = "manifest_point12_vala_999"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 		{name: "proof_pack_id exact_required mutation blocks export", mutate: func(model *Point12ValCFoundation) {
 			model.ExportBundle.ProofPackID = "proof_pack_point12_val0_999"
 			model.ExportBundle.ExportState = Point12ValCExportStateReady
-		}, wantState: Point12ValCExportStateBlocked},
+		}, wantState: Point12ValCExportStateBlocked, wantReason: "audit_export_dependency_binding_mismatch"},
 	}
 	for _, testCase := range exportMutations {
 		t.Run(testCase.name, func(t *testing.T) {
 			model := activePoint12ValCFoundation()
 			testCase.mutate(&model)
+			redactionManifestState := EvaluatePoint12ValCRedactionManifestState(model.RedactionManifest, model.Dependency, model.ExportBundle)
+			redactionImpactState := EvaluatePoint12ValCRedactionImpactState(model.RedactionImpactVerdict, model.RedactionManifest, model.Dependency)
+			offlineState := EvaluatePoint12ValCOfflineBundleState(model.OfflineBundle, model.Dependency, redactionImpactState)
+			boundaryState := EvaluatePoint12ValCPublicPrivateBoundaryState(model.PublicPrivateBoundary, model.Dependency, model.ExportBundle, model.OfflineBundle, model.RedactionManifest)
+			exportState, exportReasons := point12ValCAuditExportStateAndReasons(model.ExportBundle, model.Dependency, redactionManifestState, redactionImpactState, offlineState, boundaryState)
+			if exportState != testCase.wantState {
+				t.Fatalf("expected direct export state %q, got state=%s reasons=%#v", testCase.wantState, exportState, exportReasons)
+			}
+			if !point12Val0StringSliceContains(exportReasons, testCase.wantReason) {
+				t.Fatalf("expected exact export reason %q, got %#v", testCase.wantReason, exportReasons)
+			}
 			model = ComputePoint12ValCFoundation(model)
 			if model.ExportState != testCase.wantState {
 				t.Fatalf("expected export state %q, got %#v", testCase.wantState, model)
@@ -823,54 +983,63 @@ func TestPoint12ValCExactBindingMutationClosure(t *testing.T) {
 	}
 
 	offlineMutations := []struct {
-		name      string
-		mutate    func(*Point12ValCFoundation)
-		wantState string
+		name       string
+		mutate     func(*Point12ValCFoundation)
+		wantState  string
+		wantReason string
 	}{
 		{name: "artifact_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.ArtifactHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "evidence_hash_refs exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.EvidenceHashRefs = []string{"sha256:8888888888888888888888888888888888888888888888888888888888888888"}
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "policy_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.PolicyHash = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "engine_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.EngineHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "schema_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.SchemaHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "manifest_payload_hash exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.ManifestPayloadHash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
+		{name: "detached_signature_ref exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.DetachedSignatureRef = "detached_signature_point12_vala_999"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
+		{name: "retention_class_ref exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
+			model.OfflineBundle.RetentionClassRef = "retention_class_point12_downgraded"
+			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "redaction_manifest_ref exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.RedactionManifestRef = "redaction_manifest_point12_valc_999"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "replay_result_id exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.ReplayResultID = "replay_result_point12_valb_999"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "tenant_scope exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.TenantScope = "tenant_scope_point12_cross_001"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "manifest_id exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.ManifestID = "manifest_point12_vala_999"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "proof_pack_id exact_required mutation blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.ProofPackID = "proof_pack_point12_val0_999"
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
-		}, wantState: Point12ValCOfflineBundleStateBlocked},
+		}, wantState: Point12ValCOfflineBundleStateBlocked, wantReason: "offline_bundle_dependency_binding_mismatch"},
 		{name: "no_external_api_required false blocks offline bundle", mutate: func(model *Point12ValCFoundation) {
 			model.OfflineBundle.NoExternalAPIRequired = false
 			model.OfflineBundle.OfflineState = Point12ValCOfflineBundleStateActive
@@ -884,6 +1053,16 @@ func TestPoint12ValCExactBindingMutationClosure(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			model := activePoint12ValCFoundation()
 			testCase.mutate(&model)
+			if testCase.wantReason != "" {
+				redactionImpactState := EvaluatePoint12ValCRedactionImpactState(model.RedactionImpactVerdict, model.RedactionManifest, model.Dependency)
+				offlineState, offlineReasons := point12ValCOfflineBundleStateAndReasons(model.OfflineBundle, model.Dependency, redactionImpactState)
+				if offlineState != testCase.wantState {
+					t.Fatalf("expected direct offline state %q, got state=%s reasons=%#v", testCase.wantState, offlineState, offlineReasons)
+				}
+				if !point12Val0StringSliceContains(offlineReasons, testCase.wantReason) {
+					t.Fatalf("expected exact offline reason %q, got %#v", testCase.wantReason, offlineReasons)
+				}
+			}
 			model = ComputePoint12ValCFoundation(model)
 			if model.OfflineBundleState != testCase.wantState {
 				t.Fatalf("expected offline state %q, got %#v", testCase.wantState, model)
@@ -960,6 +1139,8 @@ func TestPoint12ValCNoOverclaimAndTaxonomy(t *testing.T) {
 	t.Run("partial advisory export is review required not pass", func(t *testing.T) {
 		model := activePoint12ValCFoundation()
 		model.Dependency.ValBReplayTaxonomy = Point12Val0ReplayResultInsufficientEvidence
+		model.Dependency.ValBReplayResult.ReplayResultTaxonomy = Point12Val0ReplayResultInsufficientEvidence
+		model.Dependency.ValBReplayResult.InsufficientEvidence = true
 		model.ExportBundle.ExportState = Point12ValCExportStatePartialAdvisory
 		model.ExportBundle.Limitations = []string{"insufficient evidence for full export"}
 		model = ComputePoint12ValCFoundation(model)

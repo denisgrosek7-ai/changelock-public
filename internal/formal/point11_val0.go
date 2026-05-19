@@ -797,9 +797,31 @@ func point11Val0DependencyRepoReviewModel() Point11Val0Point10RepoReview {
 	}
 }
 
+func point11Val0PostMergeDependencyRepoReviewModel() Point11Val0Point10RepoReview {
+	return Point11Val0Point10RepoReview{
+		LatestValEClosurePatchPresent: true,
+		Point10PassOutsideValE:        false,
+		CIGreenVisible:                true,
+		CIGreen:                       true,
+		MergeStatusVisible:            true,
+		MergeAccepted:                 true,
+	}
+}
+
 func point11Val0DependencySnapshotModel() Point11Val0DependencySnapshot {
 	valE := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
 	return SnapshotPoint11Val0DependencyFromComputedPoint10ValE(valE, point11Val0DependencyRepoReviewModel())
+}
+
+func point11Val0PostMergeDependencySnapshotModel() Point11Val0DependencySnapshot {
+	valE := operability.ComputeDeploymentMultiTenantValEFoundation(operability.DeploymentMultiTenantValEFoundationModel())
+	return SnapshotPoint11Val0DependencyFromComputedPoint10ValE(valE, point11Val0PostMergeDependencyRepoReviewModel())
+}
+
+func point11Val0PostMergeFoundationModel() Point11Val0Foundation {
+	model := Point11Val0FoundationModel()
+	model.Dependency = point11Val0PostMergeDependencySnapshotModel()
+	return ComputePoint11Val0Foundation(model)
 }
 
 func EvaluatePoint11Val0DependencyState(model Point11Val0DependencySnapshot) string {

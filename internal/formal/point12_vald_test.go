@@ -196,6 +196,21 @@ func TestPoint12ValDDependencyState(t *testing.T) {
 		{name: "padded valc export ready state blocks raw exact dependency", mutate: func(model *Point12ValDDependencySnapshot) {
 			model.ValCExportState = model.ValCExportState + " "
 		}, want: Point12ValDDependencyStateBlocked},
+		{name: "embedded valb request profile hash substitution blocks", mutate: func(model *Point12ValDDependencySnapshot) {
+			model.ValBReplayRequest.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+			model.ValBReplayRequest.ProfileContext.ProfileMatchOriginal = false
+			model.ValBReplayRequest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+			model.ValBReplayRequest.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		}, want: Point12ValDDependencyStateBlocked},
+		{name: "embedded valb result profile hash substitution blocks", mutate: func(model *Point12ValDDependencySnapshot) {
+			model.ValBReplayResult.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+			model.ValBReplayResult.ProfileContext.ProfileMatchOriginal = false
+			model.ValBReplayResult.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+			model.ValBReplayResult.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		}, want: Point12ValDDependencyStateBlocked},
+		{name: "embedded valb result profile no longer matches request blocks", mutate: func(model *Point12ValDDependencySnapshot) {
+			model.ValBReplayResult.ProfileContext.ProfileApprovalBoundHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		}, want: Point12ValDDependencyStateBlocked},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -206,6 +221,254 @@ func TestPoint12ValDDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("computed valc point pass emission propagates into dependency block", func(t *testing.T) {
+		valB := activePoint12ValBFoundation()
+		valB.ReplayResult.PointPassEmitted = true
+		valC := activePoint12ValCFoundationFromValB(valB)
+
+		snapshot := SnapshotPoint12ValDDependencyFromComputedValC(valC, point12ValDDependencyReviewContextModel())
+		if !snapshot.ValCPointPassEmitted {
+			t.Fatalf("expected computed valc point pass emission to propagate into snapshot, got %#v", snapshot)
+		}
+		if got := EvaluatePoint12ValDDependencyState(snapshot); got != Point12ValDDependencyStateBlocked {
+			t.Fatalf("expected propagated point pass emission to block dependency, got %s for %#v", got, snapshot)
+		}
+	})
+
+	t.Run("embedded valb request profile substitution blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayRequest.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.ValBReplayRequest.ProfileContext.ProfileMatchOriginal = false
+		model.ValBReplayRequest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.ValBReplayRequest.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_profile_context_binding_invalid") {
+			t.Fatalf("expected exact profile-context dependency block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb result profile substitution blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayResult.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.ValBReplayResult.ProfileContext.ProfileMatchOriginal = false
+		model.ValBReplayResult.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.ValBReplayResult.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_profile_context_binding_invalid") {
+			t.Fatalf("expected exact profile-context dependency block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb result profile drift from request blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayResult.ProfileContext.ProfileApprovalBoundHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_profile_context_binding_invalid") {
+			t.Fatalf("expected exact profile-context dependency block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc export pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCAuditExportBundle.ExportOutputClaims = []string{"point_12_pass"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_export_premature_point12_pass") {
+			t.Fatalf("expected exact embedded export pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc offline authority leak blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCOfflineBundle.ExternalAPIUsed = true
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_offline_external_api_invalid") {
+			t.Fatalf("expected exact embedded offline external-api block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb replay result authority leak blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayResult.ExternalAPIUsed = true
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_replay_result_external_api_or_point_pass") {
+			t.Fatalf("expected exact embedded replay result authority block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb replay result point pass blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayResult.PointPassEmitted = true
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_replay_result_external_api_or_point_pass") {
+			t.Fatalf("expected exact embedded replay result point-pass block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc export authority overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCAuditExportBundle.ExportAudience = point12ValCExportAudienceCustomer
+		model.ValCAuditExportBundle.Limitations = []string{"production approved"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_export_authority_or_overclaim_invalid") {
+			t.Fatalf("expected exact embedded export overclaim block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc export output overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCAuditExportBundle.ExportOutputClaims = []string{"production approved"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_export_overclaim_detected") {
+			t.Fatalf("expected exact embedded export output overclaim block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc redaction manifest overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCRedactionManifest.MinimumSafeClaimAfterRedaction = "production approved"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_redaction_manifest_overclaim_detected") {
+			t.Fatalf("expected exact embedded redaction manifest overclaim block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc redaction impact overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCRedactionImpactVerdict.MinimumSafeClaimAfterRedaction = "deployment approved"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_redaction_impact_overclaim_detected") {
+			t.Fatalf("expected exact embedded redaction impact overclaim block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary point pass blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCPublicPrivateBoundary.ExportedFields = append(model.ValCPublicPrivateBoundary.ExportedFields, "point_12_pass")
+		model.ValCPublicPrivateBoundary.InternalOnlyFields = append(model.ValCPublicPrivateBoundary.InternalOnlyFields, "point_12_pass")
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_premature_point12_pass") {
+			t.Fatalf("expected exact embedded boundary pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc redaction manifest pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCRedactionManifest.RedactionSummary = "point_12_pass"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_redaction_manifest_premature_point12_pass") {
+			t.Fatalf("expected exact embedded redaction manifest pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc redaction impact pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCRedactionImpactVerdict.Limitations = []string{"point_12_pass"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_redaction_impact_premature_point12_pass") {
+			t.Fatalf("expected exact embedded redaction impact pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc offline pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCOfflineBundle.OfflineOutputClaims = []string{"point_12_pass"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_offline_premature_point12_pass") {
+			t.Fatalf("expected exact embedded offline pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc offline output overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCOfflineBundle.OfflineOutputClaims = []string{"deployment approved"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_offline_overclaim_detected") {
+			t.Fatalf("expected exact embedded offline overclaim block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb replay request pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayRequest.ClaimRefs = []string{"claim_point_12_pass"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_replay_request_premature_point12_pass") {
+			t.Fatalf("expected exact embedded replay request pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb replay result pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayResult.ReplayOutputClaims = []string{"point_12_pass"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_replay_result_premature_point12_pass") {
+			t.Fatalf("expected exact embedded replay result pass-token block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valb replay result output overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValBReplayResult.ReplayOutputClaims = []string{"compliance guaranteed"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valb_replay_result_overclaim_detected") {
+			t.Fatalf("expected exact embedded replay result overclaim block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary metadata mutation blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCPublicPrivateBoundary.BoundaryID = " " + model.ValCPublicPrivateBoundary.BoundaryID + " "
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_identity_or_metadata_invalid") {
+			t.Fatalf("expected exact embedded boundary metadata block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary export binding mismatch blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCPublicPrivateBoundary.ExportID = "export_point12_valc_other_001"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_binding_mismatch") {
+			t.Fatalf("expected exact embedded boundary binding mismatch block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary unclassified exported field blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCPublicPrivateBoundary.ExportedFields = append(model.ValCPublicPrivateBoundary.ExportedFields, "unclassified_field")
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_unclassified_exported_field") {
+			t.Fatalf("expected exact embedded boundary unclassified field block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary field subset mismatch blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCPublicPrivateBoundary.PublicFields = append(model.ValCPublicPrivateBoundary.PublicFields, "not_exported_field")
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_field_subset_invalid") {
+			t.Fatalf("expected exact embedded boundary field subset block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary private field leak blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCPublicPrivateBoundary.CustomerVisibleFields = []string{"artifact_hash"}
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_private_field_leak") {
+			t.Fatalf("expected exact embedded boundary private-field leak block, state=%s reasons=%v", state, reasons)
+		}
+	})
+
+	t.Run("embedded valc boundary text leak blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation().Dependency
+		model.ValCAuditExportBundle.ExportAudience = point12ValCExportAudienceCustomer
+		model.ValCAuditExportBundle.CustomerVisibleSummary = "customer summary includes artifact_hash"
+		state, reasons := point12ValDDependencyStateAndReasons(model)
+		if state != Point12ValDDependencyStateBlocked || !point12Val0StringSliceContains(reasons, "dependency_valc_boundary_text_leak") {
+			t.Fatalf("expected exact embedded boundary text leak block, state=%s reasons=%v", state, reasons)
+		}
+	})
 }
 
 func TestPoint12ValDAggregateStateRawExact(t *testing.T) {
@@ -863,6 +1126,34 @@ func TestPoint12ValDProofChainProjection(t *testing.T) {
 		})
 	}
 
+	t.Run("lineage edge ref point12 pass token blocks after projection hash recomputation", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		proofChain := model.ProofChain
+		proofChain.LineageEdges[0].FromRef = "point_12_pass"
+		proofChain.ProjectionHash = point12ValDComputedProjectionHash(proofChain)
+		state, reasons := point12ValDProofChainProjectionStateAndReasons(proofChain, model.Dependency)
+		if state != Point12ValDProofChainStateBlocked {
+			t.Fatalf("expected lineage edge pass token to block after projection hash recomputation, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "lineage_edge_premature_point12_pass") {
+			t.Fatalf("expected exact lineage edge premature pass reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("proof chain top-level pass token blocks after projection hash recomputation", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		proofChain := model.ProofChain
+		proofChain.ArtifactRef = "point_12_pass"
+		proofChain.ProjectionHash = point12ValDComputedProjectionHash(proofChain)
+		state, reasons := point12ValDProofChainProjectionStateAndReasons(proofChain, model.Dependency)
+		if state != Point12ValDProofChainStateBlocked {
+			t.Fatalf("expected proof-chain top-level pass token to block after projection hash recomputation, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "proof_chain_premature_point12_pass") {
+			t.Fatalf("expected exact proof-chain premature pass reason, got %#v", reasons)
+		}
+	})
+
 	t.Run("raw exact projection state padding blocks", func(t *testing.T) {
 		model := activePoint12ValDFoundation()
 		proofChain := model.ProofChain
@@ -1217,9 +1508,159 @@ func TestPoint12ValDExplanationState(t *testing.T) {
 		model := activePoint12ValDFoundation()
 		model.Explanation.CustomerVisibleStatement = "This is production approved."
 		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
-		model = ComputePoint12ValDFoundation(model)
-		if model.ExplanationState != Point12ValDExplanationStateBlocked {
-			t.Fatalf("expected blocked overclaim explanation, got %#v", model)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected blocked overclaim explanation, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+			t.Fatalf("expected exact scalar explanation overclaim reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("customer visible point12 pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.CustomerVisibleStatement = "point_12_pass"
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected scalar explanation pass token to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_premature_point12_pass") {
+			t.Fatalf("expected exact scalar explanation premature pass reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("mismatch explanation overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.MismatchExplanations = []string{"production approved"}
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected explanation list overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+			t.Fatalf("expected exact explanation overclaim reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("expected refs overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.ExpectedRefs = []string{"production approved"}
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected expected refs overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+			t.Fatalf("expected exact expected refs overclaim reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("actual refs overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.ActualRefs = []string{"compliance guaranteed"}
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected actual refs overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+			t.Fatalf("expected exact actual refs overclaim reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("expected versions overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.ExpectedVersions = []string{"compliance-as-an-asset"}
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected expected versions overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+			t.Fatalf("expected exact expected versions overclaim reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("actual versions overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.ActualVersions = []string{"ai-approved"}
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected actual versions overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+			t.Fatalf("expected exact actual versions overclaim reason, got %#v", reasons)
+		}
+	})
+
+	explanationNoOverclaimSiblingCases := []struct {
+		name   string
+		mutate func(*Point12ValDExplanationResult)
+	}{
+		{
+			name: "decision context summary overclaim blocks",
+			mutate: func(model *Point12ValDExplanationResult) {
+				model.DecisionContextSummary = "production approved"
+			},
+		},
+		{
+			name: "why decision summary overclaim blocks",
+			mutate: func(model *Point12ValDExplanationResult) {
+				model.WhyDecisionSummary = "deployment approved"
+			},
+		},
+		{
+			name: "why changed summary overclaim blocks",
+			mutate: func(model *Point12ValDExplanationResult) {
+				model.WhyChangedSummary = "public badge"
+			},
+		},
+		{
+			name: "missing evidence explanations overclaim blocks",
+			mutate: func(model *Point12ValDExplanationResult) {
+				model.MissingEvidenceExplanations = []string{"global truth"}
+			},
+		},
+		{
+			name: "redaction limitations overclaim blocks",
+			mutate: func(model *Point12ValDExplanationResult) {
+				model.RedactionLimitations = []string{"compliance guaranteed"}
+			},
+		},
+		{
+			name: "limitations overclaim blocks",
+			mutate: func(model *Point12ValDExplanationResult) {
+				model.Limitations = []string{"financial guarantee"}
+			},
+		},
+	}
+	for _, tc := range explanationNoOverclaimSiblingCases {
+		t.Run(tc.name+" with exact reason", func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			tc.mutate(&model.Explanation)
+			model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+			state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+			if state != Point12ValDExplanationStateBlocked {
+				t.Fatalf("expected explanation sibling overclaim to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "explanation_overclaim_detected") {
+				t.Fatalf("expected exact explanation sibling overclaim reason, got %#v", reasons)
+			}
+		})
+	}
+
+	t.Run("redaction limitation point12 pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.Explanation.RedactionLimitations = []string{"point_12_pass"}
+		model.Explanation.ExplanationHash = point12ValDComputedExplanationHash(model.Explanation)
+		state, reasons := point12ValDExplanationStateAndReasons(model.Explanation, model.Query, model.ProofChain, model.Dependency)
+		if state != Point12ValDExplanationStateBlocked {
+			t.Fatalf("expected explanation list pass token to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "explanation_premature_point12_pass") {
+			t.Fatalf("expected exact explanation premature pass reason, got %#v", reasons)
 		}
 	})
 
@@ -1327,6 +1768,12 @@ func TestPoint12ValDSupportProfileState(t *testing.T) {
 		{name: "increases credit rating blocks", mutate: func(model *Point12ValDFinancialInsuranceEvidenceSupportProfile) {
 			model.SupportStatement = "This increases credit rating."
 		}},
+		{name: "support profile limitation overclaim blocks", mutate: func(model *Point12ValDFinancialInsuranceEvidenceSupportProfile) {
+			model.Limitations = []string{"production approved"}
+		}},
+		{name: "support profile limitation point12 pass token blocks", mutate: func(model *Point12ValDFinancialInsuranceEvidenceSupportProfile) {
+			model.Limitations = []string{"point_12_pass"}
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1339,6 +1786,96 @@ func TestPoint12ValDSupportProfileState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("support statement overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.SupportProfile.SupportStatement = "This is production approved."
+		model.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.SupportProfile)
+		state, reasons := point12ValDSupportProfileStateAndReasons(model.SupportProfile, model.ProofChain)
+		if state != Point12ValDSupportProfileStateBlocked {
+			t.Fatalf("expected scalar support overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "support_profile_overclaim_detected") {
+			t.Fatalf("expected exact scalar support overclaim reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("support limitation overclaim blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.SupportProfile.Limitations = []string{"production approved"}
+		model.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.SupportProfile)
+		state, reasons := point12ValDSupportProfileStateAndReasons(model.SupportProfile, model.ProofChain)
+		if state != Point12ValDSupportProfileStateBlocked {
+			t.Fatalf("expected support limitation overclaim to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "support_profile_overclaim_detected") {
+			t.Fatalf("expected exact support limitation overclaim reason, got %#v", reasons)
+		}
+	})
+
+	supportProfileNoOverclaimListCases := []struct {
+		name   string
+		mutate func(*Point12ValDFinancialInsuranceEvidenceSupportProfile)
+	}{
+		{
+			name: "evidence support categories overclaim blocks",
+			mutate: func(model *Point12ValDFinancialInsuranceEvidenceSupportProfile) {
+				model.EvidenceSupportCategories = []string{"production approved"}
+			},
+		},
+		{
+			name: "risk context metadata overclaim blocks",
+			mutate: func(model *Point12ValDFinancialInsuranceEvidenceSupportProfile) {
+				model.RiskContextMetadata = []string{"compliance guaranteed"}
+			},
+		},
+		{
+			name: "allowed wording refs overclaim blocks",
+			mutate: func(model *Point12ValDFinancialInsuranceEvidenceSupportProfile) {
+				model.AllowedWordingRefs = []string{"production approved"}
+			},
+		},
+	}
+	for _, tc := range supportProfileNoOverclaimListCases {
+		t.Run(tc.name+" with exact reason", func(t *testing.T) {
+			model := activePoint12ValDFoundation()
+			tc.mutate(&model.SupportProfile)
+			model.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.SupportProfile)
+			state, reasons := point12ValDSupportProfileStateAndReasons(model.SupportProfile, model.ProofChain)
+			if state != Point12ValDSupportProfileStateBlocked {
+				t.Fatalf("expected support profile list overclaim to block, got state=%s reasons=%#v", state, reasons)
+			}
+			if !point12Val0StringSliceContains(reasons, "support_profile_overclaim_detected") {
+				t.Fatalf("expected exact support profile list overclaim reason, got %#v", reasons)
+			}
+		})
+	}
+
+	t.Run("support statement point12 pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.SupportProfile.SupportStatement = "point_12_pass"
+		model.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.SupportProfile)
+		state, reasons := point12ValDSupportProfileStateAndReasons(model.SupportProfile, model.ProofChain)
+		if state != Point12ValDSupportProfileStateBlocked {
+			t.Fatalf("expected scalar support pass token to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "support_profile_premature_point12_pass") {
+			t.Fatalf("expected exact scalar support premature pass reason, got %#v", reasons)
+		}
+	})
+
+	t.Run("support limitation point12 pass token blocks with exact reason", func(t *testing.T) {
+		model := activePoint12ValDFoundation()
+		model.SupportProfile.Limitations = []string{"point_12_pass"}
+		model.SupportProfile.ProfileHash = point12ValDComputedSupportProfileHash(model.SupportProfile)
+		state, reasons := point12ValDSupportProfileStateAndReasons(model.SupportProfile, model.ProofChain)
+		if state != Point12ValDSupportProfileStateBlocked {
+			t.Fatalf("expected support limitation pass token to block, got state=%s reasons=%#v", state, reasons)
+		}
+		if !point12Val0StringSliceContains(reasons, "support_profile_premature_point12_pass") {
+			t.Fatalf("expected exact support limitation premature pass reason, got %#v", reasons)
+		}
+	})
 
 	rawExactBindingCases := []struct {
 		name   string
@@ -1620,6 +2157,7 @@ func TestPoint12ValDRegressionGuards(t *testing.T) {
 	t.Run("valc unsupported dependency remains review required and not export ready", func(t *testing.T) {
 		model := Point12ValCFoundationModel()
 		model.Dependency.ValBManifestIntegrityResult = point12ValBCheckResultUnsupported
+		model.Dependency.ValBReplayResult.ManifestIntegrityCheckResult = point12ValBCheckResultUnsupported
 		model = ComputePoint12ValCFoundation(model)
 		if model.DependencyState != Point12ValCDependencyStateReviewRequired {
 			t.Fatalf("expected valc dependency review required, got %#v", model)

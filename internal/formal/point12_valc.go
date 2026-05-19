@@ -108,6 +108,32 @@ type Point12ValCDependencySnapshot struct {
 	ValBReplayResult             Point12ValBReplayResult                `json:"valb_replay_result"`
 }
 
+func point12ValCDependencyPassTokenGuardValues(model Point12ValCDependencySnapshot) []string {
+	values := []string{
+		model.ValBCurrentState,
+		model.ValBDependencyState,
+		model.ValBReplayCommandState,
+		model.ValBReplayRequestState,
+		model.ValBReplayResultState,
+		model.ValBPointID,
+		model.ValBWaveID,
+		model.ValBManifestIntegrityResult,
+		model.ValBSignatureMetadataResult,
+		model.ValBCompatibilityResult,
+		model.ValBReplayMode,
+		model.ValBReplayTaxonomy,
+		model.Val0RedactionBoundaryState,
+		model.ProjectionDisclaimer,
+		model.SnapshotRef,
+	}
+	values = append(values, model.ReviewPrerequisites...)
+	values = append(values, point12ValAManifestPassTokenGuardValues(model.ValAManifest)...)
+	values = append(values, point12ValBReplayCommandPassTokenGuardValues(model.ValBReplayCommand)...)
+	values = append(values, point12ValBReplayRequestPassTokenGuardValues(model.ValBReplayRequest)...)
+	values = append(values, point12ValBReplayResultPassTokenGuardValues(model.ValBReplayResult)...)
+	return values
+}
+
 type Point12ValCAuditExportBundle struct {
 	ExportID                    string   `json:"export_id"`
 	ExportKind                  string   `json:"export_kind"`
@@ -153,6 +179,53 @@ type Point12ValCAuditExportBundle struct {
 	CustomerVisibleSummary      string   `json:"customer_visible_summary"`
 }
 
+func point12ValCExportPassTokenGuardValues(model Point12ValCAuditExportBundle) []string {
+	values := []string{
+		model.ExportID,
+		model.ExportKind,
+		model.ProofPackID,
+		model.ManifestID,
+		model.ReplayResultID,
+		model.DecisionID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
+		model.CompatibilityProfileRef,
+		model.RedactionManifestRef,
+		model.OfflineBundleRef,
+		model.ManifestPayloadHash,
+		model.SignatureMetadataRef,
+		model.GeneratedAt,
+		model.FreshnessWindow,
+		model.ExportScope,
+		model.ExportAudience,
+		model.PublicPrivateClassification,
+		model.RetentionClassRef,
+		model.RetentionOwnerRef,
+		model.DisposalPathRef,
+		model.ProjectionDisclaimer,
+		model.NoOverclaimState,
+		model.TenantBoundaryState,
+		model.RedactionImpactState,
+		model.ExportState,
+		model.CustomerVisibleSummary,
+	}
+	values = append(values, model.EvidenceRefs...)
+	values = append(values, model.EvidenceHashRefs...)
+	values = append(values, model.ClaimRefs...)
+	values = append(values, model.GovernanceEventRefs...)
+	values = append(values, model.Limitations...)
+	values = append(values, model.ExportOutputClaims...)
+	return values
+}
+
 type Point12ValCRedactionManifest struct {
 	RedactionManifestID                 string   `json:"redaction_manifest_id"`
 	ProofPackID                         string   `json:"proof_pack_id"`
@@ -186,6 +259,35 @@ type Point12ValCRedactionManifest struct {
 	DisposalPathRef                     string   `json:"disposal_path_ref"`
 }
 
+func point12ValCRedactionManifestPassTokenGuardValues(model Point12ValCRedactionManifest) []string {
+	values := []string{
+		model.RedactionManifestID,
+		model.ProofPackID,
+		model.ExportID,
+		model.TenantScope,
+		model.RedactionApproverRef,
+		model.RedactionApprovalEventRef,
+		model.RedactionPolicyRef,
+		model.RedactionPolicyVersion,
+		model.PostRedactionResult,
+		model.MinimumSafeClaimAfterRedaction,
+		model.RedactionSummary,
+		model.GeneratedAt,
+		model.RetentionClassRef,
+		model.RetentionOwnerRef,
+		model.DisposalPathRef,
+	}
+	values = append(values, model.RedactedFields...)
+	values = append(values, model.RedactionReasons...)
+	values = append(values, model.DisallowedClaimsAfterRedaction...)
+	values = append(values, model.SurvivingClaimsAfterRedaction...)
+	values = append(values, model.CustomerVisibleClaimsAfterRedaction...)
+	values = append(values, model.ExportedClaimsAfterRedaction...)
+	values = append(values, model.ReplayResultClaims...)
+	values = append(values, model.Limitations...)
+	return values
+}
+
 type Point12ValCRedactionImpactVerdict struct {
 	RedactionImpactID                string   `json:"redaction_impact_id"`
 	RedactionManifestID              string   `json:"redaction_manifest_id"`
@@ -204,6 +306,20 @@ type Point12ValCRedactionImpactVerdict struct {
 	RequiresPartialAdvisoryExport    bool     `json:"requires_partial_advisory_export"`
 	RequiresCustomerReview           bool     `json:"requires_customer_review"`
 	RedactionImpactState             string   `json:"redaction_impact_state"`
+}
+
+func point12ValCRedactionImpactPassTokenGuardValues(model Point12ValCRedactionImpactVerdict) []string {
+	values := []string{
+		model.RedactionImpactID,
+		model.RedactionManifestID,
+		model.PostRedactionResult,
+		model.MinimumSafeClaimAfterRedaction,
+		model.AllowedExportState,
+		model.DisallowedExportState,
+		model.RedactionImpactState,
+	}
+	values = append(values, model.Limitations...)
+	return values
 }
 
 type Point12ValCOfflineVerificationBundle struct {
@@ -245,6 +361,47 @@ type Point12ValCOfflineVerificationBundle struct {
 	OfflineOutputClaims         []string `json:"offline_output_claims,omitempty"`
 	CustomerVisibleExplanation  string   `json:"customer_visible_explanation"`
 	OfflineState                string   `json:"offline_state"`
+}
+
+func point12ValCOfflinePassTokenGuardValues(model Point12ValCOfflineVerificationBundle) []string {
+	values := []string{
+		model.OfflineBundleID,
+		model.ProofPackID,
+		model.ManifestID,
+		model.ReplayRequestID,
+		model.ReplayResultID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
+		model.ManifestPayloadHash,
+		model.SignatureMetadataRef,
+		model.DetachedSignatureRef,
+		model.CompatibilityProfileRef,
+		model.RedactionManifestRef,
+		model.VerificationPolicyRef,
+		model.GeneratedAt,
+		model.BundleFormatVersion,
+		model.RequestedVerifierVersion,
+		model.PublicPrivateClassification,
+		model.RetentionClassRef,
+		model.RetentionOwnerRef,
+		model.DisposalPathRef,
+		model.CustomerVisibleExplanation,
+		model.OfflineState,
+	}
+	values = append(values, model.EvidenceRefs...)
+	values = append(values, model.EvidenceHashRefs...)
+	values = append(values, model.SupportedVerifierVersions...)
+	values = append(values, model.Limitations...)
+	values = append(values, model.OfflineOutputClaims...)
+	return values
 }
 
 type Point12ValCPublicPrivateBoundary struct {
@@ -322,40 +479,40 @@ func point12ValCDataResidencyRefValid(value string) bool {
 }
 
 func point12ValCExportKindValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValCExportKindAuditReadyJSON,
 		point12ValCExportKindAuditReadyStaticMetadata,
 		point12ValCExportKindVerifierPackageMetadata,
 		point12ValCExportKindCustomerReviewPackage,
-	}, value)
+	})
 }
 
 func point12ValCExportScopeValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValCExportScopeTenantScoped,
 		point12ValCExportScopeAuditorReview,
 		point12ValCExportScopeCustomerReview,
 		point12ValCExportScopeVerifier,
-	}, value)
+	})
 }
 
 func point12ValCExportAudienceValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValCExportAudienceInternalAudit,
 		point12ValCExportAudienceAuditor,
 		point12ValCExportAudienceCustomer,
 		point12ValCExportAudienceVerifier,
-	}, value)
+	})
 }
 
 func point12ValCPublicPrivateClassificationValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValCClassificationInternalOnly,
 		point12ValCClassificationTenantPrivate,
 		point12ValCClassificationAuditorRestricted,
 		point12ValCClassificationCustomerRedacted,
 		point12ValCClassificationPublicRedacted,
-	}, value)
+	})
 }
 
 func point12ValCExportStates() []string {
@@ -376,20 +533,69 @@ func point12ValCExportStates() []string {
 }
 
 func point12ValCDependencyCheckResultBlocked(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if !point12ValBCheckResultValid(trimmed) {
+	if !point12ValBCheckResultValid(value) {
 		return true
 	}
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValBCheckResultMismatch,
 		point12ValBCheckResultTampered,
 		point12ValBCheckResultMissing,
 		point12ValBCheckResultBlocked,
-	}, trimmed)
+	})
 }
 
 func point12ValCDependencyCheckResultReviewRequired(value string) bool {
-	return strings.TrimSpace(value) == point12ValBCheckResultUnsupported
+	return value == point12ValBCheckResultUnsupported
+}
+
+func point12ValCEmbeddedValBReplayResultSummaryMismatch(model Point12ValCDependencySnapshot) bool {
+	result := model.ValBReplayResult
+	return result.ReplayRequestID != model.ValBReplayRequest.ReplayRequestID ||
+		result.ProofPackID != model.ValBReplayRequest.ProofPackID ||
+		result.ManifestID != model.ValBReplayRequest.ManifestID ||
+		result.ReplayMode != model.ValBReplayRequest.ReplayMode ||
+		result.OriginalDecisionState != model.ValBReplayRequest.OriginalDecisionState ||
+		!point12Val0ProfileContextMatchesManifest(result.ProfileContext, model.ValBReplayRequest.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(model.ValBReplayRequest.ProfileContext, model.ValBReplayCommand.ProfileContext) ||
+		!point12Val0ProfileContextMatchesManifest(model.ValBReplayCommand.ProfileContext, model.ValAManifest.ProfileContext) ||
+		result.ReplayResultTaxonomy != model.ValBReplayTaxonomy ||
+		result.ManifestIntegrityCheckResult != model.ValBManifestIntegrityResult ||
+		result.SignatureMetadataCheckResult != model.ValBSignatureMetadataResult ||
+		result.CompatibilityCheckResult != model.ValBCompatibilityResult ||
+		result.ExternalAPIUsed != model.ValBExternalAPIUsed ||
+		result.PointPassEmitted != model.ValBPointPassEmitted
+}
+
+func point12ValCEmbeddedValBReplayResultBlocks(result Point12ValBReplayResult) bool {
+	return !point12Val0ExactOneOf(result.ReplayState, point12ValBReplayResultStates()) ||
+		result.ReplayState == Point12ValBReplayResultStateBlocked ||
+		result.ExternalAPIUsed ||
+		result.PointPassEmitted ||
+		result.TamperDetected ||
+		result.ReplayResultTaxonomy == Point12Val0ReplayResultTamperDetected ||
+		result.ReplayResultTaxonomy == Point12Val0ReplayResultBlockedReplay ||
+		point12ValCDependencyCheckResultBlocked(result.EvidenceHashCheckResult) ||
+		point12ValCDependencyCheckResultBlocked(result.ManifestIntegrityCheckResult) ||
+		point12ValCDependencyCheckResultBlocked(result.SignatureMetadataCheckResult) ||
+		point12ValCDependencyCheckResultBlocked(result.CompatibilityCheckResult) ||
+		point12ValBHasReplayBlockingMismatch(result.Mismatches)
+}
+
+func point12ValCEmbeddedValBReplayResultReviewRequired(result Point12ValBReplayResult) bool {
+	return result.ReplayState == Point12ValBReplayResultStateReviewRequired ||
+		!result.MatchOriginal ||
+		result.UnsupportedVersion ||
+		result.InsufficientEvidence ||
+		result.RedactionLimitations ||
+		result.ReplayResultTaxonomy == Point12Val0ReplayResultUnsupportedVersion ||
+		result.ReplayResultTaxonomy == Point12Val0ReplayResultInsufficientEvidence ||
+		result.ReplayResultTaxonomy == Point12Val0ReplayResultRedactedLimitations ||
+		result.ReplayResultTaxonomy == Point12Val0ReplayResultDifferentDecision ||
+		point12ValCDependencyCheckResultReviewRequired(result.EvidenceHashCheckResult) ||
+		point12ValCDependencyCheckResultReviewRequired(result.ManifestIntegrityCheckResult) ||
+		point12ValCDependencyCheckResultReviewRequired(result.SignatureMetadataCheckResult) ||
+		point12ValCDependencyCheckResultReviewRequired(result.CompatibilityCheckResult) ||
+		len(result.Mismatches) > 0
 }
 
 func point12ValCRedactionImpactStates() []string {
@@ -416,17 +622,39 @@ func point12ValCOfflineBundleStates() []string {
 }
 
 func point12ValCCustomerFacingAudience(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValCExportAudienceCustomer,
-	}, value)
+	})
 }
 
 func point12ValCStringFieldValid(value string) bool {
-	return point11Val0IdentityValueValid(strings.TrimSpace(value))
+	return formalRawExactTokenValid(value, point11Val0IdentityValueValid)
 }
 
 func point12ValCStringFieldListValid(values []string) bool {
 	return point12Val0StringListValid(values, point12ValCStringFieldValid)
+}
+
+func point12ValCPublicPrivateBoundaryPassTokenGuardValues(model Point12ValCPublicPrivateBoundary) []string {
+	values := []string{
+		model.BoundaryID,
+		model.TenantScope,
+		model.ExportID,
+		model.OfflineBundleID,
+		model.Classification,
+		model.DataResidencyRef,
+		model.AllowedAudience,
+		model.BoundaryState,
+	}
+	values = append(values, model.ExportedFields...)
+	values = append(values, model.PublicFields...)
+	values = append(values, model.PrivateFields...)
+	values = append(values, model.RedactedFields...)
+	values = append(values, model.SensitiveFields...)
+	values = append(values, model.CustomerVisibleFields...)
+	values = append(values, model.AuditorVisibleFields...)
+	values = append(values, model.InternalOnlyFields...)
+	return values
 }
 
 func point12ValCStringFieldListSubset(subset, superset []string) bool {
@@ -435,23 +663,34 @@ func point12ValCStringFieldListSubset(subset, superset []string) bool {
 	}
 	seen := map[string]struct{}{}
 	for _, item := range superset {
-		trimmed := strings.TrimSpace(item)
-		if trimmed != "" {
-			seen[trimmed] = struct{}{}
+		if item != "" {
+			seen[item] = struct{}{}
 		}
 	}
 	for _, item := range subset {
-		if _, ok := seen[strings.TrimSpace(item)]; !ok {
+		if _, ok := seen[item]; !ok {
 			return false
 		}
 	}
 	return true
 }
 
+func point12ValCExactStringInList(value string, values []string) bool {
+	if !formalRawExactNonEmpty(value) {
+		return false
+	}
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
 func point12ValCFieldListsOverlap(left, right []string) bool {
 	for _, l := range left {
 		for _, r := range right {
-			if strings.TrimSpace(l) != "" && strings.TrimSpace(l) == strings.TrimSpace(r) {
+			if l != "" && l == r {
 				return true
 			}
 		}
@@ -470,7 +709,7 @@ func point12ValCAllExportedFieldsClassified(model Point12ValCPublicPrivateBounda
 
 func point12ValCStringMentionedInTexts(fields []string, texts ...string) bool {
 	for _, field := range fields {
-		needle := strings.TrimSpace(field)
+		needle := field
 		if needle == "" {
 			continue
 		}
@@ -529,60 +768,62 @@ func EvaluatePoint12ValCDependencyState(model Point12ValCDependencySnapshot) str
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!model.SnapshotFromComputedOutput ||
 		!point12ValCDependencySnapshotRefValid(model.SnapshotRef) ||
-		strings.TrimSpace(model.ValBPointID) != point12Val0PointID ||
-		strings.TrimSpace(model.ValBWaveID) != point12ValBWaveID ||
+		model.ValBPointID != point12Val0PointID ||
+		model.ValBWaveID != point12ValBWaveID ||
 		!point12Val0ReplayModeValid(model.ValBReplayMode) ||
+		!point12ValBReplayResultTaxonomyValid(model.ValBReplayTaxonomy) ||
 		model.ValBExternalAPIUsed ||
 		model.ValBPointPassEmitted ||
 		model.ValBPrematurePoint12PassSeen ||
-		point12Val0ContainsPrematurePassToken(
-			model.ValBReplayCommand.CommandID,
-			model.ValBReplayRequest.ReplayRequestID,
-			model.ValBReplayResult.ReplayResultID,
-			model.ValBReplayResult.CustomerVisibleExplanation,
-			strings.Join(model.ValBReplayResult.ReplayOutputClaims, " "),
-		) {
+		point12ValCEmbeddedValBReplayResultSummaryMismatch(model) ||
+		point12ValCEmbeddedValBReplayResultBlocks(model.ValBReplayResult) ||
+		point12Val0ContainsPrematurePassToken(point12ValCDependencyPassTokenGuardValues(model)...) {
 		return Point12ValCDependencyStateBlocked
 	}
 	if !point12Val0ProofPackRefValid(model.ValAManifest.ProofPackID) ||
 		!point12ValAManifestRefValid(model.ValAManifest.ManifestID) ||
+		!point12Val0ProfileContextOriginalReplaySafe(model.ValAManifest.ProfileContext, model.ValAManifest.TenantScope) ||
 		!point12ValBReplayRequestRefValid(model.ValBReplayRequest.ReplayRequestID) ||
 		!point12ValBReplayResultRefValid(model.ValBReplayResult.ReplayResultID) {
 		return Point12ValCDependencyStateBlocked
 	}
-	if strings.TrimSpace(model.ValBCurrentState) == Point12ValBStateBlocked ||
-		strings.TrimSpace(model.ValBDependencyState) == Point12ValBDependencyStateBlocked ||
-		strings.TrimSpace(model.ValBReplayCommandState) == Point12ValBReplayCommandStateBlocked ||
-		strings.TrimSpace(model.ValBReplayRequestState) == Point12ValBReplayRequestStateBlocked ||
-		strings.TrimSpace(model.ValBReplayResultState) == Point12ValBReplayResultStateBlocked ||
+	if point12Val0ContainsPrematurePassToken(point12Val0ProfileContextGuardValues(model.ValAManifest.ProfileContext)...) {
+		return Point12ValCDependencyStateBlocked
+	}
+	if model.ValBCurrentState == Point12ValBStateBlocked ||
+		model.ValBDependencyState == Point12ValBDependencyStateBlocked ||
+		model.ValBReplayCommandState == Point12ValBReplayCommandStateBlocked ||
+		model.ValBReplayRequestState == Point12ValBReplayRequestStateBlocked ||
+		model.ValBReplayResultState == Point12ValBReplayResultStateBlocked ||
 		point12ValCDependencyCheckResultBlocked(model.ValBManifestIntegrityResult) ||
 		point12ValCDependencyCheckResultBlocked(model.ValBSignatureMetadataResult) ||
 		point12ValCDependencyCheckResultBlocked(model.ValBCompatibilityResult) ||
-		strings.TrimSpace(model.ValBReplayTaxonomy) == Point12Val0ReplayResultTamperDetected ||
-		strings.TrimSpace(model.ValBReplayTaxonomy) == Point12Val0ReplayResultBlockedReplay ||
-		strings.TrimSpace(model.Val0RedactionBoundaryState) == Point12Val0RedactionBoundaryStateBlocked {
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultTamperDetected ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultBlockedReplay ||
+		model.Val0RedactionBoundaryState == Point12Val0RedactionBoundaryStateBlocked {
 		return Point12ValCDependencyStateBlocked
 	}
-	if strings.TrimSpace(model.ValBCurrentState) == Point12ValBStateReviewRequired ||
-		strings.TrimSpace(model.ValBDependencyState) == Point12ValBDependencyStateReviewRequired ||
-		strings.TrimSpace(model.ValBReplayResultState) == Point12ValBReplayResultStateReviewRequired ||
+	if model.ValBCurrentState == Point12ValBStateReviewRequired ||
+		model.ValBDependencyState == Point12ValBDependencyStateReviewRequired ||
+		model.ValBReplayResultState == Point12ValBReplayResultStateReviewRequired ||
 		point12ValCDependencyCheckResultReviewRequired(model.ValBManifestIntegrityResult) ||
 		point12ValCDependencyCheckResultReviewRequired(model.ValBSignatureMetadataResult) ||
 		point12ValCDependencyCheckResultReviewRequired(model.ValBCompatibilityResult) ||
-		strings.TrimSpace(model.ValBReplayTaxonomy) == Point12Val0ReplayResultUnsupportedVersion ||
-		strings.TrimSpace(model.ValBReplayTaxonomy) == Point12Val0ReplayResultInsufficientEvidence ||
-		strings.TrimSpace(model.ValBReplayTaxonomy) == Point12Val0ReplayResultRedactedLimitations ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultUnsupportedVersion ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultInsufficientEvidence ||
+		model.ValBReplayTaxonomy == Point12Val0ReplayResultRedactedLimitations ||
+		point12ValCEmbeddedValBReplayResultReviewRequired(model.ValBReplayResult) ||
 		len(model.ReviewPrerequisites) > 0 {
 		return Point12ValCDependencyStateReviewRequired
 	}
-	if strings.TrimSpace(model.ValBCurrentState) != Point12ValBStateActive ||
-		strings.TrimSpace(model.ValBDependencyState) != Point12ValBDependencyStateActive ||
-		strings.TrimSpace(model.ValBReplayCommandState) != Point12ValBReplayCommandStateActive ||
-		strings.TrimSpace(model.ValBReplayRequestState) != Point12ValBReplayRequestStateActive ||
-		strings.TrimSpace(model.ValBReplayResultState) != Point12ValBReplayResultStateActive ||
-		strings.TrimSpace(model.ValBManifestIntegrityResult) != point12ValBCheckResultActive ||
-		strings.TrimSpace(model.ValBSignatureMetadataResult) != point12ValBCheckResultActive ||
-		strings.TrimSpace(model.ValBCompatibilityResult) != point12ValBCheckResultActive {
+	if model.ValBCurrentState != Point12ValBStateActive ||
+		model.ValBDependencyState != Point12ValBDependencyStateActive ||
+		model.ValBReplayCommandState != Point12ValBReplayCommandStateActive ||
+		model.ValBReplayRequestState != Point12ValBReplayRequestStateActive ||
+		model.ValBReplayResultState != Point12ValBReplayResultStateActive ||
+		model.ValBManifestIntegrityResult != point12ValBCheckResultActive ||
+		model.ValBSignatureMetadataResult != point12ValBCheckResultActive ||
+		model.ValBCompatibilityResult != point12ValBCheckResultActive {
 		return Point12ValCDependencyStateBlocked
 	}
 	return Point12ValCDependencyStateActive
@@ -599,7 +840,7 @@ func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManif
 		!point12Val0OptionalStringListValid(model.RedactionReasons, point11Val0IdentityValueValid) ||
 		!point12Val0PolicyRefValid(model.RedactionPolicyRef) ||
 		!point12Val0VersionIdentityValid(model.RedactionPolicyVersion) ||
-		!point11Val0ContainsTrimmed(point12Val0ReplayResults(), model.PostRedactionResult) ||
+		!point12Val0ExactOneOf(model.PostRedactionResult, point12Val0ReplayResults()) ||
 		!point12Val0OptionalClaimTextListValid(model.DisallowedClaimsAfterRedaction) ||
 		!point12Val0OptionalClaimTextListValid(model.SurvivingClaimsAfterRedaction) ||
 		!point12Val0OptionalClaimTextListValid(model.CustomerVisibleClaimsAfterRedaction) ||
@@ -612,23 +853,14 @@ func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManif
 		!point12ValCDisposalPathRefValid(model.DisposalPathRef) {
 		blockedReasons = append(blockedReasons, "redaction_manifest_identity_or_metadata_invalid")
 	}
-	if strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(dependency.ValAManifest.ProofPackID) ||
-		strings.TrimSpace(model.RedactionManifestID) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
-		strings.TrimSpace(model.ExportID) != strings.TrimSpace(export.ExportID) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) {
+	if model.ProofPackID != dependency.ValAManifest.ProofPackID ||
+		model.RedactionManifestID != dependency.ValBReplayRequest.RedactionManifestRef ||
+		model.ExportID != export.ExportID ||
+		model.TenantScope != dependency.ValBReplayRequest.TenantScope ||
+		model.RetentionClassRef != dependency.ValAManifest.RetentionClassRef {
 		blockedReasons = append(blockedReasons, "redaction_manifest_dependency_binding_mismatch")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.RedactionManifestID,
-		model.RedactionApproverRef,
-		model.RedactionApprovalEventRef,
-		model.RedactionSummary,
-		strings.Join(model.DisallowedClaimsAfterRedaction, " "),
-		strings.Join(model.SurvivingClaimsAfterRedaction, " "),
-		strings.Join(model.CustomerVisibleClaimsAfterRedaction, " "),
-		strings.Join(model.ExportedClaimsAfterRedaction, " "),
-		strings.Join(model.ReplayResultClaims, " "),
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValCRedactionManifestPassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "redaction_manifest_premature_point12_pass")
 	}
 	if len(model.RedactedFields) > 0 {
@@ -639,7 +871,7 @@ func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManif
 			blockedReasons = append(blockedReasons, "redaction_manifest_approval_or_reason_missing")
 		}
 	}
-	if strings.TrimSpace(model.MinimumSafeClaimAfterRedaction) != "" &&
+	if model.MinimumSafeClaimAfterRedaction != "" &&
 		point12Val0ContainsForbiddenClaim(model.MinimumSafeClaimAfterRedaction) {
 		blockedReasons = append(blockedReasons, "redaction_manifest_minimum_safe_claim_overclaim")
 	}
@@ -660,9 +892,9 @@ func point12ValCRedactionManifestStateAndReasons(model Point12ValCRedactionManif
 	if (model.RedactionAffectsDecision || model.RedactionAffectsReplay ||
 		model.RedactionAffectsEvidenceHashes || model.RedactionAffectsPolicyContext ||
 		model.RedactionAffectsClaimContext || model.RedactionAffectsGovernanceContext) &&
-		strings.TrimSpace(model.PostRedactionResult) != Point12Val0ReplayResultInsufficientEvidence &&
-		strings.TrimSpace(model.PostRedactionResult) != Point12Val0ReplayResultBlockedReplay &&
-		strings.TrimSpace(model.PostRedactionResult) != Point12Val0ReplayResultRedactedLimitations {
+		model.PostRedactionResult != Point12Val0ReplayResultInsufficientEvidence &&
+		model.PostRedactionResult != Point12Val0ReplayResultBlockedReplay &&
+		model.PostRedactionResult != Point12Val0ReplayResultRedactedLimitations {
 		blockedReasons = append(blockedReasons, "redaction_manifest_post_result_must_fail_closed")
 	}
 	if (model.RedactionAffectsDecision || model.RedactionAffectsReplay) && !model.PartialOrAdvisoryOnly {
@@ -689,27 +921,23 @@ func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactV
 	reasons := []string{}
 	if !point12ValCRedactionImpactRefValid(model.RedactionImpactID) ||
 		!point12Val0RedactionManifestRefValid(model.RedactionManifestID) ||
-		!point11Val0ContainsTrimmed(point12Val0ReplayResults(), model.PostRedactionResult) ||
-		!point11Val0ContainsTrimmed(point12ValCExportStates(), model.AllowedExportState) ||
-		!point11Val0ContainsTrimmed(point12ValCExportStates(), model.DisallowedExportState) ||
+		!point12Val0ExactOneOf(model.PostRedactionResult, point12Val0ReplayResults()) ||
+		!point12Val0ExactOneOf(model.AllowedExportState, point12ValCExportStates()) ||
+		!point12Val0ExactOneOf(model.DisallowedExportState, point12ValCExportStates()) ||
 		!point12Val0OptionalStringListValid(model.Limitations, point11Val0IdentityValueValid) ||
-		!point11Val0ContainsTrimmed(point12ValCRedactionImpactStates(), model.RedactionImpactState) {
+		!point12Val0ExactOneOf(model.RedactionImpactState, point12ValCRedactionImpactStates()) {
 		reasons = append(reasons, "redaction_impact_identity_or_metadata_invalid")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.RedactionImpactID,
-		model.MinimumSafeClaimAfterRedaction,
-		strings.Join(model.Limitations, " "),
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValCRedactionImpactPassTokenGuardValues(model)...) {
 		reasons = append(reasons, "redaction_impact_premature_point12_pass")
 	}
-	if strings.TrimSpace(model.RedactionManifestID) != strings.TrimSpace(manifest.RedactionManifestID) ||
-		strings.TrimSpace(model.RedactionManifestID) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
-		strings.TrimSpace(model.PostRedactionResult) != strings.TrimSpace(manifest.PostRedactionResult) ||
-		strings.TrimSpace(model.MinimumSafeClaimAfterRedaction) != strings.TrimSpace(manifest.MinimumSafeClaimAfterRedaction) {
+	if model.RedactionManifestID != manifest.RedactionManifestID ||
+		model.RedactionManifestID != dependency.ValBReplayRequest.RedactionManifestRef ||
+		model.PostRedactionResult != manifest.PostRedactionResult ||
+		model.MinimumSafeClaimAfterRedaction != manifest.MinimumSafeClaimAfterRedaction {
 		reasons = append(reasons, "redaction_impact_manifest_binding_mismatch")
 	}
-	if strings.TrimSpace(model.MinimumSafeClaimAfterRedaction) != "" &&
+	if model.MinimumSafeClaimAfterRedaction != "" &&
 		point12Val0ContainsForbiddenClaim(model.MinimumSafeClaimAfterRedaction) {
 		reasons = append(reasons, "redaction_impact_minimum_safe_claim_overclaim")
 	}
@@ -718,14 +946,14 @@ func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactV
 		model.DecisiveClaimContextRemoved ||
 		model.DecisiveGovernanceContextRemoved
 	if decisiveRemoved || model.AffectsDecision {
-		if strings.TrimSpace(model.RedactionImpactState) == Point12ValCRedactionImpactNoDecisionImpact {
+		if model.RedactionImpactState == Point12ValCRedactionImpactNoDecisionImpact {
 			reasons = append(reasons, "redaction_impact_decisive_change_cannot_be_no_decision_impact")
 		}
 		if !model.BlocksFullExport && !model.RequiresPartialAdvisoryExport {
 			reasons = append(reasons, "redaction_impact_decisive_change_requires_export_limitation")
 		}
 	}
-	if model.AffectsReplay && strings.TrimSpace(model.RedactionImpactState) == Point12ValCRedactionImpactNoDecisionImpact {
+	if model.AffectsReplay && model.RedactionImpactState == Point12ValCRedactionImpactNoDecisionImpact {
 		reasons = append(reasons, "redaction_impact_replay_change_requires_limitations")
 	}
 	if (model.AffectsDecision || model.AffectsReplay || decisiveRemoved) && len(model.Limitations) == 0 {
@@ -734,7 +962,7 @@ func point12ValCRedactionImpactStateAndReasons(model Point12ValCRedactionImpactV
 	if len(reasons) > 0 {
 		return Point12ValCRedactionImpactReviewRequired, reasons
 	}
-	return strings.TrimSpace(model.RedactionImpactState), nil
+	return model.RedactionImpactState, nil
 }
 
 func EvaluatePoint12ValCRedactionImpactState(model Point12ValCRedactionImpactVerdict, manifest Point12ValCRedactionManifest, dependency Point12ValCDependencySnapshot) string {
@@ -778,7 +1006,7 @@ func point12ValCOfflineBundleStateAndReasons(model Point12ValCOfflineVerificatio
 		!point12ValCDisposalPathRefValid(model.DisposalPathRef) ||
 		!point12Val0OptionalStringListValid(model.Limitations, point11Val0IdentityValueValid) ||
 		!point12Val0OptionalClaimTextListValid(model.OfflineOutputClaims) ||
-		!point11Val0ContainsTrimmed(point12ValCOfflineBundleStates(), model.OfflineState) {
+		!point12Val0ExactOneOf(model.OfflineState, point12ValCOfflineBundleStates()) {
 		blockedReasons = append(blockedReasons, "offline_bundle_identity_or_metadata_invalid")
 	}
 	if len(model.EvidenceRefs) != len(model.EvidenceHashRefs) {
@@ -790,69 +1018,66 @@ func point12ValCOfflineBundleStateAndReasons(model Point12ValCOfflineVerificatio
 	if model.ExternalAPIUsed {
 		blockedReasons = append(blockedReasons, "offline_bundle_external_api_used")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.OfflineBundleID,
-		model.ReplayResultID,
-		model.CustomerVisibleExplanation,
-		strings.Join(model.OfflineOutputClaims, " "),
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValCOfflinePassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "offline_bundle_premature_point12_pass")
 	}
 	if point12Val0ContainsForbiddenClaim(strings.Join(model.OfflineOutputClaims, " "), model.CustomerVisibleExplanation) {
 		blockedReasons = append(blockedReasons, "offline_bundle_overclaim_detected")
 	}
-	if strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(dependency.ValAManifest.ProofPackID) ||
-		strings.TrimSpace(model.ManifestID) != strings.TrimSpace(dependency.ValAManifest.ManifestID) ||
-		strings.TrimSpace(model.ReplayRequestID) != strings.TrimSpace(dependency.ValBReplayRequest.ReplayRequestID) ||
-		strings.TrimSpace(model.ReplayResultID) != strings.TrimSpace(dependency.ValBReplayResult.ReplayResultID) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) ||
-		strings.TrimSpace(model.ArtifactRef) != strings.TrimSpace(dependency.ValBReplayRequest.ArtifactRef) ||
-		strings.TrimSpace(model.ArtifactHash) != strings.TrimSpace(dependency.ValBReplayRequest.ArtifactHash) ||
+	if model.ProofPackID != dependency.ValAManifest.ProofPackID ||
+		model.ManifestID != dependency.ValAManifest.ManifestID ||
+		model.ReplayRequestID != dependency.ValBReplayRequest.ReplayRequestID ||
+		model.ReplayResultID != dependency.ValBReplayResult.ReplayResultID ||
+		model.TenantScope != dependency.ValBReplayRequest.TenantScope ||
+		model.ArtifactRef != dependency.ValBReplayRequest.ArtifactRef ||
+		model.ArtifactHash != dependency.ValBReplayRequest.ArtifactHash ||
 		!point12Val0ExactStringSetMatch(model.EvidenceRefs, dependency.ValBReplayRequest.EvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.EvidenceHashRefs, dependency.ValBReplayRequest.EvidenceHashRefs) ||
-		strings.TrimSpace(model.PolicyRef) != strings.TrimSpace(dependency.ValBReplayRequest.PolicyRef) ||
-		strings.TrimSpace(model.PolicyVersion) != strings.TrimSpace(dependency.ValBReplayRequest.PolicyVersion) ||
-		strings.TrimSpace(model.PolicyHash) != strings.TrimSpace(dependency.ValBReplayRequest.PolicyHash) ||
-		strings.TrimSpace(model.EngineVersion) != strings.TrimSpace(dependency.ValBReplayRequest.EngineVersion) ||
-		strings.TrimSpace(model.EngineHash) != strings.TrimSpace(dependency.ValBReplayRequest.EngineHash) ||
-		strings.TrimSpace(model.SchemaVersion) != strings.TrimSpace(dependency.ValBReplayRequest.SchemaVersion) ||
-		strings.TrimSpace(model.SchemaHash) != strings.TrimSpace(dependency.ValBReplayRequest.SchemaHash) ||
-		strings.TrimSpace(model.ManifestPayloadHash) != strings.TrimSpace(dependency.ValBReplayRequest.ManifestPayloadHash) ||
-		strings.TrimSpace(model.RedactionManifestRef) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
-		strings.TrimSpace(model.SignatureMetadataRef) != strings.TrimSpace(dependency.ValAManifest.SignatureMetadataRef) ||
-		strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.ValBReplayRequest.CompatibilityProfileRef) {
+		model.PolicyRef != dependency.ValBReplayRequest.PolicyRef ||
+		model.PolicyVersion != dependency.ValBReplayRequest.PolicyVersion ||
+		model.PolicyHash != dependency.ValBReplayRequest.PolicyHash ||
+		model.EngineVersion != dependency.ValBReplayRequest.EngineVersion ||
+		model.EngineHash != dependency.ValBReplayRequest.EngineHash ||
+		model.SchemaVersion != dependency.ValBReplayRequest.SchemaVersion ||
+		model.SchemaHash != dependency.ValBReplayRequest.SchemaHash ||
+		model.ManifestPayloadHash != dependency.ValBReplayRequest.ManifestPayloadHash ||
+		model.RedactionManifestRef != dependency.ValBReplayRequest.RedactionManifestRef ||
+		model.SignatureMetadataRef != dependency.ValAManifest.SignatureMetadataRef ||
+		model.DetachedSignatureRef != dependency.ValAManifest.DetachedSignatureRef ||
+		model.RetentionClassRef != dependency.ValAManifest.RetentionClassRef ||
+		model.CompatibilityProfileRef != dependency.ValBReplayRequest.CompatibilityProfileRef {
 		blockedReasons = append(blockedReasons, "offline_bundle_dependency_binding_mismatch")
 	}
-	if !point11Val0ContainsTrimmed(model.SupportedVerifierVersions, model.RequestedVerifierVersion) {
+	if !point12ValCExactStringInList(model.RequestedVerifierVersion, model.SupportedVerifierVersions) {
 		reviewReasons = append(reviewReasons, "offline_bundle_requested_verifier_version_unsupported")
 	}
-	if strings.TrimSpace(redactionImpactState) == Point12ValCRedactionImpactBlockedReplay ||
-		strings.TrimSpace(redactionImpactState) == Point12ValCRedactionImpactInsufficient {
-		if strings.TrimSpace(model.OfflineState) != Point12ValCOfflineBundleStatePartialAdvisoryOnly &&
-			strings.TrimSpace(model.OfflineState) != Point12ValCOfflineBundleStateBlocked &&
-			strings.TrimSpace(model.OfflineState) != Point12ValCOfflineBundleStateRedactedLimitations {
+	if redactionImpactState == Point12ValCRedactionImpactBlockedReplay ||
+		redactionImpactState == Point12ValCRedactionImpactInsufficient {
+		if model.OfflineState != Point12ValCOfflineBundleStatePartialAdvisoryOnly &&
+			model.OfflineState != Point12ValCOfflineBundleStateBlocked &&
+			model.OfflineState != Point12ValCOfflineBundleStateRedactedLimitations {
 			blockedReasons = append(blockedReasons, "offline_bundle_decisive_redaction_requires_limitations")
 		}
 	}
-	if strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultTamperDetected ||
-		strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultBlockedReplay {
+	if dependency.ValBReplayTaxonomy == Point12Val0ReplayResultTamperDetected ||
+		dependency.ValBReplayTaxonomy == Point12Val0ReplayResultBlockedReplay {
 		blockedReasons = append(blockedReasons, "offline_bundle_tampered_or_blocked_replay_dependency")
 	}
-	if strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultUnsupportedVersion &&
-		strings.TrimSpace(model.OfflineState) != Point12ValCOfflineBundleStateUnsupported &&
-		strings.TrimSpace(model.OfflineState) != Point12ValCOfflineBundleStateReviewRequired {
+	if dependency.ValBReplayTaxonomy == Point12Val0ReplayResultUnsupportedVersion &&
+		model.OfflineState != Point12ValCOfflineBundleStateUnsupported &&
+		model.OfflineState != Point12ValCOfflineBundleStateReviewRequired {
 		reviewReasons = append(reviewReasons, "offline_bundle_unsupported_version_requires_unsupported_or_review")
 	}
 	if len(blockedReasons) > 0 {
 		return Point12ValCOfflineBundleStateBlocked, blockedReasons
 	}
 	if len(reviewReasons) > 0 {
-		if strings.TrimSpace(model.OfflineState) == Point12ValCOfflineBundleStateUnsupported {
+		if model.OfflineState == Point12ValCOfflineBundleStateUnsupported {
 			return Point12ValCOfflineBundleStateUnsupported, reviewReasons
 		}
 		return Point12ValCOfflineBundleStateReviewRequired, reviewReasons
 	}
-	return strings.TrimSpace(model.OfflineState), nil
+	return model.OfflineState, nil
 }
 
 func EvaluatePoint12ValCOfflineBundleState(model Point12ValCOfflineVerificationBundle, dependency Point12ValCDependencySnapshot, redactionImpactState string) string {
@@ -877,19 +1102,22 @@ func point12ValCPublicPrivateBoundaryStateAndReasons(model Point12ValCPublicPriv
 		!point12ValCPublicPrivateClassificationValid(model.Classification) ||
 		!point12ValCDataResidencyRefValid(model.DataResidencyRef) ||
 		!point12ValCExportAudienceValid(model.AllowedAudience) ||
-		!point11Val0ContainsTrimmed([]string{
+		!point12Val0ExactOneOf(model.BoundaryState, []string{
 			Point12ValCPublicPrivateBoundaryStateActive,
 			Point12ValCPublicPrivateBoundaryStateBlocked,
-		}, model.BoundaryState) {
+		}) {
 		reasons = append(reasons, "public_private_boundary_identity_or_metadata_invalid")
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) ||
-		strings.TrimSpace(model.ExportID) != strings.TrimSpace(export.ExportID) ||
-		strings.TrimSpace(model.OfflineBundleID) != strings.TrimSpace(offline.OfflineBundleID) {
+	if model.TenantScope != dependency.ValBReplayRequest.TenantScope ||
+		model.ExportID != export.ExportID ||
+		model.OfflineBundleID != offline.OfflineBundleID {
 		reasons = append(reasons, "public_private_boundary_binding_mismatch")
 	}
 	if len(model.ExportedFields) == 0 || !point12ValCAllExportedFieldsClassified(model) {
 		reasons = append(reasons, "public_private_boundary_unclassified_exported_field")
+	}
+	if point12Val0ContainsPrematurePassToken(point12ValCPublicPrivateBoundaryPassTokenGuardValues(model)...) {
+		reasons = append(reasons, "public_private_boundary_premature_point12_pass")
 	}
 	if !point12ValCStringFieldListSubset(model.PublicFields, model.ExportedFields) ||
 		!point12ValCStringFieldListSubset(model.PrivateFields, model.ExportedFields) ||
@@ -946,7 +1174,7 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 		!point12Val0StringListValid(model.GovernanceEventRefs, point12Val0GovernanceEventRefValid) ||
 		!point12Val0CompatibilityProfileRefValid(model.CompatibilityProfileRef) ||
 		!point12Val0RedactionManifestRefValid(model.RedactionManifestRef) ||
-		(strings.TrimSpace(model.OfflineBundleRef) != "" && !point12ValCOfflineBundleRefValid(model.OfflineBundleRef)) ||
+		(model.OfflineBundleRef != "" && !point12ValCOfflineBundleRefValid(model.OfflineBundleRef)) ||
 		!point12Val0HashValid(model.ManifestPayloadHash) ||
 		!point12ValASignatureMetadataRefValid(model.SignatureMetadataRef) ||
 		!point11Val0ValidTimestamp(model.GeneratedAt) ||
@@ -959,7 +1187,7 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 		!point12ValCDisposalPathRefValid(model.DisposalPathRef) ||
 		!point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point12Val0OptionalStringListValid(model.Limitations, point11Val0IdentityValueValid) ||
-		!point11Val0ContainsTrimmed(point12ValCExportStates(), model.ExportState) ||
+		!point12Val0ExactOneOf(model.ExportState, point12ValCExportStates()) ||
 		!point12Val0OptionalClaimTextListValid(model.ExportOutputClaims) {
 		blockedReasons = append(blockedReasons, "audit_export_identity_or_metadata_invalid")
 	}
@@ -969,22 +1197,16 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 	if !model.AdvisoryOnly {
 		blockedReasons = append(blockedReasons, "audit_export_must_remain_advisory_only")
 	}
-	if strings.TrimSpace(model.NoOverclaimState) != Point12Val0NoOverclaimStateActive {
+	if model.NoOverclaimState != Point12Val0NoOverclaimStateActive {
 		blockedReasons = append(blockedReasons, "audit_export_no_overclaim_state_invalid")
 	}
-	if strings.TrimSpace(model.TenantBoundaryState) != strings.TrimSpace(boundaryState) {
+	if model.TenantBoundaryState != boundaryState {
 		blockedReasons = append(blockedReasons, "audit_export_boundary_state_binding_mismatch")
 	}
-	if strings.TrimSpace(model.RedactionImpactState) != strings.TrimSpace(redactionImpactState) {
+	if model.RedactionImpactState != redactionImpactState {
 		blockedReasons = append(blockedReasons, "audit_export_redaction_impact_state_binding_mismatch")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.ExportID,
-		model.ReplayResultID,
-		model.CustomerVisibleSummary,
-		strings.Join(model.ExportOutputClaims, " "),
-		strings.Join(model.Limitations, " "),
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValCExportPassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "audit_export_premature_point12_pass")
 	}
 	if point12Val0ContainsForbiddenClaim(strings.Join(model.ExportOutputClaims, " "), model.CustomerVisibleSummary) {
@@ -994,28 +1216,29 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 		point12Val0ContainsForbiddenClaim(strings.Join(model.Limitations, " ")) {
 		blockedReasons = append(blockedReasons, "audit_export_customer_facing_limitations_overclaim")
 	}
-	if strings.TrimSpace(model.ProofPackID) != strings.TrimSpace(dependency.ValAManifest.ProofPackID) ||
-		strings.TrimSpace(model.ManifestID) != strings.TrimSpace(dependency.ValAManifest.ManifestID) ||
-		strings.TrimSpace(model.ReplayResultID) != strings.TrimSpace(dependency.ValBReplayResult.ReplayResultID) ||
-		strings.TrimSpace(model.DecisionID) != strings.TrimSpace(dependency.ValBReplayRequest.DecisionID) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) ||
-		strings.TrimSpace(model.ArtifactRef) != strings.TrimSpace(dependency.ValBReplayRequest.ArtifactRef) ||
-		strings.TrimSpace(model.ArtifactHash) != strings.TrimSpace(dependency.ValBReplayRequest.ArtifactHash) ||
+	if model.ProofPackID != dependency.ValAManifest.ProofPackID ||
+		model.ManifestID != dependency.ValAManifest.ManifestID ||
+		model.ReplayResultID != dependency.ValBReplayResult.ReplayResultID ||
+		model.DecisionID != dependency.ValBReplayRequest.DecisionID ||
+		model.TenantScope != dependency.ValBReplayRequest.TenantScope ||
+		model.ArtifactRef != dependency.ValBReplayRequest.ArtifactRef ||
+		model.ArtifactHash != dependency.ValBReplayRequest.ArtifactHash ||
 		!point12Val0ExactStringSetMatch(model.EvidenceRefs, dependency.ValBReplayRequest.EvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.EvidenceHashRefs, dependency.ValBReplayRequest.EvidenceHashRefs) ||
-		strings.TrimSpace(model.PolicyRef) != strings.TrimSpace(dependency.ValBReplayRequest.PolicyRef) ||
-		strings.TrimSpace(model.PolicyVersion) != strings.TrimSpace(dependency.ValBReplayRequest.PolicyVersion) ||
-		strings.TrimSpace(model.PolicyHash) != strings.TrimSpace(dependency.ValBReplayRequest.PolicyHash) ||
-		strings.TrimSpace(model.EngineVersion) != strings.TrimSpace(dependency.ValBReplayRequest.EngineVersion) ||
-		strings.TrimSpace(model.EngineHash) != strings.TrimSpace(dependency.ValBReplayRequest.EngineHash) ||
-		strings.TrimSpace(model.SchemaVersion) != strings.TrimSpace(dependency.ValBReplayRequest.SchemaVersion) ||
-		strings.TrimSpace(model.SchemaHash) != strings.TrimSpace(dependency.ValBReplayRequest.SchemaHash) ||
+		model.PolicyRef != dependency.ValBReplayRequest.PolicyRef ||
+		model.PolicyVersion != dependency.ValBReplayRequest.PolicyVersion ||
+		model.PolicyHash != dependency.ValBReplayRequest.PolicyHash ||
+		model.EngineVersion != dependency.ValBReplayRequest.EngineVersion ||
+		model.EngineHash != dependency.ValBReplayRequest.EngineHash ||
+		model.SchemaVersion != dependency.ValBReplayRequest.SchemaVersion ||
+		model.SchemaHash != dependency.ValBReplayRequest.SchemaHash ||
 		!point12Val0ExactStringSetMatch(model.ClaimRefs, dependency.ValBReplayRequest.ClaimRefs) ||
 		!point12Val0ExactStringSetMatch(model.GovernanceEventRefs, dependency.ValBReplayRequest.GovernanceEventRefs) ||
-		strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.ValBReplayRequest.CompatibilityProfileRef) ||
-		strings.TrimSpace(model.RedactionManifestRef) != strings.TrimSpace(dependency.ValBReplayRequest.RedactionManifestRef) ||
-		strings.TrimSpace(model.ManifestPayloadHash) != strings.TrimSpace(dependency.ValBReplayRequest.ManifestPayloadHash) ||
-		strings.TrimSpace(model.SignatureMetadataRef) != strings.TrimSpace(dependency.ValAManifest.SignatureMetadataRef) {
+		model.CompatibilityProfileRef != dependency.ValBReplayRequest.CompatibilityProfileRef ||
+		model.RedactionManifestRef != dependency.ValBReplayRequest.RedactionManifestRef ||
+		model.ManifestPayloadHash != dependency.ValBReplayRequest.ManifestPayloadHash ||
+		model.SignatureMetadataRef != dependency.ValAManifest.SignatureMetadataRef ||
+		model.RetentionClassRef != dependency.ValAManifest.RetentionClassRef {
 		blockedReasons = append(blockedReasons, "audit_export_dependency_binding_mismatch")
 	}
 	if !point12ValCExportRefValid(model.ExportID) ||
@@ -1025,63 +1248,63 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 		!point12Val0DecisionRefValid(model.DecisionID) {
 		return Point12ValCExportStateBlocked, blockedReasons
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.ValBReplayRequest.TenantScope) {
+	if model.TenantScope != dependency.ValBReplayRequest.TenantScope {
 		return Point12ValCExportStateTenantMismatch, append(blockedReasons, "audit_export_tenant_scope_mismatch")
 	}
 	if boundaryState != Point12ValCPublicPrivateBoundaryStateActive {
 		return Point12ValCExportStateBoundaryViolation, append(blockedReasons, "audit_export_public_private_boundary_violation")
 	}
-	if strings.TrimSpace(model.RetentionClassRef) == "" || strings.TrimSpace(model.RetentionOwnerRef) == "" || strings.TrimSpace(model.DisposalPathRef) == "" {
+	if model.RetentionClassRef == "" || model.RetentionOwnerRef == "" || model.DisposalPathRef == "" {
 		return Point12ValCExportStateRetentionMissing, append(blockedReasons, "audit_export_retention_metadata_missing")
 	}
-	if strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultTamperDetected ||
-		strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultBlockedReplay {
+	if dependency.ValBReplayTaxonomy == Point12Val0ReplayResultTamperDetected ||
+		dependency.ValBReplayTaxonomy == Point12Val0ReplayResultBlockedReplay {
 		return Point12ValCExportStateTampered, append(blockedReasons, "audit_export_tampered_or_blocked_replay_dependency")
 	}
-	if strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultUnsupportedVersion {
-		if strings.TrimSpace(model.ExportState) != Point12ValCExportStateUnsupported &&
-			strings.TrimSpace(model.ExportState) != Point12ValCExportStateReviewRequired {
+	if dependency.ValBReplayTaxonomy == Point12Val0ReplayResultUnsupportedVersion {
+		if model.ExportState != Point12ValCExportStateUnsupported &&
+			model.ExportState != Point12ValCExportStateReviewRequired {
 			reviewReasons = append(reviewReasons, "audit_export_unsupported_version_requires_limited_state")
 		}
 	}
 	if point12ValCDependencyCheckResultReviewRequired(dependency.ValBManifestIntegrityResult) ||
 		point12ValCDependencyCheckResultReviewRequired(dependency.ValBSignatureMetadataResult) ||
 		point12ValCDependencyCheckResultReviewRequired(dependency.ValBCompatibilityResult) {
-		if strings.TrimSpace(model.ExportState) == Point12ValCExportStateReady ||
-			strings.TrimSpace(model.ExportState) == Point12ValCExportStateProjectionOnly {
+		if model.ExportState == Point12ValCExportStateReady ||
+			model.ExportState == Point12ValCExportStateProjectionOnly {
 			reviewReasons = append(reviewReasons, "audit_export_unsupported_dependency_check_requires_limited_state")
 		}
 	}
-	if strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultInsufficientEvidence {
-		if strings.TrimSpace(model.ExportState) == Point12ValCExportStateReady || strings.TrimSpace(model.ExportState) == Point12ValCExportStateProjectionOnly {
+	if dependency.ValBReplayTaxonomy == Point12Val0ReplayResultInsufficientEvidence {
+		if model.ExportState == Point12ValCExportStateReady || model.ExportState == Point12ValCExportStateProjectionOnly {
 			blockedReasons = append(blockedReasons, "audit_export_insufficient_evidence_cannot_be_export_ready")
 		}
 		if len(model.Limitations) == 0 {
 			reviewReasons = append(reviewReasons, "audit_export_insufficient_evidence_limitations_missing")
 		}
 	}
-	if strings.TrimSpace(dependency.ValBReplayTaxonomy) == Point12Val0ReplayResultRedactedLimitations ||
-		strings.TrimSpace(redactionImpactState) == Point12ValCRedactionImpactRedactedLimits ||
-		strings.TrimSpace(redactionImpactState) == Point12ValCRedactionImpactBlockedReplay ||
-		strings.TrimSpace(redactionImpactState) == Point12ValCRedactionImpactInsufficient ||
-		strings.TrimSpace(redactionImpactState) == Point12ValCRedactionImpactPartialAdvisory ||
-		strings.TrimSpace(redactionManifestState) != Point12ValCRedactionManifestStateActive {
-		if strings.TrimSpace(model.ExportState) == Point12ValCExportStateReady {
+	if dependency.ValBReplayTaxonomy == Point12Val0ReplayResultRedactedLimitations ||
+		redactionImpactState == Point12ValCRedactionImpactRedactedLimits ||
+		redactionImpactState == Point12ValCRedactionImpactBlockedReplay ||
+		redactionImpactState == Point12ValCRedactionImpactInsufficient ||
+		redactionImpactState == Point12ValCRedactionImpactPartialAdvisory ||
+		redactionManifestState != Point12ValCRedactionManifestStateActive {
+		if model.ExportState == Point12ValCExportStateReady {
 			blockedReasons = append(blockedReasons, "audit_export_redaction_limitations_cannot_be_export_ready")
 		}
 		if len(model.Limitations) == 0 {
 			reviewReasons = append(reviewReasons, "audit_export_redaction_limitations_missing")
 		}
 	}
-	if strings.TrimSpace(model.ExportKind) == point12ValCExportKindVerifierPackageMetadata && strings.TrimSpace(model.OfflineBundleRef) == "" {
+	if model.ExportKind == point12ValCExportKindVerifierPackageMetadata && model.OfflineBundleRef == "" {
 		blockedReasons = append(blockedReasons, "audit_export_offline_bundle_ref_missing")
 	}
-	if strings.TrimSpace(model.ExportKind) == point12ValCExportKindVerifierPackageMetadata &&
-		strings.TrimSpace(offlineState) != Point12ValCOfflineBundleStateActive &&
-		strings.TrimSpace(offlineState) != Point12ValCOfflineBundleStatePartialAdvisoryOnly &&
-		strings.TrimSpace(offlineState) != Point12ValCOfflineBundleStateRedactedLimitations &&
-		strings.TrimSpace(offlineState) != Point12ValCOfflineBundleStateReviewRequired &&
-		strings.TrimSpace(offlineState) != Point12ValCOfflineBundleStateUnsupported {
+	if model.ExportKind == point12ValCExportKindVerifierPackageMetadata &&
+		offlineState != Point12ValCOfflineBundleStateActive &&
+		offlineState != Point12ValCOfflineBundleStatePartialAdvisoryOnly &&
+		offlineState != Point12ValCOfflineBundleStateRedactedLimitations &&
+		offlineState != Point12ValCOfflineBundleStateReviewRequired &&
+		offlineState != Point12ValCOfflineBundleStateUnsupported {
 		blockedReasons = append(blockedReasons, "audit_export_offline_bundle_state_invalid")
 	}
 	if len(blockedReasons) > 0 {
@@ -1090,7 +1313,7 @@ func point12ValCAuditExportStateAndReasons(model Point12ValCAuditExportBundle, d
 	if len(reviewReasons) > 0 {
 		return Point12ValCExportStateReviewRequired, reviewReasons
 	}
-	return strings.TrimSpace(model.ExportState), nil
+	return model.ExportState, nil
 }
 
 func EvaluatePoint12ValCAuditExportState(model Point12ValCAuditExportBundle, dependency Point12ValCDependencySnapshot, redactionManifestState string, redactionImpactState string, offlineState string, boundaryState string) string {
@@ -1100,26 +1323,26 @@ func EvaluatePoint12ValCAuditExportState(model Point12ValCAuditExportBundle, dep
 
 func EvaluatePoint12ValCState(model Point12ValCFoundation) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		strings.TrimSpace(model.DependencyState) == Point12ValCDependencyStateBlocked ||
-		strings.TrimSpace(model.RedactionManifestState) == Point12ValCRedactionManifestStateBlocked ||
-		strings.TrimSpace(model.PublicPrivateBoundaryState) == Point12ValCPublicPrivateBoundaryStateBlocked ||
-		strings.TrimSpace(model.OfflineBundleState) == Point12ValCOfflineBundleStateBlocked ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateBlocked ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateTampered ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateTenantMismatch ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateBoundaryViolation ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateRetentionMissing {
+		model.DependencyState == Point12ValCDependencyStateBlocked ||
+		model.RedactionManifestState == Point12ValCRedactionManifestStateBlocked ||
+		model.PublicPrivateBoundaryState == Point12ValCPublicPrivateBoundaryStateBlocked ||
+		model.OfflineBundleState == Point12ValCOfflineBundleStateBlocked ||
+		model.ExportState == Point12ValCExportStateBlocked ||
+		model.ExportState == Point12ValCExportStateTampered ||
+		model.ExportState == Point12ValCExportStateTenantMismatch ||
+		model.ExportState == Point12ValCExportStateBoundaryViolation ||
+		model.ExportState == Point12ValCExportStateRetentionMissing {
 		return Point12ValCStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point12ValCDependencyStateReviewRequired ||
-		strings.TrimSpace(model.RedactionManifestState) == Point12ValCRedactionManifestStateReviewRequired ||
-		strings.TrimSpace(model.OfflineBundleState) == Point12ValCOfflineBundleStateReviewRequired ||
-		strings.TrimSpace(model.OfflineBundleState) == Point12ValCOfflineBundleStateUnsupported ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStatePartialAdvisory ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateRedactedLimitations ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateInsufficient ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateUnsupported ||
-		strings.TrimSpace(model.ExportState) == Point12ValCExportStateReviewRequired {
+	if model.DependencyState == Point12ValCDependencyStateReviewRequired ||
+		model.RedactionManifestState == Point12ValCRedactionManifestStateReviewRequired ||
+		model.OfflineBundleState == Point12ValCOfflineBundleStateReviewRequired ||
+		model.OfflineBundleState == Point12ValCOfflineBundleStateUnsupported ||
+		model.ExportState == Point12ValCExportStatePartialAdvisory ||
+		model.ExportState == Point12ValCExportStateRedactedLimitations ||
+		model.ExportState == Point12ValCExportStateInsufficient ||
+		model.ExportState == Point12ValCExportStateUnsupported ||
+		model.ExportState == Point12ValCExportStateReviewRequired {
 		return Point12ValCStateReviewRequired
 	}
 	return Point12ValCStateActive

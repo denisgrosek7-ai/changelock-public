@@ -3,6 +3,7 @@ package formal
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -145,6 +146,17 @@ func TestPoint12ValADependencyState(t *testing.T) {
 			model.Val0DependencyState = Point12Val0DependencyStateReviewRequired
 			model.Val0ProvenanceState = Point12Val0ProvenanceStateReviewRequired
 		}, want: Point12ValADependencyStateReviewRequired},
+		{name: "padded val0 active state blocks raw inherited dependency binding", mutate: func(model *Point12ValADependencySnapshot) {
+			model.Val0CurrentState = Point12Val0StateActive + " "
+		}, want: Point12ValADependencyStateBlocked},
+		{name: "tab newline val0 manifest point id blocks raw inherited dependency binding", mutate: func(model *Point12ValADependencySnapshot) {
+			model.Val0Manifest.PointID = "\t" + point12Val0PointID + "\n"
+		}, want: Point12ValADependencyStateBlocked},
+		{name: "unsupported val0 profile context blocks inherited dependency binding", mutate: func(model *Point12ValADependencySnapshot) {
+			model.Val0Manifest.ProfileContext.ProfileMatchOriginal = false
+			model.Val0Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusUnsupported
+			model.Val0Manifest.ProfileContext.ProfileMismatchReason = "profile_unsupported"
+		}, want: Point12ValADependencyStateBlocked},
 	}
 
 	for _, testCase := range testCases {
@@ -156,6 +168,19 @@ func TestPoint12ValADependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("profile approval pass token blocks inherited dependency binding with exact reason", func(t *testing.T) {
+		model := activePoint12ValADependencySnapshot()
+		model.Val0Manifest.ProfileContext.ProfileApprovalRef = "profile_approval_point_12_pass"
+		state, reasons := point12ValADependencyStateAndReasons(model)
+		if state != Point12ValADependencyStateBlocked ||
+			!reflect.DeepEqual(reasons, []string{
+				"dependency_inherited_profile_context_premature_point12_pass",
+				"dependency_identity_or_profile_context_invalid",
+			}) {
+			t.Fatalf("expected inherited profile pass token exact block, state=%q reasons=%v model=%#v", state, reasons, model)
+		}
+	})
 }
 
 func TestPoint12ValAManifestIntegrityState(t *testing.T) {
@@ -216,6 +241,12 @@ func TestPoint12ValAManifestIntegrityState(t *testing.T) {
 		{name: "malformed signing key ref blocks", mutate: func(model *Point12ValASignedProofPackManifestCore) { model.SigningKeyRef = "signing key invalid" }},
 		{name: "malformed signature ref blocks", mutate: func(model *Point12ValASignedProofPackManifestCore) { model.SignatureRef = "signature invalid" }},
 		{name: "malformed algorithm ref blocks", mutate: func(model *Point12ValASignedProofPackManifestCore) { model.HashAlgorithmRef = "hash algorithm invalid" }},
+		{name: "padded signature algorithm cannot trim into supported algorithm", mutate: func(model *Point12ValASignedProofPackManifestCore) {
+			model.SignatureAlgorithmRef = point12ValASignatureAlgorithmEd25519 + " "
+		}},
+		{name: "tab newline signing key state cannot trim into active state", mutate: func(model *Point12ValASignedProofPackManifestCore) {
+			model.SigningKeyState = "\t" + point12ValASigningKeyStateActive + "\n"
+		}},
 		{name: "cross tenant evidence ref blocks", mutate: func(model *Point12ValASignedProofPackManifestCore) {
 			model.EvidenceRefs = []string{"evidence:cross-tenant-pack-001"}
 		}},
@@ -291,6 +322,73 @@ func TestPoint12ValAManifestIntegrityState(t *testing.T) {
 			t.Fatalf("expected schema hash drift to block active manifest integrity, got %#v", model)
 		}
 	})
+	t.Run("padded signature manifest id cannot trim into valid binding", func(t *testing.T) {
+		model := activePoint12ValAFoundation()
+		model.Manifest.SignatureBoundManifestID = " " + model.Manifest.ManifestID
+		state, reasons := point12ValAManifestIntegrityStateAndReasons(model.Manifest, model.Dependency)
+		if state != Point12ValAManifestIntegrityStateTampered ||
+			!point12Val0StringSliceContains(reasons, "manifest_signature_manifest_id_binding_mismatch") {
+			t.Fatalf("expected raw signature manifest id mismatch, state=%q reasons=%v model=%#v", state, reasons, model)
+		}
+	})
+	t.Run("tab newline signature payload hash cannot trim into valid binding", func(t *testing.T) {
+		model := activePoint12ValAFoundation()
+		model.Manifest.SignatureBoundManifestPayloadHash = "\t" + model.Manifest.ManifestPayloadHash + "\n"
+		state, reasons := point12ValAManifestIntegrityStateAndReasons(model.Manifest, model.Dependency)
+		if state != Point12ValAManifestIntegrityStateTampered ||
+			!point12Val0StringSliceContains(reasons, "manifest_signature_payload_hash_binding_mismatch") {
+			t.Fatalf("expected raw signature payload hash mismatch, state=%q reasons=%v model=%#v", state, reasons, model)
+		}
+	})
+	t.Run("self consistent substituted profile context is signed and bound to val0 dependency", func(t *testing.T) {
+		model := activePoint12ValAFoundation()
+		model.Manifest.ProfileContext.OriginalProfileID = "profile_point12_replay_substituted_002"
+		model.Manifest.ProfileContext.CurrentProfileID = "profile_point12_replay_substituted_002"
+		model.Manifest.ProfileContext.OriginalProfileVersion = "profile_version_point12_replay_v2"
+		model.Manifest.ProfileContext.CurrentProfileVersion = "profile_version_point12_replay_v2"
+		model.Manifest.ProfileContext.OriginalProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Manifest.ProfileContext.CurrentProfileHash = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+		model.Manifest.ProfileContext.ProfileApprovalRef = "profile_approval_point12_replay_002"
+		model.Manifest.ProfileContext.ProfileSignatureRef = "profile_signature_point12_replay_002"
+		model.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Manifest)
+		model.Manifest.SignatureBoundManifestPayloadHash = model.Manifest.ManifestPayloadHash
+		state, reasons := point12ValAManifestIntegrityStateAndReasons(model.Manifest, model.Dependency)
+		if state != Point12ValAManifestIntegrityStateTampered ||
+			!point12Val0StringSliceContains(reasons, "manifest_profile_context_binding_mismatch") {
+			t.Fatalf("expected profile context binding mismatch, state=%q reasons=%v model=%#v", state, reasons, model)
+		}
+	})
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*Point12Val0ReplayProfileContext)
+	}{
+		{name: "isolated profile id drift", mutate: func(profile *Point12Val0ReplayProfileContext) {
+			profile.OriginalProfileID = "profile_point12_replay_substituted_002"
+			profile.CurrentProfileID = "profile_point12_replay_substituted_002"
+		}},
+		{name: "isolated profile version drift", mutate: func(profile *Point12Val0ReplayProfileContext) {
+			profile.OriginalProfileVersion = "profile_version_point12_replay_v2"
+			profile.CurrentProfileVersion = "profile_version_point12_replay_v2"
+		}},
+		{name: "isolated profile approval ref drift", mutate: func(profile *Point12Val0ReplayProfileContext) {
+			profile.ProfileApprovalRef = "profile_approval_point12_replay_002"
+		}},
+		{name: "isolated profile signature ref drift", mutate: func(profile *Point12Val0ReplayProfileContext) {
+			profile.ProfileSignatureRef = "profile_signature_point12_replay_002"
+		}},
+	} {
+		t.Run(testCase.name+" is signed but still bound to val0 dependency", func(t *testing.T) {
+			model := activePoint12ValAFoundation()
+			testCase.mutate(&model.Manifest.ProfileContext)
+			model.Manifest.ManifestPayloadHash = point12ValAComputedManifestPayloadHash(model.Manifest)
+			model.Manifest.SignatureBoundManifestPayloadHash = model.Manifest.ManifestPayloadHash
+			state, reasons := point12ValAManifestIntegrityStateAndReasons(model.Manifest, model.Dependency)
+			if state != Point12ValAManifestIntegrityStateTampered ||
+				!reflect.DeepEqual(reasons, []string{"manifest_profile_context_binding_mismatch"}) {
+				t.Fatalf("expected isolated profile context binding mismatch, state=%q reasons=%v model=%#v", state, reasons, model)
+			}
+		})
+	}
 	t.Run("unsupported hash algorithm yields unsupported", func(t *testing.T) {
 		model := Point12ValAFoundationModel()
 		model.Manifest.HashAlgorithmRef = "hash_algorithm_blake3"
@@ -471,6 +569,24 @@ func TestPoint12ValAPassTokenGuard(t *testing.T) {
 		model = ComputePoint12ValAFoundation(model)
 		if model.ManifestIntegrityState != Point12ValAManifestIntegrityStateBlocked {
 			t.Fatalf("expected premature point12 pass proof to block, got %#v", model)
+		}
+	})
+
+	t.Run("vala manifest artifact ref cannot carry point12 pass before final closure", func(t *testing.T) {
+		model := activePoint12ValAFoundation()
+		model.Manifest.ArtifactRef = "artifact_point_12_pass"
+		state, reasons := point12ValAManifestIntegrityStateAndReasons(model.Manifest, model.Dependency)
+		if state != Point12ValAManifestIntegrityStateBlocked || !point12Val0StringSliceContains(reasons, "manifest_premature_point12_pass") {
+			t.Fatalf("expected premature point12 pass artifact ref to block ValA manifest, state=%s reasons=%#v", state, reasons)
+		}
+	})
+
+	t.Run("vala inherited val0 manifest artifact ref cannot carry point12 pass", func(t *testing.T) {
+		model := activePoint12ValAFoundation()
+		model.Dependency.Val0Manifest.ArtifactRef = "artifact_point_12_pass"
+		state := EvaluatePoint12ValADependencyState(model.Dependency)
+		if state != Point12ValADependencyStateBlocked {
+			t.Fatalf("expected inherited premature point12 pass artifact ref to block ValA dependency, got state=%s", state)
 		}
 	})
 

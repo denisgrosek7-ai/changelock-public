@@ -63,49 +63,100 @@ type Point12ValADependencySnapshot struct {
 }
 
 type Point12ValASignedProofPackManifestCore struct {
-	ProofPackID                       string   `json:"proof_pack_id"`
-	ManifestID                        string   `json:"manifest_id"`
-	DecisionID                        string   `json:"decision_id"`
-	PointID                           string   `json:"point_id"`
-	WaveID                            string   `json:"wave_id"`
-	TenantScope                       string   `json:"tenant_scope"`
-	ArtifactRef                       string   `json:"artifact_ref"`
-	ArtifactHash                      string   `json:"artifact_hash"`
-	EvidenceRefs                      []string `json:"evidence_refs,omitempty"`
-	EvidenceHashRefs                  []string `json:"evidence_hash_refs,omitempty"`
-	PolicyRef                         string   `json:"policy_ref"`
-	PolicyVersion                     string   `json:"policy_version"`
-	PolicyHash                        string   `json:"policy_hash"`
-	EngineVersion                     string   `json:"engine_version"`
-	EngineHash                        string   `json:"engine_hash"`
-	SchemaVersion                     string   `json:"schema_version"`
-	SchemaHash                        string   `json:"schema_hash"`
-	ClaimRefs                         []string `json:"claim_refs,omitempty"`
-	GovernanceEventRefs               []string `json:"governance_event_refs,omitempty"`
-	CompatibilityProfileRef           string   `json:"compatibility_profile_ref"`
-	UpstreamVal0SnapshotRef           string   `json:"upstream_val0_snapshot_ref"`
-	GeneratedAt                       string   `json:"generated_at"`
-	FreshnessWindow                   string   `json:"freshness_window"`
-	ManifestPayloadHash               string   `json:"manifest_payload_hash"`
-	ManifestSchemaVersion             string   `json:"manifest_schema_version"`
-	ManifestSchemaHash                string   `json:"manifest_schema_hash"`
-	HashAlgorithmRef                  string   `json:"hash_algorithm_ref"`
-	SignatureAlgorithmRef             string   `json:"signature_algorithm_ref"`
-	SigningKeyRef                     string   `json:"signing_key_ref"`
-	SigningKeyState                   string   `json:"signing_key_state"`
-	SignatureRef                      string   `json:"signature_ref"`
-	DetachedSignatureRef              string   `json:"detached_signature_ref"`
-	SignatureMetadataRef              string   `json:"signature_metadata_ref"`
-	SignatureTimestamp                string   `json:"signature_timestamp"`
-	SignatureBoundManifestID          string   `json:"signature_bound_manifest_id"`
-	SignatureBoundManifestPayloadHash string   `json:"signature_bound_manifest_payload_hash"`
-	RedactionManifestRef              string   `json:"redaction_manifest_ref"`
-	RetentionClassRef                 string   `json:"retention_class_ref"`
-	ProjectionDisclaimer              string   `json:"projection_disclaimer"`
-	ToolchainProvenanceRefs           []string `json:"toolchain_provenance_refs,omitempty"`
-	AgentLineageRefs                  []string `json:"agent_lineage_refs,omitempty"`
-	ManifestOutputClaims              []string `json:"manifest_output_claims,omitempty"`
-	ManifestState                     string   `json:"manifest_state"`
+	ProofPackID                       string                          `json:"proof_pack_id"`
+	ManifestID                        string                          `json:"manifest_id"`
+	DecisionID                        string                          `json:"decision_id"`
+	PointID                           string                          `json:"point_id"`
+	WaveID                            string                          `json:"wave_id"`
+	TenantScope                       string                          `json:"tenant_scope"`
+	ArtifactRef                       string                          `json:"artifact_ref"`
+	ArtifactHash                      string                          `json:"artifact_hash"`
+	EvidenceRefs                      []string                        `json:"evidence_refs,omitempty"`
+	EvidenceHashRefs                  []string                        `json:"evidence_hash_refs,omitempty"`
+	PolicyRef                         string                          `json:"policy_ref"`
+	PolicyVersion                     string                          `json:"policy_version"`
+	PolicyHash                        string                          `json:"policy_hash"`
+	EngineVersion                     string                          `json:"engine_version"`
+	EngineHash                        string                          `json:"engine_hash"`
+	SchemaVersion                     string                          `json:"schema_version"`
+	SchemaHash                        string                          `json:"schema_hash"`
+	ClaimRefs                         []string                        `json:"claim_refs,omitempty"`
+	GovernanceEventRefs               []string                        `json:"governance_event_refs,omitempty"`
+	CompatibilityProfileRef           string                          `json:"compatibility_profile_ref"`
+	ProfileContext                    Point12Val0ReplayProfileContext `json:"profile_context"`
+	UpstreamVal0SnapshotRef           string                          `json:"upstream_val0_snapshot_ref"`
+	GeneratedAt                       string                          `json:"generated_at"`
+	FreshnessWindow                   string                          `json:"freshness_window"`
+	ManifestPayloadHash               string                          `json:"manifest_payload_hash"`
+	ManifestSchemaVersion             string                          `json:"manifest_schema_version"`
+	ManifestSchemaHash                string                          `json:"manifest_schema_hash"`
+	HashAlgorithmRef                  string                          `json:"hash_algorithm_ref"`
+	SignatureAlgorithmRef             string                          `json:"signature_algorithm_ref"`
+	SigningKeyRef                     string                          `json:"signing_key_ref"`
+	SigningKeyState                   string                          `json:"signing_key_state"`
+	SignatureRef                      string                          `json:"signature_ref"`
+	DetachedSignatureRef              string                          `json:"detached_signature_ref"`
+	SignatureMetadataRef              string                          `json:"signature_metadata_ref"`
+	SignatureTimestamp                string                          `json:"signature_timestamp"`
+	SignatureBoundManifestID          string                          `json:"signature_bound_manifest_id"`
+	SignatureBoundManifestPayloadHash string                          `json:"signature_bound_manifest_payload_hash"`
+	RedactionManifestRef              string                          `json:"redaction_manifest_ref"`
+	RetentionClassRef                 string                          `json:"retention_class_ref"`
+	ProjectionDisclaimer              string                          `json:"projection_disclaimer"`
+	ToolchainProvenanceRefs           []string                        `json:"toolchain_provenance_refs,omitempty"`
+	AgentLineageRefs                  []string                        `json:"agent_lineage_refs,omitempty"`
+	ManifestOutputClaims              []string                        `json:"manifest_output_claims,omitempty"`
+	ManifestState                     string                          `json:"manifest_state"`
+}
+
+func point12ValAManifestPassTokenGuardValues(model Point12ValASignedProofPackManifestCore) []string {
+	values := []string{
+		model.ProofPackID,
+		model.ManifestID,
+		model.DecisionID,
+		model.PointID,
+		model.WaveID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
+		model.CompatibilityProfileRef,
+		model.UpstreamVal0SnapshotRef,
+		model.GeneratedAt,
+		model.FreshnessWindow,
+		model.ManifestPayloadHash,
+		model.ManifestSchemaVersion,
+		model.ManifestSchemaHash,
+		model.HashAlgorithmRef,
+		model.SignatureAlgorithmRef,
+		model.SigningKeyRef,
+		model.SigningKeyState,
+		model.SignatureRef,
+		model.DetachedSignatureRef,
+		model.SignatureMetadataRef,
+		model.SignatureTimestamp,
+		model.SignatureBoundManifestID,
+		model.SignatureBoundManifestPayloadHash,
+		model.RedactionManifestRef,
+		model.RetentionClassRef,
+		model.ProjectionDisclaimer,
+		model.ManifestState,
+	}
+	values = append(values, model.EvidenceRefs...)
+	values = append(values, model.EvidenceHashRefs...)
+	values = append(values, model.ClaimRefs...)
+	values = append(values, model.GovernanceEventRefs...)
+	values = append(values, model.ToolchainProvenanceRefs...)
+	values = append(values, model.AgentLineageRefs...)
+	values = append(values, model.ManifestOutputClaims...)
+	values = append(values, point12Val0ProfileContextGuardValues(model.ProfileContext)...)
+	return values
 }
 
 type Point12ValAFoundation struct {
@@ -155,53 +206,54 @@ func point12ValADetachedSignatureRefValid(value string) bool {
 }
 
 func point12ValAHashAlgorithmSupported(value string) bool {
-	return strings.TrimSpace(value) == point12ValAHashAlgorithmSHA256
+	return value == point12ValAHashAlgorithmSHA256
 }
 
 func point12ValASignatureAlgorithmSupported(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValASignatureAlgorithmEd25519,
 		point12ValASignatureAlgorithmECDSAP256,
-	}, value)
+	})
 }
 
 func point12ValASigningKeyStateValid(value string) bool {
-	return point11Val0ContainsTrimmed([]string{
+	return point12Val0ExactOneOf(value, []string{
 		point12ValASigningKeyStateActive,
 		point12ValASigningKeyStateRevoked,
 		point12ValASigningKeyStateExpired,
 		point12ValASigningKeyStateCompromised,
 		point12ValASigningKeyStateUnknown,
-	}, value)
+	})
 }
 
 func point12ValAManifestPayloadParts(model Point12ValASignedProofPackManifestCore) []string {
 	parts := []string{
-		strings.TrimSpace(model.ProofPackID),
-		strings.TrimSpace(model.ManifestID),
-		strings.TrimSpace(model.DecisionID),
-		strings.TrimSpace(model.PointID),
-		strings.TrimSpace(model.WaveID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.ArtifactRef),
-		strings.TrimSpace(model.ArtifactHash),
+		model.ProofPackID,
+		model.ManifestID,
+		model.DecisionID,
+		model.PointID,
+		model.WaveID,
+		model.TenantScope,
+		model.ArtifactRef,
+		model.ArtifactHash,
 		strings.Join(model.EvidenceRefs, ","),
 		strings.Join(model.EvidenceHashRefs, ","),
-		strings.TrimSpace(model.PolicyRef),
-		strings.TrimSpace(model.PolicyVersion),
-		strings.TrimSpace(model.PolicyHash),
-		strings.TrimSpace(model.EngineVersion),
-		strings.TrimSpace(model.EngineHash),
-		strings.TrimSpace(model.SchemaVersion),
-		strings.TrimSpace(model.SchemaHash),
+		model.PolicyRef,
+		model.PolicyVersion,
+		model.PolicyHash,
+		model.EngineVersion,
+		model.EngineHash,
+		model.SchemaVersion,
+		model.SchemaHash,
 		strings.Join(model.ClaimRefs, ","),
 		strings.Join(model.GovernanceEventRefs, ","),
-		strings.TrimSpace(model.CompatibilityProfileRef),
-		strings.TrimSpace(model.UpstreamVal0SnapshotRef),
-		strings.TrimSpace(model.ManifestSchemaVersion),
-		strings.TrimSpace(model.ManifestSchemaHash),
-		strings.TrimSpace(model.RedactionManifestRef),
-		strings.TrimSpace(model.RetentionClassRef),
+		model.CompatibilityProfileRef,
+		strings.Join(point12Val0ProfileContextPayloadParts(model.ProfileContext), "|"),
+		model.UpstreamVal0SnapshotRef,
+		model.ManifestSchemaVersion,
+		model.ManifestSchemaHash,
+		model.RedactionManifestRef,
+		model.RetentionClassRef,
 		strings.Join(model.ToolchainProvenanceRefs, ","),
 		strings.Join(model.AgentLineageRefs, ","),
 		strings.Join(model.ManifestOutputClaims, ","),
@@ -250,44 +302,58 @@ func point12ValADependencySnapshotModel() Point12ValADependencySnapshot {
 	return SnapshotPoint12ValADependencyFromComputedVal0(val0, point12ValADependencyReviewContextModel())
 }
 
-func EvaluatePoint12ValADependencyState(model Point12ValADependencySnapshot) string {
+func point12ValADependencyStateAndReasons(model Point12ValADependencySnapshot) (string, []string) {
+	blockedReasons := []string{}
+	reviewReasons := []string{}
+	if point12Val0ContainsPrematurePassToken(point12Val0ProfileContextGuardValues(model.Val0Manifest.ProfileContext)...) {
+		blockedReasons = append(blockedReasons, "dependency_inherited_profile_context_premature_point12_pass")
+	}
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!model.SnapshotFromComputedOutput ||
 		!point12ValADependencySnapshotRefValid(model.SnapshotRef) ||
-		strings.TrimSpace(model.Val0PointID) != point12Val0PointID ||
-		strings.TrimSpace(model.Val0WaveID) != point12Val0WaveID ||
-		strings.TrimSpace(model.Val0Manifest.PointID) != point12Val0PointID ||
-		strings.TrimSpace(model.Val0Manifest.WaveID) != point12Val0WaveID ||
+		model.Val0PointID != point12Val0PointID ||
+		model.Val0WaveID != point12Val0WaveID ||
+		model.Val0Manifest.PointID != point12Val0PointID ||
+		model.Val0Manifest.WaveID != point12Val0WaveID ||
+		!point12Val0ProfileContextOriginalReplaySafe(model.Val0Manifest.ProfileContext, model.Val0Manifest.TenantScope) ||
 		model.Val0PrematurePoint12PassSeen ||
-		point12Val0ContainsPrematurePassToken(
-			model.Val0Manifest.ProofPackID,
-			model.Val0Manifest.DecisionID,
-			model.Val0Manifest.SigningKeyRef,
-			model.Val0Manifest.SignatureRef,
-		) {
-		return Point12ValADependencyStateBlocked
+		point12Val0ContainsPrematurePassToken(point12Val0ManifestPassTokenGuardValues(model.Val0Manifest)...) {
+		blockedReasons = append(blockedReasons, "dependency_identity_or_profile_context_invalid")
 	}
-	if strings.TrimSpace(model.Val0CurrentState) == Point12Val0StateBlocked ||
-		strings.TrimSpace(model.Val0DependencyState) == Point12Val0DependencyStateBlocked ||
-		strings.TrimSpace(model.Val0NoOverclaimState) != Point12Val0NoOverclaimStateActive ||
-		strings.TrimSpace(model.Val0ManifestState) != Point12Val0ManifestStateActive ||
-		strings.TrimSpace(model.Val0RedactionBoundaryState) != Point12Val0RedactionBoundaryStateActive ||
-		strings.TrimSpace(model.Val0CompatibilityProfileState) != Point12Val0CompatibilityProfileStateActive ||
-		strings.TrimSpace(model.Val0ProvenanceState) == Point12Val0ProvenanceStateBlocked {
-		return Point12ValADependencyStateBlocked
+	if model.Val0CurrentState == Point12Val0StateBlocked ||
+		model.Val0DependencyState == Point12Val0DependencyStateBlocked ||
+		model.Val0NoOverclaimState != Point12Val0NoOverclaimStateActive ||
+		model.Val0ManifestState != Point12Val0ManifestStateActive ||
+		model.Val0RedactionBoundaryState != Point12Val0RedactionBoundaryStateActive ||
+		model.Val0CompatibilityProfileState != Point12Val0CompatibilityProfileStateActive ||
+		model.Val0ProvenanceState == Point12Val0ProvenanceStateBlocked {
+		blockedReasons = append(blockedReasons, "dependency_val0_blocked")
 	}
-	if strings.TrimSpace(model.Val0CurrentState) == Point12Val0StateReviewRequired ||
-		strings.TrimSpace(model.Val0DependencyState) == Point12Val0DependencyStateReviewRequired ||
-		strings.TrimSpace(model.Val0ProvenanceState) == Point12Val0ProvenanceStateReviewRequired ||
+	if model.Val0CurrentState == Point12Val0StateReviewRequired ||
+		model.Val0DependencyState == Point12Val0DependencyStateReviewRequired ||
+		model.Val0ProvenanceState == Point12Val0ProvenanceStateReviewRequired ||
 		len(model.ReviewPrerequisites) > 0 {
-		return Point12ValADependencyStateReviewRequired
+		reviewReasons = append(reviewReasons, "dependency_val0_review_required")
 	}
-	if strings.TrimSpace(model.Val0CurrentState) != Point12Val0StateActive ||
-		strings.TrimSpace(model.Val0DependencyState) != Point12Val0DependencyStateActive ||
-		strings.TrimSpace(model.Val0ProvenanceState) != Point12Val0ProvenanceStateActive {
-		return Point12ValADependencyStateBlocked
+	if model.Val0CurrentState != Point12Val0StateActive ||
+		model.Val0DependencyState != Point12Val0DependencyStateActive ||
+		model.Val0ProvenanceState != Point12Val0ProvenanceStateActive {
+		if len(blockedReasons) == 0 && len(reviewReasons) == 0 {
+			blockedReasons = append(blockedReasons, "dependency_val0_not_active")
+		}
 	}
-	return Point12ValADependencyStateActive
+	if len(blockedReasons) > 0 {
+		return Point12ValADependencyStateBlocked, blockedReasons
+	}
+	if len(reviewReasons) > 0 {
+		return Point12ValADependencyStateReviewRequired, reviewReasons
+	}
+	return Point12ValADependencyStateActive, nil
+}
+
+func EvaluatePoint12ValADependencyState(model Point12ValADependencySnapshot) string {
+	state, _ := point12ValADependencyStateAndReasons(model)
+	return state
 }
 
 func point12ValAManifestIntegrityStateAndReasons(
@@ -299,12 +365,12 @@ func point12ValAManifestIntegrityStateAndReasons(
 	unsupportedReasons := []string{}
 	reviewReasons := []string{}
 
-	if !point11Val0ContainsTrimmed(point12ValAManifestCoreStates(), model.ManifestState) ||
+	if !point12Val0ExactOneOf(model.ManifestState, point12ValAManifestCoreStates()) ||
 		!point12Val0ProofPackRefValid(model.ProofPackID) ||
 		!point12ValAManifestRefValid(model.ManifestID) ||
 		!point12Val0DecisionRefValid(model.DecisionID) ||
-		strings.TrimSpace(model.PointID) != point12Val0PointID ||
-		strings.TrimSpace(model.WaveID) != point12ValAWaveID ||
+		model.PointID != point12Val0PointID ||
+		model.WaveID != point12ValAWaveID ||
 		!point11Val0ScopeValid(model.TenantScope) ||
 		!point12Val0ArtifactRefValid(model.ArtifactRef) ||
 		!point12Val0HashValid(model.ArtifactHash) ||
@@ -320,6 +386,7 @@ func point12ValAManifestIntegrityStateAndReasons(
 		!point12Val0StringListValid(model.ClaimRefs, point12Val0ClaimRefValid) ||
 		!point12Val0StringListValid(model.GovernanceEventRefs, point12Val0GovernanceEventRefValid) ||
 		!point12Val0CompatibilityProfileRefValid(model.CompatibilityProfileRef) ||
+		!point12Val0ProfileContextFieldsValid(model.ProfileContext) ||
 		!point12ValADependencySnapshotRefValid(model.UpstreamVal0SnapshotRef) ||
 		!point11Val0ValidTimestamp(model.GeneratedAt) ||
 		!point12Val0VersionIdentityValid(model.FreshnessWindow) ||
@@ -344,25 +411,16 @@ func point12ValAManifestIntegrityStateAndReasons(
 	if len(model.EvidenceRefs) != len(model.EvidenceHashRefs) {
 		blockedReasons = append(blockedReasons, "manifest_evidence_hash_alignment_invalid")
 	}
-	if strings.TrimSpace(model.SignatureRef) == "" && strings.TrimSpace(model.DetachedSignatureRef) == "" {
+	if model.SignatureRef == "" && model.DetachedSignatureRef == "" {
 		blockedReasons = append(blockedReasons, "manifest_signature_reference_missing")
 	}
-	if strings.TrimSpace(model.SignatureRef) != "" && !point12Val0SignatureRefValid(model.SignatureRef) {
+	if model.SignatureRef != "" && !point12Val0SignatureRefValid(model.SignatureRef) {
 		blockedReasons = append(blockedReasons, "manifest_signature_ref_invalid")
 	}
-	if strings.TrimSpace(model.DetachedSignatureRef) != "" && !point12ValADetachedSignatureRefValid(model.DetachedSignatureRef) {
+	if model.DetachedSignatureRef != "" && !point12ValADetachedSignatureRefValid(model.DetachedSignatureRef) {
 		blockedReasons = append(blockedReasons, "manifest_detached_signature_ref_invalid")
 	}
-	if point12Val0ContainsPrematurePassToken(
-		model.ProofPackID,
-		model.ManifestID,
-		model.DecisionID,
-		model.SigningKeyRef,
-		model.SignatureRef,
-		model.DetachedSignatureRef,
-		model.SignatureMetadataRef,
-		strings.Join(model.ManifestOutputClaims, " "),
-	) {
+	if point12Val0ContainsPrematurePassToken(point12ValAManifestPassTokenGuardValues(model)...) {
 		blockedReasons = append(blockedReasons, "manifest_premature_point12_pass")
 	}
 	if point12Val0ContainsForbiddenClaim(strings.Join(model.ManifestOutputClaims, " ")) {
@@ -376,7 +434,7 @@ func point12ValAManifestIntegrityStateAndReasons(
 		unsupportedReasons = append(unsupportedReasons, "manifest_signature_algorithm_unsupported")
 	}
 
-	switch strings.TrimSpace(model.SigningKeyState) {
+	switch model.SigningKeyState {
 	case point12ValASigningKeyStateRevoked:
 		blockedReasons = append(blockedReasons, "manifest_signing_key_revoked")
 	case point12ValASigningKeyStateExpired:
@@ -387,34 +445,34 @@ func point12ValAManifestIntegrityStateAndReasons(
 		reviewReasons = append(reviewReasons, "manifest_signing_key_unknown")
 	}
 
-	if strings.TrimSpace(model.UpstreamVal0SnapshotRef) != strings.TrimSpace(dependency.SnapshotRef) {
+	if model.UpstreamVal0SnapshotRef != dependency.SnapshotRef {
 		tamperedReasons = append(tamperedReasons, "manifest_snapshot_binding_mismatch")
 	}
-	if strings.TrimSpace(model.DecisionID) != strings.TrimSpace(dependency.Val0Manifest.DecisionID) {
+	if model.DecisionID != dependency.Val0Manifest.DecisionID {
 		tamperedReasons = append(tamperedReasons, "manifest_decision_binding_mismatch")
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.Val0Manifest.TenantScope) {
+	if model.TenantScope != dependency.Val0Manifest.TenantScope {
 		tamperedReasons = append(tamperedReasons, "manifest_tenant_scope_binding_mismatch")
 	}
-	if strings.TrimSpace(model.ArtifactRef) != strings.TrimSpace(dependency.Val0Manifest.ArtifactRef) ||
-		strings.TrimSpace(model.ArtifactHash) != strings.TrimSpace(dependency.Val0Manifest.ArtifactHash) {
+	if model.ArtifactRef != dependency.Val0Manifest.ArtifactRef ||
+		model.ArtifactHash != dependency.Val0Manifest.ArtifactHash {
 		tamperedReasons = append(tamperedReasons, "manifest_artifact_binding_mismatch")
 	}
 	if !point12Val0ExactStringSetMatch(model.EvidenceRefs, dependency.Val0Manifest.EvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.EvidenceHashRefs, dependency.Val0Manifest.EvidenceHashRefs) {
 		tamperedReasons = append(tamperedReasons, "manifest_evidence_binding_mismatch")
 	}
-	if strings.TrimSpace(model.PolicyRef) != strings.TrimSpace(dependency.Val0Manifest.PolicyRef) ||
-		strings.TrimSpace(model.PolicyVersion) != strings.TrimSpace(dependency.Val0Manifest.PolicyVersion) ||
-		strings.TrimSpace(model.PolicyHash) != strings.TrimSpace(dependency.Val0Manifest.PolicyHash) {
+	if model.PolicyRef != dependency.Val0Manifest.PolicyRef ||
+		model.PolicyVersion != dependency.Val0Manifest.PolicyVersion ||
+		model.PolicyHash != dependency.Val0Manifest.PolicyHash {
 		tamperedReasons = append(tamperedReasons, "manifest_policy_binding_mismatch")
 	}
-	if strings.TrimSpace(model.EngineVersion) != strings.TrimSpace(dependency.Val0Manifest.EngineVersion) ||
-		strings.TrimSpace(model.EngineHash) != strings.TrimSpace(dependency.Val0Manifest.EngineHash) {
+	if model.EngineVersion != dependency.Val0Manifest.EngineVersion ||
+		model.EngineHash != dependency.Val0Manifest.EngineHash {
 		tamperedReasons = append(tamperedReasons, "manifest_engine_binding_mismatch")
 	}
-	if strings.TrimSpace(model.SchemaVersion) != strings.TrimSpace(dependency.Val0Manifest.SchemaVersion) ||
-		strings.TrimSpace(model.SchemaHash) != strings.TrimSpace(dependency.Val0Manifest.SchemaHash) {
+	if model.SchemaVersion != dependency.Val0Manifest.SchemaVersion ||
+		model.SchemaHash != dependency.Val0Manifest.SchemaHash {
 		tamperedReasons = append(tamperedReasons, "manifest_schema_binding_mismatch")
 	}
 	if !point12Val0ExactStringSetMatch(model.ClaimRefs, dependency.Val0Manifest.ClaimRefs) {
@@ -423,13 +481,19 @@ func point12ValAManifestIntegrityStateAndReasons(
 	if !point12Val0ExactStringSetMatch(model.GovernanceEventRefs, dependency.Val0Manifest.GovernanceEventRefs) {
 		tamperedReasons = append(tamperedReasons, "manifest_governance_binding_mismatch")
 	}
-	if strings.TrimSpace(model.CompatibilityProfileRef) != strings.TrimSpace(dependency.Val0Manifest.CompatibilityProfileRef) {
+	if model.CompatibilityProfileRef != dependency.Val0Manifest.CompatibilityProfileRef {
 		tamperedReasons = append(tamperedReasons, "manifest_compatibility_profile_binding_mismatch")
 	}
-	if strings.TrimSpace(model.RedactionManifestRef) != strings.TrimSpace(dependency.Val0Manifest.RedactionManifestRef) {
+	if !point12Val0ProfileContextMatchesManifest(model.ProfileContext, dependency.Val0Manifest.ProfileContext) {
+		tamperedReasons = append(tamperedReasons, "manifest_profile_context_binding_mismatch")
+	}
+	if !point12Val0ProfileContextBoundToTenant(model.ProfileContext, model.TenantScope) {
+		tamperedReasons = append(tamperedReasons, "manifest_profile_tenant_binding_mismatch")
+	}
+	if model.RedactionManifestRef != dependency.Val0Manifest.RedactionManifestRef {
 		tamperedReasons = append(tamperedReasons, "manifest_redaction_binding_mismatch")
 	}
-	if strings.TrimSpace(model.RetentionClassRef) != strings.TrimSpace(dependency.Val0Manifest.RetentionClassRef) {
+	if model.RetentionClassRef != dependency.Val0Manifest.RetentionClassRef {
 		tamperedReasons = append(tamperedReasons, "manifest_retention_binding_mismatch")
 	}
 	if !point12Val0ExactStringSetMatch(model.ToolchainProvenanceRefs, dependency.Val0Manifest.ToolchainProvenanceRefs) {
@@ -438,21 +502,21 @@ func point12ValAManifestIntegrityStateAndReasons(
 	if !point12Val0ExactStringSetMatch(model.AgentLineageRefs, dependency.Val0Manifest.AgentLineageRefs) {
 		tamperedReasons = append(tamperedReasons, "manifest_agent_lineage_binding_mismatch")
 	}
-	if strings.TrimSpace(model.PolicyRef) != strings.TrimSpace(dependency.Val0Manifest.PolicyAuthorityContextRef) &&
-		strings.TrimSpace(model.PolicyRef) != strings.TrimSpace(dependency.Val0Manifest.PolicyRef) {
+	if model.PolicyRef != dependency.Val0Manifest.PolicyAuthorityContextRef &&
+		model.PolicyRef != dependency.Val0Manifest.PolicyRef {
 		tamperedReasons = append(tamperedReasons, "manifest_policy_authority_binding_mismatch")
 	}
 
 	expectedPayloadHash := point12ValAComputedManifestPayloadHash(model)
 	if expectedPayloadHash == "" {
 		unsupportedReasons = append(unsupportedReasons, "manifest_payload_hash_algorithm_unsupported")
-	} else if strings.TrimSpace(model.ManifestPayloadHash) != expectedPayloadHash {
+	} else if model.ManifestPayloadHash != expectedPayloadHash {
 		tamperedReasons = append(tamperedReasons, "manifest_payload_hash_mismatch")
 	}
-	if strings.TrimSpace(model.SignatureBoundManifestID) != strings.TrimSpace(model.ManifestID) {
+	if model.SignatureBoundManifestID != model.ManifestID {
 		tamperedReasons = append(tamperedReasons, "manifest_signature_manifest_id_binding_mismatch")
 	}
-	if strings.TrimSpace(model.SignatureBoundManifestPayloadHash) != strings.TrimSpace(model.ManifestPayloadHash) {
+	if model.SignatureBoundManifestPayloadHash != model.ManifestPayloadHash {
 		tamperedReasons = append(tamperedReasons, "manifest_signature_payload_hash_binding_mismatch")
 	}
 
@@ -481,15 +545,15 @@ func EvaluatePoint12ValAManifestIntegrityState(
 
 func EvaluatePoint12ValAState(model Point12ValAFoundation) string {
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
-		strings.TrimSpace(model.DependencyState) == Point12ValADependencyStateBlocked ||
-		strings.TrimSpace(model.ManifestIntegrityState) == Point12ValAManifestIntegrityStateBlocked ||
-		strings.TrimSpace(model.ManifestIntegrityState) == Point12ValAManifestIntegrityStateIncomplete ||
-		strings.TrimSpace(model.ManifestIntegrityState) == Point12ValAManifestIntegrityStateUnsupported ||
-		strings.TrimSpace(model.ManifestIntegrityState) == Point12ValAManifestIntegrityStateTampered {
+		model.DependencyState == Point12ValADependencyStateBlocked ||
+		model.ManifestIntegrityState == Point12ValAManifestIntegrityStateBlocked ||
+		model.ManifestIntegrityState == Point12ValAManifestIntegrityStateIncomplete ||
+		model.ManifestIntegrityState == Point12ValAManifestIntegrityStateUnsupported ||
+		model.ManifestIntegrityState == Point12ValAManifestIntegrityStateTampered {
 		return Point12ValAStateBlocked
 	}
-	if strings.TrimSpace(model.DependencyState) == Point12ValADependencyStateReviewRequired ||
-		strings.TrimSpace(model.ManifestIntegrityState) == Point12ValAManifestIntegrityStateReviewRequired {
+	if model.DependencyState == Point12ValADependencyStateReviewRequired ||
+		model.ManifestIntegrityState == Point12ValAManifestIntegrityStateReviewRequired {
 		return Point12ValAStateReviewRequired
 	}
 	return Point12ValAStateActive
@@ -539,6 +603,7 @@ func Point12ValAFoundationModel() Point12ValAFoundation {
 		ClaimRefs:                append([]string{}, dependency.Val0Manifest.ClaimRefs...),
 		GovernanceEventRefs:      append([]string{}, dependency.Val0Manifest.GovernanceEventRefs...),
 		CompatibilityProfileRef:  dependency.Val0Manifest.CompatibilityProfileRef,
+		ProfileContext:           dependency.Val0Manifest.ProfileContext,
 		UpstreamVal0SnapshotRef:  dependency.SnapshotRef,
 		GeneratedAt:              "2026-05-03T12:00:00Z",
 		FreshnessWindow:          dependency.Val0Manifest.FreshnessWindow,

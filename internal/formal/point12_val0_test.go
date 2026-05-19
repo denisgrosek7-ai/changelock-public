@@ -39,6 +39,25 @@ func point12Val0StringSliceContains(values []string, target string) bool {
 	return false
 }
 
+func point12Val0ReplayReasons(model Point12Val0Foundation) []string {
+	_, reasons := point12Val0ReplayAssessmentStateAndReasons(
+		model.ReplayAssessment,
+		model.DeterminismContract,
+		model.CompatibilityProfile,
+		model.Manifest,
+		model.RedactionBoundary,
+	)
+	return reasons
+}
+
+func requirePoint12Val0ReplayReason(t *testing.T, model Point12Val0Foundation, reasons ...string) {
+	t.Helper()
+	got := point12Val0ReplayReasons(model)
+	if !reflect.DeepEqual(got, reasons) {
+		t.Fatalf("expected exact replay reasons %v, got reasons=%v model=%#v", reasons, got, model)
+	}
+}
+
 func point12Val0ActiveDependencySnapshot() Point12Val0DependencySnapshot {
 	valD := activePoint11ValDFoundation()
 	return SnapshotPoint12Val0DependencyFromComputedPoint11ValD(valD, point12Val0DependencyReviewContextModel())
@@ -457,6 +476,401 @@ func TestPoint12Val0DeterminismAndCompatibility(t *testing.T) {
 			model.CompatibilityProfileState != Point12Val0CompatibilityProfileStateBlocked {
 			t.Fatalf("expected raw compatibility retag to block, got %#v", model)
 		}
+	})
+}
+
+func TestPoint12Val0ProfileReplayBinding(t *testing.T) {
+	t.Run("happy path binds original profile context exactly", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		if model.CurrentState != Point12Val0StateActive || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateActive {
+			t.Fatalf("expected active profile-bound replay foundation, got %#v", model)
+		}
+		if !model.ReplayAssessment.ProfileContext.ProfileMatchOriginal ||
+			model.ReplayAssessment.ProfileContext.ProfileBindingStatus != Point12Val0ProfileBindingStatusMatch ||
+			model.ReplayAssessment.ProfileContext.ProfileReplayMode != Point12Val0ProfileReplayModeOriginalProfileReplay {
+			t.Fatalf("expected exact profile match context, got %#v", model.ReplayAssessment.ProfileContext)
+		}
+		if model.Manifest.ProfileContext.OriginalProfileHash != model.ReplayAssessment.ProfileContext.OriginalProfileHash {
+			t.Fatalf("expected manifest and replay to bind the same original profile hash, got manifest=%q replay=%q", model.Manifest.ProfileContext.OriginalProfileHash, model.ReplayAssessment.ProfileContext.OriginalProfileHash)
+		}
+	})
+
+	t.Run("direct exploit hash mismatch cannot claim same decision", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.CurrentProfileHash = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.Manifest.ProfileContext.ProfileMismatchReason = "profile_hash_mismatch"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile hash mismatch to block same decision, got %#v", model)
+		}
+		if model.ReplayAssessment.ProfileContext.ProfileMatchOriginal ||
+			model.ReplayAssessment.ProfileContext.ProfileBindingStatus != Point12Val0ProfileBindingStatusMismatch ||
+			model.ReplayAssessment.ProfileContext.ProfileMismatchReason != "profile_hash_mismatch" {
+			t.Fatalf("expected exact profile hash mismatch state, got %#v", model.ReplayAssessment.ProfileContext)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_original_source_binding_mismatch",
+			"profile_mismatch_cannot_replay_same_decision",
+		)
+	})
+
+	t.Run("near perfect padded profile hash does not trim into a match", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		padded := " " + model.Manifest.ProfileContext.OriginalProfileHash
+		model.Manifest.ProfileContext.OriginalProfileHash = padded
+		model.Manifest.ProfileContext.CurrentProfileHash = padded
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.ManifestState != Point12Val0ManifestStateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected padded profile hash to fail raw-exact binding, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_identity_invalid",
+			"profile_manifest_context_identity_invalid",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+		)
+	})
+
+	t.Run("unicode confusable profile id fails closed", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		confusable := "profile_point12_replay_\u043eriginal_001"
+		model.Manifest.ProfileContext.OriginalProfileID = confusable
+		model.Manifest.ProfileContext.CurrentProfileID = confusable
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.ManifestState != Point12Val0ManifestStateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected confusable profile id to fail raw-exact binding, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_identity_invalid",
+			"profile_manifest_context_identity_invalid",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+		)
+	})
+
+	t.Run("missing original profile hash cannot replay same decision", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.OriginalProfileHash = ""
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMissingOriginal
+		model.Manifest.ProfileContext.ProfileMismatchReason = "profile_original_hash_missing"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected missing original profile hash to block same decision, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_identity_invalid",
+			"profile_manifest_context_identity_invalid",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+			"profile_mismatch_cannot_replay_same_decision",
+			"profile_original_hash_missing",
+			"profile_current_context_substitution_unclassified",
+			"profile_missing_original_status_invalid",
+		)
+	})
+
+	t.Run("missing current profile hash cannot replay same decision", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.CurrentProfileHash = ""
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMissingCurrent
+		model.Manifest.ProfileContext.ProfileMismatchReason = "profile_current_hash_missing"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected missing current profile hash to block same decision, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_identity_invalid",
+			"profile_manifest_context_identity_invalid",
+			"profile_context_original_source_binding_mismatch",
+			"profile_mismatch_cannot_replay_same_decision",
+			"profile_current_hash_missing",
+			"profile_current_context_substitution_unclassified",
+			"profile_missing_current_status_invalid",
+		)
+	})
+
+	t.Run("current profile substitution in original replay mode blocks", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.CurrentProfileID = "profile_point12_replay_current_002"
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.Manifest.ProfileContext.ProfileMismatchReason = "profile_current_context_substitution_attempt"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected current profile substitution to block, got %#v", model)
+		}
+		if model.ReplayAssessment.ProfileContext.ProfileMatchOriginal {
+			t.Fatalf("current profile substitution must not match original, got %#v", model.ReplayAssessment.ProfileContext)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_original_source_binding_mismatch",
+			"profile_mismatch_cannot_replay_same_decision",
+		)
+	})
+
+	t.Run("cross tenant profile reuse blocks", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.CurrentTenantScope = "tenant_scope_point12_beta"
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusBlocked
+		model.Manifest.ProfileContext.ProfileMismatchReason = "profile_tenant_mismatch"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected cross-tenant profile reuse to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_tenant_scope_binding_mismatch",
+			"profile_context_original_source_binding_mismatch",
+			"profile_mismatch_cannot_replay_same_decision",
+			"profile_non_pass_status_cannot_replay_same_decision",
+		)
+	})
+
+	t.Run("self consistent foreign profile tenant cannot bind to proof pack tenant", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.OriginalTenantScope = "tenant_scope_point12_beta"
+		model.Manifest.ProfileContext.CurrentTenantScope = "tenant_scope_point12_beta"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked ||
+			model.ManifestState != Point12Val0ManifestStateBlocked ||
+			model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected self-consistent foreign profile tenant to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_tenant_scope_binding_mismatch",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+		)
+	})
+
+	t.Run("coordinated tenant retag cannot replace original profile source", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.TenantScope = "tenant_scope_point12_beta"
+		model.Manifest.ProfileContext = point12Val0DefaultProfileContext(model.Manifest.TenantScope)
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked ||
+			model.ManifestState != Point12Val0ManifestStateBlocked ||
+			model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected coordinated tenant retag to block immutable original profile source, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model, "profile_context_original_source_binding_mismatch")
+	})
+
+	for _, testCase := range []struct {
+		name           string
+		approvalState  string
+		mismatchReason string
+		wantReason     string
+	}{
+		{
+			name:           "expired profile approval cannot support same decision replay",
+			approvalState:  Point12Val0ProfileApprovalStateExpired,
+			mismatchReason: "profile_approval_expired",
+			wantReason:     "profile_approval_expired_cannot_replay_same_decision",
+		},
+		{
+			name:           "revoked profile approval cannot support same decision replay",
+			approvalState:  Point12Val0ProfileApprovalStateRevoked,
+			mismatchReason: "profile_approval_revoked",
+			wantReason:     "profile_approval_revoked_cannot_replay_same_decision",
+		},
+		{
+			name:           "superseded profile approval cannot support same decision replay",
+			approvalState:  Point12Val0ProfileApprovalStateSuperseded,
+			mismatchReason: "profile_approval_superseded",
+			wantReason:     "profile_approval_superseded_cannot_replay_same_decision",
+		},
+		{
+			name:           "unsupported profile approval cannot support same decision replay",
+			approvalState:  Point12Val0ProfileApprovalStateUnsupported,
+			mismatchReason: "profile_approval_unsupported",
+			wantReason:     "profile_approval_unsupported_cannot_replay_same_decision",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			model := activePoint12Val0Foundation()
+			model.Manifest.ProfileContext.OriginalProfileApprovalState = testCase.approvalState
+			model.Manifest.ProfileContext.ProfileMatchOriginal = false
+			model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusBlocked
+			model.Manifest.ProfileContext.ProfileMismatchReason = testCase.mismatchReason
+			model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+			model.ReplayAssessment.ReplayResult = Point12Val0ReplayResultSameDecision
+			model = ComputePoint12Val0Foundation(model)
+			if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+				t.Fatalf("expected %s to block same decision replay, got %#v", testCase.approvalState, model)
+			}
+			requirePoint12Val0ReplayReason(t, model,
+				"profile_context_original_source_binding_mismatch",
+				"profile_mismatch_cannot_replay_same_decision",
+				"profile_current_context_substitution_unclassified",
+				"profile_non_pass_status_cannot_replay_same_decision",
+				testCase.wantReason,
+			)
+		})
+	}
+
+	t.Run("manifest and replay profile hash mismatch blocks sibling surface drift", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.OriginalProfileHash = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+		model = ComputePoint12Val0Foundation(model)
+		if model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected manifest/replay profile context drift to block replay assessment, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+			"profile_context_manifest_mismatch",
+		)
+	})
+
+	t.Run("manifest profile status drift blocks sibling surface drift", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusBlocked
+		model.Manifest.ProfileContext.ProfileMismatchReason = "profile_approval_revoked"
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected manifest/replay profile status drift to block replay assessment, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_original_source_binding_mismatch",
+			"profile_context_manifest_mismatch",
+		)
+	})
+
+	t.Run("manifest profile replay mode drift blocks sibling surface drift", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.ProfileReplayMode = Point12Val0ProfileReplayModeCurrentComparison
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected manifest/replay profile replay mode drift to block replay assessment, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_original_source_binding_mismatch",
+			"profile_context_manifest_mismatch",
+		)
+	})
+
+	t.Run("profile mismatch reason cannot carry point12 pass token", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.ProfileMismatchReason = "point_12_pass"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile mismatch reason pass token to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"replay_assessment_premature_pass_token",
+			"profile_context_identity_invalid",
+			"profile_manifest_context_identity_invalid",
+			"profile_context_original_source_binding_mismatch",
+			"profile_context_premature_point12_pass",
+		)
+	})
+
+	t.Run("profile approval ref cannot carry point12 pass token", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.ProfileApprovalRef = "profile_approval_point_12_pass"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile approval ref pass token to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"replay_assessment_premature_pass_token",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+			"profile_context_premature_point12_pass",
+		)
+	})
+
+	t.Run("profile signature ref cannot carry point12 pass token", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.ProfileSignatureRef = "profile_signature_point_12_pass"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile signature ref pass token to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"replay_assessment_premature_pass_token",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+			"profile_context_premature_point12_pass",
+		)
+	})
+
+	t.Run("profile identity ref cannot carry point12 pass token", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.OriginalProfileID = "profile_point_12_pass"
+		model.Manifest.ProfileContext.CurrentProfileID = "profile_point_12_pass"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile identity pass token to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"replay_assessment_premature_pass_token",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+			"profile_context_premature_point12_pass",
+		)
+	})
+
+	t.Run("profile version cannot carry point12 pass token", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.OriginalProfileVersion = "profile_version_point_12_pass"
+		model.Manifest.ProfileContext.CurrentProfileVersion = "profile_version_point_12_pass"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile version pass token to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"replay_assessment_premature_pass_token",
+			"profile_context_original_source_binding_mismatch",
+			"profile_approval_evidence_binding_invalid",
+			"profile_context_premature_point12_pass",
+		)
+	})
+
+	t.Run("profile mismatch reason cannot carry authority overclaim", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ProfileContext.ProfileMatchOriginal = false
+		model.Manifest.ProfileContext.ProfileBindingStatus = Point12Val0ProfileBindingStatusMismatch
+		model.Manifest.ProfileContext.ProfileMismatchReason = "production approved"
+		model.ReplayAssessment.ProfileContext = model.Manifest.ProfileContext
+		model = ComputePoint12Val0Foundation(model)
+		if model.CurrentState != Point12Val0StateBlocked || model.ReplayAssessmentState != Point12Val0ReplayAssessmentStateBlocked {
+			t.Fatalf("expected profile mismatch reason overclaim to block, got %#v", model)
+		}
+		requirePoint12Val0ReplayReason(t, model,
+			"profile_context_identity_invalid",
+			"profile_manifest_context_identity_invalid",
+			"profile_context_original_source_binding_mismatch",
+			"profile_context_overclaim_detected",
+			"profile_match_original_incorrect",
+		)
 	})
 }
 
@@ -1642,6 +2056,39 @@ func TestPoint12Val0PassTokenGuard(t *testing.T) {
 		model = ComputePoint12Val0Foundation(model)
 		if model.ManifestState != Point12Val0ManifestStateBlocked {
 			t.Fatalf("expected premature point12 pass proof to be rejected, got %#v", model)
+		}
+	})
+
+	t.Run("manifest artifact ref cannot carry point12 pass before final closure", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.ArtifactRef = "artifact_point_12_pass"
+		model = ComputePoint12Val0Foundation(model)
+		if model.ManifestState != Point12Val0ManifestStateBlocked || !point12Val0StringSliceContains(model.BlockingReasons, "manifest_blocked") {
+			t.Fatalf("expected premature point12 pass artifact ref to block manifest exactly, got %#v", model)
+		}
+	})
+
+	t.Run("manifest evidence refs cannot carry point12 pass before final closure", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.Manifest.EvidenceRefs[0] = "evidence:point_12_pass"
+		model = ComputePoint12Val0Foundation(model)
+		if model.ManifestState != Point12Val0ManifestStateBlocked || !point12Val0StringSliceContains(model.BlockingReasons, "manifest_blocked") {
+			t.Fatalf("expected premature point12 pass evidence ref to block manifest exactly, got %#v", model)
+		}
+	})
+
+	t.Run("replay assessment claim refs cannot carry point12 pass with exact reason", func(t *testing.T) {
+		model := activePoint12Val0Foundation()
+		model.ReplayAssessment.ClaimRefs[0] = "claim_point_12_pass"
+		state, reasons := point12Val0ReplayAssessmentStateAndReasons(
+			model.ReplayAssessment,
+			model.DeterminismContract,
+			model.CompatibilityProfile,
+			model.Manifest,
+			model.RedactionBoundary,
+		)
+		if state != Point12Val0ReplayAssessmentStateBlocked || !point12Val0StringSliceContains(reasons, "replay_assessment_premature_pass_token") {
+			t.Fatalf("expected premature point12 pass claim ref to block replay assessment, state=%s reasons=%#v", state, reasons)
 		}
 	})
 
