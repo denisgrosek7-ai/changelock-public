@@ -352,7 +352,7 @@ func point14ValDStates() []string {
 }
 
 func point14ValDStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValDStates(), value)
+	return point14ValDExactValueValid(value, point14ValDStates())
 }
 
 func point14ValDQueryScopes() []string {
@@ -533,7 +533,12 @@ func point14ValDObservedListContainsForbiddenWording(values []string) bool {
 }
 
 func point14ValDExactValueValid(value string, allowed []string) bool {
-	return point11Val0ContainsTrimmed(allowed, value)
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func point14ValDValCPayloadContainsPointPass(valC Point14ValCFoundation) bool {
@@ -757,7 +762,7 @@ func point14ValDTimelineProjectionModel(dependency Point14ValDDependencySnapshot
 
 func EvaluatePoint14ValDTimelineProjectionState(model ExternalEcosystemTimelineProjection) string {
 	if !point14ValDTimelineProjectionIDValid(model.TimelineProjectionID) ||
-		(len(strings.TrimSpace(model.TenantScope)) == 0 && len(strings.TrimSpace(model.GlobalScopeClassification)) == 0) ||
+		(model.TenantScope == "" && model.GlobalScopeClassification == "") ||
 		!point14ValDSourceProjectionRefsValid(model.SourceProjectionRefs) ||
 		!point14ValDSignalEntryRefsValid(model.SignalEntryRefs) ||
 		(len(model.DisputeEntryRefs) > 0 && !point14ValDDisputeEntryRefsValid(model.DisputeEntryRefs)) ||
@@ -770,10 +775,10 @@ func EvaluatePoint14ValDTimelineProjectionState(model ExternalEcosystemTimelineP
 		return Point14ValDStateBlocked
 	}
 	if model.TenantScope != "" {
-		if !point11Val0ScopeValid(model.TenantScope) || strings.TrimSpace(model.GlobalScopeClassification) != "" {
+		if !point11Val0ScopeValid(model.TenantScope) || model.GlobalScopeClassification != "" {
 			return Point14ValDStateBlocked
 		}
-	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	} else if !point14ValDExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValDStateBlocked
 	}
 	if model.MutatesCanonicalEvidence ||
@@ -827,7 +832,7 @@ func EvaluatePoint14ValDSignalTimelineEntryState(model ExternalSignalTimelineEnt
 	if !model.AdvisoryOnly || model.AuthorityGranted || model.UpgradesSignalValidity || model.SourceEventAsCanonicalAuthority {
 		return Point14ValDStateBlocked
 	}
-	switch strings.TrimSpace(model.TimelineState) {
+	switch model.TimelineState {
 	case point14ValDSignalEntryBlocked:
 		return Point14ValDStateBlocked
 	case point14ValDSignalEntryReviewRequired:
@@ -861,10 +866,10 @@ func EvaluatePoint14ValDDisputeTimelineProjectionState(model ExternalDisputeTime
 		!point14ValDExactValueValid(model.TimelineState, point14ValDDisputeTimelineStates()) {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) == point14Val0DisputeEvidenceNeeded && !point14Val0RefListValid(model.EvidenceRequirementRefs, "evidence_requirement_") {
+	if model.LifecycleState == point14Val0DisputeEvidenceNeeded && !point14Val0RefListValid(model.EvidenceRequirementRefs, "evidence_requirement_") {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) == point14Val0DisputeReviewRequired && len(model.GovernanceEscalationRefs) > 0 && !point14Val0RefListValid(model.GovernanceEscalationRefs, "escalation_") {
+	if model.LifecycleState == point14Val0DisputeReviewRequired && len(model.GovernanceEscalationRefs) > 0 && !point14Val0RefListValid(model.GovernanceEscalationRefs, "escalation_") {
 		return Point14ValDStateBlocked
 	}
 	if model.ResolvesDispute ||
@@ -875,10 +880,10 @@ func EvaluatePoint14ValDDisputeTimelineProjectionState(model ExternalDisputeTime
 		model.ConvertsReviewIncompleteToActive {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.LifecycleState) == point14Val0DisputeEvidenceNeeded && strings.TrimSpace(model.TimelineState) == point14ValDDisputeTimelineVisible {
+	if model.LifecycleState == point14Val0DisputeEvidenceNeeded && model.TimelineState == point14ValDDisputeTimelineVisible {
 		return Point14ValDStateIncomplete
 	}
-	switch strings.TrimSpace(model.TimelineState) {
+	switch model.TimelineState {
 	case point14ValDDisputeTimelineBlocked:
 		return Point14ValDStateBlocked
 	case point14ValDDisputeTimelineReview:
@@ -1044,7 +1049,7 @@ func point14ValDAccessBoundaryModel(dependency Point14ValDDependencySnapshot) Ec
 func EvaluatePoint14ValDAccessBoundaryState(model EcosystemTimelineAccessBoundary, dependency Point14ValDDependencySnapshot) string {
 	if !point14Val0BoundaryRefValid(model.AccessBoundaryID) ||
 		!point14ValDExactValueValid(model.ViewerRole, point14ValDViewerRoles()) ||
-		(strings.TrimSpace(model.TenantScope) == "" && strings.TrimSpace(model.GlobalScopeClassification) == "") ||
+		(model.TenantScope == "" && model.GlobalScopeClassification == "") ||
 		!point14ValDExactValueValid(model.AllowedViewScope, point14ValCVisibilityClassifications()) ||
 		!point14Val0AuditEventRefValid(model.AuditRef) ||
 		!point14Val0ParsedTimeOk(model.AccessTime) ||
@@ -1052,16 +1057,16 @@ func EvaluatePoint14ValDAccessBoundaryState(model EcosystemTimelineAccessBoundar
 		return Point14ValDStateBlocked
 	}
 	if model.TenantScope != "" {
-		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope || strings.TrimSpace(model.GlobalScopeClassification) != "" {
+		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope || model.GlobalScopeClassification != "" {
 			return Point14ValDStateBlocked
 		}
-	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	} else if !point14ValDExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValDStateBlocked
 	}
 	if model.AccessExpired || model.AccessRevoked || model.CrossTenantAccess || model.AuthorityGranted || model.TenantPrivateDataExposed {
 		return Point14ValDStateBlocked
 	}
-	if strings.TrimSpace(model.ViewerRole) == point14ValDViewerPublic && strings.TrimSpace(model.AllowedViewScope) == point14ValCVisibilityPrivateTenantOnly {
+	if model.ViewerRole == point14ValDViewerPublic && model.AllowedViewScope == point14ValCVisibilityPrivateTenantOnly {
 		return Point14ValDStateBlocked
 	}
 	return Point14ValDStateActive
@@ -1284,8 +1289,8 @@ func point14ValDNoOverclaimTimelineWordingModel() Point14ValDNoOverclaimTimeline
 
 func EvaluatePoint14ValDNoOverclaimTimelineWordingState(model Point14ValDNoOverclaimTimelineWording) string {
 	if model.ProjectionDisclaimer != point14ValDProjectionDisclaimerBase ||
-		!point14Val0TextListValid(model.AllowedSafeWording) ||
-		!point14Val0TextListValid(model.BlockedWording) {
+		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point14ValDSafeWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedWording, point14ValDForbiddenWording()) {
 		return Point14ValDStateBlocked
 	}
 	observedTexts := append([]string{}, model.ObservedTimelineTexts...)
@@ -1310,13 +1315,16 @@ func point14ValDFoundationState(states ...string) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValDStateBlocked:
 			return Point14ValDStateBlocked
 		case Point14ValDStateReviewRequired:
 			hasReview = true
 		case Point14ValDStateIncomplete:
 			hasIncomplete = true
+		case Point14ValDStateActive:
+		default:
+			return Point14ValDStateBlocked
 		}
 	}
 	if hasReview {

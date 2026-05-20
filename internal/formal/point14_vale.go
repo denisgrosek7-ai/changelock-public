@@ -577,6 +577,10 @@ func EvaluatePoint14ValEDependencyState(model Point14ValEDependencySnapshot) str
 		model.InheritedPoint10PassRuleState == "" ||
 		!point14ValDFoundationEmbeddedSnapshotCopiesExact(model.Point14ValD) ||
 		!point14ValDDependencyChainComputedActive(model.Point14ValD) ||
+		EvaluatePoint14ValDNoOverclaimTimelineWordingState(model.Point14ValD.NoOverclaimTimelineWording) != Point14ValDStateActive ||
+		EvaluatePoint14ValCNoOverclaimPublicationWordingState(model.Point14ValD.Dependency.Point14ValC.NoOverclaimPublicationWording) != Point14ValCStateActive ||
+		EvaluatePoint14ValBNoOverclaimDisputeWordingState(model.Point14ValD.Dependency.Point14ValB.NoOverclaimDisputeWording) != Point14ValBStateActive ||
+		EvaluatePoint14ValANoOverclaimValidationWordingState(model.Point14ValD.Dependency.Point14ValA.NoOverclaimValidationWording) != Point14ValAStateActive ||
 		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point11) ||
 		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point14ValC.Dependency.Point11) ||
 		!point14Val0Point11FoundationActive(model.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point11) ||
@@ -1189,19 +1193,22 @@ func point14ValEClosureEvaluatorModel() Point14ValEClosureEvaluator {
 
 func point14ValEComponentAggregate(states ...string) string {
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValEStateBlocked:
+			return Point14ValEStateBlocked
+		case Point14ValEStatePassConfirmed, Point14ValEStateReviewRequired, Point14ValEStateIncomplete:
+		default:
 			return Point14ValEStateBlocked
 		}
 	}
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValEStateReviewRequired:
 			return Point14ValEStateReviewRequired
 		}
 	}
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValEStateIncomplete:
 			return Point14ValEStateIncomplete
 		}

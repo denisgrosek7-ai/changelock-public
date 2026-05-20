@@ -293,8 +293,17 @@ func point14Val0States() []string {
 	}
 }
 
+func point14Val0RawValueInSet(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func point14Val0StateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14Val0States(), value)
+	return point14Val0RawValueInSet(value, point14Val0States())
 }
 
 func point14Val0SourceTypes() []string {
@@ -833,7 +842,7 @@ func point14Val0TextListValid(values []string) bool {
 }
 
 func point14Val0ExactValueValid(value string, allowed []string) bool {
-	return point11Val0ContainsTrimmed(allowed, value)
+	return point14Val0RawValueInSet(value, allowed)
 }
 
 func point14Val0TimeSourceValid(value string) bool {
@@ -1066,7 +1075,7 @@ func EvaluatePoint14Val0DependencyState(model Point14Val0DependencySnapshot) str
 		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
 		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
 		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
-		strings.TrimSpace(model.InheritedPoint11CurrentState) == "" ||
+		model.InheritedPoint11CurrentState == "" ||
 		!point14Val0Point11FoundationActive(model.Point11) ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point14Val0StateBlocked
@@ -1216,7 +1225,7 @@ func EvaluatePoint14Val0ExternalSignalCandidateState(model ExternalEcosystemSign
 	if model.RequireProvenance && !point14Val0ProvenanceRefValid(model.ProvenanceRef) {
 		return Point14Val0StateBlocked
 	}
-	if strings.TrimSpace(model.CustodyRef) != "" && !point14Val0CustodyRefValid(model.CustodyRef) {
+	if model.CustodyRef != "" && !point14Val0CustodyRefValid(model.CustodyRef) {
 		return Point14Val0StateBlocked
 	}
 	if model.SignalIdentityKey != point14Val0SignalIdentityKey(model) ||
@@ -1233,13 +1242,13 @@ func EvaluatePoint14Val0ExternalSignalCandidateState(model ExternalEcosystemSign
 	if strings.TrimSpace(model.ValidatedAt) != "" {
 		validatedAt, ok := point14Val0ParsedTime(model.ValidatedAt)
 		receivedAt, okReceived := point14Val0ParsedTime(model.ReceivedAt)
-		if !ok || !okReceived || strings.TrimSpace(model.ValidationStatus) != point14Val0ValidationValidated || validatedAt.Before(receivedAt) {
+		if !ok || !okReceived || model.ValidationStatus != point14Val0ValidationValidated || validatedAt.Before(receivedAt) {
 			return Point14Val0StateBlocked
 		}
-	} else if strings.TrimSpace(model.ValidationStatus) == point14Val0ValidationValidated {
+	} else if model.ValidationStatus == point14Val0ValidationValidated {
 		return Point14Val0StateIncomplete
 	}
-	switch strings.TrimSpace(model.ValidationStatus) {
+	switch model.ValidationStatus {
 	case point14Val0ValidationSuperseded:
 		if !point14Val0SignalIDValid(model.SupersededByRef) {
 			return Point14Val0StateBlocked
@@ -1300,7 +1309,7 @@ func EvaluatePoint14Val0ExternalStakeholderAuthorityRoleState(model ExternalStak
 	}
 	for _, action := range model.AllowedActionRefs {
 		if !point14Val0ExactValueValid(action, point14Val0BoundedRoleActions()) ||
-			point11Val0ContainsTrimmed(point14Val0ForbiddenRoleActions(), action) {
+			point14Val0ExactValueValid(action, point14Val0ForbiddenRoleActions()) {
 			return Point14Val0StateBlocked
 		}
 	}
@@ -1331,15 +1340,15 @@ func EvaluatePoint14Val0ExternalAuthorityConflictMatrixState(model ExternalAutho
 		return Point14Val0StateBlocked
 	}
 	if !model.ConflictPresent {
-		if strings.TrimSpace(model.ConflictType) != "" ||
+		if model.ConflictType != "" ||
 			len(model.SignalRefs) > 0 ||
 			len(model.RoleRefs) > 0 ||
 			len(model.AffectedArtifactRefs) > 0 ||
 			len(model.AffectedClaimRefs) > 0 ||
 			len(model.AffectedEvidenceRefs) > 0 ||
-			strings.TrimSpace(model.GovernancePath) != "" ||
+			model.GovernancePath != "" ||
 			model.ResolvedByGovernance ||
-			strings.TrimSpace(model.GovernanceResolutionEventRef) != "" ||
+			model.GovernanceResolutionEventRef != "" ||
 			model.ConsensusResolutionRequested ||
 			model.SilentActiveResolutionRequested {
 			return Point14Val0StateBlocked
@@ -1638,8 +1647,8 @@ func point14Val0NoOverclaimEcosystemWordingModel() Point14Val0NoOverclaimEcosyst
 
 func EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model Point14Val0NoOverclaimEcosystemWording) string {
 	if model.ProjectionDisclaimer != point14Val0ProjectionDisclaimerBase ||
-		!point14Val0TextListValid(model.AllowedSafeWording) ||
-		!point14Val0TextListValid(model.BlockedWording) {
+		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point14Val0SafeWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedWording, point14Val0ForbiddenWording()) {
 		return Point14Val0StateBlocked
 	}
 	observedTexts := append([]string{}, model.ObservedSignalTexts...)
@@ -1661,13 +1670,17 @@ func point14Val0FoundationState(states ...string) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14Val0StateBlocked:
 			return Point14Val0StateBlocked
 		case Point14Val0StateReviewRequired:
 			hasReview = true
 		case Point14Val0StateIncomplete:
 			hasIncomplete = true
+		case Point14Val0StateActive:
+			continue
+		default:
+			return Point14Val0StateBlocked
 		}
 	}
 	if hasReview {

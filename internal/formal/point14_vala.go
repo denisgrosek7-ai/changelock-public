@@ -299,8 +299,17 @@ func point14ValAStates() []string {
 	}
 }
 
+func point14ValARawValueInSet(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func point14ValAStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValAStates(), value)
+	return point14ValARawValueInSet(value, point14ValAStates())
 }
 
 func point14ValAValidationStates() []string {
@@ -318,7 +327,7 @@ func point14ValAValidationStates() []string {
 }
 
 func point14ValAValidationStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValAValidationStates(), value)
+	return point14ValARawValueInSet(value, point14ValAValidationStates())
 }
 
 func point14ValAEvidenceStates() []string {
@@ -333,7 +342,7 @@ func point14ValAEvidenceStates() []string {
 }
 
 func point14ValAEvidenceStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValAEvidenceStates(), value)
+	return point14ValARawValueInSet(value, point14ValAEvidenceStates())
 }
 
 func point14ValASourceAuthorityScopes() []string {
@@ -345,7 +354,7 @@ func point14ValASourceAuthorityScopes() []string {
 }
 
 func point14ValASourceAuthorityScopeValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValASourceAuthorityScopes(), value)
+	return point14ValARawValueInSet(value, point14ValASourceAuthorityScopes())
 }
 
 func point14ValAForbiddenAuthorityMarkers() []string {
@@ -410,7 +419,7 @@ func point14ValATenantGuardIDValid(value string) bool {
 }
 
 func point14ValAValidationStateClassification(value string) (string, bool, bool) {
-	switch strings.TrimSpace(value) {
+	switch value {
 	case point14ValAValidationCandidateBlocked,
 		point14ValAValidationCandidateUnsupported,
 		point14ValAValidationCandidateTampered,
@@ -430,9 +439,8 @@ func point14ValAValidationStateClassification(value string) (string, bool, bool)
 }
 
 func point14ValAResolvedValidationState(current, aggregate string) string {
-	current = strings.TrimSpace(current)
 	currentState, blockedLike, recognized := point14ValAValidationStateClassification(current)
-	resolvedAggregate := point14ValAFoundationState(currentState, strings.TrimSpace(aggregate))
+	resolvedAggregate := point14ValAFoundationState(currentState, aggregate)
 	switch resolvedAggregate {
 	case Point14ValAStateBlocked:
 		if recognized && blockedLike {
@@ -671,17 +679,17 @@ func EvaluatePoint14ValANormalizedExternalSignalState(model NormalizedExternalSi
 		!model.PayloadNormalized {
 		return Point14ValAStateBlocked
 	}
-	if model.TenantScope == "" && strings.TrimSpace(model.GlobalScopeClassification) == "" {
+	if model.TenantScope == "" && model.GlobalScopeClassification == "" {
 		return Point14ValAStateBlocked
 	}
 	if model.TenantScope != "" {
 		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope {
 			return Point14ValAStateBlocked
 		}
-		if strings.TrimSpace(model.GlobalScopeClassification) != "" {
+		if model.GlobalScopeClassification != "" {
 			return Point14ValAStateBlocked
 		}
-	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	} else if !point14Val0ExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValAStateBlocked
 	}
 	if model.ArtifactScoped && !point14Val0RefListValid(model.ArtifactRefs, "artifact_") {
@@ -700,7 +708,7 @@ func EvaluatePoint14ValANormalizedExternalSignalState(model NormalizedExternalSi
 		model.PublicBadgeAllowed {
 		return Point14ValAStateBlocked
 	}
-	switch strings.TrimSpace(model.ValidationStatus) {
+	switch model.ValidationStatus {
 	case point14Val0ValidationProvenancePending, point14Val0ValidationConflicting:
 		return Point14ValAStateReviewRequired
 	case point14Val0ValidationRevoked, point14Val0ValidationSuperseded, point14Val0ValidationRejected:
@@ -781,15 +789,15 @@ func EvaluatePoint14ValAExternalSignalScopeBindingState(model ExternalSignalScop
 		!point14Val0ExactValueValid(model.ScopeClassification, point14Val0ScopeClassifications()) {
 		return Point14ValAStateBlocked
 	}
-	if strings.TrimSpace(model.ScopeClassification) == point14Val0ScopeTenantScoped {
+	if model.ScopeClassification == point14Val0ScopeTenantScoped {
 		if !point11Val0ScopeValid(model.TenantScope) ||
 			model.TenantScope != dependency.InheritedTenantScope ||
-			strings.TrimSpace(model.GlobalScopeClassification) != "" {
+			model.GlobalScopeClassification != "" {
 			return Point14ValAStateBlocked
 		}
 	} else {
-		if strings.TrimSpace(model.TenantScope) != "" ||
-			!point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+		if model.TenantScope != "" ||
+			!point14Val0ExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 			return Point14ValAStateBlocked
 		}
 	}
@@ -851,7 +859,7 @@ func EvaluatePoint14ValAExternalSignalEvidenceBindingState(model ExternalSignalE
 	if model.CanonicalMutationAllowed {
 		return Point14ValAStateBlocked
 	}
-	switch strings.TrimSpace(model.EvidenceState) {
+	switch model.EvidenceState {
 	case point14ValAEvidenceStateStale, point14ValAEvidenceStateSuperseded:
 		return Point14ValAStateReviewRequired
 	case point14ValAEvidenceStateRevoked, point14ValAEvidenceStateExpired, point14ValAEvidenceStateUnrelated:
@@ -983,7 +991,7 @@ func EvaluatePoint14ValAExternalSignalTenantBoundaryGuardState(model ExternalSig
 		model.TenantPrivateDataExposed {
 		return Point14ValAStateBlocked
 	}
-	if strings.TrimSpace(model.ScopeClassification) == point14Val0ScopeTenantScoped {
+	if model.ScopeClassification == point14Val0ScopeTenantScoped {
 		if !point11Val0ScopeValid(model.TenantScope) ||
 			model.SourceTenantScope != model.TenantScope ||
 			model.ArtifactTenantScope != model.TenantScope ||
@@ -993,13 +1001,13 @@ func EvaluatePoint14ValAExternalSignalTenantBoundaryGuardState(model ExternalSig
 		}
 		return Point14ValAStateActive
 	}
-	if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.ScopeClassification) {
+	if !point14Val0ExactValueValid(model.ScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValAStateBlocked
 	}
 	if !model.ExplicitBoundedRuleExists &&
-		(strings.TrimSpace(model.ArtifactTenantScope) != "" ||
-			strings.TrimSpace(model.ClaimTenantScope) != "" ||
-			strings.TrimSpace(model.EvidenceTenantScope) != "") {
+		(model.ArtifactTenantScope != "" ||
+			model.ClaimTenantScope != "" ||
+			model.EvidenceTenantScope != "") {
 		return Point14ValAStateBlocked
 	}
 	return Point14ValAStateActive
@@ -1065,18 +1073,18 @@ func EvaluatePoint14ValAExternalSignalValidationResultState(model ExternalSignal
 		return Point14ValAStateBlocked
 	}
 	if componentAggregate == Point14ValAStateReviewRequired {
-		if strings.TrimSpace(model.ValidationState) == point14ValAValidationCandidateValidated {
+		if model.ValidationState == point14ValAValidationCandidateValidated {
 			return Point14ValAStateBlocked
 		}
 		return Point14ValAStateReviewRequired
 	}
 	if componentAggregate == Point14ValAStateIncomplete {
-		if strings.TrimSpace(model.ValidationState) == point14ValAValidationCandidateValidated {
+		if model.ValidationState == point14ValAValidationCandidateValidated {
 			return Point14ValAStateBlocked
 		}
 		return Point14ValAStateIncomplete
 	}
-	switch strings.TrimSpace(model.ValidationState) {
+	switch model.ValidationState {
 	case point14ValAValidationCandidateBlocked,
 		point14ValAValidationCandidateUnsupported,
 		point14ValAValidationCandidateTampered,
@@ -1128,8 +1136,8 @@ func point14ValANoOverclaimValidationWordingModel() Point14ValANoOverclaimValida
 
 func EvaluatePoint14ValANoOverclaimValidationWordingState(model Point14ValANoOverclaimValidationWording) string {
 	if model.ProjectionDisclaimer != point14ValAProjectionDisclaimerBase ||
-		!point14Val0TextListValid(model.AllowedSafeWording) ||
-		!point14Val0TextListValid(model.BlockedWording) {
+		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point14ValASafeWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedWording, point14Val0ForbiddenWording()) {
 		return Point14ValAStateBlocked
 	}
 	observedTexts := append([]string{}, model.ObservedNormalizationTexts...)
@@ -1150,13 +1158,16 @@ func point14ValAFoundationState(states ...string) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValAStateBlocked:
 			return Point14ValAStateBlocked
 		case Point14ValAStateReviewRequired:
 			hasReview = true
 		case Point14ValAStateIncomplete:
 			hasIncomplete = true
+		case Point14ValAStateActive:
+		default:
+			return Point14ValAStateBlocked
 		}
 	}
 	if hasReview {
@@ -1288,7 +1299,7 @@ func ComputePoint14ValAFoundation(model Point14ValAFoundation) Point14ValAFounda
 			model.NoOverclaimState,
 		),
 	)
-	model.ValidationResult.CandidateUsable = strings.TrimSpace(model.ValidationResult.ValidationState) == point14ValAValidationCandidateValidated
+	model.ValidationResult.CandidateUsable = model.ValidationResult.ValidationState == point14ValAValidationCandidateValidated
 	model.ValidationResultState = EvaluatePoint14ValAExternalSignalValidationResultState(model.ValidationResult)
 
 	model.CurrentState = point14ValAFoundationState(

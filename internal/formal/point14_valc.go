@@ -332,8 +332,17 @@ func point14ValCStates() []string {
 	}
 }
 
+func point14ValCRawValueInSet(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func point14ValCStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValCStates(), value)
+	return point14ValCRawValueInSet(value, point14ValCStates())
 }
 
 func point14ValCCorrectionStates() []string {
@@ -404,15 +413,15 @@ func point14ValCApprovalScopes() []string {
 }
 
 func point14ValCPublicationBoundaryPairValid(scope, boundary string) bool {
-	switch strings.TrimSpace(scope) {
+	switch scope {
 	case point14ValCVisibilityPrivateTenantOnly:
-		return strings.TrimSpace(boundary) == point14ValCPublicationBoundaryPrivate
+		return boundary == point14ValCPublicationBoundaryPrivate
 	case point14ValCVisibilityCustomerBounded:
-		return strings.TrimSpace(boundary) == point14ValCPublicationBoundaryCustomer
+		return boundary == point14ValCPublicationBoundaryCustomer
 	case point14ValCVisibilityAuditorBounded:
-		return strings.TrimSpace(boundary) == point14ValCPublicationBoundaryAuditor
+		return boundary == point14ValCPublicationBoundaryAuditor
 	case point14ValCVisibilityPublicBounded:
-		return strings.TrimSpace(boundary) == point14ValCPublicationBoundaryPublic
+		return boundary == point14ValCPublicationBoundaryPublic
 	default:
 		return false
 	}
@@ -511,7 +520,7 @@ func point14ValCCorrectedSignalRefsValid(values []string) bool {
 }
 
 func point14ValCExactValueValid(value string, allowed []string) bool {
-	return point11Val0ContainsTrimmed(allowed, value)
+	return point14ValCRawValueInSet(value, allowed)
 }
 
 func point14ValCDependencySnapshotFromUpstream(valB Point14ValBFoundation) Point14ValCDependencySnapshot {
@@ -746,7 +755,7 @@ func EvaluatePoint14ValCCorrectionNoticeBoundaryState(model ExternalCorrectionNo
 		model.StrengthensClaim {
 		return Point14ValCStateBlocked
 	}
-	switch strings.TrimSpace(model.CorrectionState) {
+	switch model.CorrectionState {
 	case point14ValCCorrectionBlocked:
 		return Point14ValCStateBlocked
 	case point14ValCCorrectionReviewRequired, point14ValCCorrectionDraft:
@@ -791,17 +800,17 @@ func EvaluatePoint14ValCRevocationRequestBoundaryState(model ExternalRevocationR
 	if model.CanonicalMutationRequested || model.ExternalAuthorityGranted || model.PublicBadgeAllowed || model.PassAllowed {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.RevocationState) == point14ValCRevocationApprovedGovernance &&
+	if model.RevocationState == point14ValCRevocationApprovedGovernance &&
 		!point14Val0GovernanceEventRefValid(model.GovernanceEventRef) {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.RevocationState) == point14ValCRevocationBlocked {
+	if model.RevocationState == point14ValCRevocationBlocked {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.RevocationState) == point14ValCRevocationReviewRequired {
+	if model.RevocationState == point14ValCRevocationReviewRequired {
 		return Point14ValCStateReviewRequired
 	}
-	if strings.TrimSpace(model.RevocationState) == point14ValCRevocationEvidenceRequired {
+	if model.RevocationState == point14ValCRevocationEvidenceRequired {
 		return Point14ValCStateIncomplete
 	}
 	return Point14ValCStateActive
@@ -836,7 +845,7 @@ func EvaluatePoint14ValCSupersessionRecordBoundaryState(model ExternalSupersessi
 	if model.SilentReplacement || model.HidesPreviousEvidence || model.DeletesHistory || model.ReplacementHashRecomputed {
 		return Point14ValCStateBlocked
 	}
-	switch strings.TrimSpace(model.SupersessionState) {
+	switch model.SupersessionState {
 	case point14ValCSupersessionBlocked:
 		return Point14ValCStateBlocked
 	case point14ValCSupersessionReviewRequired:
@@ -915,7 +924,7 @@ func EvaluatePoint14ValCPublicationApprovalBoundaryState(model ExternalPublicati
 		model.GlobalTruthRequested {
 		return Point14ValCStateBlocked
 	}
-	switch strings.TrimSpace(model.PublicationState) {
+	switch model.PublicationState {
 	case point14ValCPublicationBlocked:
 		return Point14ValCStateBlocked
 	case point14ValCPublicationReviewRequired:
@@ -944,32 +953,32 @@ func EvaluatePoint14ValCPublicationVisibilityBoundaryState(model ExternalPublica
 		!point14ValCPublicationBoundaryPairValid(model.VisibilityClassification, model.PublicPrivateBoundary) {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" && strings.TrimSpace(model.GlobalScopeClassification) == "" {
+	if model.TenantScope == "" && model.GlobalScopeClassification == "" {
 		return Point14ValCStateBlocked
 	}
 	if model.TenantScope != "" {
 		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope {
 			return Point14ValCStateBlocked
 		}
-		if strings.TrimSpace(model.GlobalScopeClassification) != "" {
+		if model.GlobalScopeClassification != "" {
 			return Point14ValCStateBlocked
 		}
-	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	} else if !point14ValCExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValCStateBlocked
 	}
 	if model.TenantPrivateDataExposed || model.StrengthensClaim || model.ImpliesPublicAuthority || model.MeaningChangingPrivateLimitationOmitted {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.VisibilityClassification) == point14ValCVisibilityBlocked {
+	if model.VisibilityClassification == point14ValCVisibilityBlocked {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.VisibilityClassification) == point14ValCVisibilityPublicBounded {
+	if model.VisibilityClassification == point14ValCVisibilityPublicBounded {
 		if !point14ValCLimitationRefsValid(model.LimitationRefs) || !point14ValCRedactionRefsValid(model.RedactionRefs) {
 			return Point14ValCStateBlocked
 		}
 	}
-	if strings.TrimSpace(model.VisibilityClassification) == point14ValCVisibilityCustomerBounded ||
-		strings.TrimSpace(model.VisibilityClassification) == point14ValCVisibilityAuditorBounded {
+	if model.VisibilityClassification == point14ValCVisibilityCustomerBounded ||
+		model.VisibilityClassification == point14ValCVisibilityAuditorBounded {
 		if !point14ValCLimitationRefsValid(model.LimitationRefs) {
 			return Point14ValCStateBlocked
 		}
@@ -1003,11 +1012,11 @@ func EvaluatePoint14ValCTenantPrivacyPublicationGuardState(model TenantPrivacyPu
 	if model.TenantPrivateDataExposed || model.CrossTenantPublication || !model.LimitationsVisible {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.GlobalScopeClassification) != "" &&
-		!point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	if model.GlobalScopeClassification != "" &&
+		!point14ValCExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValCStateBlocked
 	}
-	if strings.TrimSpace(model.PublicationTargetScope) == point14ValCVisibilityPublicBounded && len(model.RedactionRefs) == 0 {
+	if model.PublicationTargetScope == point14ValCVisibilityPublicBounded && len(model.RedactionRefs) == 0 {
 		return Point14ValCStateBlocked
 	}
 	return Point14ValCStateActive
@@ -1040,9 +1049,9 @@ func EvaluatePoint14ValCCorrectionRedactionLimitationGuardState(model Correction
 	if model.DecisiveMissingEvidenceHidden || model.RedactionStrengthensClaim || model.LimitationOmitted || model.SurvivingTextMisleading {
 		return Point14ValCStateBlocked
 	}
-	if (strings.TrimSpace(model.SourcePublicationState) == Point14ValCStateReviewRequired ||
-		strings.TrimSpace(model.SourcePublicationState) == Point14ValCStateIncomplete) &&
-		strings.TrimSpace(model.ResolvedPublicationState) == Point14ValCStateActive {
+	if (model.SourcePublicationState == Point14ValCStateReviewRequired ||
+		model.SourcePublicationState == Point14ValCStateIncomplete) &&
+		model.ResolvedPublicationState == Point14ValCStateActive {
 		return Point14ValCStateBlocked
 	}
 	return Point14ValCStateActive
@@ -1174,8 +1183,8 @@ func point14ValCNoOverclaimPublicationWordingModel() Point14ValCNoOverclaimPubli
 
 func EvaluatePoint14ValCNoOverclaimPublicationWordingState(model Point14ValCNoOverclaimPublicationWording) string {
 	if model.ProjectionDisclaimer != point14ValCPublicationDisclaimerBase ||
-		!point14Val0TextListValid(model.AllowedSafeWording) ||
-		!point14Val0TextListValid(model.BlockedWording) {
+		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point14ValCSafeWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedWording, point14ValCForbiddenWording()) {
 		return Point14ValCStateBlocked
 	}
 	observedTexts := append([]string{}, model.ObservedCorrectionTexts...)
@@ -1199,13 +1208,16 @@ func point14ValCFoundationState(states ...string) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValCStateBlocked:
 			return Point14ValCStateBlocked
 		case Point14ValCStateReviewRequired:
 			hasReview = true
 		case Point14ValCStateIncomplete:
 			hasIncomplete = true
+		case Point14ValCStateActive:
+		default:
+			return Point14ValCStateBlocked
 		}
 	}
 	if hasReview {

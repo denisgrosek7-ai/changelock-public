@@ -264,6 +264,10 @@ func TestPoint14ValDTimelineProjectionState(t *testing.T) {
 		{"timeline revocation execution flag blocks", func(model *ExternalEcosystemTimelineProjection) { model.RevokesClaim = true }, Point14ValDStateBlocked},
 		{"timeline public badge flag blocks", func(model *ExternalEcosystemTimelineProjection) { model.CreatesPublicBadge = true }, Point14ValDStateBlocked},
 		{"timeline pass flag blocks", func(model *ExternalEcosystemTimelineProjection) { model.EmitsPass = true }, Point14ValDStateBlocked},
+		{"whitespace retagged timeline global scope blocks raw exact", func(model *ExternalEcosystemTimelineProjection) {
+			model.TenantScope = ""
+			model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
+		}, Point14ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -294,6 +298,9 @@ func TestPoint14ValDSignalTimelineEntryState(t *testing.T) {
 		{"authority granted true blocks", func(model *ExternalSignalTimelineEntryProjection) { model.AuthorityGranted = true }, Point14ValDStateBlocked},
 		{"signal validity upgrade flag blocks", func(model *ExternalSignalTimelineEntryProjection) { model.UpgradesSignalValidity = true }, Point14ValDStateBlocked},
 		{"event after received review required", func(model *ExternalSignalTimelineEntryProjection) { model.EventAt = "2026-05-06T09:02:00Z" }, Point14ValDStateReviewRequired},
+		{"whitespace retagged visible timeline state blocks raw exact", func(model *ExternalSignalTimelineEntryProjection) {
+			model.TimelineState = point14ValDSignalEntryVisible + " "
+		}, Point14ValDStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -317,6 +324,12 @@ func TestPoint14ValDDisputeTimelineProjectionState(t *testing.T) {
 		{"missing conflict set ref blocks", func(model *ExternalDisputeTimelineProjection) { model.ConflictSetRef = "" }, Point14ValDStateBlocked},
 		{"missing triage result ref blocks", func(model *ExternalDisputeTimelineProjection) { model.TriageResultRef = "" }, Point14ValDStateBlocked},
 		{"missing lifecycle state blocks", func(model *ExternalDisputeTimelineProjection) { model.LifecycleState = "" }, Point14ValDStateBlocked},
+		{"whitespace retagged lifecycle state blocks raw exact", func(model *ExternalDisputeTimelineProjection) {
+			model.LifecycleState = point14Val0DisputeTriaged + " "
+		}, Point14ValDStateBlocked},
+		{"tab newline retagged timeline state blocks raw exact", func(model *ExternalDisputeTimelineProjection) {
+			model.TimelineState = "\t" + point14ValDDisputeTimelineVisible + "\n"
+		}, Point14ValDStateBlocked},
 		{"evidence required state remains visible", func(model *ExternalDisputeTimelineProjection) {
 			model.LifecycleState = point14Val0DisputeEvidenceNeeded
 			model.TimelineState = point14ValDDisputeTimelineVisible
@@ -489,6 +502,13 @@ func TestPoint14ValDAccessBoundaryState(t *testing.T) {
 			model.ViewerRole = "customer_admin"
 			model.AllowedViewScope = point14ValCVisibilityCustomerBounded
 			model.TenantPrivateDataExposed = true
+		}, Point14ValDStateBlocked},
+		{"whitespace retagged access global scope blocks raw exact", func(model *EcosystemTimelineAccessBoundary) {
+			model.TenantScope = ""
+			model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
+		}, Point14ValDStateBlocked},
+		{"whitespace retagged viewer role blocks raw exact", func(model *EcosystemTimelineAccessBoundary) {
+			model.ViewerRole += " "
 		}, Point14ValDStateBlocked},
 	}
 	for _, tc := range tests {
@@ -666,6 +686,20 @@ func TestPoint14ValDNoOverclaimTimelineWordingState(t *testing.T) {
 			t.Fatalf("expected active, got %s", got)
 		}
 	})
+	t.Run("mutated allowed safe wording blocks", func(t *testing.T) {
+		model := point14ValDNoOverclaimTimelineWordingModel()
+		model.AllowedSafeWording = append(model.AllowedSafeWording, "timeline proves truth")
+		if got := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model); got != Point14ValDStateBlocked {
+			t.Fatalf("expected blocked mutated allowed wording, got %s", got)
+		}
+	})
+	t.Run("mutated blocked wording blocks", func(t *testing.T) {
+		model := point14ValDNoOverclaimTimelineWordingModel()
+		model.BlockedWording = append(model.BlockedWording[:len(model.BlockedWording)-1], "replacement")
+		if got := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model); got != Point14ValDStateBlocked {
+			t.Fatalf("expected blocked mutated blocked wording, got %s", got)
+		}
+	})
 
 	t.Run("forbidden wording allowed only in internal blocked diagnostic context", func(t *testing.T) {
 		model := point14ValDNoOverclaimTimelineWordingModel()
@@ -741,6 +775,12 @@ func TestPoint14ValDStateAggregation(t *testing.T) {
 			model.NoOverclaimTimelineWordingState,
 		); got != Point14ValDStateIncomplete {
 			t.Fatalf("expected incomplete, got %s", got)
+		}
+	})
+
+	t.Run("whitespace retagged active component fails closed", func(t *testing.T) {
+		if got := point14ValDFoundationState(Point14ValDStateActive + " "); got != Point14ValDStateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged aggregate state, got %s", got)
 		}
 	})
 

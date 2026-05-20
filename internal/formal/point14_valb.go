@@ -305,7 +305,7 @@ func point14ValBStates() []string {
 }
 
 func point14ValBStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point14ValBStates(), value)
+	return point14ValBExactValueValid(value, point14ValBStates())
 }
 
 func point14ValBConflictTypes() []string {
@@ -466,7 +466,12 @@ func point14ValBLimitationRefsValid(values []string) bool {
 }
 
 func point14ValBExactValueValid(value string, allowed []string) bool {
-	return point11Val0ContainsTrimmed(allowed, value)
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func point14ValBEvidenceTypesValid(values []string) bool {
@@ -482,7 +487,7 @@ func point14ValBEvidenceTypesValid(values []string) bool {
 }
 
 func point14ValBTriageStateClassification(value string) (string, bool, bool) {
-	switch strings.TrimSpace(value) {
+	switch value {
 	case point14ValBTriageBlocked,
 		point14ValBTriageUnsupported,
 		point14ValBTriageCrossTenant,
@@ -501,9 +506,8 @@ func point14ValBTriageStateClassification(value string) (string, bool, bool) {
 }
 
 func point14ValBResolvedTriageState(current, aggregate string) string {
-	current = strings.TrimSpace(current)
 	currentState, blockedLike, recognized := point14ValBTriageStateClassification(current)
-	resolvedAggregate := point14ValBFoundationState(currentState, strings.TrimSpace(aggregate))
+	resolvedAggregate := point14ValBFoundationState(currentState, aggregate)
 	switch resolvedAggregate {
 	case Point14ValBStateBlocked:
 		if recognized && blockedLike {
@@ -526,6 +530,15 @@ func point14ValBResolvedTriageState(current, aggregate string) string {
 		}
 		return point14ValBTriageBlocked
 	}
+}
+
+func point14ValBTriageStateValid(value string) bool {
+	for _, allowed := range point14ValBTriageStates() {
+		if value == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func point14ValBDependencySnapshotFromUpstream(valA Point14ValAFoundation) Point14ValBDependencySnapshot {
@@ -803,17 +816,17 @@ func EvaluatePoint14ValBExternalSignalConflictSetState(model ExternalSignalConfl
 		!point14ValBCanonicalContextRefValid(model.CanonicalContextRef) {
 		return Point14ValBStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" && strings.TrimSpace(model.GlobalScopeClassification) == "" {
+	if model.TenantScope == "" && model.GlobalScopeClassification == "" {
 		return Point14ValBStateBlocked
 	}
 	if model.TenantScope != "" {
 		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope {
 			return Point14ValBStateBlocked
 		}
-		if strings.TrimSpace(model.GlobalScopeClassification) != "" {
+		if model.GlobalScopeClassification != "" {
 			return Point14ValBStateBlocked
 		}
-	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	} else if !point14Val0ExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValBStateBlocked
 	}
 	if model.ArtifactScoped && !point14Val0RefListValid(model.AffectedArtifactRefs, "artifact_") {
@@ -833,7 +846,7 @@ func EvaluatePoint14ValBExternalSignalConflictSetState(model ExternalSignalConfl
 	if !model.ConflictDetected {
 		return Point14ValBStateActive
 	}
-	switch strings.TrimSpace(model.ConflictType) {
+	switch model.ConflictType {
 	case "cross_tenant_signal_conflict":
 		return Point14ValBStateBlocked
 	case "scanner_vs_vex",
@@ -886,7 +899,7 @@ func EvaluatePoint14ValBStakeholderSignalComparisonState(model StakeholderSignal
 		model.CrowdConsensusResolutionRequested {
 		return Point14ValBStateBlocked
 	}
-	switch strings.TrimSpace(model.ComparisonResult) {
+	switch model.ComparisonResult {
 	case "consistent":
 		return Point14ValBStateActive
 	case "conflicting", "insufficient_context", "stale_signal", "review_required":
@@ -930,7 +943,7 @@ func EvaluatePoint14ValBExternalConflictTriageResultState(model ExternalConflict
 		!point14ValBStateValid(model.AgentBoundaryState) ||
 		!point14ValBStateValid(model.NoExternalAuthorityState) ||
 		!point14ValBStateValid(model.NoOverclaimState) ||
-		!point14ValBExactValueValid(model.TriageState, point14ValBTriageStates()) {
+		!point14ValBTriageStateValid(model.TriageState) {
 		return Point14ValBStateBlocked
 	}
 	if model.EmitsPass ||
@@ -957,18 +970,18 @@ func EvaluatePoint14ValBExternalConflictTriageResultState(model ExternalConflict
 		return Point14ValBStateBlocked
 	}
 	if componentAggregate == Point14ValBStateReviewRequired {
-		if strings.TrimSpace(model.TriageState) == point14ValBTriageNoConflictDetected || strings.TrimSpace(model.TriageState) == point14ValBTriageEvidenceRequired {
+		if model.TriageState == point14ValBTriageNoConflictDetected || model.TriageState == point14ValBTriageEvidenceRequired {
 			return Point14ValBStateBlocked
 		}
 		return Point14ValBStateReviewRequired
 	}
 	if componentAggregate == Point14ValBStateIncomplete {
-		if strings.TrimSpace(model.TriageState) == point14ValBTriageNoConflictDetected {
+		if model.TriageState == point14ValBTriageNoConflictDetected {
 			return Point14ValBStateBlocked
 		}
 		return Point14ValBStateIncomplete
 	}
-	switch strings.TrimSpace(model.TriageState) {
+	switch model.TriageState {
 	case point14ValBTriageBlocked, point14ValBTriageUnsupported, point14ValBTriageCrossTenant, point14ValBTriagePrivacyBlocked:
 		return Point14ValBStateBlocked
 	case point14ValBTriageReviewRequired, point14ValBTriageGovernanceEscalated:
@@ -1009,17 +1022,17 @@ func EvaluatePoint14ValBDisputeIntakePacketState(model DisputeIntakePacket, depe
 		strings.TrimSpace(model.DisputeReason) == "" {
 		return Point14ValBStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" && strings.TrimSpace(model.GlobalScopeClassification) == "" {
+	if model.TenantScope == "" && model.GlobalScopeClassification == "" {
 		return Point14ValBStateBlocked
 	}
 	if model.TenantScope != "" {
 		if !point11Val0ScopeValid(model.TenantScope) || model.TenantScope != dependency.InheritedTenantScope {
 			return Point14ValBStateBlocked
 		}
-		if strings.TrimSpace(model.GlobalScopeClassification) != "" {
+		if model.GlobalScopeClassification != "" {
 			return Point14ValBStateBlocked
 		}
-	} else if !point11Val0ContainsTrimmed([]string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}, model.GlobalScopeClassification) {
+	} else if !point14Val0ExactValueValid(model.GlobalScopeClassification, []string{point14Val0ScopeGlobalAdvisory, point14Val0ScopePublicNonAuthorative}) {
 		return Point14ValBStateBlocked
 	}
 	if model.ArtifactScoped && !point14Val0RefListValid(model.AffectedArtifactRefs, "artifact_") {
@@ -1052,7 +1065,7 @@ func EvaluatePoint14ValBDisputeIntakePacketState(model DisputeIntakePacket, depe
 		}
 		return Point14ValBStateBlocked
 	}
-	switch strings.TrimSpace(model.LifecycleState) {
+	switch model.LifecycleState {
 	case point14Val0DisputeOpened, point14Val0DisputeTriaged, point14Val0DisputeRejected:
 		return Point14ValBStateActive
 	case point14Val0DisputeEvidenceNeeded:
@@ -1086,7 +1099,7 @@ func EvaluatePoint14ValBDisputeEvidenceRequirementGateState(model DisputeEvidenc
 		model.AuditorNoteOnly {
 		return Point14ValBStateBlocked
 	}
-	switch strings.TrimSpace(model.EvidenceState) {
+	switch model.EvidenceState {
 	case point14ValAEvidenceStateRevoked, point14ValAEvidenceStateExpired, point14ValAEvidenceStateUnrelated:
 		return Point14ValBStateBlocked
 	case point14ValAEvidenceStateStale, point14ValAEvidenceStateSuperseded:
@@ -1114,12 +1127,12 @@ func EvaluatePoint14ValBGovernanceEscalationPathState(model GovernanceEscalation
 		return Point14ValBStateBlocked
 	}
 	if !model.EscalationRequired {
-		if strings.TrimSpace(model.EscalationState) != point14ValBEscalationStateNotRequired ||
-			strings.TrimSpace(model.GovernanceEventRef) != "" ||
-			strings.TrimSpace(model.Owner) != "" ||
-			strings.TrimSpace(model.ApproverRole) != "" ||
-			strings.TrimSpace(model.Reason) != "" ||
-			strings.TrimSpace(model.AuditRef) != "" {
+		if model.EscalationState != point14ValBEscalationStateNotRequired ||
+			model.GovernanceEventRef != "" ||
+			model.Owner != "" ||
+			model.ApproverRole != "" ||
+			model.Reason != "" ||
+			model.AuditRef != "" {
 			return Point14ValBStateBlocked
 		}
 		return Point14ValBStateActive
@@ -1131,7 +1144,7 @@ func EvaluatePoint14ValBGovernanceEscalationPathState(model GovernanceEscalation
 		!point14Val0AuditEventRefValid(model.AuditRef) {
 		return Point14ValBStateBlocked
 	}
-	if strings.TrimSpace(model.EscalationState) == point14ValBEscalationStateCompleted {
+	if model.EscalationState == point14ValBEscalationStateCompleted {
 		return Point14ValBStateActive
 	}
 	return Point14ValBStateReviewRequired
@@ -1163,7 +1176,7 @@ func EvaluatePoint14ValBTenantPrivacyConflictBoundaryState(model TenantPrivacyCo
 		return Point14ValBStateBlocked
 	}
 	if model.PublicVisibilityRequested {
-		if strings.TrimSpace(model.VisibilityScope) != point14Val0VisibilityPublicNoticeLimited {
+		if model.VisibilityScope != point14Val0VisibilityPublicNoticeLimited {
 			return Point14ValBStateBlocked
 		}
 		return Point14ValBStateReviewRequired
@@ -1246,8 +1259,8 @@ func point14ValBNoOverclaimDisputeWordingModel() Point14ValBNoOverclaimDisputeWo
 
 func EvaluatePoint14ValBNoOverclaimDisputeWordingState(model Point14ValBNoOverclaimDisputeWording) string {
 	if model.ProjectionDisclaimer != point14ValBProjectionDisclaimerBase ||
-		!point14Val0TextListValid(model.AllowedSafeWording) ||
-		!point14Val0TextListValid(model.BlockedWording) {
+		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point14ValBSafeWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedWording, point14ValBForbiddenWording()) {
 		return Point14ValBStateBlocked
 	}
 	observedTexts := append([]string{}, model.ObservedConflictTexts...)
@@ -1269,13 +1282,16 @@ func point14ValBFoundationState(states ...string) string {
 	hasReview := false
 	hasIncomplete := false
 	for _, state := range states {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point14ValBStateBlocked:
 			return Point14ValBStateBlocked
 		case Point14ValBStateReviewRequired:
 			hasReview = true
 		case Point14ValBStateIncomplete:
 			hasIncomplete = true
+		case Point14ValBStateActive:
+		default:
+			return Point14ValBStateBlocked
 		}
 	}
 	if hasReview {

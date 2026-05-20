@@ -244,6 +244,21 @@ func TestPoint14ValANormalizedExternalSignalState(t *testing.T) {
 			want: Point14ValAStateBlocked,
 		},
 		{
+			name: "whitespace retagged validation status blocks raw exact",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.ValidationStatus += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "whitespace retagged global scope blocks raw exact",
+			mutate: func(model *NormalizedExternalSignal) {
+				model.TenantScope = ""
+				model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
 			name: "malformed normalized payload blocks",
 			mutate: func(model *NormalizedExternalSignal) {
 				model.PayloadNormalized = false
@@ -463,6 +478,15 @@ func TestPoint14ValAExternalSignalScopeBindingState(t *testing.T) {
 			want: Point14ValAStateBlocked,
 		},
 		{
+			name: "whitespace retagged global scope binding blocks raw exact",
+			mutate: func(model *ExternalSignalScopeBinding) {
+				model.ScopeClassification = point14Val0ScopeGlobalAdvisory
+				model.TenantScope = ""
+				model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
 			name: "missing artifact refs for artifact scoped signal blocks",
 			mutate: func(model *ExternalSignalScopeBinding) {
 				model.ArtifactRefs = nil
@@ -548,6 +572,20 @@ func TestPoint14ValAExternalSignalEvidenceBindingState(t *testing.T) {
 				model.EvidenceState = point14ValAEvidenceStateStale
 			},
 			want: Point14ValAStateReviewRequired,
+		},
+		{
+			name: "whitespace retagged active evidence state blocks raw exact",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceState = point14ValAEvidenceStateActive + " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
+			name: "tab newline retagged active evidence state blocks raw exact",
+			mutate: func(model *ExternalSignalEvidenceBinding) {
+				model.EvidenceState = "\t" + point14ValAEvidenceStateActive + "\n"
+			},
+			want: Point14ValAStateBlocked,
 		},
 		{
 			name: "revoked evidence ref blocks",
@@ -760,6 +798,13 @@ func TestPoint14ValAExternalSignalTenantBoundaryGuardState(t *testing.T) {
 			want: Point14ValAStateBlocked,
 		},
 		{
+			name: "whitespace retagged scope classification blocks raw exact",
+			mutate: func(model *ExternalSignalTenantBoundaryGuard) {
+				model.ScopeClassification += " "
+			},
+			want: Point14ValAStateBlocked,
+		},
+		{
 			name: "tenant private data cannot be exposed in normalized public global signal",
 			mutate: func(model *ExternalSignalTenantBoundaryGuard) {
 				model.TenantPrivateDataExposed = true
@@ -835,6 +880,20 @@ func TestPoint14ValAAuthorityAndWordingGuards(t *testing.T) {
 			t.Fatalf("expected active, got %s", got)
 		}
 	})
+	t.Run("mutated allowed safe wording blocks", func(t *testing.T) {
+		model := point14ValANoOverclaimValidationWordingModel()
+		model.AllowedSafeWording = append(model.AllowedSafeWording, "production approved")
+		if got := EvaluatePoint14ValANoOverclaimValidationWordingState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked mutated allowed wording, got %s", got)
+		}
+	})
+	t.Run("mutated blocked wording blocks", func(t *testing.T) {
+		model := point14ValANoOverclaimValidationWordingModel()
+		model.BlockedWording = append(model.BlockedWording[:len(model.BlockedWording)-1], "replacement")
+		if got := EvaluatePoint14ValANoOverclaimValidationWordingState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked mutated blocked wording, got %s", got)
+		}
+	})
 	t.Run("forbidden wording allowed only in internal blocked diagnostic context", func(t *testing.T) {
 		model := point14ValANoOverclaimValidationWordingModel()
 		model.InternalDiagnosticTexts = []string{"external PASS"}
@@ -877,6 +936,38 @@ func TestPoint14ValAExternalSignalValidationResultState(t *testing.T) {
 			t.Fatalf("expected blocked, got %s", got)
 		}
 	})
+	t.Run("whitespace retagged validated candidate blocks raw exact", func(t *testing.T) {
+		model := point14ValAValidationResultModel()
+		model.NormalizedSignalState = Point14ValAStateActive
+		model.SourceIdentityState = Point14ValAStateActive
+		model.ScopeBindingState = Point14ValAStateActive
+		model.EvidenceBindingState = Point14ValAStateActive
+		model.FreshnessTimestampState = Point14ValAStateActive
+		model.DuplicateRelationGuardState = Point14ValAStateActive
+		model.TenantBoundaryGuardState = Point14ValAStateActive
+		model.NoExternalAuthorityState = Point14ValAStateActive
+		model.NoOverclaimState = Point14ValAStateActive
+		model.ValidationState = point14ValAValidationCandidateValidated + " "
+		if got := EvaluatePoint14ValAExternalSignalValidationResultState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged validation state, got %s", got)
+		}
+	})
+	t.Run("tab newline retagged validated candidate blocks raw exact", func(t *testing.T) {
+		model := point14ValAValidationResultModel()
+		model.NormalizedSignalState = Point14ValAStateActive
+		model.SourceIdentityState = Point14ValAStateActive
+		model.ScopeBindingState = Point14ValAStateActive
+		model.EvidenceBindingState = Point14ValAStateActive
+		model.FreshnessTimestampState = Point14ValAStateActive
+		model.DuplicateRelationGuardState = Point14ValAStateActive
+		model.TenantBoundaryGuardState = Point14ValAStateActive
+		model.NoExternalAuthorityState = Point14ValAStateActive
+		model.NoOverclaimState = Point14ValAStateActive
+		model.ValidationState = "\t" + point14ValAValidationCandidateValidated + "\n"
+		if got := EvaluatePoint14ValAExternalSignalValidationResultState(model); got != Point14ValAStateBlocked {
+			t.Fatalf("expected blocked tab/newline-retagged validation state, got %s", got)
+		}
+	})
 }
 
 func TestPoint14ValAFoundationAggregation(t *testing.T) {
@@ -913,6 +1004,28 @@ func TestPoint14ValAFoundationAggregation(t *testing.T) {
 			got.ValidationResultState != Point14ValAStateBlocked ||
 			got.ValidationResult.ValidationState != point14ValAValidationCandidateBlocked {
 			t.Fatalf("expected blocked unknown validation state, got %#v", got)
+		}
+	})
+	t.Run("whitespace retagged validated state blocks instead of normalizing to active", func(t *testing.T) {
+		model := Point14ValAFoundationModel()
+		model.ValidationResult.ValidationState = point14ValAValidationCandidateValidated + " "
+		got := ComputePoint14ValAFoundation(model)
+		if got.CurrentState != Point14ValAStateBlocked ||
+			got.ValidationResultState != Point14ValAStateBlocked ||
+			got.ValidationResult.ValidationState != point14ValAValidationCandidateBlocked ||
+			got.ValidationResult.CandidateUsable {
+			t.Fatalf("expected blocked whitespace-retagged validation state, got %#v", got)
+		}
+	})
+	t.Run("tab newline retagged validated state blocks instead of normalizing to active", func(t *testing.T) {
+		model := Point14ValAFoundationModel()
+		model.ValidationResult.ValidationState = "\t" + point14ValAValidationCandidateValidated + "\n"
+		got := ComputePoint14ValAFoundation(model)
+		if got.CurrentState != Point14ValAStateBlocked ||
+			got.ValidationResultState != Point14ValAStateBlocked ||
+			got.ValidationResult.ValidationState != point14ValAValidationCandidateBlocked ||
+			got.ValidationResult.CandidateUsable {
+			t.Fatalf("expected blocked tab/newline-retagged validation state, got %#v", got)
 		}
 	})
 	t.Run("active only when all components active", func(t *testing.T) {

@@ -172,6 +172,13 @@ func TestPoint14Val0ExternalSignalCandidateState(t *testing.T) {
 			want: Point14Val0StateBlocked,
 		},
 		{
+			name: "whitespace retagged source type blocks raw exact",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.SourceType += " "
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
 			name: "missing signal type blocks",
 			mutate: func(model *ExternalEcosystemSignalCandidate) {
 				model.SignalType = ""
@@ -239,6 +246,20 @@ func TestPoint14Val0ExternalSignalCandidateState(t *testing.T) {
 			name: "unknown validation status blocks",
 			mutate: func(model *ExternalEcosystemSignalCandidate) {
 				model.ValidationStatus = "mystery_status"
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "whitespace retagged validation status blocks raw exact",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.ValidationStatus += " "
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "whitespace only optional custody ref blocks raw exact",
+			mutate: func(model *ExternalEcosystemSignalCandidate) {
+				model.CustodyRef = " "
 			},
 			want: Point14Val0StateBlocked,
 		},
@@ -527,6 +548,13 @@ func TestPoint14Val0ExternalStakeholderAuthorityRoleState(t *testing.T) {
 			},
 			want: Point14Val0StateActive,
 		},
+		{
+			name: "whitespace retagged allowed action blocks raw exact",
+			mutate: func(model *ExternalStakeholderAuthorityRole) {
+				model.AllowedActionRefs = []string{model.AllowedActionRefs[0] + " "}
+			},
+			want: Point14Val0StateBlocked,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -590,6 +618,13 @@ func TestPoint14Val0ExternalAuthorityConflictMatrixState(t *testing.T) {
 			name: "hidden resolution flags on no conflict record block",
 			mutate: func(model *ExternalAuthorityConflictMatrix) {
 				model.ConsensusResolutionRequested = true
+			},
+			want: Point14Val0StateBlocked,
+		},
+		{
+			name: "whitespace conflict type on no conflict record blocks raw exact",
+			mutate: func(model *ExternalAuthorityConflictMatrix) {
+				model.ConflictType = " "
 			},
 			want: Point14Val0StateBlocked,
 		},
@@ -845,6 +880,20 @@ func TestPoint14Val0AgentBoundaryAndNoOverclaim(t *testing.T) {
 			t.Fatalf("expected active, got %s", got)
 		}
 	})
+	t.Run("mutated allowed safe wording blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.AllowedSafeWording = append(model.AllowedSafeWording, "production approved")
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked mutated allowed wording, got %s", got)
+		}
+	})
+	t.Run("mutated blocked wording blocks", func(t *testing.T) {
+		model := point14Val0NoOverclaimEcosystemWordingModel()
+		model.BlockedWording = append(model.BlockedWording[:len(model.BlockedWording)-1], "replacement")
+		if got := EvaluatePoint14Val0NoOverclaimEcosystemWordingState(model); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked mutated blocked wording, got %s", got)
+		}
+	})
 	t.Run("forbidden wording allowed only in internal blocked diagnostic context", func(t *testing.T) {
 		model := point14Val0NoOverclaimEcosystemWordingModel()
 		model.InternalDiagnosticTexts = []string{"external PASS"}
@@ -912,6 +961,11 @@ func TestPoint14Val0FoundationAggregation(t *testing.T) {
 		got := ComputePoint14Val0Foundation(model)
 		if got.CurrentState != Point14Val0StateIncomplete {
 			t.Fatalf("expected incomplete, got %#v", got)
+		}
+	})
+	t.Run("whitespace retagged active component fails closed", func(t *testing.T) {
+		if got := point14Val0FoundationState(Point14Val0StateActive + " "); got != Point14Val0StateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged aggregate state, got %s", got)
 		}
 	})
 	t.Run("active only when all components active", func(t *testing.T) {

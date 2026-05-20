@@ -54,6 +54,56 @@ func TestPoint14ValEDependencyState(t *testing.T) {
 			want: Point14ValEStateBlocked,
 		},
 		{
+			name: "mutated vald allowed no overclaim wording blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.NoOverclaimTimelineWording.AllowedSafeWording = append(
+					model.Point14ValD.NoOverclaimTimelineWording.AllowedSafeWording,
+					"timeline proves truth",
+				)
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "mutated valc allowed no overclaim wording blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValC.NoOverclaimPublicationWording.AllowedSafeWording = append(
+					model.Point14ValD.Dependency.Point14ValC.NoOverclaimPublicationWording.AllowedSafeWording,
+					"publication proves safety",
+				)
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "mutated valb allowed no overclaim wording blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValB.NoOverclaimDisputeWording.AllowedSafeWording = append(
+					model.Point14ValD.Dependency.Point14ValB.NoOverclaimDisputeWording.AllowedSafeWording,
+					"dispute resolved by ai",
+				)
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "mutated vala allowed no overclaim wording blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValA.NoOverclaimValidationWording.AllowedSafeWording = append(
+					model.Point14ValD.Dependency.Point14ValA.NoOverclaimValidationWording.AllowedSafeWording,
+					"production approved",
+				)
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
+			name: "mutated val0 allowed no overclaim wording blocks",
+			mutate: func(model *Point14ValEDependencySnapshot) {
+				model.Point14ValD.Dependency.Point14ValA.Dependency.Point14Val0.NoOverclaimEcosystemWording.AllowedSafeWording = append(
+					model.Point14ValD.Dependency.Point14ValA.Dependency.Point14Val0.NoOverclaimEcosystemWording.AllowedSafeWording,
+					"production approved",
+				)
+			},
+			want: Point14ValEStateBlocked,
+		},
+		{
 			name: "whitespace retagged nested point10 current state in vald dependency blocks",
 			mutate: func(model *Point14ValEDependencySnapshot) {
 				model.Point14ValD.Dependency.InheritedPoint10CurrentState += " "
@@ -291,6 +341,10 @@ func TestPoint14ValEClosureEvaluatorState(t *testing.T) {
 		{"any validation closure blocked returns blocked", func(model *Point14ValEClosureEvaluator) { model.ValidationClosureState = Point14ValEStateBlocked }, Point14ValEStateBlocked},
 		{"review required prevents pass confirmed", func(model *Point14ValEClosureEvaluator) { model.DisputeClosureState = Point14ValEStateReviewRequired }, Point14ValEStateReviewRequired},
 		{"incomplete prevents pass confirmed", func(model *Point14ValEClosureEvaluator) { model.DisputeClosureState = Point14ValEStateIncomplete }, Point14ValEStateIncomplete},
+		{"whitespace retagged pass confirmed state blocks", func(model *Point14ValEClosureEvaluator) { model.NoOverclaimState = Point14ValEStatePassConfirmed + " " }, Point14ValEStateBlocked},
+		{"tab newline retagged pass confirmed state blocks", func(model *Point14ValEClosureEvaluator) {
+			model.CLBFinalState = "\t" + Point14ValEStatePassConfirmed + "\n"
+		}, Point14ValEStateBlocked},
 		{"no mutation paths detected false blocks", func(model *Point14ValEClosureEvaluator) { model.NoMutationPathsDetected = false }, Point14ValEStateBlocked},
 		{"no external authority detected false blocks", func(model *Point14ValEClosureEvaluator) { model.NoExternalAuthorityDetected = false }, Point14ValEStateBlocked},
 		{"no premature point14 pass false blocks", func(model *Point14ValEClosureEvaluator) { model.NoPrematurePoint14Pass = false }, Point14ValEStateBlocked},
@@ -835,6 +889,23 @@ func TestPoint14ValEFoundationNestedVal0NoOverclaimBlocksFinalPass(t *testing.T)
 	}
 	if model.Point14PassAllowed || model.Point14PassToken != "" {
 		t.Fatalf("expected no final point_14_pass after nested Val0 overclaim, got %#v", model)
+	}
+}
+
+func TestPoint14ValEFoundationNestedVal0AllowedNoOverclaimLedgerBlocksFinalPass(t *testing.T) {
+	model := Point14ValEFoundationModel()
+	model.Dependency.Point14ValD.Dependency.Point14ValA.Dependency.Point14Val0.NoOverclaimEcosystemWording.AllowedSafeWording = append(
+		model.Dependency.Point14ValD.Dependency.Point14ValA.Dependency.Point14Val0.NoOverclaimEcosystemWording.AllowedSafeWording,
+		"production approved",
+	)
+	model = ComputePoint14ValEFoundation(model)
+	if model.CurrentState != Point14ValEStateBlocked ||
+		model.DependencyState != Point14ValEStateBlocked ||
+		!point12Val0StringSliceContains(model.BlockingReasons, "dependency") {
+		t.Fatalf("expected nested Val0 allowed no-overclaim ledger mutation to block, got %#v", model)
+	}
+	if model.Point14PassAllowed || model.Point14PassToken != "" {
+		t.Fatalf("expected no final point_14_pass after nested Val0 allowed wording mutation, got %#v", model)
 	}
 }
 

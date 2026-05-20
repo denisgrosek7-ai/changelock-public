@@ -205,6 +205,12 @@ func TestPoint14ValCCorrectionNoticeBoundaryState(t *testing.T) {
 		{"missing limitations blocks", func(model *ExternalCorrectionNoticeBoundary) { model.CorrectionLimitations = nil }, Point14ValCStateBlocked},
 		{"missing governance event ref blocks", func(model *ExternalCorrectionNoticeBoundary) { model.GovernanceEventRef = "" }, Point14ValCStateBlocked},
 		{"missing audit ref blocks", func(model *ExternalCorrectionNoticeBoundary) { model.AuditRef = "" }, Point14ValCStateBlocked},
+		{"whitespace retagged correction state blocks raw exact", func(model *ExternalCorrectionNoticeBoundary) {
+			model.CorrectionState = point14ValCCorrectionApprovedBounded + " "
+		}, Point14ValCStateBlocked},
+		{"tab newline retagged correction state blocks raw exact", func(model *ExternalCorrectionNoticeBoundary) {
+			model.CorrectionState = "\t" + point14ValCCorrectionApprovedBounded + "\n"
+		}, Point14ValCStateBlocked},
 		{"correction auto published blocks", func(model *ExternalCorrectionNoticeBoundary) { model.CorrectionState = "correction_auto_published" }, Point14ValCStateBlocked},
 		{"correction certified blocks", func(model *ExternalCorrectionNoticeBoundary) { model.CertifiesCompliance = true }, Point14ValCStateBlocked},
 		{"correction production approved blocks", func(model *ExternalCorrectionNoticeBoundary) { model.ApprovesProduction = true }, Point14ValCStateBlocked},
@@ -243,6 +249,12 @@ func TestPoint14ValCRevocationRequestBoundaryState(t *testing.T) {
 			model.RevocationState = point14ValCRevocationApprovedGovernance
 			model.GovernanceEventRef = ""
 		}, Point14ValCStateBlocked},
+		{"whitespace retagged revocation state blocks raw exact", func(model *ExternalRevocationRequestBoundary) {
+			model.RevocationState = point14ValCRevocationRequested + " "
+		}, Point14ValCStateBlocked},
+		{"tab newline retagged revocation state blocks raw exact", func(model *ExternalRevocationRequestBoundary) {
+			model.RevocationState = "\t" + point14ValCRevocationRequested + "\n"
+		}, Point14ValCStateBlocked},
 		{"revocation auto executed blocks", func(model *ExternalRevocationRequestBoundary) { model.RevocationState = "revocation_auto_executed" }, Point14ValCStateBlocked},
 		{"revocation external authority blocks", func(model *ExternalRevocationRequestBoundary) { model.ExternalAuthorityGranted = true }, Point14ValCStateBlocked},
 		{"revocation public badge blocks", func(model *ExternalRevocationRequestBoundary) { model.PublicBadgeAllowed = true }, Point14ValCStateBlocked},
@@ -276,6 +288,12 @@ func TestPoint14ValCSupersessionRecordBoundaryState(t *testing.T) {
 		{"previous evidence deletion hiding blocks", func(model *ExternalSupersessionRecordBoundary) { model.DeletesHistory = true }, Point14ValCStateBlocked},
 		{"replacement hash recomputation hiding drift blocks", func(model *ExternalSupersessionRecordBoundary) { model.ReplacementHashRecomputed = true }, Point14ValCStateBlocked},
 		{"missing supersession audit trace blocks", func(model *ExternalSupersessionRecordBoundary) { model.AuditRef = "" }, Point14ValCStateBlocked},
+		{"whitespace retagged supersession state blocks raw exact", func(model *ExternalSupersessionRecordBoundary) {
+			model.SupersessionState = point14ValCSupersessionRecorded + " "
+		}, Point14ValCStateBlocked},
+		{"tab newline retagged supersession state blocks raw exact", func(model *ExternalSupersessionRecordBoundary) {
+			model.SupersessionState = "\t" + point14ValCSupersessionRecorded + "\n"
+		}, Point14ValCStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -318,6 +336,12 @@ func TestPoint14ValCPublicationApprovalBoundaryState(t *testing.T) {
 		{"publication approval cannot create pass", func(model *ExternalPublicationApprovalBoundary) { model.CreatesPass = true }, Point14ValCStateBlocked},
 		{"future dated publication approval review required", func(model *ExternalPublicationApprovalBoundary) { model.RecordedAt = "2026-05-06T08:04:00Z" }, Point14ValCStateReviewRequired},
 		{"backdated correction approval before dispute open review required", func(model *ExternalPublicationApprovalBoundary) { model.ApprovedAt = "2026-05-06T07:55:00Z" }, Point14ValCStateReviewRequired},
+		{"whitespace retagged publication state blocks raw exact", func(model *ExternalPublicationApprovalBoundary) {
+			model.PublicationState = point14ValCPublicationPrivateOnly + " "
+		}, Point14ValCStateBlocked},
+		{"tab newline retagged publication state blocks raw exact", func(model *ExternalPublicationApprovalBoundary) {
+			model.PublicationState = "\t" + point14ValCPublicationPrivateOnly + "\n"
+		}, Point14ValCStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -355,6 +379,16 @@ func TestPoint14ValCPublicationVisibilityBoundaryState(t *testing.T) {
 			model.VisibilityClassification = point14ValCVisibilityBlocked
 		}, Point14ValCStateBlocked},
 		{"missing visibility classification blocks", func(model *ExternalPublicationVisibilityBoundary) { model.VisibilityClassification = "" }, Point14ValCStateBlocked},
+		{"whitespace retagged visibility classification blocks raw exact", func(model *ExternalPublicationVisibilityBoundary) {
+			model.VisibilityClassification = point14ValCVisibilityPrivateTenantOnly + " "
+		}, Point14ValCStateBlocked},
+		{"whitespace retagged publication boundary blocks raw exact", func(model *ExternalPublicationVisibilityBoundary) {
+			model.PublicPrivateBoundary = point14ValCPublicationBoundaryPrivate + " "
+		}, Point14ValCStateBlocked},
+		{"whitespace retagged global scope blocks raw exact", func(model *ExternalPublicationVisibilityBoundary) {
+			model.TenantScope = ""
+			model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
+		}, Point14ValCStateBlocked},
 		{"public notice without limitations blocks", func(model *ExternalPublicationVisibilityBoundary) {
 			model.VisibilityClassification = point14ValCVisibilityPublicBounded
 			model.PublicPrivateBoundary = point14ValCPublicationBoundaryPublic
@@ -399,6 +433,9 @@ func TestPoint14ValCTenantPrivacyPublicationGuardState(t *testing.T) {
 			model.RedactionRefs = nil
 		}, Point14ValCStateBlocked},
 		{"public private classification missing blocks", func(model *TenantPrivacyPublicationGuard) { model.PublicPrivateClassification = "" }, Point14ValCStateBlocked},
+		{"whitespace retagged publication target scope blocks raw exact", func(model *TenantPrivacyPublicationGuard) {
+			model.PublicationTargetScope = point14ValCVisibilityPrivateTenantOnly + " "
+		}, Point14ValCStateBlocked},
 		{"redacted publication must preserve limitations", func(model *TenantPrivacyPublicationGuard) { model.LimitationsVisible = false }, Point14ValCStateBlocked},
 		{"blocked publication target scope blocks", func(model *TenantPrivacyPublicationGuard) {
 			model.PublicationTargetScope = point14ValCVisibilityBlocked
@@ -431,6 +468,12 @@ func TestPoint14ValCCorrectionRedactionLimitationGuardState(t *testing.T) {
 		{"redaction cannot convert incomplete review required into active", func(model *CorrectionRedactionLimitationGuard) {
 			model.SourcePublicationState = Point14ValCStateIncomplete
 			model.ResolvedPublicationState = Point14ValCStateActive
+		}, Point14ValCStateBlocked},
+		{"whitespace retagged source publication state blocks raw exact", func(model *CorrectionRedactionLimitationGuard) {
+			model.SourcePublicationState = Point14ValCStateActive + " "
+		}, Point14ValCStateBlocked},
+		{"tab newline retagged resolved publication state blocks raw exact", func(model *CorrectionRedactionLimitationGuard) {
+			model.ResolvedPublicationState = "\t" + Point14ValCStateActive + "\n"
 		}, Point14ValCStateBlocked},
 	}
 	for _, tc := range tests {
@@ -556,6 +599,20 @@ func TestPoint14ValCAuthorityAndWordingGuards(t *testing.T) {
 			t.Fatalf("expected active, got %s", got)
 		}
 	})
+	t.Run("mutated allowed safe wording blocks", func(t *testing.T) {
+		model := point14ValCNoOverclaimPublicationWordingModel()
+		model.AllowedSafeWording = append(model.AllowedSafeWording, "publication proves safety")
+		if got := EvaluatePoint14ValCNoOverclaimPublicationWordingState(model); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked mutated allowed wording, got %s", got)
+		}
+	})
+	t.Run("mutated blocked wording blocks", func(t *testing.T) {
+		model := point14ValCNoOverclaimPublicationWordingModel()
+		model.BlockedWording = append(model.BlockedWording[:len(model.BlockedWording)-1], "replacement")
+		if got := EvaluatePoint14ValCNoOverclaimPublicationWordingState(model); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked mutated blocked wording, got %s", got)
+		}
+	})
 	t.Run("forbidden wording allowed only in internal blocked diagnostic context", func(t *testing.T) {
 		model := point14ValCNoOverclaimPublicationWordingModel()
 		model.InternalDiagnosticTexts = []string{"scanner PASS"}
@@ -589,6 +646,11 @@ func TestPoint14ValCFoundationAggregation(t *testing.T) {
 		got := ComputePoint14ValCFoundation(model)
 		if got.CurrentState != Point14ValCStateIncomplete {
 			t.Fatalf("expected incomplete, got %#v", got)
+		}
+	})
+	t.Run("whitespace retagged active component fails closed", func(t *testing.T) {
+		if got := point14ValCFoundationState(Point14ValCStateActive + " "); got != Point14ValCStateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged aggregate state, got %s", got)
 		}
 	})
 	t.Run("active only when all components active", func(t *testing.T) {

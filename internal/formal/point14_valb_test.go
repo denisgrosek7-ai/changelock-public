@@ -203,6 +203,14 @@ func TestPoint14ValBExternalSignalConflictSetState(t *testing.T) {
 			want: Point14ValBStateReviewRequired,
 		},
 		{
+			name: "whitespace retagged conflict type blocks raw exact",
+			mutate: func(model *ExternalSignalConflictSet) {
+				model.ConflictDetected = true
+				model.ConflictType = "scanner_vs_vex "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
 			name: "scanner vs maintainer conflict returns review required",
 			mutate: func(model *ExternalSignalConflictSet) {
 				model.ConflictDetected = true
@@ -325,6 +333,14 @@ func TestPoint14ValBExternalSignalConflictSetState(t *testing.T) {
 			},
 			want: Point14ValBStateBlocked,
 		},
+		{
+			name: "whitespace retagged global scope classification blocks raw exact",
+			mutate: func(model *ExternalSignalConflictSet) {
+				model.TenantScope = ""
+				model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
+			},
+			want: Point14ValBStateBlocked,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -354,6 +370,13 @@ func TestPoint14ValBStakeholderSignalComparisonState(t *testing.T) {
 				model.ComparisonResult = "conflicting"
 			},
 			want: Point14ValBStateReviewRequired,
+		},
+		{
+			name: "whitespace retagged comparison result blocks raw exact",
+			mutate: func(model *StakeholderSignalComparison) {
+				model.ComparisonResult = "consistent "
+			},
+			want: Point14ValBStateBlocked,
 		},
 		{
 			name: "unsupported role blocks",
@@ -496,6 +519,13 @@ func TestPoint14ValBDisputeIntakePacketState(t *testing.T) {
 			want: Point14ValBStateBlocked,
 		},
 		{
+			name: "whitespace retagged opened lifecycle state blocks raw exact",
+			mutate: func(model *DisputeIntakePacket) {
+				model.LifecycleState = point14Val0DisputeOpened + " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
 			name: "revoked lifecycle state blocks in valb",
 			mutate: func(model *DisputeIntakePacket) {
 				model.LifecycleState = point14Val0DisputeRevoked
@@ -528,6 +558,14 @@ func TestPoint14ValBDisputeIntakePacketState(t *testing.T) {
 			mutate: func(model *DisputeIntakePacket) {
 				model.ClosureAttempted = true
 				model.ClosedAt = "2026-05-06T07:00:00Z"
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace retagged dispute global scope classification blocks raw exact",
+			mutate: func(model *DisputeIntakePacket) {
+				model.TenantScope = ""
+				model.GlobalScopeClassification = point14Val0ScopeGlobalAdvisory + " "
 			},
 			want: Point14ValBStateBlocked,
 		},
@@ -569,6 +607,20 @@ func TestPoint14ValBDisputeEvidenceRequirementGateState(t *testing.T) {
 				model.EvidenceState = point14ValAEvidenceStateStale
 			},
 			want: Point14ValBStateReviewRequired,
+		},
+		{
+			name: "whitespace retagged active evidence state blocks raw exact",
+			mutate: func(model *DisputeEvidenceRequirementGate) {
+				model.EvidenceState = point14ValAEvidenceStateActive + " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace retagged required evidence type blocks raw exact",
+			mutate: func(model *DisputeEvidenceRequirementGate) {
+				model.RequiredEvidenceTypes = []string{"canonical_evidence "}
+			},
+			want: Point14ValBStateBlocked,
 		},
 		{
 			name: "revoked evidence blocks",
@@ -653,6 +705,48 @@ func TestPoint14ValBGovernanceEscalationPathState(t *testing.T) {
 			mutate: func(model *GovernanceEscalationPath) {
 				model.EscalationRequired = true
 				model.EscalationState = point14ValBEscalationStateQueued
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace retagged not required escalation state blocks raw exact",
+			mutate: func(model *GovernanceEscalationPath) {
+				model.EscalationState = point14ValBEscalationStateNotRequired + " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace only inactive governance event ref blocks raw exact",
+			mutate: func(model *GovernanceEscalationPath) {
+				model.GovernanceEventRef = " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace only inactive owner blocks raw exact",
+			mutate: func(model *GovernanceEscalationPath) {
+				model.Owner = " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace only inactive approver role blocks raw exact",
+			mutate: func(model *GovernanceEscalationPath) {
+				model.ApproverRole = " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace only inactive reason blocks raw exact",
+			mutate: func(model *GovernanceEscalationPath) {
+				model.Reason = " "
+			},
+			want: Point14ValBStateBlocked,
+		},
+		{
+			name: "whitespace only inactive audit ref blocks raw exact",
+			mutate: func(model *GovernanceEscalationPath) {
+				model.AuditRef = " "
 			},
 			want: Point14ValBStateBlocked,
 		},
@@ -916,6 +1010,20 @@ func TestPoint14ValBAuthorityAndWordingGuards(t *testing.T) {
 			t.Fatalf("expected active, got %s", got)
 		}
 	})
+	t.Run("mutated allowed safe wording blocks", func(t *testing.T) {
+		model := point14ValBNoOverclaimDisputeWordingModel()
+		model.AllowedSafeWording = append(model.AllowedSafeWording, "dispute resolved by ai")
+		if got := EvaluatePoint14ValBNoOverclaimDisputeWordingState(model); got != Point14ValBStateBlocked {
+			t.Fatalf("expected blocked mutated allowed wording, got %s", got)
+		}
+	})
+	t.Run("mutated blocked wording blocks", func(t *testing.T) {
+		model := point14ValBNoOverclaimDisputeWordingModel()
+		model.BlockedWording = append(model.BlockedWording[:len(model.BlockedWording)-1], "replacement")
+		if got := EvaluatePoint14ValBNoOverclaimDisputeWordingState(model); got != Point14ValBStateBlocked {
+			t.Fatalf("expected blocked mutated blocked wording, got %s", got)
+		}
+	})
 	t.Run("forbidden wording allowed only in internal blocked diagnostic context", func(t *testing.T) {
 		model := point14ValBNoOverclaimDisputeWordingModel()
 		model.InternalDiagnosticTexts = []string{"scanner PASS"}
@@ -996,6 +1104,38 @@ func TestPoint14ValBExternalConflictTriageResultState(t *testing.T) {
 			t.Fatalf("expected blocked, got %s", got)
 		}
 	})
+	t.Run("whitespace retagged no conflict triage blocks raw exact", func(t *testing.T) {
+		model := point14ValBDisputeTriageResultModel()
+		model.ConflictSetState = Point14ValBStateActive
+		model.StakeholderComparisonState = Point14ValBStateActive
+		model.DisputeIntakeState = Point14ValBStateActive
+		model.EvidenceRequirementState = Point14ValBStateActive
+		model.GovernanceEscalationState = Point14ValBStateActive
+		model.TenantPrivacyBoundaryState = Point14ValBStateActive
+		model.AgentBoundaryState = Point14ValBStateActive
+		model.NoExternalAuthorityState = Point14ValBStateActive
+		model.NoOverclaimState = Point14ValBStateActive
+		model.TriageState = point14ValBTriageNoConflictDetected + " "
+		if got := EvaluatePoint14ValBExternalConflictTriageResultState(model); got != Point14ValBStateBlocked {
+			t.Fatalf("expected blocked whitespace-retagged triage state, got %s", got)
+		}
+	})
+	t.Run("tab newline retagged no conflict triage blocks raw exact", func(t *testing.T) {
+		model := point14ValBDisputeTriageResultModel()
+		model.ConflictSetState = Point14ValBStateActive
+		model.StakeholderComparisonState = Point14ValBStateActive
+		model.DisputeIntakeState = Point14ValBStateActive
+		model.EvidenceRequirementState = Point14ValBStateActive
+		model.GovernanceEscalationState = Point14ValBStateActive
+		model.TenantPrivacyBoundaryState = Point14ValBStateActive
+		model.AgentBoundaryState = Point14ValBStateActive
+		model.NoExternalAuthorityState = Point14ValBStateActive
+		model.NoOverclaimState = Point14ValBStateActive
+		model.TriageState = "\t" + point14ValBTriageNoConflictDetected + "\n"
+		if got := EvaluatePoint14ValBExternalConflictTriageResultState(model); got != Point14ValBStateBlocked {
+			t.Fatalf("expected blocked tab/newline-retagged triage state, got %s", got)
+		}
+	})
 }
 
 func TestPoint14ValBFoundationAggregation(t *testing.T) {
@@ -1033,6 +1173,26 @@ func TestPoint14ValBFoundationAggregation(t *testing.T) {
 			got.DisputeTriageResultState != Point14ValBStateBlocked ||
 			got.DisputeTriageResult.TriageState != point14ValBTriageBlocked {
 			t.Fatalf("expected blocked unknown triage state, got %#v", got)
+		}
+	})
+	t.Run("whitespace retagged no conflict triage blocks instead of normalizing to active", func(t *testing.T) {
+		model := Point14ValBFoundationModel()
+		model.DisputeTriageResult.TriageState = point14ValBTriageNoConflictDetected + " "
+		got := ComputePoint14ValBFoundation(model)
+		if got.CurrentState != Point14ValBStateBlocked ||
+			got.DisputeTriageResultState != Point14ValBStateBlocked ||
+			got.DisputeTriageResult.TriageState != point14ValBTriageBlocked {
+			t.Fatalf("expected blocked whitespace-retagged triage state, got %#v", got)
+		}
+	})
+	t.Run("tab newline retagged no conflict triage blocks instead of normalizing to active", func(t *testing.T) {
+		model := Point14ValBFoundationModel()
+		model.DisputeTriageResult.TriageState = "\t" + point14ValBTriageNoConflictDetected + "\n"
+		got := ComputePoint14ValBFoundation(model)
+		if got.CurrentState != Point14ValBStateBlocked ||
+			got.DisputeTriageResultState != Point14ValBStateBlocked ||
+			got.DisputeTriageResult.TriageState != point14ValBTriageBlocked {
+			t.Fatalf("expected blocked tab/newline-retagged triage state, got %#v", got)
 		}
 	})
 	t.Run("active only when all components active", func(t *testing.T) {
