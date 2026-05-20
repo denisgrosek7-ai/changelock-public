@@ -207,6 +207,15 @@ func TestPoint15Val0EvidenceFreshnessTaxonomyState(t *testing.T) {
 		{"rejects unknown freshness status", func(model *Point15Val0EvidenceFreshnessTaxonomy) { model.FreshnessStatus = "freshish" }},
 		{"rejects empty freshness status", func(model *Point15Val0EvidenceFreshnessTaxonomy) { model.FreshnessStatus = "" }},
 		{"rejects generic non empty status", func(model *Point15Val0EvidenceFreshnessTaxonomy) { model.FreshnessStatus = "active" }},
+		{"rejects padded freshness status raw exact", func(model *Point15Val0EvidenceFreshnessTaxonomy) {
+			model.FreshnessStatus = " " + point15Val0FreshnessFresh + " "
+		}},
+		{"rejects tab newline mapped active state raw exact", func(model *Point15Val0EvidenceFreshnessTaxonomy) {
+			model.MappedState = "\t" + Point15Val0StateActive + "\n"
+		}},
+		{"rejects padded mapped downgrade outcome raw exact", func(model *Point15Val0EvidenceFreshnessTaxonomy) {
+			model.MappedDowngradeOutcome = " " + point15Val0DowngradeRetainActive + " "
+		}},
 		{"rejects pass preserving alias", func(model *Point15Val0EvidenceFreshnessTaxonomy) {
 			model.MappedDowngradeOutcome = "retain_pass_if_stale"
 		}},
@@ -306,6 +315,12 @@ func TestPoint15Val0DowngradeTaxonomyState(t *testing.T) {
 			model.DowngradeOutcome = point15Val0DowngradeReview
 			model.RetainsPass = true
 		}, Point15Val0StateBlocked},
+		{"padded fresh status blocks raw exact", func(model *Point15Val0DowngradeTaxonomy) {
+			model.FreshnessStatus = " " + point15Val0FreshnessFresh + " "
+		}, Point15Val0StateBlocked},
+		{"tab newline retain active outcome blocks raw exact", func(model *Point15Val0DowngradeTaxonomy) {
+			model.DowngradeOutcome = "\t" + point15Val0DowngradeRetainActive + "\n"
+		}, Point15Val0StateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -349,6 +364,15 @@ func TestPoint15Val0TimestampDisciplineState(t *testing.T) {
 		}, Point15Val0StateBlocked},
 		{"whitespace retagged observed timestamp blocks", func(model *Point15Val0TimestampDiscipline) {
 			model.ObservedAt = " " + model.ObservedAt
+		}, Point15Val0StateBlocked},
+		{"whitespace-only evaluated time source blocks raw exact", func(model *Point15Val0TimestampDiscipline) {
+			model.EvaluatedTimeSource = " "
+		}, Point15Val0StateBlocked},
+		{"whitespace-only reviewer approval timestamp blocks raw exact", func(model *Point15Val0TimestampDiscipline) {
+			model.ReviewerApprovedAt = " "
+		}, Point15Val0StateBlocked},
+		{"whitespace-only source event timestamp blocks raw exact", func(model *Point15Val0TimestampDiscipline) {
+			model.SourceEventAt = " "
 		}, Point15Val0StateBlocked},
 		{"backdated approval requires review", func(model *Point15Val0TimestampDiscipline) {
 			model.ReviewerApprovedAt = "2026-05-06T18:24:00Z"
@@ -426,6 +450,12 @@ func TestPoint15Val0FreshnessEvidenceContextState(t *testing.T) {
 		{"missing evidence id incomplete", func(model *Point15Val0FreshnessEvidenceContext) { model.EvidenceID = "" }, Point15Val0StateIncomplete},
 		{"missing evidence hash incomplete", func(model *Point15Val0FreshnessEvidenceContext) { model.EvidenceHash = "" }, Point15Val0StateIncomplete},
 		{"missing version incomplete", func(model *Point15Val0FreshnessEvidenceContext) { model.PolicyVersion = "" }, Point15Val0StateIncomplete},
+		{"whitespace-only evaluated time source blocks raw exact", func(model *Point15Val0FreshnessEvidenceContext) {
+			model.EvaluatedTimeSource = " "
+		}, Point15Val0StateBlocked},
+		{"padded tenant scope blocks raw exact", func(model *Point15Val0FreshnessEvidenceContext) {
+			model.TenantScope = " " + model.TenantScope
+		}, Point15Val0StateBlocked},
 		{"similar evidence names paths do not imply identity", func(model *Point15Val0FreshnessEvidenceContext) {
 			model.IdentityInferredFromNameOrPath = true
 		}, Point15Val0StateBlocked},
@@ -475,6 +505,9 @@ func TestPoint15Val0NoOverclaimGuardState(t *testing.T) {
 		}, Point15Val0StateBlocked},
 		{"split forbidden wording across observed corpus blocks", func(model *Point15Val0NoOverclaimGuard) {
 			model.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		}, Point15Val0StateBlocked},
+		{"padded freshness disclaimer blocks raw exact", func(model *Point15Val0NoOverclaimGuard) {
+			model.FreshnessDisclaimer = " " + point15Val0FreshnessDisclaimer + " "
 		}, Point15Val0StateBlocked},
 		{"safe bounded wording passes", func(model *Point15Val0NoOverclaimGuard) {}, Point15Val0StateActive},
 		{"internal blocked diagnostics remain classified", func(model *Point15Val0NoOverclaimGuard) {
@@ -646,5 +679,26 @@ func TestPoint15Val0CachedHelperNestedDependencyIsolation(t *testing.T) {
 	fresh := point15Val0ValidFoundationModel()
 	if fresh.Dependency.Point14ValE.NoOverclaimFinalCheck.AllowedSafeWording[0] != originalAllowed {
 		t.Fatalf("expected cached point15 val0 nested dependency helper to return isolated copy, got %#v", fresh.Dependency.Point14ValE.NoOverclaimFinalCheck.AllowedSafeWording)
+	}
+}
+
+func TestPoint15Val0AggregateRawExact(t *testing.T) {
+	tests := []struct {
+		name   string
+		states []string
+		want   string
+	}{
+		{"happy path active", []string{Point15Val0StateActive, Point15Val0StateActive}, Point15Val0StateActive},
+		{"direct exploit padded active blocks", []string{Point15Val0StateActive, " " + Point15Val0StateActive + " "}, Point15Val0StateBlocked},
+		{"hard invalid tab newline active blocks", []string{Point15Val0StateActive, "\t" + Point15Val0StateActive + "\n"}, Point15Val0StateBlocked},
+		{"sibling review path preserved", []string{Point15Val0StateActive, Point15Val0StateReviewRequired}, Point15Val0StateReviewRequired},
+		{"blocked path preserved", []string{Point15Val0StateActive, Point15Val0StateBlocked}, Point15Val0StateBlocked},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := point15Val0Aggregate(tc.states...); got != tc.want {
+				t.Fatalf("expected %s, got %s", tc.want, got)
+			}
+		})
 	}
 }

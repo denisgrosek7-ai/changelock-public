@@ -685,42 +685,7 @@ func point15ValDInternalListContainsForbiddenWording(values []string) bool {
 }
 
 func point15ValDListContainsForbiddenWording(values []string, normalize func(string) string) bool {
-	type observedPart struct {
-		normalized string
-		allowed    bool
-	}
-	parts := []observedPart{}
-	for _, value := range values {
-		if point15ValDObservedTextContainsForbiddenWordingWithNormalizer(value, normalize) {
-			return true
-		}
-		normalized := normalize(value)
-		if normalized == "" {
-			continue
-		}
-		parts = append(parts, observedPart{
-			normalized: normalized,
-			allowed:    point15ValDObservedTextAllowedSafeWithNormalizer(normalized, normalize),
-		})
-	}
-	for start := range parts {
-		combined := ""
-		allAllowed := true
-		for end := start; end < len(parts); end++ {
-			if combined == "" {
-				combined = parts[end].normalized
-			} else {
-				combined += " " + parts[end].normalized
-			}
-			allAllowed = allAllowed && parts[end].allowed
-			for _, forbidden := range point15ValDForbiddenWording() {
-				if formalNoOverclaimContainsForbidden(combined, normalize(forbidden)) && !allAllowed {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return point15ObservedListContainsForbiddenWordingWithNormalizer(values, point15ValDSafeWording(), point15ValDForbiddenWording(), normalize)
 }
 
 func point15ValDValCPayloadContainsPoint15Pass(valC Point15ValCEnforcementBoundaryFoundation) bool {
@@ -779,6 +744,166 @@ func point15ValDDependencyModel() Point15ValDDependencySnapshot {
 	return point15ValDDependencyModelFromUpstream(valC)
 }
 
+func point15ValCEmbeddedNoOverclaimChainActive(valC Point15ValCEnforcementBoundaryFoundation) bool {
+	valB := valC.Dependency.Point15ValB
+	valA := valB.Dependency.Point15ValA
+	val0 := valA.Dependency.Point15Val0
+	if val0.NoOverclaimState != Point15Val0StateActive ||
+		EvaluatePoint15Val0NoOverclaimGuardState(val0.NoOverclaimGuard) != Point15Val0StateActive {
+		return false
+	}
+	if valA.NoOverclaimState != Point15ValAStateActive ||
+		EvaluatePoint15ValANoOverclaimGuardState(valA.NoOverclaimGuard) != Point15ValAStateActive {
+		return false
+	}
+	if valB.NoOverclaimState != Point15ValBStateActive ||
+		EvaluatePoint15ValBNoOverclaimGuardState(valB.NoOverclaimGuard) != Point15ValBStateActive {
+		return false
+	}
+	if valC.NoOverclaimState != Point15ValCStateActive ||
+		EvaluatePoint15ValCNoOverclaimGuardState(valC.NoOverclaimGuard) != Point15ValCStateActive {
+		return false
+	}
+	return true
+}
+
+func point15Val0EmbeddedStateChainActive(val0 Point15Val0FreshnessDisciplineFoundation) bool {
+	recomputed := ComputePoint15Val0FreshnessDisciplineFoundation(val0)
+	return val0.CurrentState == recomputed.CurrentState &&
+		val0.DependencyState == recomputed.DependencyState &&
+		val0.FreshnessTaxonomyState == recomputed.FreshnessTaxonomyState &&
+		val0.DowngradeTaxonomyState == recomputed.DowngradeTaxonomyState &&
+		val0.EvidenceContextState == recomputed.EvidenceContextState &&
+		val0.TenantBoundaryState == recomputed.TenantBoundaryState &&
+		val0.TimestampDisciplineState == recomputed.TimestampDisciplineState &&
+		val0.AuthorityBoundaryState == recomputed.AuthorityBoundaryState &&
+		val0.NoOverclaimState == recomputed.NoOverclaimState &&
+		recomputed.CurrentState == Point15Val0StateActive &&
+		recomputed.DependencyState == Point15Val0StateActive &&
+		recomputed.FreshnessTaxonomyState == Point15Val0StateActive &&
+		recomputed.DowngradeTaxonomyState == Point15Val0StateActive &&
+		recomputed.EvidenceContextState == Point15Val0StateActive &&
+		recomputed.TenantBoundaryState == Point15Val0StateActive &&
+		recomputed.TimestampDisciplineState == Point15Val0StateActive &&
+		recomputed.AuthorityBoundaryState == Point15Val0StateActive &&
+		recomputed.NoOverclaimState == Point15Val0StateActive
+}
+
+func point15ValAEmbeddedStateChainActive(valA Point15ValADowngradeTriggerFoundation) bool {
+	recomputed := ComputePoint15ValADowngradeTriggerFoundation(valA)
+	return point15Val0EmbeddedStateChainActive(valA.Dependency.Point15Val0) &&
+		valA.CurrentState == recomputed.CurrentState &&
+		valA.DependencyState == recomputed.DependencyState &&
+		valA.TriggerTableState == recomputed.TriggerTableState &&
+		valA.TriggerState == recomputed.TriggerState &&
+		valA.ReasonState == recomputed.ReasonState &&
+		valA.DecisionState == recomputed.DecisionState &&
+		valA.AuthorityBoundaryState == recomputed.AuthorityBoundaryState &&
+		valA.NoOverclaimState == recomputed.NoOverclaimState &&
+		recomputed.CurrentState == Point15ValAStateActive &&
+		recomputed.DependencyState == Point15ValAStateActive &&
+		recomputed.TriggerTableState == Point15ValAStateActive &&
+		recomputed.TriggerState == Point15ValAStateActive &&
+		recomputed.ReasonState == Point15ValAStateActive &&
+		recomputed.DecisionState == Point15ValAStateActive &&
+		recomputed.AuthorityBoundaryState == Point15ValAStateActive &&
+		recomputed.NoOverclaimState == Point15ValAStateActive
+}
+
+func point15ValBEmbeddedStateChainActive(valB Point15ValBScheduledRevalidationFoundation) bool {
+	recomputed := ComputePoint15ValBScheduledRevalidationFoundation(valB)
+	return point15ValAEmbeddedStateChainActive(valB.Dependency.Point15ValA) &&
+		valB.CurrentState == recomputed.CurrentState &&
+		valB.DependencyState == recomputed.DependencyState &&
+		valB.ScheduleState == recomputed.ScheduleState &&
+		valB.RunState == recomputed.RunState &&
+		valB.RetryBudgetState == recomputed.RetryBudgetState &&
+		valB.TenantThrottleState == recomputed.TenantThrottleState &&
+		valB.DowngradeBindingState == recomputed.DowngradeBindingState &&
+		valB.TimestampDisciplineState == recomputed.TimestampDisciplineState &&
+		valB.AuthorityBoundaryState == recomputed.AuthorityBoundaryState &&
+		valB.NoOverclaimState == recomputed.NoOverclaimState &&
+		recomputed.CurrentState == Point15ValBStateActive &&
+		recomputed.DependencyState == Point15ValBStateActive &&
+		recomputed.ScheduleState == Point15ValBStateActive &&
+		recomputed.RunState == Point15ValBStateActive &&
+		recomputed.RetryBudgetState == Point15ValBStateActive &&
+		recomputed.TenantThrottleState == Point15ValBStateActive &&
+		recomputed.DowngradeBindingState == Point15ValBStateActive &&
+		recomputed.TimestampDisciplineState == Point15ValBStateActive &&
+		recomputed.AuthorityBoundaryState == Point15ValBStateActive &&
+		recomputed.NoOverclaimState == Point15ValBStateActive
+}
+
+func point15ValCEmbeddedStateChainActive(valC Point15ValCEnforcementBoundaryFoundation) bool {
+	recomputed := ComputePoint15ValCEnforcementBoundaryFoundation(valC)
+	return point15ValBEmbeddedStateChainActive(valC.Dependency.Point15ValB) &&
+		valC.CurrentState == recomputed.CurrentState &&
+		valC.DependencyState == recomputed.DependencyState &&
+		valC.EnforcementActionState == recomputed.EnforcementActionState &&
+		valC.EvidenceLifecycleState == recomputed.EvidenceLifecycleState &&
+		valC.RevocationBoundaryState == recomputed.RevocationBoundaryState &&
+		valC.ExpiryBoundaryState == recomputed.ExpiryBoundaryState &&
+		valC.SupersessionState == recomputed.SupersessionState &&
+		valC.ReplayProofHistoryState == recomputed.ReplayProofHistoryState &&
+		valC.TimestampDisciplineState == recomputed.TimestampDisciplineState &&
+		valC.AuthorityBoundaryState == recomputed.AuthorityBoundaryState &&
+		valC.TenantBoundaryState == recomputed.TenantBoundaryState &&
+		valC.NoOverclaimState == recomputed.NoOverclaimState &&
+		recomputed.CurrentState == Point15ValCStateActive &&
+		recomputed.DependencyState == Point15ValCStateActive &&
+		recomputed.EnforcementActionState == Point15ValCStateActive &&
+		recomputed.EvidenceLifecycleState == Point15ValCStateActive &&
+		recomputed.RevocationBoundaryState == Point15ValCStateActive &&
+		recomputed.ExpiryBoundaryState == Point15ValCStateActive &&
+		recomputed.SupersessionState == Point15ValCStateActive &&
+		recomputed.ReplayProofHistoryState == Point15ValCStateActive &&
+		recomputed.TimestampDisciplineState == Point15ValCStateActive &&
+		recomputed.AuthorityBoundaryState == Point15ValCStateActive &&
+		recomputed.TenantBoundaryState == Point15ValCStateActive &&
+		recomputed.NoOverclaimState == Point15ValCStateActive &&
+		point15ValCEmbeddedNoOverclaimChainActive(recomputed)
+}
+
+func point15ValDEmbeddedStateChainActive(valD Point15ValDAssuranceProjectionFoundation) bool {
+	recomputed := ComputePoint15ValDAssuranceProjectionFoundation(valD)
+	return point15ValCEmbeddedStateChainActive(valD.Dependency.Point15ValC) &&
+		valD.CurrentState == recomputed.CurrentState &&
+		valD.DependencyState == recomputed.DependencyState &&
+		valD.TimelineState == recomputed.TimelineState &&
+		valD.DashboardState == recomputed.DashboardState &&
+		valD.QueryState == recomputed.QueryState &&
+		valD.EvidenceDetailState == recomputed.EvidenceDetailState &&
+		valD.RevalidationDetailState == recomputed.RevalidationDetailState &&
+		valD.EnforcementDetailState == recomputed.EnforcementDetailState &&
+		valD.ReplayProofHistoryState == recomputed.ReplayProofHistoryState &&
+		valD.AccessTenantState == recomputed.AccessTenantState &&
+		valD.TimestampDisplayState == recomputed.TimestampDisplayState &&
+		valD.NoMutationState == recomputed.NoMutationState &&
+		valD.AuthorityBoundaryState == recomputed.AuthorityBoundaryState &&
+		valD.NoOverclaimState == recomputed.NoOverclaimState &&
+		recomputed.CurrentState == Point15ValDStateActive &&
+		recomputed.DependencyState == Point15ValDStateActive &&
+		recomputed.TimelineState == Point15ValDStateActive &&
+		recomputed.DashboardState == Point15ValDStateActive &&
+		recomputed.QueryState == Point15ValDStateActive &&
+		recomputed.EvidenceDetailState == Point15ValDStateActive &&
+		recomputed.RevalidationDetailState == Point15ValDStateActive &&
+		recomputed.EnforcementDetailState == Point15ValDStateActive &&
+		recomputed.ReplayProofHistoryState == Point15ValDStateActive &&
+		recomputed.AccessTenantState == Point15ValDStateActive &&
+		recomputed.TimestampDisplayState == Point15ValDStateActive &&
+		recomputed.NoMutationState == Point15ValDStateActive &&
+		recomputed.AuthorityBoundaryState == Point15ValDStateActive &&
+		recomputed.NoOverclaimState == Point15ValDStateActive
+}
+
+func point15ValDEmbeddedNoOverclaimChainActive(valD Point15ValDAssuranceProjectionFoundation) bool {
+	return valD.NoOverclaimState == Point15ValDStateActive &&
+		EvaluatePoint15ValDNoOverclaimGuardState(valD.NoOverclaimGuard) == Point15ValDStateActive &&
+		point15ValCEmbeddedNoOverclaimChainActive(valD.Dependency.Point15ValC)
+}
+
 func EvaluatePoint15ValDDependencyState(model Point15ValDDependencySnapshot) string {
 	if model.Point15ValCCurrentState != Point15ValCStateActive ||
 		model.Point15ValCDependencyState != Point15ValCStateActive ||
@@ -818,6 +943,9 @@ func EvaluatePoint15ValDDependencyState(model Point15ValDDependencySnapshot) str
 		return Point15ValDStateBlocked
 	}
 	if model.Point15PassSeen || point15ValDValCPayloadContainsPoint15Pass(model.Point15ValC) {
+		return Point15ValDStateBlocked
+	}
+	if !point15ValCEmbeddedStateChainActive(model.Point15ValC) {
 		return Point15ValDStateBlocked
 	}
 	if model.InheritedPoint15ValBCurrentState != Point15ValBStateActive ||

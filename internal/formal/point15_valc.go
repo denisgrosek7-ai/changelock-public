@@ -390,30 +390,11 @@ func point15ValCSafeWording() []string {
 }
 
 func point15ValCObservedTextContainsForbiddenWording(text string) bool {
-	trimmed := strings.TrimSpace(strings.ToLower(text))
-	if trimmed == "" {
-		return false
-	}
-	for _, safe := range point15ValCSafeWording() {
-		if trimmed == strings.ToLower(strings.TrimSpace(safe)) {
-			return false
-		}
-	}
-	for _, forbidden := range point15ValCForbiddenWording() {
-		if strings.Contains(trimmed, strings.ToLower(strings.TrimSpace(forbidden))) {
-			return true
-		}
-	}
-	return false
+	return point15ObservedTextContainsForbiddenWordingWithNormalizer(text, point15ValCSafeWording(), point15ValCForbiddenWording(), formalNoOverclaimNormalizePublicText)
 }
 
 func point15ValCObservedListContainsForbiddenWording(values []string) bool {
-	for _, value := range values {
-		if point15ValCObservedTextContainsForbiddenWording(value) {
-			return true
-		}
-	}
-	return false
+	return point15ObservedListContainsForbiddenWordingWithNormalizer(values, point15ValCSafeWording(), point15ValCForbiddenWording(), formalNoOverclaimNormalizePublicText)
 }
 
 func point15ValCValBPayloadContainsPoint15Pass(valB Point15ValBScheduledRevalidationFoundation) bool {
@@ -426,7 +407,7 @@ func point15ValCValBPayloadContainsPoint15Pass(valB Point15ValBScheduledRevalida
 }
 
 func point15ValCExpectedAction(reason string, decisive bool) (string, string, string) {
-	switch strings.TrimSpace(reason) {
+	switch reason {
 	case "":
 		return point15ValCActionNone, Point15Val0StateActive, point15Val0DowngradeRetainActive
 	case point15ValCReasonExpired, point15ValCReasonRevoked, point15ValCReasonUnsupported, point15ValCReasonRetryExhausted,
@@ -453,7 +434,7 @@ func point15ValCExpectedAction(reason string, decisive bool) (string, string, st
 }
 
 func point15ValCTargetStateToWaveState(target string) string {
-	switch strings.TrimSpace(target) {
+	switch target {
 	case Point15Val0StateActive:
 		return Point15ValCStateActive
 	case Point15Val0StateBlocked:
@@ -507,7 +488,7 @@ func EvaluatePoint15ValCDependencyState(model Point15ValCDependencySnapshot) str
 		!point15ValBStateValid(model.Point15ValBNoOverclaimState) ||
 		!point15ValAStateValid(model.InheritedPoint15ValACurrentState) ||
 		!point15Val0StateValid(model.InheritedPoint15Val0CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint14ValECurrentState) != Point14ValEStatePassConfirmed ||
+		!point14ValEStateValid(model.InheritedPoint14ValECurrentState) ||
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point15ValCStateBlocked
 	}
@@ -518,32 +499,36 @@ func EvaluatePoint15ValCDependencyState(model Point15ValCDependencySnapshot) str
 		!model.Point15ValBComputedFromUpstream || !model.SnapshotFromComputedOutput {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.Point15ValBCurrentState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBDependencyState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBScheduleState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBRunState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBRetryBudgetState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBTenantThrottleState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBDowngradeBindingState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBTimestampState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBAuthorityState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.Point15ValBNoOverclaimState) != Point15ValBStateActive ||
-		strings.TrimSpace(model.InheritedPoint15ValACurrentState) != Point15ValAStateActive ||
-		strings.TrimSpace(model.InheritedPoint15Val0CurrentState) != Point15Val0StateActive {
+	if model.Point15ValBCurrentState != Point15ValBStateActive ||
+		model.Point15ValBDependencyState != Point15ValBStateActive ||
+		model.Point15ValBScheduleState != Point15ValBStateActive ||
+		model.Point15ValBRunState != Point15ValBStateActive ||
+		model.Point15ValBRetryBudgetState != Point15ValBStateActive ||
+		model.Point15ValBTenantThrottleState != Point15ValBStateActive ||
+		model.Point15ValBDowngradeBindingState != Point15ValBStateActive ||
+		model.Point15ValBTimestampState != Point15ValBStateActive ||
+		model.Point15ValBAuthorityState != Point15ValBStateActive ||
+		model.Point15ValBNoOverclaimState != Point15ValBStateActive ||
+		model.InheritedPoint15ValACurrentState != Point15ValAStateActive ||
+		model.InheritedPoint15Val0CurrentState != Point15Val0StateActive ||
+		model.InheritedPoint14ValECurrentState != Point14ValEStatePassConfirmed {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.Point15ValB.CurrentState) != strings.TrimSpace(model.Point15ValBCurrentState) ||
-		strings.TrimSpace(model.Point15ValB.DependencyState) != strings.TrimSpace(model.Point15ValBDependencyState) ||
-		strings.TrimSpace(model.Point15ValB.ScheduleState) != strings.TrimSpace(model.Point15ValBScheduleState) ||
-		strings.TrimSpace(model.Point15ValB.RunState) != strings.TrimSpace(model.Point15ValBRunState) ||
-		strings.TrimSpace(model.Point15ValB.RetryBudgetState) != strings.TrimSpace(model.Point15ValBRetryBudgetState) ||
-		strings.TrimSpace(model.Point15ValB.TenantThrottleState) != strings.TrimSpace(model.Point15ValBTenantThrottleState) ||
-		strings.TrimSpace(model.Point15ValB.DowngradeBindingState) != strings.TrimSpace(model.Point15ValBDowngradeBindingState) ||
-		strings.TrimSpace(model.Point15ValB.TimestampDisciplineState) != strings.TrimSpace(model.Point15ValBTimestampState) ||
-		strings.TrimSpace(model.Point15ValB.AuthorityBoundaryState) != strings.TrimSpace(model.Point15ValBAuthorityState) ||
-		strings.TrimSpace(model.Point15ValB.NoOverclaimState) != strings.TrimSpace(model.Point15ValBNoOverclaimState) ||
-		strings.TrimSpace(model.Point15ValB.Dependency.InheritedTenantScope) != strings.TrimSpace(model.InheritedTenantScope) ||
+	if model.Point15ValB.CurrentState != model.Point15ValBCurrentState ||
+		model.Point15ValB.DependencyState != model.Point15ValBDependencyState ||
+		model.Point15ValB.ScheduleState != model.Point15ValBScheduleState ||
+		model.Point15ValB.RunState != model.Point15ValBRunState ||
+		model.Point15ValB.RetryBudgetState != model.Point15ValBRetryBudgetState ||
+		model.Point15ValB.TenantThrottleState != model.Point15ValBTenantThrottleState ||
+		model.Point15ValB.DowngradeBindingState != model.Point15ValBDowngradeBindingState ||
+		model.Point15ValB.TimestampDisciplineState != model.Point15ValBTimestampState ||
+		model.Point15ValB.AuthorityBoundaryState != model.Point15ValBAuthorityState ||
+		model.Point15ValB.NoOverclaimState != model.Point15ValBNoOverclaimState ||
+		model.Point15ValB.Dependency.InheritedTenantScope != model.InheritedTenantScope ||
 		model.Point15ValBComputedFromUpstream != model.Point15ValB.Dependency.SnapshotFromComputedOutput {
+		return Point15ValCStateBlocked
+	}
+	if !point15ValBEmbeddedStateChainActive(model.Point15ValB) {
 		return Point15ValCStateBlocked
 	}
 	return Point15ValCStateActive
@@ -576,11 +561,11 @@ func EvaluatePoint15ValCEnforcementActionState(model Point15ValCEnforcementActio
 		!point15Val0DowngradeOutcomeValid(model.DowngradeOutcome) {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.EnforcementAction) == point15ValCActionNone {
-		if strings.TrimSpace(model.EnforcementReason) != "" ||
+	if model.EnforcementAction == point15ValCActionNone {
+		if model.EnforcementReason != "" ||
 			model.ReasonDecisive ||
-			strings.TrimSpace(model.TargetState) != Point15Val0StateActive ||
-			strings.TrimSpace(model.DowngradeOutcome) != point15Val0DowngradeRetainActive ||
+			model.TargetState != Point15Val0StateActive ||
+			model.DowngradeOutcome != point15Val0DowngradeRetainActive ||
 			model.RetainsPass ||
 			!model.RetainsActiveClosure {
 			return Point15ValCStateBlocked
@@ -592,9 +577,9 @@ func EvaluatePoint15ValCEnforcementActionState(model Point15ValCEnforcementActio
 	}
 	expectedAction, expectedState, expectedOutcome := point15ValCExpectedAction(model.EnforcementReason, model.ReasonDecisive)
 	if expectedAction == "" ||
-		strings.TrimSpace(model.EnforcementAction) != expectedAction ||
-		strings.TrimSpace(model.TargetState) != expectedState ||
-		strings.TrimSpace(model.DowngradeOutcome) != expectedOutcome ||
+		model.EnforcementAction != expectedAction ||
+		model.TargetState != expectedState ||
+		model.DowngradeOutcome != expectedOutcome ||
 		model.RetainsPass ||
 		model.RetainsActiveClosure {
 		return Point15ValCStateBlocked
@@ -603,25 +588,25 @@ func EvaluatePoint15ValCEnforcementActionState(model Point15ValCEnforcementActio
 }
 
 func point15ValCEvidenceLifecycleStatusesReasonValid(status, reason string) bool {
-	switch strings.TrimSpace(status) {
+	switch status {
 	case point15ValCLifecycleActive:
-		return strings.TrimSpace(reason) == ""
+		return reason == ""
 	case point15ValCLifecycleExpired:
-		return strings.TrimSpace(reason) == point15ValCReasonExpired
+		return reason == point15ValCReasonExpired
 	case point15ValCLifecycleRevoked:
-		return strings.TrimSpace(reason) == point15ValCReasonRevoked
+		return reason == point15ValCReasonRevoked
 	case point15ValCLifecycleSuperseded:
-		return strings.TrimSpace(reason) == point15ValCReasonSupersededNoLineage || strings.TrimSpace(reason) == point15ValCReasonSupersededWithLineage
+		return reason == point15ValCReasonSupersededNoLineage || reason == point15ValCReasonSupersededWithLineage
 	case point15ValCLifecycleStale:
-		return strings.TrimSpace(reason) == point15ValCReasonStale || strings.TrimSpace(reason) == point15ValCReasonRevalidationMissed || strings.TrimSpace(reason) == point15ValCReasonRevalidationOverdue || strings.TrimSpace(reason) == point15ValCReasonRevalidationFailed
+		return reason == point15ValCReasonStale || reason == point15ValCReasonRevalidationMissed || reason == point15ValCReasonRevalidationOverdue || reason == point15ValCReasonRevalidationFailed
 	case point15ValCLifecycleDrifted:
-		return strings.TrimSpace(reason) == point15ValCReasonDecisiveDrift || strings.TrimSpace(reason) == point15ValCReasonNonDecisiveDrift
+		return reason == point15ValCReasonDecisiveDrift || reason == point15ValCReasonNonDecisiveDrift
 	case point15ValCLifecycleTampered:
-		return strings.TrimSpace(reason) == point15ValCReasonTampered
+		return reason == point15ValCReasonTampered
 	case point15ValCLifecycleHashMismatch:
-		return strings.TrimSpace(reason) == point15ValCReasonHashMismatch
+		return reason == point15ValCReasonHashMismatch
 	case point15ValCLifecycleRevalidationFailed:
-		return strings.TrimSpace(reason) == point15ValCReasonRevalidationFailed || strings.TrimSpace(reason) == point15ValCReasonRetryExhausted
+		return reason == point15ValCReasonRevalidationFailed || reason == point15ValCReasonRetryExhausted
 	default:
 		return false
 	}
@@ -642,21 +627,21 @@ func EvaluatePoint15ValCEvidenceLifecycleBoundaryState(model Point15ValCEvidence
 		!point14Val0RefValid(model.EvidenceID, "evidence_") ||
 		!point11Val0ScopeValid(model.TenantScope) ||
 		!point15ValCLifecycleStatusValid(model.LifecycleStatus) ||
-		(strings.TrimSpace(model.PreviousEvidenceRef) != "" && !point14Val0RefValid(model.PreviousEvidenceRef, "evidence_")) ||
-		(strings.TrimSpace(model.ReplacementEvidenceRef) != "" && !point14Val0RefValid(model.ReplacementEvidenceRef, "evidence_")) ||
-		(strings.TrimSpace(model.LineageRef) != "" && !point15ValCDependencyRefValid(model.LineageRef)) ||
+		(model.PreviousEvidenceRef != "" && !point14Val0RefValid(model.PreviousEvidenceRef, "evidence_")) ||
+		(model.ReplacementEvidenceRef != "" && !point14Val0RefValid(model.ReplacementEvidenceRef, "evidence_")) ||
+		(model.LineageRef != "" && !point15ValCDependencyRefValid(model.LineageRef)) ||
 		!point15ValCEvidenceLifecycleStatusesReasonValid(model.LifecycleStatus, model.LifecycleReason) {
 		return Point15ValCStateBlocked
 	}
 	if !model.HistoryPreserved || model.CanonicalMutationAttempted {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.PreviousEvidenceRef) != "" && strings.TrimSpace(model.PreviousEvidenceRef) == strings.TrimSpace(model.ReplacementEvidenceRef) {
+	if model.PreviousEvidenceRef != "" && model.PreviousEvidenceRef == model.ReplacementEvidenceRef {
 		return Point15ValCStateBlocked
 	}
-	switch strings.TrimSpace(model.LifecycleStatus) {
+	switch model.LifecycleStatus {
 	case point15ValCLifecycleActive:
-		if strings.TrimSpace(model.PreviousEvidenceRef) != "" || strings.TrimSpace(model.ReplacementEvidenceRef) != "" || strings.TrimSpace(model.LineageRef) != "" || model.ReasonDecisive {
+		if model.PreviousEvidenceRef != "" || model.ReplacementEvidenceRef != "" || model.LineageRef != "" || model.ReasonDecisive {
 			return Point15ValCStateBlocked
 		}
 		return Point15ValCStateActive
@@ -665,26 +650,26 @@ func EvaluatePoint15ValCEvidenceLifecycleBoundaryState(model Point15ValCEvidence
 	case point15ValCLifecycleStale:
 		return Point15ValCStateReviewRequired
 	case point15ValCLifecycleDrifted:
-		if strings.TrimSpace(model.LifecycleReason) == point15ValCReasonDecisiveDrift || model.ReasonDecisive {
+		if model.LifecycleReason == point15ValCReasonDecisiveDrift || model.ReasonDecisive {
 			return Point15ValCStateBlocked
 		}
 		return Point15ValCStateReviewRequired
 	case point15ValCLifecycleSuperseded:
-		if strings.TrimSpace(model.PreviousEvidenceRef) == "" || strings.TrimSpace(model.ReplacementEvidenceRef) == "" {
+		if model.PreviousEvidenceRef == "" || model.ReplacementEvidenceRef == "" {
 			return Point15ValCStateBlocked
 		}
-		if strings.TrimSpace(model.LifecycleReason) == point15ValCReasonSupersededWithLineage {
-			if strings.TrimSpace(model.LineageRef) == "" {
+		if model.LifecycleReason == point15ValCReasonSupersededWithLineage {
+			if model.LineageRef == "" {
 				return Point15ValCStateBlocked
 			}
 			return Point15ValCStateReviewRequired
 		}
-		if strings.TrimSpace(model.LineageRef) != "" {
+		if model.LineageRef != "" {
 			return Point15ValCStateBlocked
 		}
 		return Point15ValCStateBlocked
 	case point15ValCLifecycleRevalidationFailed:
-		if strings.TrimSpace(model.LifecycleReason) == point15ValCReasonRetryExhausted {
+		if model.LifecycleReason == point15ValCReasonRetryExhausted {
 			return Point15ValCStateBlocked
 		}
 		return Point15ValCStateReviewRequired
@@ -712,7 +697,7 @@ func EvaluatePoint15ValCRevocationBoundaryState(model Point15ValCRevocationBound
 		return Point15ValCStateBlocked
 	}
 	if !model.RevocationPresent {
-		if strings.TrimSpace(model.RevocationSourceRef) != "" || strings.TrimSpace(model.RevocationReceivedAt) != "" || strings.TrimSpace(model.RevocationValidatedAt) != "" || strings.TrimSpace(model.RevocationTimeSource) != "" || model.GovernanceReviewRequired {
+		if model.RevocationSourceRef != "" || model.RevocationReceivedAt != "" || model.RevocationValidatedAt != "" || model.RevocationTimeSource != "" || model.GovernanceReviewRequired {
 			return Point15ValCStateBlocked
 		}
 		return Point15ValCStateActive
@@ -720,7 +705,7 @@ func EvaluatePoint15ValCRevocationBoundaryState(model Point15ValCRevocationBound
 	if !point15ValCDependencyRefValid(model.RevocationSourceRef) {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.RevocationReceivedAt) == "" || strings.TrimSpace(model.RevocationValidatedAt) == "" {
+	if model.RevocationReceivedAt == "" || model.RevocationValidatedAt == "" {
 		return Point15ValCStateIncomplete
 	}
 	if !point14Val0CanonicalTimeSourceValid(model.RevocationTimeSource) {
@@ -758,7 +743,7 @@ func EvaluatePoint15ValCExpiryBoundaryState(model Point15ValCExpiryBoundary) str
 		}
 		return Point15ValCStateActive
 	}
-	if strings.TrimSpace(model.ExpiresAt) == "" || strings.TrimSpace(model.EvaluatedAt) == "" {
+	if model.ExpiresAt == "" || model.EvaluatedAt == "" {
 		return Point15ValCStateIncomplete
 	}
 	if !point14Val0CanonicalTimeSourceValid(model.ExpiryTimeSource) {
@@ -794,24 +779,24 @@ func EvaluatePoint15ValCSupersessionBoundaryState(model Point15ValCSupersessionB
 		return Point15ValCStateBlocked
 	}
 	if !model.SupersessionPresent {
-		if strings.TrimSpace(model.OldEvidenceRef) != "" || strings.TrimSpace(model.NewEvidenceRef) != "" || strings.TrimSpace(model.LineageRef) != "" || strings.TrimSpace(model.ReplacementHash) != "" || strings.TrimSpace(model.PriorHash) != "" {
+		if model.OldEvidenceRef != "" || model.NewEvidenceRef != "" || model.LineageRef != "" || model.ReplacementHash != "" || model.PriorHash != "" {
 			return Point15ValCStateBlocked
 		}
 		return Point15ValCStateActive
 	}
 	if !point14Val0RefValid(model.OldEvidenceRef, "evidence_") ||
 		!point14Val0RefValid(model.NewEvidenceRef, "evidence_") ||
-		strings.TrimSpace(model.OldEvidenceRef) == strings.TrimSpace(model.NewEvidenceRef) ||
-		strings.TrimSpace(model.ReplacementHash) == "" ||
+		model.OldEvidenceRef == model.NewEvidenceRef ||
+		model.ReplacementHash == "" ||
 		!point14Val0HashRefValid(model.ReplacementHash) ||
-		strings.TrimSpace(model.PriorHash) == "" ||
+		model.PriorHash == "" ||
 		!point14Val0HashRefValid(model.PriorHash) {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.ReplacementHash) == strings.TrimSpace(model.PriorHash) {
+	if model.ReplacementHash == model.PriorHash {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.LineageRef) == "" || !point15ValCDependencyRefValid(model.LineageRef) {
+	if model.LineageRef == "" || !point15ValCDependencyRefValid(model.LineageRef) {
 		return Point15ValCStateBlocked
 	}
 	return Point15ValCStateReviewRequired
@@ -868,29 +853,29 @@ func EvaluatePoint15ValCTimestampDisciplineState(model Point15ValCTimestampDisci
 	if model.ClientLocalCreatesCanonical || model.SourceEventCreatesCanonical {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.ReceivedAt) != "" && !point14Val0CanonicalTimeSourceValid(model.ReceivedAtTimeSource) ||
-		strings.TrimSpace(model.ValidatedAt) != "" && !point14Val0CanonicalTimeSourceValid(model.ValidatedAtTimeSource) ||
-		strings.TrimSpace(model.EnforcedAt) != "" && !point14Val0CanonicalTimeSourceValid(model.EnforcedAtTimeSource) ||
-		strings.TrimSpace(model.EvaluatedAt) != "" && !point14Val0CanonicalTimeSourceValid(model.EvaluatedAtTimeSource) ||
-		strings.TrimSpace(model.ReferenceNow) != "" && !point14Val0CanonicalTimeSourceValid(model.ReferenceNowTimeSource) {
+	if model.ReceivedAt != "" && !point14Val0CanonicalTimeSourceValid(model.ReceivedAtTimeSource) ||
+		model.ValidatedAt != "" && !point14Val0CanonicalTimeSourceValid(model.ValidatedAtTimeSource) ||
+		model.EnforcedAt != "" && !point14Val0CanonicalTimeSourceValid(model.EnforcedAtTimeSource) ||
+		model.EvaluatedAt != "" && !point14Val0CanonicalTimeSourceValid(model.EvaluatedAtTimeSource) ||
+		model.ReferenceNow != "" && !point14Val0CanonicalTimeSourceValid(model.ReferenceNowTimeSource) {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.SourceEventAt) != "" {
+	if model.SourceEventAt != "" {
 		if !point14Val0ParsedTimeOk(model.SourceEventAt) || !point14Val0CanonicalTimeSourceValid(model.SourceEventTimeSource) {
 			return Point15ValCStateBlocked
 		}
 	}
-	if (model.RevocationPresent || model.ExpiryEnforced || model.SupersessionPresent) && strings.TrimSpace(model.EnforcedAt) == "" {
+	if (model.RevocationPresent || model.ExpiryEnforced || model.SupersessionPresent) && model.EnforcedAt == "" {
 		return Point15ValCStateIncomplete
 	}
-	if model.RevocationPresent && (strings.TrimSpace(model.ReceivedAt) == "" || strings.TrimSpace(model.ValidatedAt) == "") {
+	if model.RevocationPresent && (model.ReceivedAt == "" || model.ValidatedAt == "") {
 		return Point15ValCStateIncomplete
 	}
 	if (model.RevocationPresent || model.ExpiryEnforced || model.SupersessionPresent) &&
-		strings.TrimSpace(model.SourceEventAt) != "" &&
-		strings.TrimSpace(model.ReceivedAt) == "" &&
-		strings.TrimSpace(model.ValidatedAt) == "" &&
-		strings.TrimSpace(model.EnforcedAt) == "" {
+		model.SourceEventAt != "" &&
+		model.ReceivedAt == "" &&
+		model.ValidatedAt == "" &&
+		model.EnforcedAt == "" {
 		return Point15ValCStateBlocked
 	}
 	referenceNow, okNow := point14Val0ParsedTime(model.ReferenceNow)
@@ -926,7 +911,7 @@ func EvaluatePoint15ValCTenantBoundaryState(model Point15ValCTenantBoundary) str
 	if !point15ValCDependencyRefValid(model.BoundaryID) {
 		return Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" || strings.TrimSpace(model.ReferencedTenantScope) == "" || strings.TrimSpace(model.EnforcementResultTenantScope) == "" {
+	if model.TenantScope == "" || model.ReferencedTenantScope == "" || model.EnforcementResultTenantScope == "" {
 		return Point15ValCStateIncomplete
 	}
 	if !point11Val0ScopeValid(model.TenantScope) ||
@@ -935,8 +920,8 @@ func EvaluatePoint15ValCTenantBoundaryState(model Point15ValCTenantBoundary) str
 		return Point15ValCStateBlocked
 	}
 	if model.CrossTenantDetected ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(model.ReferencedTenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(model.EnforcementResultTenantScope) {
+		model.TenantScope != model.ReferencedTenantScope ||
+		model.TenantScope != model.EnforcementResultTenantScope {
 		return Point15ValCStateBlocked
 	}
 	return Point15ValCStateActive
@@ -983,7 +968,7 @@ func point15ValCNoOverclaimGuardModel() Point15ValCNoOverclaimGuard {
 }
 
 func EvaluatePoint15ValCNoOverclaimGuardState(model Point15ValCNoOverclaimGuard) string {
-	if strings.TrimSpace(model.EnforcementDisclaimer) != point15ValCEnforcementDisclaimer {
+	if model.EnforcementDisclaimer != point15ValCEnforcementDisclaimer {
 		return Point15ValCStateBlocked
 	}
 	if !point12Val0ExactStringSetMatch(model.AllowedSafeWording, point15ValCSafeWording()) ||
@@ -1048,17 +1033,20 @@ func Point15ValCFoundationModel() Point15ValCEnforcementBoundaryFoundation {
 
 func point15ValCAggregate(states ...string) string {
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValCStateBlocked {
+		if !point15ValCStateValid(state) {
+			return Point15ValCStateBlocked
+		}
+		if state == Point15ValCStateBlocked {
 			return Point15ValCStateBlocked
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValCStateReviewRequired {
+		if state == Point15ValCStateReviewRequired {
 			return Point15ValCStateReviewRequired
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValCStateIncomplete {
+		if state == Point15ValCStateIncomplete {
 			return Point15ValCStateIncomplete
 		}
 	}
@@ -1081,7 +1069,7 @@ func point15ValCBlockingReasons(model Point15ValCEnforcementBoundaryFoundation) 
 	}
 	reasons := []string{}
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15ValCStateBlocked {
+		if state == Point15ValCStateBlocked {
 			reasons = append(reasons, name)
 		}
 	}
@@ -1104,7 +1092,7 @@ func point15ValCReviewPrerequisites(model Point15ValCEnforcementBoundaryFoundati
 	}
 	prereqs := append([]string{}, model.Dependency.ReviewPrerequisites...)
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15ValCStateReviewRequired || strings.TrimSpace(state) == Point15ValCStateIncomplete {
+		if state == Point15ValCStateReviewRequired || state == Point15ValCStateIncomplete {
 			prereqs = append(prereqs, name)
 		}
 	}
@@ -1125,20 +1113,20 @@ func ComputePoint15ValCEnforcementBoundaryFoundation(model Point15ValCEnforcemen
 	model.AuthorityBoundaryState = EvaluatePoint15ValCAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValCNoOverclaimGuardState(model.NoOverclaimGuard)
 
-	expectedTenant := strings.TrimSpace(model.Dependency.InheritedTenantScope)
-	expectedEvidenceID := strings.TrimSpace(model.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.EvidenceContext.EvidenceID)
-	expectedBindingRef := strings.TrimSpace(model.Dependency.Point15ValB.DowngradeBinding.BindingID)
-	expectedDecisionRef := strings.TrimSpace(model.Dependency.Point15ValB.Dependency.Point15ValA.Decision.DecisionID)
+	expectedTenant := model.Dependency.InheritedTenantScope
+	expectedEvidenceID := model.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.EvidenceContext.EvidenceID
+	expectedBindingRef := model.Dependency.Point15ValB.DowngradeBinding.BindingID
+	expectedDecisionRef := model.Dependency.Point15ValB.Dependency.Point15ValA.Decision.DecisionID
 
 	if expectedTenant == "" ||
-		strings.TrimSpace(model.EnforcementAction.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.EvidenceLifecycle.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.RevocationBoundary.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.ExpiryBoundary.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.SupersessionBoundary.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.TimestampDiscipline.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.TenantBoundary.TenantScope) != expectedTenant ||
-		strings.TrimSpace(model.AuthorityBoundary.TenantScope) != expectedTenant {
+		model.EnforcementAction.TenantScope != expectedTenant ||
+		model.EvidenceLifecycle.TenantScope != expectedTenant ||
+		model.RevocationBoundary.TenantScope != expectedTenant ||
+		model.ExpiryBoundary.TenantScope != expectedTenant ||
+		model.SupersessionBoundary.TenantScope != expectedTenant ||
+		model.TimestampDiscipline.TenantScope != expectedTenant ||
+		model.TenantBoundary.TenantScope != expectedTenant ||
+		model.AuthorityBoundary.TenantScope != expectedTenant {
 		model.EnforcementActionState = Point15ValCStateBlocked
 		model.EvidenceLifecycleState = Point15ValCStateBlocked
 		model.RevocationBoundaryState = Point15ValCStateBlocked
@@ -1149,27 +1137,27 @@ func ComputePoint15ValCEnforcementBoundaryFoundation(model Point15ValCEnforcemen
 		model.AuthorityBoundaryState = Point15ValCStateBlocked
 	}
 	if expectedEvidenceID == "" ||
-		strings.TrimSpace(model.EnforcementAction.EvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.EvidenceLifecycle.EvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.RevocationBoundary.EvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.ExpiryBoundary.EvidenceID) != expectedEvidenceID ||
-		strings.TrimSpace(model.TimestampDiscipline.EvidenceID) != expectedEvidenceID {
+		model.EnforcementAction.EvidenceID != expectedEvidenceID ||
+		model.EvidenceLifecycle.EvidenceID != expectedEvidenceID ||
+		model.RevocationBoundary.EvidenceID != expectedEvidenceID ||
+		model.ExpiryBoundary.EvidenceID != expectedEvidenceID ||
+		model.TimestampDiscipline.EvidenceID != expectedEvidenceID {
 		model.EnforcementActionState = Point15ValCStateBlocked
 		model.EvidenceLifecycleState = Point15ValCStateBlocked
 		model.RevocationBoundaryState = Point15ValCStateBlocked
 		model.ExpiryBoundaryState = Point15ValCStateBlocked
 		model.TimestampDisciplineState = Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.EnforcementAction.SourceValBTriggerRef) != expectedBindingRef ||
-		strings.TrimSpace(model.EnforcementAction.SourceValADecisionRef) != expectedDecisionRef {
+	if model.EnforcementAction.SourceValBTriggerRef != expectedBindingRef ||
+		model.EnforcementAction.SourceValADecisionRef != expectedDecisionRef {
 		model.EnforcementActionState = Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantBoundary.ReferencedTenantScope) != expectedTenant ||
-		strings.TrimSpace(model.TenantBoundary.EnforcementResultTenantScope) != expectedTenant {
+	if model.TenantBoundary.ReferencedTenantScope != expectedTenant ||
+		model.TenantBoundary.EnforcementResultTenantScope != expectedTenant {
 		model.TenantBoundaryState = Point15ValCStateBlocked
 	}
-	if strings.TrimSpace(model.EnforcementAction.TargetState) == Point15Val0StateActive {
-		if strings.TrimSpace(model.EvidenceLifecycle.LifecycleStatus) != point15ValCLifecycleActive ||
+	if model.EnforcementAction.TargetState == Point15Val0StateActive {
+		if model.EvidenceLifecycle.LifecycleStatus != point15ValCLifecycleActive ||
 			model.RevocationBoundary.RevocationPresent ||
 			model.ExpiryBoundary.ExpiryEnforced ||
 			model.SupersessionBoundary.SupersessionPresent {

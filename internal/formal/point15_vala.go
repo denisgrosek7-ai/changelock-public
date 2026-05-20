@@ -229,31 +229,59 @@ func point15ValASafeWording() []string {
 	}
 }
 
-func point15ValAObservedTextContainsForbiddenWording(text string) bool {
-	trimmed := strings.TrimSpace(strings.ToLower(text))
-	if trimmed == "" {
-		return false
-	}
-	for _, safe := range point15ValASafeWording() {
-		if trimmed == strings.ToLower(strings.TrimSpace(safe)) {
-			return false
-		}
-	}
-	for _, forbidden := range point15ValAForbiddenWording() {
-		if strings.Contains(trimmed, strings.ToLower(strings.TrimSpace(forbidden))) {
+func point15ObservedTextAllowedSafeWithNormalizer(normalized string, safeWording []string, normalize func(string) string) bool {
+	for _, safe := range safeWording {
+		if normalized == normalize(safe) {
 			return true
 		}
 	}
 	return false
 }
 
-func point15ValAObservedListContainsForbiddenWording(values []string) bool {
-	for _, value := range values {
-		if point15ValAObservedTextContainsForbiddenWording(value) {
+func point15ObservedTextContainsForbiddenWordingWithNormalizer(text string, safeWording, forbiddenWording []string, normalize func(string) string) bool {
+	normalized := normalize(text)
+	if normalized == "" {
+		return false
+	}
+	if point15ObservedTextAllowedSafeWithNormalizer(normalized, safeWording, normalize) {
+		return false
+	}
+	for _, forbidden := range forbiddenWording {
+		if formalNoOverclaimContainsForbidden(normalized, normalize(forbidden)) {
 			return true
 		}
 	}
 	return false
+}
+
+func point15ObservedListContainsForbiddenWordingWithNormalizer(values []string, safeWording, forbiddenWording []string, normalize func(string) string) bool {
+	normalizedValues := []string{}
+	allowedValues := []bool{}
+	for _, value := range values {
+		if point15ObservedTextContainsForbiddenWordingWithNormalizer(value, safeWording, forbiddenWording, normalize) {
+			return true
+		}
+		normalized := normalize(value)
+		if normalized == "" {
+			continue
+		}
+		normalizedValues = append(normalizedValues, normalized)
+		allowedValues = append(allowedValues, point15ObservedTextAllowedSafeWithNormalizer(normalized, safeWording, normalize))
+	}
+	for _, forbidden := range forbiddenWording {
+		if formalNoOverclaimForbiddenPhraseAcrossValues(normalizedValues, allowedValues, normalize(forbidden)) {
+			return true
+		}
+	}
+	return false
+}
+
+func point15ValAObservedTextContainsForbiddenWording(text string) bool {
+	return point15ObservedTextContainsForbiddenWordingWithNormalizer(text, point15ValASafeWording(), point15ValAForbiddenWording(), formalNoOverclaimNormalizePublicText)
+}
+
+func point15ValAObservedListContainsForbiddenWording(values []string) bool {
+	return point15ObservedListContainsForbiddenWordingWithNormalizer(values, point15ValASafeWording(), point15ValAForbiddenWording(), formalNoOverclaimNormalizePublicText)
 }
 
 func point15ValAVal0PayloadContainsPoint15Pass(val0 Point15Val0FreshnessDisciplineFoundation) bool {
@@ -265,7 +293,7 @@ func point15ValAVal0PayloadContainsPoint15Pass(val0 Point15Val0FreshnessDiscipli
 }
 
 func point15ValATriggerObservedFreshnessStatus(triggerType string) string {
-	switch strings.TrimSpace(triggerType) {
+	switch triggerType {
 	case point15ValATriggerExpired:
 		return point15Val0FreshnessExpired
 	case point15ValATriggerRevoked:
@@ -288,7 +316,7 @@ func point15ValATriggerObservedFreshnessStatus(triggerType string) string {
 }
 
 func point15ValATriggerExpectedOutcome(triggerType string, decisive bool, lineageValid bool) string {
-	switch strings.TrimSpace(triggerType) {
+	switch triggerType {
 	case "":
 		return point15Val0DowngradeRetainActive
 	case point15ValATriggerExpired, point15ValATriggerRevoked, point15ValATriggerUnsupported, point15ValATriggerTampered, point15ValATriggerHash, point15ValATriggerConnAuth, point15ValATriggerConnTenant:
@@ -331,7 +359,7 @@ func point15ValATriggerExpectedState(triggerType string, decisive bool, lineageV
 }
 
 func point15ValAExpectedReasonCode(triggerType string, lineageValid bool) string {
-	switch strings.TrimSpace(triggerType) {
+	switch triggerType {
 	case "":
 		return ""
 	case point15ValATriggerExpired:
@@ -377,7 +405,7 @@ func point15ValAExpectedReasonCode(triggerType string, lineageValid bool) string
 }
 
 func point15ValATargetStateToWaveState(state string) string {
-	switch strings.TrimSpace(state) {
+	switch state {
 	case Point15Val0StateActive:
 		return Point15ValAStateActive
 	case Point15Val0StateReviewRequired:
@@ -440,30 +468,33 @@ func EvaluatePoint15ValADependencyState(model Point15ValADependencySnapshot) str
 		!point11Val0ScopeValid(model.InheritedTenantScope) {
 		return Point15ValAStateBlocked
 	}
-	if strings.TrimSpace(model.Point15Val0CurrentState) != strings.TrimSpace(model.Point15Val0.CurrentState) ||
-		strings.TrimSpace(model.Point15Val0DependencyState) != strings.TrimSpace(model.Point15Val0.DependencyState) ||
-		strings.TrimSpace(model.Point15Val0FreshnessTaxonomyState) != strings.TrimSpace(model.Point15Val0.FreshnessTaxonomyState) ||
-		strings.TrimSpace(model.Point15Val0DowngradeTaxonomyState) != strings.TrimSpace(model.Point15Val0.DowngradeTaxonomyState) ||
-		strings.TrimSpace(model.Point15Val0EvidenceContextState) != strings.TrimSpace(model.Point15Val0.EvidenceContextState) ||
-		strings.TrimSpace(model.Point15Val0TenantBoundaryState) != strings.TrimSpace(model.Point15Val0.TenantBoundaryState) ||
-		strings.TrimSpace(model.Point15Val0TimestampState) != strings.TrimSpace(model.Point15Val0.TimestampDisciplineState) ||
-		strings.TrimSpace(model.Point15Val0AuthorityState) != strings.TrimSpace(model.Point15Val0.AuthorityBoundaryState) ||
-		strings.TrimSpace(model.Point15Val0NoOverclaimState) != strings.TrimSpace(model.Point15Val0.NoOverclaimState) ||
+	if model.Point15Val0CurrentState != model.Point15Val0.CurrentState ||
+		model.Point15Val0DependencyState != model.Point15Val0.DependencyState ||
+		model.Point15Val0FreshnessTaxonomyState != model.Point15Val0.FreshnessTaxonomyState ||
+		model.Point15Val0DowngradeTaxonomyState != model.Point15Val0.DowngradeTaxonomyState ||
+		model.Point15Val0EvidenceContextState != model.Point15Val0.EvidenceContextState ||
+		model.Point15Val0TenantBoundaryState != model.Point15Val0.TenantBoundaryState ||
+		model.Point15Val0TimestampState != model.Point15Val0.TimestampDisciplineState ||
+		model.Point15Val0AuthorityState != model.Point15Val0.AuthorityBoundaryState ||
+		model.Point15Val0NoOverclaimState != model.Point15Val0.NoOverclaimState ||
 		model.Point15Val0ComputedFromUpstream != model.Point15Val0.Dependency.SnapshotFromComputedOutput ||
-		strings.TrimSpace(model.InheritedPoint14ValECurrentState) != strings.TrimSpace(model.Point15Val0.Dependency.Point14ValECurrentState) ||
-		strings.TrimSpace(model.InheritedTenantScope) != strings.TrimSpace(model.Point15Val0.Dependency.InheritedTenantScope) {
+		model.InheritedPoint14ValECurrentState != model.Point15Val0.Dependency.Point14ValECurrentState ||
+		model.InheritedTenantScope != model.Point15Val0.Dependency.InheritedTenantScope {
 		return Point15ValAStateBlocked
 	}
-	if strings.TrimSpace(model.Point15Val0CurrentState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0DependencyState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0FreshnessTaxonomyState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0DowngradeTaxonomyState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0EvidenceContextState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0TenantBoundaryState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0TimestampState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0AuthorityState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.Point15Val0NoOverclaimState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.InheritedPoint14ValECurrentState) != Point14ValEStatePassConfirmed {
+	if !point15Val0EmbeddedStateChainActive(model.Point15Val0) {
+		return Point15ValAStateBlocked
+	}
+	if model.Point15Val0CurrentState != Point15Val0StateActive ||
+		model.Point15Val0DependencyState != Point15Val0StateActive ||
+		model.Point15Val0FreshnessTaxonomyState != Point15Val0StateActive ||
+		model.Point15Val0DowngradeTaxonomyState != Point15Val0StateActive ||
+		model.Point15Val0EvidenceContextState != Point15Val0StateActive ||
+		model.Point15Val0TenantBoundaryState != Point15Val0StateActive ||
+		model.Point15Val0TimestampState != Point15Val0StateActive ||
+		model.Point15Val0AuthorityState != Point15Val0StateActive ||
+		model.Point15Val0NoOverclaimState != Point15Val0StateActive ||
+		model.InheritedPoint14ValECurrentState != Point14ValEStatePassConfirmed {
 		return Point15ValAStateBlocked
 	}
 	return Point15ValAStateActive
@@ -493,18 +524,18 @@ func EvaluatePoint15ValADowngradeTriggerTableState(model Point15ValADowngradeTri
 			!point15ValADependencyRefValid(model.CurrentTriggerRef) ||
 			!point15ValADependencyRefValid(model.CurrentReasonRef) ||
 			!point15ValADependencyRefValid(model.CurrentDecisionRef) ||
-			strings.TrimSpace(model.CurrentTargetState) == Point15Val0StateActive ||
-			strings.TrimSpace(model.CurrentDowngradeOutcome) == point15Val0DowngradeRetainActive {
+			model.CurrentTargetState == Point15Val0StateActive ||
+			model.CurrentDowngradeOutcome == point15Val0DowngradeRetainActive {
 			return Point15ValAStateBlocked
 		}
 		return point15ValATargetStateToWaveState(model.CurrentTargetState)
 	}
-	if strings.TrimSpace(model.CurrentTriggerRef) != "" ||
-		strings.TrimSpace(model.CurrentReasonRef) != "" ||
-		strings.TrimSpace(model.CurrentDecisionRef) != "" ||
-		strings.TrimSpace(model.CurrentTriggerType) != "" ||
-		strings.TrimSpace(model.CurrentTargetState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.CurrentDowngradeOutcome) != point15Val0DowngradeRetainActive {
+	if model.CurrentTriggerRef != "" ||
+		model.CurrentReasonRef != "" ||
+		model.CurrentDecisionRef != "" ||
+		model.CurrentTriggerType != "" ||
+		model.CurrentTargetState != Point15Val0StateActive ||
+		model.CurrentDowngradeOutcome != point15Val0DowngradeRetainActive {
 		return Point15ValAStateBlocked
 	}
 	return Point15ValAStateActive
@@ -524,7 +555,7 @@ func EvaluatePoint15ValADowngradeTriggerState(model Point15ValADowngradeTrigger)
 	if !point15ValADependencyRefValid(model.TriggerID) ||
 		!point15Val0StateValid(model.TargetState) ||
 		!point15Val0DowngradeOutcomeValid(model.TargetDowngradeOutcome) ||
-		(strings.TrimSpace(model.ObservedFreshnessStatus) != "" && !point15Val0FreshnessStatusValid(model.ObservedFreshnessStatus)) {
+		(model.ObservedFreshnessStatus != "" && !point15Val0FreshnessStatusValid(model.ObservedFreshnessStatus)) {
 		return Point15ValAStateBlocked
 	}
 	if model.TriggerDetected {
@@ -536,21 +567,21 @@ func EvaluatePoint15ValADowngradeTriggerState(model Point15ValADowngradeTrigger)
 		expectedState := point15ValATriggerExpectedState(model.TriggerType, model.TriggerIsDecisive, lineageValid)
 		expectedFreshness := point15ValATriggerObservedFreshnessStatus(model.TriggerType)
 		if expectedOutcome == "" ||
-			strings.TrimSpace(model.ObservedFreshnessStatus) != expectedFreshness ||
-			strings.TrimSpace(model.TargetState) != expectedState ||
-			strings.TrimSpace(model.TargetDowngradeOutcome) != expectedOutcome ||
+			model.ObservedFreshnessStatus != expectedFreshness ||
+			model.TargetState != expectedState ||
+			model.TargetDowngradeOutcome != expectedOutcome ||
 			model.RetainsPass ||
 			model.RetainsActiveClosure {
 			return Point15ValAStateBlocked
 		}
 		return point15ValATargetStateToWaveState(model.TargetState)
 	}
-	if strings.TrimSpace(model.TriggerType) != "" ||
+	if model.TriggerType != "" ||
 		model.TriggerIsDecisive ||
-		strings.TrimSpace(model.SupersessionLineageRef) != "" ||
-		strings.TrimSpace(model.ObservedFreshnessStatus) != point15Val0FreshnessFresh ||
-		strings.TrimSpace(model.TargetState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.TargetDowngradeOutcome) != point15Val0DowngradeRetainActive ||
+		model.SupersessionLineageRef != "" ||
+		model.ObservedFreshnessStatus != point15Val0FreshnessFresh ||
+		model.TargetState != Point15Val0StateActive ||
+		model.TargetDowngradeOutcome != point15Val0DowngradeRetainActive ||
 		model.RetainsPass ||
 		!model.RetainsActiveClosure {
 		return Point15ValAStateBlocked
@@ -571,16 +602,16 @@ func EvaluatePoint15ValADowngradeReasonState(model Point15ValADowngradeReason) s
 	if !point15ValADependencyRefValid(model.ReasonID) ||
 		!point15Val0StateValid(model.TargetState) ||
 		!point15Val0DowngradeOutcomeValid(model.TargetDowngradeOutcome) ||
-		(strings.TrimSpace(model.ObservedFreshnessStatus) != "" && !point15Val0FreshnessStatusValid(model.ObservedFreshnessStatus)) {
+		(model.ObservedFreshnessStatus != "" && !point15Val0FreshnessStatusValid(model.ObservedFreshnessStatus)) {
 		return Point15ValAStateBlocked
 	}
-	if strings.TrimSpace(model.TriggerType) == "" {
-		if strings.TrimSpace(model.ReasonCode) != "" ||
+	if model.TriggerType == "" {
+		if model.ReasonCode != "" ||
 			model.Decisive ||
-			strings.TrimSpace(model.SupersessionLineageRef) != "" ||
-			strings.TrimSpace(model.ObservedFreshnessStatus) != point15Val0FreshnessFresh ||
-			strings.TrimSpace(model.TargetState) != Point15Val0StateActive ||
-			strings.TrimSpace(model.TargetDowngradeOutcome) != point15Val0DowngradeRetainActive {
+			model.SupersessionLineageRef != "" ||
+			model.ObservedFreshnessStatus != point15Val0FreshnessFresh ||
+			model.TargetState != Point15Val0StateActive ||
+			model.TargetDowngradeOutcome != point15Val0DowngradeRetainActive {
 			return Point15ValAStateBlocked
 		}
 		return Point15ValAStateActive
@@ -593,10 +624,10 @@ func EvaluatePoint15ValADowngradeReasonState(model Point15ValADowngradeReason) s
 	expectedOutcome := point15ValATriggerExpectedOutcome(model.TriggerType, model.Decisive, lineageValid)
 	expectedState := point15ValATriggerExpectedState(model.TriggerType, model.Decisive, lineageValid)
 	expectedFreshness := point15ValATriggerObservedFreshnessStatus(model.TriggerType)
-	if strings.TrimSpace(model.ReasonCode) != expectedReason ||
-		strings.TrimSpace(model.ObservedFreshnessStatus) != expectedFreshness ||
-		strings.TrimSpace(model.TargetState) != expectedState ||
-		strings.TrimSpace(model.TargetDowngradeOutcome) != expectedOutcome {
+	if model.ReasonCode != expectedReason ||
+		model.ObservedFreshnessStatus != expectedFreshness ||
+		model.TargetState != expectedState ||
+		model.TargetDowngradeOutcome != expectedOutcome {
 		return Point15ValAStateBlocked
 	}
 	return point15ValATargetStateToWaveState(model.TargetState)
@@ -627,17 +658,17 @@ func EvaluatePoint15ValADowngradeDecisionState(model Point15ValADowngradeDecisio
 			model.RetainsActiveClosure {
 			return Point15ValAStateBlocked
 		}
-		if strings.TrimSpace(model.TargetState) == Point15Val0StateActive ||
-			strings.TrimSpace(model.TargetDowngradeOutcome) == point15Val0DowngradeRetainActive {
+		if model.TargetState == Point15Val0StateActive ||
+			model.TargetDowngradeOutcome == point15Val0DowngradeRetainActive {
 			return Point15ValAStateBlocked
 		}
 		return point15ValATargetStateToWaveState(model.TargetState)
 	}
-	if strings.TrimSpace(model.TriggerRef) != "" ||
-		strings.TrimSpace(model.ReasonRef) != "" ||
-		strings.TrimSpace(model.TriggerType) != "" ||
-		strings.TrimSpace(model.TargetState) != Point15Val0StateActive ||
-		strings.TrimSpace(model.TargetDowngradeOutcome) != point15Val0DowngradeRetainActive ||
+	if model.TriggerRef != "" ||
+		model.ReasonRef != "" ||
+		model.TriggerType != "" ||
+		model.TargetState != Point15Val0StateActive ||
+		model.TargetDowngradeOutcome != point15Val0DowngradeRetainActive ||
 		model.RetainsPass ||
 		!model.RetainsActiveClosure {
 		return Point15ValAStateBlocked
@@ -693,7 +724,7 @@ func point15ValANoOverclaimGuardModel() Point15ValANoOverclaimGuard {
 }
 
 func EvaluatePoint15ValANoOverclaimGuardState(model Point15ValANoOverclaimGuard) string {
-	if strings.TrimSpace(model.TriggerDisclaimer) != point15ValATriggerDisclaimer ||
+	if model.TriggerDisclaimer != point15ValATriggerDisclaimer ||
 		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point15ValASafeWording()) ||
 		!point12Val0ExactStringSetMatch(model.BlockedWording, point15ValAForbiddenWording()) {
 		return Point15ValAStateBlocked
@@ -728,17 +759,20 @@ func Point15ValAFoundationModel() Point15ValADowngradeTriggerFoundation {
 
 func point15ValAAggregate(states ...string) string {
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValAStateBlocked {
+		if !point15ValAStateValid(state) {
+			return Point15ValAStateBlocked
+		}
+		if state == Point15ValAStateBlocked {
 			return Point15ValAStateBlocked
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValAStateReviewRequired {
+		if state == Point15ValAStateReviewRequired {
 			return Point15ValAStateReviewRequired
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15ValAStateIncomplete {
+		if state == Point15ValAStateIncomplete {
 			return Point15ValAStateIncomplete
 		}
 	}
@@ -757,7 +791,7 @@ func point15ValABlockingReasons(model Point15ValADowngradeTriggerFoundation) []s
 	}
 	reasons := []string{}
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15ValAStateBlocked {
+		if state == Point15ValAStateBlocked {
 			reasons = append(reasons, name)
 		}
 	}
@@ -776,7 +810,7 @@ func point15ValAReviewPrerequisites(model Point15ValADowngradeTriggerFoundation)
 	}
 	prereqs := append([]string{}, model.Dependency.ReviewPrerequisites...)
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15ValAStateReviewRequired || strings.TrimSpace(state) == Point15ValAStateIncomplete {
+		if state == Point15ValAStateReviewRequired || state == Point15ValAStateIncomplete {
 			prereqs = append(prereqs, name)
 		}
 	}
@@ -793,7 +827,7 @@ func ComputePoint15ValADowngradeTriggerFoundation(model Point15ValADowngradeTrig
 	model.AuthorityBoundaryState = EvaluatePoint15ValAAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValANoOverclaimGuardState(model.NoOverclaimGuard)
 
-	if strings.TrimSpace(model.AuthorityBoundary.TenantScope) != strings.TrimSpace(model.Dependency.InheritedTenantScope) {
+	if model.AuthorityBoundary.TenantScope != model.Dependency.InheritedTenantScope {
 		model.AuthorityBoundaryState = Point15ValAStateBlocked
 	}
 	if model.TriggerTable.CurrentTriggerDetected != model.Trigger.TriggerDetected ||
@@ -802,23 +836,23 @@ func ComputePoint15ValADowngradeTriggerFoundation(model Point15ValADowngradeTrig
 		model.DecisionState = Point15ValAStateBlocked
 	}
 	if model.TriggerTable.CurrentTriggerDetected {
-		if strings.TrimSpace(model.TriggerTable.CurrentTriggerRef) != strings.TrimSpace(model.Trigger.TriggerID) ||
-			strings.TrimSpace(model.TriggerTable.CurrentReasonRef) != strings.TrimSpace(model.Reason.ReasonID) ||
-			strings.TrimSpace(model.TriggerTable.CurrentDecisionRef) != strings.TrimSpace(model.Decision.DecisionID) ||
-			strings.TrimSpace(model.TriggerTable.CurrentTriggerType) != strings.TrimSpace(model.Trigger.TriggerType) ||
-			strings.TrimSpace(model.Trigger.TriggerType) != strings.TrimSpace(model.Reason.TriggerType) ||
-			strings.TrimSpace(model.Reason.TriggerType) != strings.TrimSpace(model.Decision.TriggerType) {
+		if model.TriggerTable.CurrentTriggerRef != model.Trigger.TriggerID ||
+			model.TriggerTable.CurrentReasonRef != model.Reason.ReasonID ||
+			model.TriggerTable.CurrentDecisionRef != model.Decision.DecisionID ||
+			model.TriggerTable.CurrentTriggerType != model.Trigger.TriggerType ||
+			model.Trigger.TriggerType != model.Reason.TriggerType ||
+			model.Reason.TriggerType != model.Decision.TriggerType {
 			model.TriggerTableState = Point15ValAStateBlocked
 			model.ReasonState = Point15ValAStateBlocked
 			model.DecisionState = Point15ValAStateBlocked
 		}
 	}
-	if strings.TrimSpace(model.TriggerTable.CurrentTargetState) != strings.TrimSpace(model.Trigger.TargetState) ||
-		strings.TrimSpace(model.TriggerTable.CurrentTargetState) != strings.TrimSpace(model.Reason.TargetState) ||
-		strings.TrimSpace(model.TriggerTable.CurrentTargetState) != strings.TrimSpace(model.Decision.TargetState) ||
-		strings.TrimSpace(model.TriggerTable.CurrentDowngradeOutcome) != strings.TrimSpace(model.Trigger.TargetDowngradeOutcome) ||
-		strings.TrimSpace(model.TriggerTable.CurrentDowngradeOutcome) != strings.TrimSpace(model.Reason.TargetDowngradeOutcome) ||
-		strings.TrimSpace(model.TriggerTable.CurrentDowngradeOutcome) != strings.TrimSpace(model.Decision.TargetDowngradeOutcome) {
+	if model.TriggerTable.CurrentTargetState != model.Trigger.TargetState ||
+		model.TriggerTable.CurrentTargetState != model.Reason.TargetState ||
+		model.TriggerTable.CurrentTargetState != model.Decision.TargetState ||
+		model.TriggerTable.CurrentDowngradeOutcome != model.Trigger.TargetDowngradeOutcome ||
+		model.TriggerTable.CurrentDowngradeOutcome != model.Reason.TargetDowngradeOutcome ||
+		model.TriggerTable.CurrentDowngradeOutcome != model.Decision.TargetDowngradeOutcome {
 		model.TriggerTableState = Point15ValAStateBlocked
 		model.ReasonState = Point15ValAStateBlocked
 		model.DecisionState = Point15ValAStateBlocked

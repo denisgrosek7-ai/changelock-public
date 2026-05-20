@@ -126,6 +126,34 @@ func TestPoint15ValBDependencyState(t *testing.T) {
 		{"blocks when computed provenance mismatches upstream", func(model *Point15ValBDependencySnapshot) {
 			model.Point15ValAComputedFromUpstream = false
 		}, Point15ValBStateBlocked},
+		{"blocks padded vala current state raw exact", func(model *Point15ValBDependencySnapshot) {
+			model.Point15ValACurrentState = " " + Point15ValAStateActive + " "
+			model.Point15ValA.CurrentState = model.Point15ValACurrentState
+		}, Point15ValBStateBlocked},
+		{"blocks tab newline inherited val0 current state raw exact", func(model *Point15ValBDependencySnapshot) {
+			model.InheritedPoint15Val0CurrentState = "\t" + Point15Val0StateActive + "\n"
+			model.Point15ValA.Dependency.Point15Val0CurrentState = model.InheritedPoint15Val0CurrentState
+		}, Point15ValBStateBlocked},
+		{"blocks padded inherited point14 pass state raw exact", func(model *Point15ValBDependencySnapshot) {
+			model.InheritedPoint14ValECurrentState = " " + Point14ValEStatePassConfirmed + " "
+			model.Point15ValA.Dependency.InheritedPoint14ValECurrentState = model.InheritedPoint14ValECurrentState
+		}, Point15ValBStateBlocked},
+		{"blocks padded inherited tenant scope raw exact", func(model *Point15ValBDependencySnapshot) {
+			model.InheritedTenantScope = " " + model.InheritedTenantScope + " "
+			model.Point15ValA.Dependency.InheritedTenantScope = model.InheritedTenantScope
+		}, Point15ValBStateBlocked},
+		{"blocks stale embedded vala no-overclaim disclaimer mutation", func(model *Point15ValBDependencySnapshot) {
+			model.Point15ValA.NoOverclaimGuard.TriggerDisclaimer = " " + point15ValATriggerDisclaimer + " "
+		}, Point15ValBStateBlocked},
+		{"blocks stale embedded vala split no-overclaim wording", func(model *Point15ValBDependencySnapshot) {
+			model.Point15ValA.NoOverclaimGuard.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		}, Point15ValBStateBlocked},
+		{"blocks stale embedded vala confusable no-overclaim wording", func(model *Point15ValBDependencySnapshot) {
+			model.Point15ValA.NoOverclaimGuard.ObservedTexts = []string{"production appro\u03bded"}
+		}, Point15ValBStateBlocked},
+		{"blocks stale embedded val0 timestamp ordering mutation", func(model *Point15ValBDependencySnapshot) {
+			model.Point15ValA.Dependency.Point15Val0.TimestampDiscipline.ObservedAt = "2026-05-06T18:30:00Z"
+		}, Point15ValBStateBlocked},
 	}
 
 	for _, tc := range tests {
@@ -182,6 +210,13 @@ func TestPoint15ValBRevalidationScheduleState(t *testing.T) {
 		}, Point15ValBStateIncomplete},
 		{"not required with scheduled status blocks", func(model *Point15ValBRevalidationSchedule) {
 			model.Required = false
+		}, Point15ValBStateBlocked},
+		{"not required rejects whitespace-only due time raw exact", func(model *Point15ValBRevalidationSchedule) {
+			model.Required = false
+			model.ScheduledStatus = point15ValBScheduleNotRequired
+			model.ScheduledAt = ""
+			model.SchedulerTimeSource = ""
+			model.RevalidationDueAt = " "
 		}, Point15ValBStateBlocked},
 	}
 
@@ -249,6 +284,11 @@ func TestPoint15ValBRevalidationRunState(t *testing.T) {
 			model.RunEvidenceHash = ""
 			return model
 		}, Point15ValBStateIncomplete},
+		{"not_run rejects whitespace-only run id raw exact", func() Point15ValBRevalidationRun {
+			model := point15ValBValidRunModel()
+			model.RunID = " "
+			return model
+		}, Point15ValBStateBlocked},
 	}
 
 	for _, tc := range tests {
@@ -283,6 +323,12 @@ func TestPoint15ValBRetryBudgetState(t *testing.T) {
 		{"next retry requires trusted time source", func(model *Point15ValBRetryBudget) {
 			model.NextRetryAt = "2026-05-07T10:15:00Z"
 			model.NextRetryTimeSource = point14Val0TimeSourceClientLocal
+		}, Point15ValBStateBlocked},
+		{"not applicable rejects whitespace-only next retry raw exact", func(model *Point15ValBRetryBudget) {
+			model.RetryBudgetStatus = point15ValBRetryNotApplicable
+			model.MaxRetries = 0
+			model.AttemptsUsed = 0
+			model.NextRetryAt = "\t"
 		}, Point15ValBStateBlocked},
 	}
 
@@ -430,6 +476,11 @@ func TestPoint15ValBDowngradeBindingState(t *testing.T) {
 			model.RetainsActiveClosure = false
 			return model
 		}, Point15ValBStateBlocked},
+		{"no trigger rejects whitespace-only trigger type raw exact", func() Point15ValBDowngradeBinding {
+			model := point15ValBValidBindingModel()
+			model.TriggerType = " "
+			return model
+		}, Point15ValBStateBlocked},
 	}
 
 	for _, tc := range tests {
@@ -551,6 +602,12 @@ func TestPoint15ValBNoOverclaimGuardState(t *testing.T) {
 		{"forbidden wording blocks", func(model *Point15ValBNoOverclaimGuard) {
 			model.ObservedTexts = []string{"continuous assurance guaranteed"}
 		}, Point15ValBStateBlocked},
+		{"split forbidden wording blocks", func(model *Point15ValBNoOverclaimGuard) {
+			model.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		}, Point15ValBStateBlocked},
+		{"confusable forbidden wording blocks", func(model *Point15ValBNoOverclaimGuard) {
+			model.ObservedTexts = []string{"production appro\u03bded"}
+		}, Point15ValBStateBlocked},
 		{"safe bounded wording passes", func(*Point15ValBNoOverclaimGuard) {}, Point15ValBStateActive},
 		{"classified internal blocked diagnostics allowed", func(model *Point15ValBNoOverclaimGuard) {
 			model.InternalDiagnosticTexts = []string{"production approved"}
@@ -558,6 +615,9 @@ func TestPoint15ValBNoOverclaimGuardState(t *testing.T) {
 		}, Point15ValBStateActive},
 		{"unclassified internal blocked diagnostics block", func(model *Point15ValBNoOverclaimGuard) {
 			model.InternalDiagnosticTexts = []string{"automatically verified forever"}
+		}, Point15ValBStateBlocked},
+		{"padded revalidation disclaimer blocks raw exact", func(model *Point15ValBNoOverclaimGuard) {
+			model.RevalidationDisclaimer = " " + point15ValBRevalidationDisclaimer + " "
 		}, Point15ValBStateBlocked},
 	}
 
@@ -678,6 +738,42 @@ func TestPoint15ValBScheduledRevalidationFoundationState(t *testing.T) {
 			tc.assert(t, got)
 		})
 	}
+
+	t.Run("stale embedded vala no-overclaim mutation records exact dependency reason", func(t *testing.T) {
+		model := point15ValBValidFoundationModel()
+		model.Dependency.Point15ValA.NoOverclaimGuard.TriggerDisclaimer = " " + point15ValATriggerDisclaimer + " "
+		computed := ComputePoint15ValBScheduledRevalidationFoundation(model)
+		if computed.CurrentState != Point15ValBStateBlocked {
+			t.Fatalf("expected stale embedded ValA no-overclaim mutation to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "dependency") {
+			t.Fatalf("expected exact dependency blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
+
+	t.Run("stale embedded vala split no-overclaim wording records exact dependency reason", func(t *testing.T) {
+		model := point15ValBValidFoundationModel()
+		model.Dependency.Point15ValA.NoOverclaimGuard.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		computed := ComputePoint15ValBScheduledRevalidationFoundation(model)
+		if computed.CurrentState != Point15ValBStateBlocked {
+			t.Fatalf("expected stale embedded ValA split no-overclaim wording to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "dependency") {
+			t.Fatalf("expected exact dependency blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
+
+	t.Run("stale embedded val0 timestamp mutation records exact dependency reason", func(t *testing.T) {
+		model := point15ValBValidFoundationModel()
+		model.Dependency.Point15ValA.Dependency.Point15Val0.TimestampDiscipline.ObservedAt = "2026-05-06T18:30:00Z"
+		computed := ComputePoint15ValBScheduledRevalidationFoundation(model)
+		if computed.CurrentState != Point15ValBStateBlocked {
+			t.Fatalf("expected stale embedded Val0 timestamp mutation to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "dependency") {
+			t.Fatalf("expected exact dependency blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
 }
 
 func TestPoint10ThroughPoint15ValBCurrentSweep(t *testing.T) {
@@ -712,5 +808,26 @@ func TestPoint15ValBCachedHelperNestedDependencyIsolation(t *testing.T) {
 	fresh := point15ValBValidFoundationModel()
 	if fresh.Dependency.Point15ValA.NoOverclaimGuard.AllowedSafeWording[0] != originalAllowed {
 		t.Fatalf("expected cached point15 valb nested dependency helper to return isolated copy, got %#v", fresh.Dependency.Point15ValA.NoOverclaimGuard.AllowedSafeWording)
+	}
+}
+
+func TestPoint15ValBAggregateRawExact(t *testing.T) {
+	tests := []struct {
+		name   string
+		states []string
+		want   string
+	}{
+		{"happy path active", []string{Point15ValBStateActive, Point15ValBStateActive}, Point15ValBStateActive},
+		{"direct exploit padded active blocks", []string{Point15ValBStateActive, " " + Point15ValBStateActive + " "}, Point15ValBStateBlocked},
+		{"hard invalid tab newline active blocks", []string{Point15ValBStateActive, "\t" + Point15ValBStateActive + "\n"}, Point15ValBStateBlocked},
+		{"sibling review path preserved", []string{Point15ValBStateActive, Point15ValBStateReviewRequired}, Point15ValBStateReviewRequired},
+		{"blocked path preserved", []string{Point15ValBStateActive, Point15ValBStateBlocked}, Point15ValBStateBlocked},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := point15ValBAggregate(tc.states...); got != tc.want {
+				t.Fatalf("expected %s, got %s", tc.want, got)
+			}
+		})
 	}
 }

@@ -137,6 +137,27 @@ func TestPoint15ValDDependencyState(t *testing.T) {
 		{"blocks embedded valc state laundering behind clean flat fields", func(model *Point15ValDDependencySnapshot) {
 			model.Point15ValC.CurrentState = Point15ValCStateBlocked
 		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valc no-overclaim allowed ledger mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.NoOverclaimGuard.AllowedSafeWording = append(model.Point15ValC.NoOverclaimGuard.AllowedSafeWording, "production approved")
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valc split no-overclaim wording", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.NoOverclaimGuard.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valc confusable no-overclaim wording", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.NoOverclaimGuard.ObservedTexts = []string{"production appro\u03bded"}
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valc timestamp ordering mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.TimestampDiscipline.ReceivedAt = "2026-05-07T09:06:00Z"
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valb no-overclaim blocked ledger mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.NoOverclaimGuard.BlockedWording = append(model.Point15ValC.Dependency.Point15ValB.NoOverclaimGuard.BlockedWording, "validated revalidation schedule")
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded vala no-overclaim disclaimer mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.NoOverclaimGuard.TriggerDisclaimer = " " + point15ValATriggerDisclaimer + " "
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded val0 no-overclaim allowed ledger mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording = append(model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording, "freshness certified")
+		}, Point15ValDStateBlocked},
 		{"blocks on point15 pass token", func(model *Point15ValDDependencySnapshot) {
 			model.Point15PassSeen = true
 		}, Point15ValDStateBlocked},
@@ -1167,6 +1188,42 @@ func TestPoint15ValDAssuranceProjectionFoundationState(t *testing.T) {
 		}
 		if !point15ValDStringSliceContains(computed.BlockingReasons, "no_overclaim") {
 			t.Fatalf("expected exact no_overclaim blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
+
+	t.Run("stale embedded valc timestamp mutation records exact dependency reason", func(t *testing.T) {
+		model := point15ValDValidFoundationModel()
+		model.Dependency.Point15ValC.TimestampDiscipline.ReceivedAt = "2026-05-07T09:06:00Z"
+		computed := ComputePoint15ValDAssuranceProjectionFoundation(model)
+		if computed.CurrentState != Point15ValDStateBlocked {
+			t.Fatalf("expected stale embedded ValC timestamp mutation to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "dependency") {
+			t.Fatalf("expected exact dependency blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
+
+	t.Run("stale embedded valc no overclaim mutation records exact dependency reason", func(t *testing.T) {
+		model := point15ValDValidFoundationModel()
+		model.Dependency.Point15ValC.NoOverclaimGuard.AllowedSafeWording = append(model.Dependency.Point15ValC.NoOverclaimGuard.AllowedSafeWording, "production approved")
+		computed := ComputePoint15ValDAssuranceProjectionFoundation(model)
+		if computed.CurrentState != Point15ValDStateBlocked {
+			t.Fatalf("expected stale embedded ValC no-overclaim mutation to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "dependency") {
+			t.Fatalf("expected exact dependency blocking reason, got %#v", computed.BlockingReasons)
+		}
+	})
+
+	t.Run("stale embedded valc split no overclaim wording records exact dependency reason", func(t *testing.T) {
+		model := point15ValDValidFoundationModel()
+		model.Dependency.Point15ValC.NoOverclaimGuard.ObservedTexts = []string{"continuous assurance", "guaranteed"}
+		computed := ComputePoint15ValDAssuranceProjectionFoundation(model)
+		if computed.CurrentState != Point15ValDStateBlocked {
+			t.Fatalf("expected stale embedded ValC split no-overclaim wording to block, got %#v", computed)
+		}
+		if !point15ValDStringSliceContains(computed.BlockingReasons, "dependency") {
+			t.Fatalf("expected exact dependency blocking reason, got %#v", computed.BlockingReasons)
 		}
 	})
 }

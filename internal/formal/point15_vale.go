@@ -548,42 +548,7 @@ func point15ValEInternalListContainsForbiddenWording(values []string) bool {
 }
 
 func point15ValEListContainsForbiddenWording(values []string, normalize func(string) string) bool {
-	type observedPart struct {
-		normalized string
-		allowed    bool
-	}
-	parts := []observedPart{}
-	for _, value := range values {
-		if point15ValEObservedTextContainsForbiddenWordingWithNormalizer(value, normalize) {
-			return true
-		}
-		normalized := normalize(value)
-		if normalized == "" {
-			continue
-		}
-		parts = append(parts, observedPart{
-			normalized: normalized,
-			allowed:    point15ValEObservedTextAllowedSafeWithNormalizer(normalized, normalize),
-		})
-	}
-	for start := range parts {
-		combined := ""
-		allAllowed := true
-		for end := start; end < len(parts); end++ {
-			if combined == "" {
-				combined = parts[end].normalized
-			} else {
-				combined += " " + parts[end].normalized
-			}
-			allAllowed = allAllowed && parts[end].allowed
-			for _, forbidden := range point15ValEForbiddenWording() {
-				if formalNoOverclaimContainsForbidden(combined, normalize(forbidden)) && !allAllowed {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return point15ObservedListContainsForbiddenWordingWithNormalizer(values, point15ValESafeWording(), point15ValEForbiddenWording(), normalize)
 }
 
 func point15ValECommandsRun() []string {
@@ -841,6 +806,9 @@ func EvaluatePoint15ValEDependencyState(model Point15ValEDependencySnapshot) str
 		return Point15ValEStateBlocked
 	}
 	if EvaluatePoint15ValDNoOverclaimGuardState(model.Point15ValD.NoOverclaimGuard) != Point15ValDStateActive {
+		return Point15ValEStateBlocked
+	}
+	if !point15ValDEmbeddedStateChainActive(model.Point15ValD) {
 		return Point15ValEStateBlocked
 	}
 	if model.Point15ValDCurrentState != Point15ValDStateActive ||
@@ -1508,6 +1476,16 @@ func point15ValENoOverclaimFinalCheckModel(dependency Point15ValEDependencySnaps
 	valB := dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB
 	valC := dependency.Point15ValD.Dependency.Point15ValC
 	valD := dependency.Point15ValD
+	if !point15ValDEmbeddedNoOverclaimChainActive(valD) {
+		return Point15ValENoOverclaimFinalCheck{
+			ObservedTexts:                        []string{"point15 nested no-overclaim guard blocked"},
+			InternalDiagnosticTexts:              []string{"nested_no_overclaim_guard_blocked"},
+			InternalDiagnosticsClassifiedBlocked: false,
+			AllowedSafeWording:                   point15ValESafeWording(),
+			BlockedWording:                       point15ValEForbiddenWording(),
+			ProjectionDisclaimer:                 "nested_no_overclaim_guard_blocked",
+		}
+	}
 	observed := []string{
 		"final continuous verification closure gate",
 		"projection remains read-only",

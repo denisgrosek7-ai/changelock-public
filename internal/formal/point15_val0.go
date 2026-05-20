@@ -293,7 +293,7 @@ func point15Val0ValEPayloadContainsPoint15Pass(valE Point14ValEFoundation) bool 
 }
 
 func point15Val0ExpectedMappedState(status string) string {
-	switch strings.TrimSpace(status) {
+	switch status {
 	case point15Val0FreshnessFresh:
 		return Point15Val0StateActive
 	case point15Val0FreshnessStale, point15Val0FreshnessSuperseded, point15Val0FreshnessDrifted:
@@ -308,7 +308,7 @@ func point15Val0ExpectedMappedState(status string) string {
 }
 
 func point15Val0ExpectedMappedDowngrade(status string) string {
-	switch strings.TrimSpace(status) {
+	switch status {
 	case point15Val0FreshnessFresh:
 		return point15Val0DowngradeRetainActive
 	case point15Val0FreshnessStale, point15Val0FreshnessSuperseded, point15Val0FreshnessDrifted:
@@ -323,8 +323,7 @@ func point15Val0ExpectedMappedDowngrade(status string) string {
 }
 
 func point15Val0ExpectedDowngradeOutcome(model Point15Val0DowngradeTaxonomy) string {
-	status := strings.TrimSpace(model.FreshnessStatus)
-	switch status {
+	switch model.FreshnessStatus {
 	case point15Val0FreshnessFresh:
 		return point15Val0DowngradeRetainActive
 	case point15Val0FreshnessStale:
@@ -367,17 +366,17 @@ func point15Val0ExpectedDowngradeState(model Point15Val0DowngradeTaxonomy) strin
 }
 
 func point15Val0FreshnessStatusAllowsContextOutcome(status, outcome string) bool {
-	switch strings.TrimSpace(status) {
+	switch status {
 	case point15Val0FreshnessFresh:
-		return strings.TrimSpace(outcome) == point15Val0DowngradeRetainActive
+		return outcome == point15Val0DowngradeRetainActive
 	case point15Val0FreshnessStale:
-		return strings.TrimSpace(outcome) == point15Val0DowngradeReview
+		return outcome == point15Val0DowngradeReview
 	case point15Val0FreshnessExpired, point15Val0FreshnessRevoked, point15Val0FreshnessUnsupported, point15Val0FreshnessTampered:
-		return strings.TrimSpace(outcome) == point15Val0DowngradeBlocked
+		return outcome == point15Val0DowngradeBlocked
 	case point15Val0FreshnessSuperseded, point15Val0FreshnessDrifted:
-		return strings.TrimSpace(outcome) == point15Val0DowngradeReview || strings.TrimSpace(outcome) == point15Val0DowngradeBlocked
+		return outcome == point15Val0DowngradeReview || outcome == point15Val0DowngradeBlocked
 	case point15Val0FreshnessMissing:
-		return strings.TrimSpace(outcome) == point15Val0DowngradeIncomplete || strings.TrimSpace(outcome) == point15Val0DowngradeBlocked
+		return outcome == point15Val0DowngradeIncomplete || outcome == point15Val0DowngradeBlocked
 	default:
 		return false
 	}
@@ -562,8 +561,8 @@ func EvaluatePoint15Val0EvidenceFreshnessTaxonomyState(model Point15Val0Evidence
 		!point12Val0ExactStringSetMatch(model.AllowedDowngradeOutcomes, point15Val0DowngradeOutcomes()) {
 		return Point15Val0StateBlocked
 	}
-	if strings.TrimSpace(model.MappedState) != point15Val0ExpectedMappedState(model.FreshnessStatus) ||
-		strings.TrimSpace(model.MappedDowngradeOutcome) != point15Val0ExpectedMappedDowngrade(model.FreshnessStatus) {
+	if model.MappedState != point15Val0ExpectedMappedState(model.FreshnessStatus) ||
+		model.MappedDowngradeOutcome != point15Val0ExpectedMappedDowngrade(model.FreshnessStatus) {
 		return Point15Val0StateBlocked
 	}
 	return model.MappedState
@@ -584,33 +583,32 @@ func EvaluatePoint15Val0DowngradeTaxonomyState(model Point15Val0DowngradeTaxonom
 		!point15Val0DowngradeOutcomeValid(model.DowngradeOutcome) {
 		return Point15Val0StateBlocked
 	}
-	status := strings.TrimSpace(model.FreshnessStatus)
 	expectedOutcome := point15Val0ExpectedDowngradeOutcome(model)
 	if expectedOutcome == "" {
 		return Point15Val0StateBlocked
 	}
-	if status == point15Val0FreshnessMissing {
+	if model.FreshnessStatus == point15Val0FreshnessMissing {
 		if model.FreshnessProofPresent {
 			return Point15Val0StateBlocked
 		}
 	} else if !model.FreshnessProofPresent && expectedOutcome == point15Val0DowngradeRetainActive {
 		return Point15Val0StateIncomplete
 	}
-	if status == point15Val0FreshnessSuperseded && !point15Val0LineageRefValid(model.SupersessionLineageRef) {
-		if strings.TrimSpace(model.DowngradeOutcome) != point15Val0DowngradeBlocked {
+	if model.FreshnessStatus == point15Val0FreshnessSuperseded && !point15Val0LineageRefValid(model.SupersessionLineageRef) {
+		if model.DowngradeOutcome != point15Val0DowngradeBlocked {
 			return Point15Val0StateBlocked
 		}
 		return Point15Val0StateBlocked
 	}
 	if model.RetainsPass || model.RetainsActiveClosure {
-		if status != point15Val0FreshnessFresh {
+		if model.FreshnessStatus != point15Val0FreshnessFresh {
 			return Point15Val0StateBlocked
 		}
-		if strings.TrimSpace(model.DowngradeOutcome) != point15Val0DowngradeRetainActive {
+		if model.DowngradeOutcome != point15Val0DowngradeRetainActive {
 			return Point15Val0StateBlocked
 		}
 	}
-	if strings.TrimSpace(model.DowngradeOutcome) != expectedOutcome {
+	if model.DowngradeOutcome != expectedOutcome {
 		return Point15Val0StateBlocked
 	}
 	return point15Val0ExpectedDowngradeState(model)
@@ -645,27 +643,27 @@ func EvaluatePoint15Val0FreshnessEvidenceContextState(model Point15Val0Freshness
 		!point15Val0FreshnessStatusValid(model.FreshnessStatus) ||
 		!point15Val0DowngradeOutcomeValid(model.DowngradeOutcome) ||
 		(model.ReferencedTenantScope != "" && !point11Val0ScopeValid(model.ReferencedTenantScope)) ||
-		(strings.TrimSpace(model.ObservedTimeSource) != "" && !point14Val0TimeSourceValid(model.ObservedTimeSource)) ||
-		(strings.TrimSpace(model.EvaluatedTimeSource) != "" && !point14Val0TimeSourceValid(model.EvaluatedTimeSource)) ||
-		(strings.TrimSpace(model.ValidatedTimeSource) != "" && !point14Val0TimeSourceValid(model.ValidatedTimeSource)) {
+		(model.ObservedTimeSource != "" && !point14Val0TimeSourceValid(model.ObservedTimeSource)) ||
+		(model.EvaluatedTimeSource != "" && !point14Val0TimeSourceValid(model.EvaluatedTimeSource)) ||
+		(model.ValidatedTimeSource != "" && !point14Val0TimeSourceValid(model.ValidatedTimeSource)) {
 		return Point15Val0StateBlocked
 	}
 	if model.IdentityInferredFromNameOrPath {
 		return Point15Val0StateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) == "" ||
-		strings.TrimSpace(model.EvidenceID) == "" ||
-		strings.TrimSpace(model.SourceID) == "" ||
-		strings.TrimSpace(model.EvidenceHash) == "" ||
-		strings.TrimSpace(model.PolicyVersion) == "" ||
-		strings.TrimSpace(model.EngineVersion) == "" ||
-		strings.TrimSpace(model.SchemaVersion) == "" ||
-		strings.TrimSpace(model.ObservedAt) == "" ||
-		strings.TrimSpace(model.ObservedTimeSource) == "" ||
-		strings.TrimSpace(model.EvaluatedAt) == "" ||
-		strings.TrimSpace(model.EvaluatedTimeSource) == "" ||
-		strings.TrimSpace(model.ValidatedAt) == "" ||
-		strings.TrimSpace(model.ValidatedTimeSource) == "" {
+	if model.TenantScope == "" ||
+		model.EvidenceID == "" ||
+		model.SourceID == "" ||
+		model.EvidenceHash == "" ||
+		model.PolicyVersion == "" ||
+		model.EngineVersion == "" ||
+		model.SchemaVersion == "" ||
+		model.ObservedAt == "" ||
+		model.ObservedTimeSource == "" ||
+		model.EvaluatedAt == "" ||
+		model.EvaluatedTimeSource == "" ||
+		model.ValidatedAt == "" ||
+		model.ValidatedTimeSource == "" {
 		return Point15Val0StateIncomplete
 	}
 	if model.ReferencedTenantScope != "" && model.ReferencedTenantScope != model.TenantScope {
@@ -689,16 +687,16 @@ func EvaluatePoint15Val0FreshnessEvidenceContextState(model Point15Val0Freshness
 	if !point15Val0FreshnessStatusAllowsContextOutcome(model.FreshnessStatus, model.DowngradeOutcome) {
 		return Point15Val0StateBlocked
 	}
-	switch strings.TrimSpace(model.FreshnessStatus) {
+	switch model.FreshnessStatus {
 	case point15Val0FreshnessFresh:
 		return Point15Val0StateActive
 	case point15Val0FreshnessStale, point15Val0FreshnessSuperseded, point15Val0FreshnessDrifted:
-		if strings.TrimSpace(model.DowngradeOutcome) == point15Val0DowngradeBlocked {
+		if model.DowngradeOutcome == point15Val0DowngradeBlocked {
 			return Point15Val0StateBlocked
 		}
 		return Point15Val0StateReviewRequired
 	case point15Val0FreshnessMissing:
-		if strings.TrimSpace(model.DowngradeOutcome) == point15Val0DowngradeBlocked {
+		if model.DowngradeOutcome == point15Val0DowngradeBlocked {
 			return Point15Val0StateBlocked
 		}
 		return Point15Val0StateIncomplete
@@ -708,7 +706,7 @@ func EvaluatePoint15Val0FreshnessEvidenceContextState(model Point15Val0Freshness
 }
 
 func EvaluatePoint15Val0TenantBoundaryState(model Point15Val0FreshnessEvidenceContext) string {
-	if strings.TrimSpace(model.TenantScope) == "" {
+	if model.TenantScope == "" {
 		return Point15Val0StateIncomplete
 	}
 	if !point11Val0ScopeValid(model.TenantScope) {
@@ -750,10 +748,10 @@ func EvaluatePoint15Val0TimestampDisciplineState(model Point15Val0TimestampDisci
 		!point14Val0CanonicalTimeSourceValid(model.ReferenceNowTimeSource) {
 		return Point15Val0StateBlocked
 	}
-	if strings.TrimSpace(model.EvaluatedAt) == "" ||
-		strings.TrimSpace(model.EvaluatedTimeSource) == "" ||
-		strings.TrimSpace(model.ValidatedAt) == "" ||
-		strings.TrimSpace(model.ValidatedTimeSource) == "" {
+	if model.EvaluatedAt == "" ||
+		model.EvaluatedTimeSource == "" ||
+		model.ValidatedAt == "" ||
+		model.ValidatedTimeSource == "" {
 		return Point15Val0StateIncomplete
 	}
 	if !point14Val0ParsedTimeOk(model.EvaluatedAt) ||
@@ -762,12 +760,12 @@ func EvaluatePoint15Val0TimestampDisciplineState(model Point15Val0TimestampDisci
 		!point14Val0CanonicalTimeSourceValid(model.ValidatedTimeSource) {
 		return Point15Val0StateBlocked
 	}
-	if strings.TrimSpace(model.ReviewerApprovedAt) != "" {
+	if model.ReviewerApprovedAt != "" {
 		if !point14Val0ParsedTimeOk(model.ReviewerApprovedAt) || !point14Val0CanonicalTimeSourceValid(model.ReviewerApprovedTimeSource) {
 			return Point15Val0StateBlocked
 		}
 	}
-	if strings.TrimSpace(model.SourceEventAt) != "" {
+	if model.SourceEventAt != "" {
 		if !point14Val0ParsedTimeOk(model.SourceEventAt) || !point14Val0TimeSourceValid(model.SourceEventTimeSource) {
 			return Point15Val0StateBlocked
 		}
@@ -785,7 +783,7 @@ func EvaluatePoint15Val0TimestampDisciplineState(model Point15Val0TimestampDisci
 	if observedAt.After(referenceNow) || evaluatedAt.After(referenceNow) || validatedAt.After(referenceNow) {
 		return Point15Val0StateBlocked
 	}
-	if strings.TrimSpace(model.ReviewerApprovedAt) != "" {
+	if model.ReviewerApprovedAt != "" {
 		reviewerApprovedAt, _ := point14Val0ParsedTime(model.ReviewerApprovedAt)
 		if reviewerApprovedAt.Before(validatedAt) {
 			return Point15Val0StateReviewRequired
@@ -842,7 +840,7 @@ func point15Val0NoOverclaimGuardModel() Point15Val0NoOverclaimGuard {
 }
 
 func EvaluatePoint15Val0NoOverclaimGuardState(model Point15Val0NoOverclaimGuard) string {
-	if strings.TrimSpace(model.FreshnessDisclaimer) != point15Val0FreshnessDisclaimer ||
+	if model.FreshnessDisclaimer != point15Val0FreshnessDisclaimer ||
 		!point12Val0ExactStringSetMatch(model.AllowedSafeWording, point15Val0SafeWording()) ||
 		!point12Val0ExactStringSetMatch(model.BlockedWording, point15Val0ForbiddenWording()) {
 		return Point15Val0StateBlocked
@@ -877,17 +875,20 @@ func Point15Val0FoundationModel() Point15Val0FreshnessDisciplineFoundation {
 
 func point15Val0Aggregate(states ...string) string {
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15Val0StateBlocked {
+		if !point15Val0StateValid(state) {
+			return Point15Val0StateBlocked
+		}
+		if state == Point15Val0StateBlocked {
 			return Point15Val0StateBlocked
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15Val0StateReviewRequired {
+		if state == Point15Val0StateReviewRequired {
 			return Point15Val0StateReviewRequired
 		}
 	}
 	for _, state := range states {
-		if strings.TrimSpace(state) == Point15Val0StateIncomplete {
+		if state == Point15Val0StateIncomplete {
 			return Point15Val0StateIncomplete
 		}
 	}
@@ -907,7 +908,7 @@ func point15Val0BlockingReasons(model Point15Val0FreshnessDisciplineFoundation) 
 	}
 	reasons := []string{}
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15Val0StateBlocked {
+		if state == Point15Val0StateBlocked {
 			reasons = append(reasons, name)
 		}
 	}
@@ -927,7 +928,7 @@ func point15Val0ReviewPrerequisites(model Point15Val0FreshnessDisciplineFoundati
 	}
 	prereqs := append([]string{}, model.Dependency.ReviewPrerequisites...)
 	for name, state := range componentStates {
-		if strings.TrimSpace(state) == Point15Val0StateReviewRequired || strings.TrimSpace(state) == Point15Val0StateIncomplete {
+		if state == Point15Val0StateReviewRequired || state == Point15Val0StateIncomplete {
 			prereqs = append(prereqs, name)
 		}
 	}

@@ -1078,6 +1078,21 @@ func TestPoint15ValEFoundationState(t *testing.T) {
 		{"stale nested valc no overclaim forbidden wording blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.Dependency.Point15ValD.Dependency.Point15ValC.NoOverclaimGuard.ObservedTexts = append(model.Dependency.Point15ValD.Dependency.Point15ValC.NoOverclaimGuard.ObservedTexts, "deployment approved")
 		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
+		{"stale nested valc no-overclaim allowed ledger mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.NoOverclaimGuard.AllowedSafeWording = append(model.Dependency.Point15ValD.Dependency.Point15ValC.NoOverclaimGuard.AllowedSafeWording, "deployment approved")
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested valc timestamp ordering mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.TimestampDiscipline.ReceivedAt = "2026-05-07T09:06:00Z"
+		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested valb no-overclaim blocked ledger mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.NoOverclaimGuard.BlockedWording = append(model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.NoOverclaimGuard.BlockedWording, "validated revalidation schedule")
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested vala no-overclaim disclaimer mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.NoOverclaimGuard.TriggerDisclaimer = " " + point15ValATriggerDisclaimer + " "
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested val0 no-overclaim allowed ledger mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording = append(model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording, "freshness certified")
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
 		{"clb blocker prevents final pass", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.CLBFinalCheck.CLB1Present = true
 		}, Point15ValEStateBlocked, nil},
