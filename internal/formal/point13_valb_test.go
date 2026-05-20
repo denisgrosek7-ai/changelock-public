@@ -140,20 +140,20 @@ func TestPoint13ValBDependencyState(t *testing.T) {
 			expectedState: Point13ValBStateBlocked,
 		},
 		{
-			name: "vala review required prevents active valb",
+			name: "stale vala review required summary blocks valb",
 			mutate: func(model *Point13ValBFoundation) {
 				model.Dependency.ValACurrentState = Point13ValAStateReviewRequired
 				model.Dependency.ValA.CurrentState = Point13ValAStateReviewRequired
 			},
-			expectedState: Point13ValBStateReviewRequired,
+			expectedState: Point13ValBStateBlocked,
 		},
 		{
-			name: "vala incomplete prevents active valb",
+			name: "stale vala incomplete summary blocks valb",
 			mutate: func(model *Point13ValBFoundation) {
 				model.Dependency.ValACurrentState = Point13ValAStateIncomplete
 				model.Dependency.ValA.CurrentState = Point13ValAStateIncomplete
 			},
-			expectedState: Point13ValBStateIncomplete,
+			expectedState: Point13ValBStateBlocked,
 		},
 		{
 			name: "vala point13 pass appearance blocks",
@@ -171,17 +171,33 @@ func TestPoint13ValBDependencyState(t *testing.T) {
 			expectedState: Point13ValBStateBlocked,
 		},
 		{
-			name: "inherited point12 review requirement through vala prevents active",
+			name: "stale inherited point12 review requirement through vala blocks",
 			mutate: func(model *Point13ValBFoundation) {
 				model.Dependency.InheritedPoint12CurrentState = Point12ValEStateReviewRequired
 				model.Dependency.ValA.Dependency.Point12CurrentState = Point12ValEStateReviewRequired
 			},
-			expectedState: Point13ValBStateReviewRequired,
+			expectedState: Point13ValBStateBlocked,
 		},
 		{
 			name: "inherited point12 binding mismatch through vala blocks",
 			mutate: func(model *Point13ValBFoundation) {
 				model.Dependency.InheritedPoint12CurrentState = Point12ValEStateReviewRequired
+			},
+			expectedState: Point13ValBStateBlocked,
+		},
+		{
+			name: "padded nested vala state blocks raw-exact dependency binding",
+			mutate: func(model *Point13ValBFoundation) {
+				model.Dependency.ValA.CurrentState = " " + Point13ValAStateActive + " "
+			},
+			expectedState: Point13ValBStateBlocked,
+		},
+		{
+			name: "tab newline inherited tenant scope blocks raw-exact dependency binding",
+			mutate: func(model *Point13ValBFoundation) {
+				retagged := model.Dependency.InheritedTenantScope + "\n"
+				model.Dependency.InheritedTenantScope = retagged
+				model.Dependency.ValA.Dependency.Point12TenantScope = retagged
 			},
 			expectedState: Point13ValBStateBlocked,
 		},
@@ -197,6 +213,65 @@ func TestPoint13ValBDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded vala point identity blocks exact dependency identity", func(t *testing.T) {
+		model := activePoint13ValBFoundation()
+		model.Dependency.ValAPointID = " " + point13Val0PointID + " "
+		state, reasons := point13ValBDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValBStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValBFoundation(model)
+		if model.DependencyState != Point13ValBStateBlocked || model.CurrentState != Point13ValBStateBlocked {
+			t.Fatalf("expected padded ValA point identity to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded vala wave identity blocks exact dependency identity", func(t *testing.T) {
+		model := activePoint13ValBFoundation()
+		model.Dependency.ValAWaveID = " " + point13ValAWaveID + " "
+		state, reasons := point13ValBDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValBStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValBFoundation(model)
+		if model.DependencyState != Point13ValBStateBlocked || model.CurrentState != Point13ValBStateBlocked {
+			t.Fatalf("expected padded ValA wave identity to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded nested vala state reports exact binding mismatch", func(t *testing.T) {
+		model := activePoint13ValBFoundation()
+		model.Dependency.ValA.CurrentState = " " + Point13ValAStateActive + " "
+		state, reasons := point13ValBDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValBStateBlocked || !point13Val0StringSliceContains(reasons, "vala_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected exact ValA recomputed snapshot mismatch, got state %q reasons %#v", state, reasons)
+		}
+	})
+
+	t.Run("retagged inherited tenant scope reports exact identity invalid", func(t *testing.T) {
+		model := activePoint13ValBFoundation()
+		retagged := model.Dependency.InheritedTenantScope + "\n"
+		model.Dependency.InheritedTenantScope = retagged
+		model.Dependency.ValA.Dependency.Point12TenantScope = retagged
+		state, reasons := point13ValBDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValBStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+	})
+
+	t.Run("stale embedded vala val0 point12 profile mutation blocks recompute", func(t *testing.T) {
+		model := activePoint13ValBFoundation()
+		model.Dependency.ValA.Dependency.Val0.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+		state, reasons := point13ValBDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValBStateBlocked || !point13Val0StringSliceContains(reasons, "vala_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected exact ValA recomputed snapshot mismatch, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValBFoundation(model)
+		if model.DependencyState != Point13ValBStateBlocked || model.CurrentState != Point13ValBStateBlocked {
+			t.Fatalf("expected stale embedded ValA profile mutation to block foundation, got %#v", model)
+		}
+	})
 }
 
 func TestPoint13ValBStateAggregation(t *testing.T) {
@@ -338,6 +413,9 @@ func TestPoint13ValBPilotEvidenceOperationLedgerState(t *testing.T) {
 		{name: "pass allowed blocks", mutate: func(model *Point13ValBFoundation) {
 			model.PilotEvidenceOperationLedger.OperationEntries[0].PassAllowed = true
 			point13ValBRecomputeLedgerBindingHash(model)
+		}},
+		{name: "padded ledger binding hash blocks raw-exact manifest binding", mutate: func(model *Point13ValBFoundation) {
+			model.PilotEvidenceOperationLedger.LedgerBindingHash = " " + model.PilotEvidenceOperationLedger.LedgerBindingHash + " "
 		}},
 	}
 
@@ -652,6 +730,18 @@ func TestPoint13ValBNoOverclaimTraceState(t *testing.T) {
 		model = ComputePoint13ValBFoundation(model)
 		if model.NoOverclaimState != Point13ValBStateActive {
 			t.Fatalf("expected safe wording to remain allowed, got %#v", model)
+		}
+	})
+
+	t.Run("forbidden wording cannot be laundered through allowed list", func(t *testing.T) {
+		model := activePoint13ValBFoundation()
+		model.NoOverclaimTrace.AllowedSafeWording = []string{"public badge"}
+		model = ComputePoint13ValBFoundation(model)
+		if model.NoOverclaimState != Point13ValBStateBlocked || model.CurrentState != Point13ValBStateBlocked {
+			t.Fatalf("expected forbidden allowed wording list mutation to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13ValBStateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
 		}
 	})
 

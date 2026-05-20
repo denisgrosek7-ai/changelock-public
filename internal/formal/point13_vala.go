@@ -223,7 +223,7 @@ func point13ValAStates() []string {
 }
 
 func point13ValAStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValAStates(), value)
+	return point13Val0RawExactOneOf(value, point13ValAStates())
 }
 
 func point13ValAOwnerRefValid(value string) bool {
@@ -347,13 +347,13 @@ func point13ValAStringListValid(values []string) bool {
 
 func point13ValAArtifactClassListValid(values []string) bool {
 	return point12Val0StringListValid(values, func(value string) bool {
-		return point11Val0ContainsTrimmed(point13ValAAllowedArtifactClasses(), value)
+		return point13Val0RawExactOneOf(value, point13ValAAllowedArtifactClasses())
 	})
 }
 
 func point13ValAEvidenceSourceListValid(values []string, allowed []string) bool {
 	return point12Val0StringListValid(values, func(value string) bool {
-		return point11Val0ContainsTrimmed(allowed, value)
+		return point13Val0RawExactOneOf(value, allowed)
 	})
 }
 
@@ -388,7 +388,7 @@ func point13ValAAuditRefsValid(values []string) bool {
 }
 
 func point13ValAPhaseTypeValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValAPhaseTaxonomy(), value)
+	return point13Val0RawExactOneOf(value, point13ValAPhaseTaxonomy())
 }
 
 func point13ValAArtifactHashRefsMatchArtifacts(artifacts, hashes []string) bool {
@@ -396,8 +396,8 @@ func point13ValAArtifactHashRefsMatchArtifacts(artifacts, hashes []string) bool 
 		return false
 	}
 	for i := range artifacts {
-		artifactToken := strings.TrimSpace(strings.TrimPrefix(artifacts[i], "artifact_"))
-		hashToken := strings.TrimSpace(strings.TrimPrefix(hashes[i], "evidence_hash_"))
+		artifactToken := strings.TrimPrefix(artifacts[i], "artifact_")
+		hashToken := strings.TrimPrefix(hashes[i], "evidence_hash_")
 		if artifactToken == "" || hashToken == "" || artifactToken != hashToken {
 			return false
 		}
@@ -429,14 +429,14 @@ func point13ValAComputedBindingHash(parts ...string) string {
 
 func point13ValAComputedIntakeBindingHash(model Point13ValACustomerIntakeEvidenceGovernance) string {
 	return point13ValAComputedBindingHash(
-		strings.TrimSpace(model.IntakeID),
-		strings.TrimSpace(model.TenantScope),
+		model.IntakeID,
+		model.TenantScope,
 		strings.Join(model.CustomerArtifactRefs, ","),
 		strings.Join(model.CustomerArtifactHashRefs, ","),
-		strings.TrimSpace(model.CustomerArtifactClassification),
-		strings.TrimSpace(model.CustodyRef),
-		strings.TrimSpace(model.SourceOwnerRef),
-		strings.TrimSpace(model.ConsentOrAuthorityRef),
+		model.CustomerArtifactClassification,
+		model.CustodyRef,
+		model.SourceOwnerRef,
+		model.ConsentOrAuthorityRef,
 	)
 }
 
@@ -493,6 +493,8 @@ func point13ValADependencyStateAndReasons(model Point13ValADependencySnapshot) (
 	reviewReasons := []string{}
 	blockedReasons := []string{}
 	incompleteReasons := []string{}
+	recomputedVal0 := ComputePoint13Val0Foundation(model.Val0)
+	recomputedLineage := point13ValAUpstreamAgentLineage(recomputedVal0.Dependency.Point12)
 
 	if !model.SnapshotFromComputedOutput || !model.Val0DependencyComputedFromUpstream {
 		blockedReasons = append(blockedReasons, "val0_dependency_not_computed_from_upstream")
@@ -505,8 +507,8 @@ func point13ValADependencyStateAndReasons(model Point13ValADependencySnapshot) (
 		!point13Val0StateValid(model.Val0OffboardingRetentionState) ||
 		!point13Val0StateValid(model.Val0NoOverclaimState) ||
 		!point13Val0StateValid(model.Val0AIPilotBoundaryState) ||
-		strings.TrimSpace(model.Val0PointID) != point13Val0PointID ||
-		strings.TrimSpace(model.Val0WaveID) != point13Val0WaveID ||
+		model.Val0PointID != point13Val0PointID ||
+		model.Val0WaveID != point13Val0WaveID ||
 		!point12ValEStateValid(model.Point12CurrentState) ||
 		!point12ValEStateValid(model.Point12DependencyState) ||
 		!point12ValEStateValid(model.Point12PassClosureManifestState) ||
@@ -516,28 +518,48 @@ func point13ValADependencyStateAndReasons(model Point13ValADependencySnapshot) (
 		!point12Val0PermissionManifestHashValid(model.InheritedAIPermissionManifestHash) {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_identity_invalid")
 	}
-	if strings.TrimSpace(model.Val0CurrentState) != strings.TrimSpace(model.Val0.CurrentState) ||
-		strings.TrimSpace(model.Val0DependencyState) != strings.TrimSpace(model.Val0.DependencyState) ||
-		strings.TrimSpace(model.Val0PilotReadinessState) != strings.TrimSpace(model.Val0.PilotReadinessState) ||
-		strings.TrimSpace(model.Val0CustomerOnboardingState) != strings.TrimSpace(model.Val0.CustomerOnboardingState) ||
-		strings.TrimSpace(model.Val0SupportEscalationState) != strings.TrimSpace(model.Val0.SupportEscalationState) ||
-		strings.TrimSpace(model.Val0OffboardingRetentionState) != strings.TrimSpace(model.Val0.OffboardingRetentionState) ||
-		strings.TrimSpace(model.Val0NoOverclaimState) != strings.TrimSpace(model.Val0.NoOverclaimState) ||
-		strings.TrimSpace(model.Val0AIPilotBoundaryState) != strings.TrimSpace(model.Val0.AIPilotBoundaryState) ||
-		model.Val0DependencyComputedFromUpstream != model.Val0.Dependency.SnapshotFromComputedOutput ||
-		strings.TrimSpace(model.Point12CurrentState) != strings.TrimSpace(model.Val0.Dependency.Point12CurrentState) ||
-		strings.TrimSpace(model.Point12DependencyState) != strings.TrimSpace(model.Val0.Dependency.Point12DependencyState) ||
-		strings.TrimSpace(model.Point12PassClosureManifestState) != strings.TrimSpace(model.Val0.Dependency.Point12PassClosureManifestState) ||
-		strings.TrimSpace(model.Point12ReviewerResult) != strings.TrimSpace(model.Val0.Dependency.Point12ReviewerResult) ||
-		model.Point12PassAllowed != model.Val0.Dependency.Point12PassAllowed ||
-		strings.TrimSpace(model.Point12PassToken) != strings.TrimSpace(model.Val0.Dependency.Point12PassToken) ||
-		strings.TrimSpace(model.Point12TenantScope) != strings.TrimSpace(model.Val0.Dependency.Point12TenantScope) {
+	if model.Val0.CurrentState != recomputedVal0.CurrentState ||
+		model.Val0.DependencyState != recomputedVal0.DependencyState ||
+		model.Val0.PilotReadinessState != recomputedVal0.PilotReadinessState ||
+		model.Val0.CustomerOnboardingState != recomputedVal0.CustomerOnboardingState ||
+		model.Val0.SupportEscalationState != recomputedVal0.SupportEscalationState ||
+		model.Val0.OffboardingRetentionState != recomputedVal0.OffboardingRetentionState ||
+		model.Val0.NoOverclaimState != recomputedVal0.NoOverclaimState ||
+		model.Val0.AIPilotBoundaryState != recomputedVal0.AIPilotBoundaryState ||
+		model.Val0.Dependency.SnapshotFromComputedOutput != recomputedVal0.Dependency.SnapshotFromComputedOutput ||
+		model.Val0.Dependency.Point12CurrentState != recomputedVal0.Dependency.Point12CurrentState ||
+		model.Val0.Dependency.Point12DependencyState != recomputedVal0.Dependency.Point12DependencyState ||
+		model.Val0.Dependency.Point12PassClosureManifestState != recomputedVal0.Dependency.Point12PassClosureManifestState ||
+		model.Val0.Dependency.Point12ReviewerResult != recomputedVal0.Dependency.Point12ReviewerResult ||
+		model.Val0.Dependency.Point12PassAllowed != recomputedVal0.Dependency.Point12PassAllowed ||
+		model.Val0.Dependency.Point12PassToken != recomputedVal0.Dependency.Point12PassToken ||
+		model.Val0.Dependency.Point12TenantScope != recomputedVal0.Dependency.Point12TenantScope {
+		blockedReasons = append(blockedReasons, "val0_recomputed_snapshot_mismatch")
+	}
+	if model.Val0CurrentState != recomputedVal0.CurrentState ||
+		model.Val0DependencyState != recomputedVal0.DependencyState ||
+		model.Val0PilotReadinessState != recomputedVal0.PilotReadinessState ||
+		model.Val0CustomerOnboardingState != recomputedVal0.CustomerOnboardingState ||
+		model.Val0SupportEscalationState != recomputedVal0.SupportEscalationState ||
+		model.Val0OffboardingRetentionState != recomputedVal0.OffboardingRetentionState ||
+		model.Val0NoOverclaimState != recomputedVal0.NoOverclaimState ||
+		model.Val0AIPilotBoundaryState != recomputedVal0.AIPilotBoundaryState ||
+		model.Val0DependencyComputedFromUpstream != recomputedVal0.Dependency.SnapshotFromComputedOutput ||
+		model.Point12CurrentState != recomputedVal0.Dependency.Point12CurrentState ||
+		model.Point12DependencyState != recomputedVal0.Dependency.Point12DependencyState ||
+		model.Point12PassClosureManifestState != recomputedVal0.Dependency.Point12PassClosureManifestState ||
+		model.Point12ReviewerResult != recomputedVal0.Dependency.Point12ReviewerResult ||
+		model.Point12PassAllowed != recomputedVal0.Dependency.Point12PassAllowed ||
+		model.Point12PassToken != recomputedVal0.Dependency.Point12PassToken ||
+		model.Point12TenantScope != recomputedVal0.Dependency.Point12TenantScope ||
+		model.InheritedAIModelOrRuleVersionRef != recomputedLineage.ModelOrRuleVersionRef ||
+		model.InheritedAIPermissionManifestHash != recomputedLineage.PermissionManifestHash {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_binding_mismatch")
 	}
 	if model.Val0Point13PassSeen {
 		blockedReasons = append(blockedReasons, "val0_point13_pass_seen")
 	}
-	switch strings.TrimSpace(model.Val0CurrentState) {
+	switch model.Val0CurrentState {
 	case Point13Val0StateBlocked:
 		blockedReasons = append(blockedReasons, "val0_blocked")
 	case Point13Val0StateReviewRequired:
@@ -554,7 +576,7 @@ func point13ValADependencyStateAndReasons(model Point13ValADependencySnapshot) (
 		model.Val0NoOverclaimState,
 		model.Val0AIPilotBoundaryState,
 	} {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13Val0StateBlocked:
 			blockedReasons = append(blockedReasons, "val0_component_blocked")
 		case Point13Val0StateReviewRequired:
@@ -563,7 +585,7 @@ func point13ValADependencyStateAndReasons(model Point13ValADependencySnapshot) (
 			incompleteReasons = append(incompleteReasons, "val0_component_incomplete")
 		}
 	}
-	switch strings.TrimSpace(model.Point12CurrentState) {
+	switch model.Point12CurrentState {
 	case Point12ValEStateBlocked:
 		blockedReasons = append(blockedReasons, "point12_inherited_blocked")
 	case Point12ValEStateReviewRequired:
@@ -571,12 +593,12 @@ func point13ValADependencyStateAndReasons(model Point13ValADependencySnapshot) (
 	case Point12ValEStateIncomplete:
 		incompleteReasons = append(incompleteReasons, "point12_inherited_incomplete")
 	}
-	if strings.TrimSpace(model.Point12CurrentState) == Point12ValEStatePassConfirmed &&
-		(strings.TrimSpace(model.Point12DependencyState) != Point12ValEStateActive ||
-			strings.TrimSpace(model.Point12PassClosureManifestState) != Point12ValEStateActive ||
-			strings.TrimSpace(model.Point12ReviewerResult) != point12ValEReviewerResultPassConfirmed ||
+	if model.Point12CurrentState == Point12ValEStatePassConfirmed &&
+		(model.Point12DependencyState != Point12ValEStateActive ||
+			model.Point12PassClosureManifestState != Point12ValEStateActive ||
+			model.Point12ReviewerResult != point12ValEReviewerResultPassConfirmed ||
 			!model.Point12PassAllowed ||
-			strings.TrimSpace(model.Point12PassToken) != point12ValEPoint12PassToken) {
+			model.Point12PassToken != point12ValEPoint12PassToken) {
 		blockedReasons = append(blockedReasons, "point12_inherited_not_pass_confirmed")
 	}
 	if len(blockedReasons) > 0 {
@@ -611,13 +633,13 @@ func EvaluatePoint13ValAPilotExecutionContractState(model Point13ValAPilotExecut
 		!model.ContractCannotCreatePass {
 		return Point13ValAStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.Point12TenantScope) ||
-		strings.TrimSpace(model.PilotOwnerRef) != strings.TrimSpace(dependency.Val0.PilotReadiness.PilotOwnerRef) ||
-		strings.TrimSpace(model.FirstRepoScope) != strings.TrimSpace(dependency.Val0.PilotReadiness.FirstRepoScope) {
+	if model.TenantScope != dependency.Point12TenantScope ||
+		model.PilotOwnerRef != dependency.Val0.PilotReadiness.PilotOwnerRef ||
+		model.FirstRepoScope != dependency.Val0.PilotReadiness.FirstRepoScope {
 		return Point13ValAStateBlocked
 	}
 	for _, disallowed := range model.DisallowedEvidenceSources {
-		if point11Val0ContainsTrimmed(model.AllowedEvidenceSources, disallowed) {
+		if point13Val0RawExactOneOf(disallowed, model.AllowedEvidenceSources) {
 			return Point13ValAStateBlocked
 		}
 	}
@@ -637,7 +659,7 @@ func EvaluatePoint13ValACustomerIntakeEvidenceGovernanceState(model Point13ValAC
 		!point13ValACustomerArtifactRefsValid(model.CustomerArtifactRefs) ||
 		!point13ValACustomerArtifactHashRefsValid(model.CustomerArtifactHashRefs) ||
 		!point13ValAArtifactHashRefsMatchArtifacts(model.CustomerArtifactRefs, model.CustomerArtifactHashRefs) ||
-		!point11Val0ContainsTrimmed(contract.AllowedArtifactClasses, model.CustomerArtifactClassification) ||
+		!point13Val0RawExactOneOf(model.CustomerArtifactClassification, contract.AllowedArtifactClasses) ||
 		!point13ValACustodyRefValid(model.CustodyRef) ||
 		!point13ValAOwnerRefValid(model.SourceOwnerRef) ||
 		!point13ValAConsentOrAuthorityRefValid(model.ConsentOrAuthorityRef) ||
@@ -645,12 +667,12 @@ func EvaluatePoint13ValACustomerIntakeEvidenceGovernanceState(model Point13ValAC
 		!model.CanonicalEvidenceRequiresGovernanceEvent ||
 		!model.CustomerUploadCannotMutateCanonicalSpine ||
 		!model.SupportAttachmentCannotMutateCanonicalSpine ||
-		strings.TrimSpace(model.IntakeBindingHash) != point13ValAComputedIntakeBindingHash(model) {
+		model.IntakeBindingHash != point13ValAComputedIntakeBindingHash(model) {
 		return Point13ValAStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(contract.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.Point12TenantScope) ||
-		strings.TrimSpace(model.SourceOwnerRef) != strings.TrimSpace(contract.CustomerOwnerRef) {
+	if model.TenantScope != contract.TenantScope ||
+		model.TenantScope != dependency.Point12TenantScope ||
+		model.SourceOwnerRef != contract.CustomerOwnerRef {
 		return Point13ValAStateBlocked
 	}
 	if point13ValAContainsCrossTenantArtifact(model.CustomerArtifactRefs) {
@@ -682,16 +704,16 @@ func EvaluatePoint13ValAPilotRunPhaseBoundaryState(model Point13ValAPilotRunPhas
 			phase.PassAttempted {
 			return Point13ValAStateBlocked
 		}
-		if strings.TrimSpace(phase.TenantScope) != strings.TrimSpace(contract.TenantScope) ||
-			strings.TrimSpace(phase.TenantScope) != strings.TrimSpace(dependency.Point12TenantScope) ||
+		if phase.TenantScope != contract.TenantScope ||
+			phase.TenantScope != dependency.Point12TenantScope ||
 			!point12Val0ExactStringSetMatch(phase.EvidenceRefs, intake.CustomerArtifactRefs) {
 			return Point13ValAStateBlocked
 		}
-		if strings.TrimSpace(phase.PhaseState) != Point13ValAStateActive {
-			if strings.TrimSpace(phase.PhaseState) == Point13ValAStateReviewRequired {
+		if phase.PhaseState != Point13ValAStateActive {
+			if phase.PhaseState == Point13ValAStateReviewRequired {
 				return Point13ValAStateReviewRequired
 			}
-			if strings.TrimSpace(phase.PhaseState) == Point13ValAStateIncomplete {
+			if phase.PhaseState == Point13ValAStateIncomplete {
 				return Point13ValAStateIncomplete
 			}
 			return Point13ValAStateBlocked
@@ -715,10 +737,10 @@ func EvaluatePoint13ValASupportResponsibilityMatrixState(model Point13ValACustom
 		!model.SupportActionRequiresAuditEvent {
 		return Point13ValAStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(contract.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.Point12TenantScope) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(contract.CustomerOwnerRef) ||
-		strings.TrimSpace(model.EscalationOwnerRef) != strings.TrimSpace(dependency.Val0.SupportEscalationBoundary.EscalationOwnerRef) ||
+	if model.TenantScope != contract.TenantScope ||
+		model.TenantScope != dependency.Point12TenantScope ||
+		model.CustomerOwnerRef != contract.CustomerOwnerRef ||
+		model.EscalationOwnerRef != dependency.Val0.SupportEscalationBoundary.EscalationOwnerRef ||
 		!point12Val0ExactStringSetMatch(model.EvidenceRefs, intake.CustomerArtifactRefs) {
 		return Point13ValAStateBlocked
 	}
@@ -738,11 +760,11 @@ func EvaluatePoint13ValAPilotExitReviewGateState(model Point13ValAPilotExitRevie
 		strings.TrimSpace(model.FinalCustomerStatement) == "" {
 		return Point13ValAStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(contract.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.Point12TenantScope) ||
+	if model.TenantScope != contract.TenantScope ||
+		model.TenantScope != dependency.Point12TenantScope ||
 		!point12Val0ExactStringSetMatch(model.ExitCriteriaRefs, contract.ExitCriteriaRefs) ||
 		!point12Val0ExactStringSetMatch(model.EvidenceRefs, intake.CustomerArtifactRefs) ||
-		strings.TrimSpace(model.OffboardingOrRetentionPlanRef) != strings.TrimSpace(dependency.Val0.OffboardingRetentionBoundary.DisposalPathRef) {
+		model.OffboardingOrRetentionPlanRef != dependency.Val0.OffboardingRetentionBoundary.DisposalPathRef {
 		return Point13ValAStateBlocked
 	}
 	if len(model.UnresolvedBlockers) > 0 ||
@@ -752,19 +774,19 @@ func EvaluatePoint13ValAPilotExitReviewGateState(model Point13ValAPilotExitRevie
 		point13Val0ContainsForbiddenClaim(model.FinalCustomerStatement) {
 		return Point13ValAStateBlocked
 	}
-	if len(model.EvidenceRefs) == 1 && strings.TrimSpace(model.EvidenceRefs[0]) == strings.TrimSpace(aiBoundary.EvidenceCandidateRef) {
+	if len(model.EvidenceRefs) == 1 && model.EvidenceRefs[0] == aiBoundary.EvidenceCandidateRef {
 		return Point13ValAStateBlocked
 	}
 	return Point13ValAStateActive
 }
 
 func EvaluatePoint13ValAAIAssistedPilotExecutionBoundaryState(model Point13ValAAIAssistedPilotExecutionBoundary, dependency Point13ValADependencySnapshot, contract Point13ValAPilotExecutionContract, intake Point13ValACustomerIntakeEvidenceGovernance, support Point13ValACustomerSupportResponsibilityMatrix) string {
-	if point11Val0ContainsTrimmed(point12Val0BlockedAIEvidenceCandidateTypes(), model.AIOutputType) {
+	if point13Val0RawExactOneOf(model.AIOutputType, point12Val0BlockedAIEvidenceCandidateTypes()) {
 		return Point13ValAStateBlocked
 	}
 	expectedSupportAuditRef := ""
 	if len(support.AuditEventRefs) > 0 {
-		expectedSupportAuditRef = strings.TrimSpace(support.AuditEventRefs[0])
+		expectedSupportAuditRef = support.AuditEventRefs[0]
 	}
 	if !point13ValAAIBoundaryRefValid(model.AIBoundaryID) ||
 		!point11Val0ScopeValid(model.TenantScope) ||
@@ -790,13 +812,13 @@ func EvaluatePoint13ValAAIAssistedPilotExecutionBoundaryState(model Point13ValAA
 		expectedSupportAuditRef == "" {
 		return Point13ValAStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(contract.TenantScope) ||
-		strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.Point12TenantScope) ||
+	if model.TenantScope != contract.TenantScope ||
+		model.TenantScope != dependency.Point12TenantScope ||
 		!point12Val0ExactStringSetMatch(model.InputEvidenceRefs, intake.CustomerArtifactRefs) ||
 		!point12Val0ExactStringSetMatch(model.InputEvidenceHashRefs, intake.CustomerArtifactHashRefs) ||
-		strings.TrimSpace(model.ModelOrRuleVersionRef) != strings.TrimSpace(dependency.InheritedAIModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.PermissionManifestHash) != strings.TrimSpace(dependency.InheritedAIPermissionManifestHash) ||
-		strings.TrimSpace(model.AuditEventRef) != expectedSupportAuditRef {
+		model.ModelOrRuleVersionRef != dependency.InheritedAIModelOrRuleVersionRef ||
+		model.PermissionManifestHash != dependency.InheritedAIPermissionManifestHash ||
+		model.AuditEventRef != expectedSupportAuditRef {
 		return Point13ValAStateBlocked
 	}
 	if model.ExternalAPIAllowed {
@@ -812,6 +834,10 @@ func EvaluatePoint13ValANoOverclaimCustomerWordingState(model Point13ValANoOverc
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point13ValAStringListValid(model.AllowedCustomerFacingWording) ||
 		!point13ValAStringListValid(model.BlockedCustomerFacingWording) {
+		return Point13ValAStateBlocked
+	}
+	if !point12Val0ExactStringSetMatch(model.AllowedCustomerFacingWording, point13ValAAllowedCustomerWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedCustomerFacingWording, point13Val0ForbiddenClaims()) {
 		return Point13ValAStateBlocked
 	}
 	if point13Val0ContainsForbiddenClaim(

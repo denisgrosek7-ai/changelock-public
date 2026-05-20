@@ -108,20 +108,20 @@ func TestPoint13ValCDependencyState(t *testing.T) {
 			expectedState: Point13ValCStateBlocked,
 		},
 		{
-			name: "valb review required prevents active valc",
+			name: "stale valb review required summary blocks valc",
 			mutate: func(model *Point13ValCFoundation) {
 				model.Dependency.ValBCurrentState = Point13ValBStateReviewRequired
 				model.Dependency.ValB.CurrentState = Point13ValBStateReviewRequired
 			},
-			expectedState: Point13ValCStateReviewRequired,
+			expectedState: Point13ValCStateBlocked,
 		},
 		{
-			name: "valb incomplete prevents active valc",
+			name: "stale valb incomplete summary blocks valc",
 			mutate: func(model *Point13ValCFoundation) {
 				model.Dependency.ValBCurrentState = Point13ValBStateIncomplete
 				model.Dependency.ValB.CurrentState = Point13ValBStateIncomplete
 			},
-			expectedState: Point13ValCStateIncomplete,
+			expectedState: Point13ValCStateBlocked,
 		},
 		{
 			name: "valb point13 pass appearance blocks",
@@ -139,17 +139,33 @@ func TestPoint13ValCDependencyState(t *testing.T) {
 			expectedState: Point13ValCStateBlocked,
 		},
 		{
-			name: "inherited point12 review requirement through valb prevents active",
+			name: "stale inherited point12 review requirement through valb blocks",
 			mutate: func(model *Point13ValCFoundation) {
 				model.Dependency.InheritedPoint12CurrentState = Point12ValEStateReviewRequired
 				model.Dependency.ValB.Dependency.InheritedPoint12CurrentState = Point12ValEStateReviewRequired
 			},
-			expectedState: Point13ValCStateReviewRequired,
+			expectedState: Point13ValCStateBlocked,
 		},
 		{
 			name: "inherited point12 binding mismatch through valb blocks",
 			mutate: func(model *Point13ValCFoundation) {
 				model.Dependency.InheritedPoint12CurrentState = Point12ValEStateReviewRequired
+			},
+			expectedState: Point13ValCStateBlocked,
+		},
+		{
+			name: "padded nested valb state blocks raw-exact dependency binding",
+			mutate: func(model *Point13ValCFoundation) {
+				model.Dependency.ValB.CurrentState = " " + Point13ValBStateActive + " "
+			},
+			expectedState: Point13ValCStateBlocked,
+		},
+		{
+			name: "tab newline inherited point12 reviewer blocks raw-exact dependency binding",
+			mutate: func(model *Point13ValCFoundation) {
+				retagged := model.Dependency.InheritedPoint12ReviewerResult + "\n"
+				model.Dependency.InheritedPoint12ReviewerResult = retagged
+				model.Dependency.ValB.Dependency.InheritedPoint12ReviewerResult = retagged
 			},
 			expectedState: Point13ValCStateBlocked,
 		},
@@ -165,6 +181,65 @@ func TestPoint13ValCDependencyState(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("padded valb point identity blocks exact dependency identity", func(t *testing.T) {
+		model := activePoint13ValCFoundation()
+		model.Dependency.ValBPointID = " " + point13Val0PointID + " "
+		state, reasons := point13ValCDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValCStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValCFoundation(model)
+		if model.DependencyState != Point13ValCStateBlocked || model.CurrentState != Point13ValCStateBlocked {
+			t.Fatalf("expected padded ValB point identity to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded valb wave identity blocks exact dependency identity", func(t *testing.T) {
+		model := activePoint13ValCFoundation()
+		model.Dependency.ValBWaveID = " " + point13ValBWaveID + " "
+		state, reasons := point13ValCDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValCStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValCFoundation(model)
+		if model.DependencyState != Point13ValCStateBlocked || model.CurrentState != Point13ValCStateBlocked {
+			t.Fatalf("expected padded ValB wave identity to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded nested valb state reports exact binding mismatch", func(t *testing.T) {
+		model := activePoint13ValCFoundation()
+		model.Dependency.ValB.CurrentState = " " + Point13ValBStateActive + " "
+		state, reasons := point13ValCDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValCStateBlocked || !point13Val0StringSliceContains(reasons, "valb_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected exact ValB recomputed snapshot mismatch, got state %q reasons %#v", state, reasons)
+		}
+	})
+
+	t.Run("retagged inherited point12 reviewer reports exact identity invalid", func(t *testing.T) {
+		model := activePoint13ValCFoundation()
+		retagged := model.Dependency.InheritedPoint12ReviewerResult + "\n"
+		model.Dependency.InheritedPoint12ReviewerResult = retagged
+		model.Dependency.ValB.Dependency.InheritedPoint12ReviewerResult = retagged
+		state, reasons := point13ValCDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValCStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+	})
+
+	t.Run("stale embedded valb vala val0 point12 profile mutation blocks recompute", func(t *testing.T) {
+		model := activePoint13ValCFoundation()
+		model.Dependency.ValB.Dependency.ValA.Dependency.Val0.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+		state, reasons := point13ValCDependencyStateAndReasons(model.Dependency)
+		if state != Point13ValCStateBlocked || !point13Val0StringSliceContains(reasons, "valb_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected exact ValB recomputed snapshot mismatch, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValCFoundation(model)
+		if model.DependencyState != Point13ValCStateBlocked || model.CurrentState != Point13ValCStateBlocked {
+			t.Fatalf("expected stale embedded ValB profile mutation to block foundation, got %#v", model)
+		}
+	})
 }
 
 func TestPoint13ValCStateAggregation(t *testing.T) {
@@ -320,6 +395,9 @@ func TestPoint13ValCCustomerEvidenceExportPackageState(t *testing.T) {
 			model.CustomerEvidenceExportPackage.ExportCannotMutateCanonicalEvidence = false
 			point13ValCRecomputeExportManifestHash(model)
 		}},
+		{name: "padded export manifest hash blocks raw-exact binding", mutate: func(model *Point13ValCFoundation) {
+			model.CustomerEvidenceExportPackage.ExportManifestHash = " " + model.CustomerEvidenceExportPackage.ExportManifestHash + " "
+		}},
 	}
 
 	for _, tc := range testCases {
@@ -465,6 +543,9 @@ func TestPoint13ValCOperationalHandoffChecklistState(t *testing.T) {
 		{name: "pass creation flag blocks", mutate: func(model *Point13ValCFoundation) {
 			model.OperationalHandoffChecklist.HandoffCannotCreatePass = false
 			point13ValCRecomputeChecklistBindingHash(model)
+		}},
+		{name: "padded checklist binding hash blocks raw-exact binding", mutate: func(model *Point13ValCFoundation) {
+			model.OperationalHandoffChecklist.ChecklistBindingHash = " " + model.OperationalHandoffChecklist.ChecklistBindingHash + " "
 		}},
 		{name: "checklist mutation blocks when recomputed", mutate: func(model *Point13ValCFoundation) {
 			model.OperationalHandoffChecklist.ChecklistItems = []string{

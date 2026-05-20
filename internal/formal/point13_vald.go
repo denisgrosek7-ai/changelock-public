@@ -576,6 +576,8 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 	reviewReasons := []string{}
 	blockedReasons := []string{}
 	incompleteReasons := []string{}
+	recomputedValC := ComputePoint13ValCFoundation(model.ValC)
+
 	if !model.SnapshotFromComputedOutput || !model.ValCDependencyComputedFromUpstream {
 		blockedReasons = append(blockedReasons, "valc_dependency_not_computed_from_upstream")
 	}
@@ -605,26 +607,48 @@ func point13ValDDependencyStateAndReasons(model Point13ValDDependencySnapshot) (
 	if model.ValCPoint13PassSeen {
 		blockedReasons = append(blockedReasons, "valc_point13_pass_seen")
 	}
-	if model.ValCCurrentState != model.ValC.CurrentState ||
-		model.ValCDependencyState != model.ValC.DependencyState ||
-		model.ValCCustomerEvidenceExportPackageState != model.ValC.CustomerEvidenceExportPackageState ||
-		model.ValCRedactionSafeDisclosureState != model.ValC.RedactionSafeDisclosureState ||
-		model.ValCOperationalHandoffChecklistState != model.ValC.OperationalHandoffChecklistState ||
-		model.ValCCustomerAcceptanceTraceState != model.ValC.CustomerAcceptanceTraceState ||
-		model.ValCSupportOffboardingHandoffState != model.ValC.SupportOffboardingHandoffState ||
-		model.ValCAIEvidenceExportLineageState != model.ValC.AIEvidenceExportLineageState ||
-		model.ValCNoOverclaimState != model.ValC.NoOverclaimState ||
-		model.ValCDependencyComputedFromUpstream != model.ValC.Dependency.SnapshotFromComputedOutput ||
-		model.InheritedValBCurrentState != model.ValC.Dependency.ValBCurrentState ||
-		model.InheritedValACurrentState != model.ValC.Dependency.InheritedValACurrentState ||
-		model.InheritedVal0CurrentState != model.ValC.Dependency.InheritedVal0CurrentState ||
-		model.InheritedPoint12CurrentState != model.ValC.Dependency.InheritedPoint12CurrentState ||
-		model.InheritedPoint12DependencyState != model.ValC.Dependency.InheritedPoint12DependencyState ||
-		model.InheritedPoint12PassClosureState != model.ValC.Dependency.InheritedPoint12PassClosureState ||
-		model.InheritedPoint12ReviewerResult != model.ValC.Dependency.InheritedPoint12ReviewerResult ||
-		model.InheritedTenantScope != model.ValC.Dependency.InheritedTenantScope ||
-		model.InheritedAIModelOrRuleVersionRef != model.ValC.Dependency.InheritedAIModelOrRuleVersionRef ||
-		model.InheritedAIPermissionManifestHash != model.ValC.Dependency.InheritedAIPermissionManifestHash {
+	if model.ValC.CurrentState != recomputedValC.CurrentState ||
+		model.ValC.DependencyState != recomputedValC.DependencyState ||
+		model.ValC.CustomerEvidenceExportPackageState != recomputedValC.CustomerEvidenceExportPackageState ||
+		model.ValC.RedactionSafeDisclosureState != recomputedValC.RedactionSafeDisclosureState ||
+		model.ValC.OperationalHandoffChecklistState != recomputedValC.OperationalHandoffChecklistState ||
+		model.ValC.CustomerAcceptanceTraceState != recomputedValC.CustomerAcceptanceTraceState ||
+		model.ValC.SupportOffboardingHandoffState != recomputedValC.SupportOffboardingHandoffState ||
+		model.ValC.AIEvidenceExportLineageState != recomputedValC.AIEvidenceExportLineageState ||
+		model.ValC.NoOverclaimState != recomputedValC.NoOverclaimState ||
+		model.ValC.Dependency.SnapshotFromComputedOutput != recomputedValC.Dependency.SnapshotFromComputedOutput ||
+		model.ValC.Dependency.ValBCurrentState != recomputedValC.Dependency.ValBCurrentState ||
+		model.ValC.Dependency.InheritedValACurrentState != recomputedValC.Dependency.InheritedValACurrentState ||
+		model.ValC.Dependency.InheritedVal0CurrentState != recomputedValC.Dependency.InheritedVal0CurrentState ||
+		model.ValC.Dependency.InheritedPoint12CurrentState != recomputedValC.Dependency.InheritedPoint12CurrentState ||
+		model.ValC.Dependency.InheritedPoint12DependencyState != recomputedValC.Dependency.InheritedPoint12DependencyState ||
+		model.ValC.Dependency.InheritedPoint12PassClosureState != recomputedValC.Dependency.InheritedPoint12PassClosureState ||
+		model.ValC.Dependency.InheritedPoint12ReviewerResult != recomputedValC.Dependency.InheritedPoint12ReviewerResult ||
+		model.ValC.Dependency.InheritedTenantScope != recomputedValC.Dependency.InheritedTenantScope ||
+		model.ValC.Dependency.InheritedAIModelOrRuleVersionRef != recomputedValC.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.ValC.Dependency.InheritedAIPermissionManifestHash != recomputedValC.Dependency.InheritedAIPermissionManifestHash {
+		blockedReasons = append(blockedReasons, "valc_recomputed_snapshot_mismatch")
+	}
+	if model.ValCCurrentState != recomputedValC.CurrentState ||
+		model.ValCDependencyState != recomputedValC.DependencyState ||
+		model.ValCCustomerEvidenceExportPackageState != recomputedValC.CustomerEvidenceExportPackageState ||
+		model.ValCRedactionSafeDisclosureState != recomputedValC.RedactionSafeDisclosureState ||
+		model.ValCOperationalHandoffChecklistState != recomputedValC.OperationalHandoffChecklistState ||
+		model.ValCCustomerAcceptanceTraceState != recomputedValC.CustomerAcceptanceTraceState ||
+		model.ValCSupportOffboardingHandoffState != recomputedValC.SupportOffboardingHandoffState ||
+		model.ValCAIEvidenceExportLineageState != recomputedValC.AIEvidenceExportLineageState ||
+		model.ValCNoOverclaimState != recomputedValC.NoOverclaimState ||
+		model.ValCDependencyComputedFromUpstream != recomputedValC.Dependency.SnapshotFromComputedOutput ||
+		model.InheritedValBCurrentState != recomputedValC.Dependency.ValBCurrentState ||
+		model.InheritedValACurrentState != recomputedValC.Dependency.InheritedValACurrentState ||
+		model.InheritedVal0CurrentState != recomputedValC.Dependency.InheritedVal0CurrentState ||
+		model.InheritedPoint12CurrentState != recomputedValC.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != recomputedValC.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != recomputedValC.Dependency.InheritedPoint12PassClosureState ||
+		model.InheritedPoint12ReviewerResult != recomputedValC.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedTenantScope != recomputedValC.Dependency.InheritedTenantScope ||
+		model.InheritedAIModelOrRuleVersionRef != recomputedValC.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.InheritedAIPermissionManifestHash != recomputedValC.Dependency.InheritedAIPermissionManifestHash {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_binding_mismatch")
 	}
 	for _, state := range []string{

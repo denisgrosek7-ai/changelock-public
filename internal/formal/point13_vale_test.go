@@ -147,6 +147,18 @@ func TestPoint13ValEDependencyState(t *testing.T) {
 			model.Dependency.ValD.ExportPackageReadProjection.LimitationsVisible = false
 			point13ValDRecomputeExportReadHash(&model.Dependency.ValD)
 		}},
+		{name: "stale nested vald valc valb vala val0 point12 profile mutation blocks", mutate: func(model *Point13ValEFoundation) {
+			model.Dependency.ValD.Dependency.ValC.Dependency.ValB.Dependency.ValA.Dependency.Val0.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+		}},
+		{name: "nested val0 allowed wording laundering blocks final dependency", mutate: func(model *Point13ValEFoundation) {
+			model.Dependency.ValD.Dependency.ValC.Dependency.ValB.Dependency.ValA.Dependency.Val0.NoOverclaimCustomerWording.AllowedCustomerFacingWording = []string{"production approved"}
+		}},
+		{name: "nested vala allowed wording laundering blocks final dependency", mutate: func(model *Point13ValEFoundation) {
+			model.Dependency.ValD.Dependency.ValC.Dependency.ValB.Dependency.ValA.NoOverclaimCustomerWording.AllowedCustomerFacingWording = []string{"deployment approved"}
+		}},
+		{name: "nested valb allowed wording laundering blocks final dependency", mutate: func(model *Point13ValEFoundation) {
+			model.Dependency.ValD.Dependency.ValC.Dependency.ValB.NoOverclaimTrace.AllowedSafeWording = []string{"public badge"}
+		}},
 	}
 
 	for _, tc := range testCases {
@@ -157,6 +169,7 @@ func TestPoint13ValEDependencyState(t *testing.T) {
 			if model.DependencyState != Point13ValEStateBlocked {
 				t.Fatalf("expected blocked dependency state, got %#v", model)
 			}
+			assertPoint13ValENoPass(t, model)
 		})
 	}
 }
@@ -194,6 +207,34 @@ func TestPoint13ValEDependencyStateRawExactReasons(t *testing.T) {
 			mutate: func(model *Point13ValEDependencySnapshot) {
 				model.ValD.ExportPackageReadProjection.LimitationsVisible = false
 				point13ValDRecomputeExportReadHash(&model.ValD)
+			},
+			wantReason: "dependency_snapshot_vald_recomputed_state_mismatch",
+		},
+		{
+			name: "stale nested point12 profile mutation recomputation mismatch",
+			mutate: func(model *Point13ValEDependencySnapshot) {
+				model.ValD.Dependency.ValC.Dependency.ValB.Dependency.ValA.Dependency.Val0.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+			},
+			wantReason: "dependency_snapshot_vald_recomputed_state_mismatch",
+		},
+		{
+			name: "nested val0 allowed wording laundering recomputation mismatch",
+			mutate: func(model *Point13ValEDependencySnapshot) {
+				model.ValD.Dependency.ValC.Dependency.ValB.Dependency.ValA.Dependency.Val0.NoOverclaimCustomerWording.AllowedCustomerFacingWording = []string{"production approved"}
+			},
+			wantReason: "dependency_snapshot_vald_recomputed_state_mismatch",
+		},
+		{
+			name: "nested vala allowed wording laundering recomputation mismatch",
+			mutate: func(model *Point13ValEDependencySnapshot) {
+				model.ValD.Dependency.ValC.Dependency.ValB.Dependency.ValA.NoOverclaimCustomerWording.AllowedCustomerFacingWording = []string{"deployment approved"}
+			},
+			wantReason: "dependency_snapshot_vald_recomputed_state_mismatch",
+		},
+		{
+			name: "nested valb allowed wording laundering recomputation mismatch",
+			mutate: func(model *Point13ValEDependencySnapshot) {
+				model.ValD.Dependency.ValC.Dependency.ValB.NoOverclaimTrace.AllowedSafeWording = []string{"public badge"}
 			},
 			wantReason: "dependency_snapshot_vald_recomputed_state_mismatch",
 		},

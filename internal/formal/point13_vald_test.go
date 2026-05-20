@@ -128,14 +128,14 @@ func TestPoint13ValDDependencyState(t *testing.T) {
 			model.ValCCurrentState = Point13ValCStateBlocked
 			model.ValC.CurrentState = Point13ValCStateBlocked
 		}, expectedState: Point13ValDStateBlocked},
-		{name: "valc review required prevents active", mutate: func(model *Point13ValDDependencySnapshot) {
+		{name: "stale valc review required summary blocks", mutate: func(model *Point13ValDDependencySnapshot) {
 			model.ValCCurrentState = Point13ValCStateReviewRequired
 			model.ValC.CurrentState = Point13ValCStateReviewRequired
-		}, expectedState: Point13ValDStateReviewRequired},
-		{name: "valc incomplete prevents active", mutate: func(model *Point13ValDDependencySnapshot) {
+		}, expectedState: Point13ValDStateBlocked, expectedDependencyReason: "valc_recomputed_snapshot_mismatch"},
+		{name: "stale valc incomplete summary blocks", mutate: func(model *Point13ValDDependencySnapshot) {
 			model.ValCCurrentState = Point13ValCStateIncomplete
 			model.ValC.CurrentState = Point13ValCStateIncomplete
-		}, expectedState: Point13ValDStateIncomplete},
+		}, expectedState: Point13ValDStateBlocked, expectedDependencyReason: "valc_recomputed_snapshot_mismatch"},
 		{name: "point13 pass before vale blocks", mutate: func(model *Point13ValDDependencySnapshot) {
 			model.ValCPoint13PassSeen = true
 		}, expectedState: Point13ValDStateBlocked},
@@ -160,6 +160,9 @@ func TestPoint13ValDDependencyState(t *testing.T) {
 		{name: "inherited val0 state mismatch blocks", mutate: func(model *Point13ValDDependencySnapshot) {
 			model.InheritedVal0CurrentState = Point13Val0StateBlocked
 		}, expectedState: Point13ValDStateBlocked},
+		{name: "stale embedded valc valb vala val0 point12 profile mutation blocks recompute", mutate: func(model *Point13ValDDependencySnapshot) {
+			model.ValC.Dependency.ValB.Dependency.ValA.Dependency.Val0.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+		}, expectedState: Point13ValDStateBlocked, expectedDependencyReason: "valc_recomputed_snapshot_mismatch"},
 	}
 
 	for _, tc := range testCases {

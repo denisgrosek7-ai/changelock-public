@@ -471,6 +471,7 @@ func point13Val0DependencySnapshotModel() Point13Val0DependencySnapshot {
 func point13Val0DependencyStateAndReasons(model Point13Val0DependencySnapshot) (string, []string) {
 	reviewReasons := []string{}
 	blockedReasons := []string{}
+	recomputedPoint12 := ComputePoint12ValEFoundation(model.Point12)
 
 	if !model.SnapshotFromComputedOutput ||
 		!point13Val0RawPullRequestRefValid(model.BackfillPullRequestRef) ||
@@ -493,16 +494,28 @@ func point13Val0DependencyStateAndReasons(model Point13Val0DependencySnapshot) (
 		!point13Val0RawScopeValid(model.Point12TenantScope) {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_identity_invalid")
 	}
-	if model.Point12CurrentState != model.Point12.CurrentState ||
-		model.Point12DependencyState != model.Point12.DependencyState ||
-		model.Point12PassClosureManifestState != model.Point12.PassClosureManifestState ||
-		model.Point12ReviewerResult != model.Point12.PassClosureManifest.ReviewerResult ||
-		model.Point12PassAllowed != model.Point12.Point12PassAllowed ||
-		model.Point12PassToken != model.Point12.Point12PassToken ||
-		model.Point12ClosureManifestRef != model.Point12.PassClosureManifest.ClosureManifestID ||
-		model.Point12DependencySnapshotRef != model.Point12.Dependency.SnapshotRef ||
-		model.Point12ProofPackID != model.Point12.PassClosureManifest.ProofPackID ||
-		model.Point12TenantScope != model.Point12.PassClosureManifest.TenantScope {
+	if model.Point12.CurrentState != recomputedPoint12.CurrentState ||
+		model.Point12.DependencyState != recomputedPoint12.DependencyState ||
+		model.Point12.PassClosureManifestState != recomputedPoint12.PassClosureManifestState ||
+		model.Point12.PassClosureManifest.ReviewerResult != recomputedPoint12.PassClosureManifest.ReviewerResult ||
+		model.Point12.Point12PassAllowed != recomputedPoint12.Point12PassAllowed ||
+		model.Point12.Point12PassToken != recomputedPoint12.Point12PassToken ||
+		model.Point12.PassClosureManifest.ClosureManifestID != recomputedPoint12.PassClosureManifest.ClosureManifestID ||
+		model.Point12.Dependency.SnapshotRef != recomputedPoint12.Dependency.SnapshotRef ||
+		model.Point12.PassClosureManifest.ProofPackID != recomputedPoint12.PassClosureManifest.ProofPackID ||
+		model.Point12.PassClosureManifest.TenantScope != recomputedPoint12.PassClosureManifest.TenantScope {
+		blockedReasons = append(blockedReasons, "point12_recomputed_snapshot_mismatch")
+	}
+	if model.Point12CurrentState != recomputedPoint12.CurrentState ||
+		model.Point12DependencyState != recomputedPoint12.DependencyState ||
+		model.Point12PassClosureManifestState != recomputedPoint12.PassClosureManifestState ||
+		model.Point12ReviewerResult != recomputedPoint12.PassClosureManifest.ReviewerResult ||
+		model.Point12PassAllowed != recomputedPoint12.Point12PassAllowed ||
+		model.Point12PassToken != recomputedPoint12.Point12PassToken ||
+		model.Point12ClosureManifestRef != recomputedPoint12.PassClosureManifest.ClosureManifestID ||
+		model.Point12DependencySnapshotRef != recomputedPoint12.Dependency.SnapshotRef ||
+		model.Point12ProofPackID != recomputedPoint12.PassClosureManifest.ProofPackID ||
+		model.Point12TenantScope != recomputedPoint12.PassClosureManifest.TenantScope {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_binding_mismatch")
 	}
 	if model.Point12CurrentState == Point12ValEStateReviewRequired ||
@@ -638,6 +651,10 @@ func EvaluatePoint13Val0NoOverclaimCustomerWordingState(model Point13Val0NoOverc
 	if !point11Val0ValidProjectionDisclaimer(model.ProjectionDisclaimer) ||
 		!point13Val0StringListValid(model.AllowedCustomerFacingWording) ||
 		!point13Val0StringListValid(model.BlockedCustomerFacingWording) {
+		return Point13Val0StateBlocked
+	}
+	if !point12Val0ExactStringSetMatch(model.AllowedCustomerFacingWording, point13Val0AllowedCustomerWording()) ||
+		!point12Val0ExactStringSetMatch(model.BlockedCustomerFacingWording, point13Val0ForbiddenClaims()) {
 		return Point13Val0StateBlocked
 	}
 	if point13Val0ContainsForbiddenClaim(

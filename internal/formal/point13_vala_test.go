@@ -96,23 +96,23 @@ func TestPoint13ValADependencyState(t *testing.T) {
 		}
 	})
 
-	t.Run("val0 review required prevents active vala", func(t *testing.T) {
+	t.Run("stale val0 review required summary blocks vala", func(t *testing.T) {
 		model := activePoint13ValAFoundation()
 		model.Dependency.Val0CurrentState = Point13Val0StateReviewRequired
 		model.Dependency.Val0.CurrentState = Point13Val0StateReviewRequired
 		model = ComputePoint13ValAFoundation(model)
-		if model.DependencyState != Point13ValAStateReviewRequired || model.CurrentState != Point13ValAStateReviewRequired {
-			t.Fatalf("expected review required Val0 to keep ValA non-active, got %#v", model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected stale review required Val0 summary to block ValA, got %#v", model)
 		}
 	})
 
-	t.Run("val0 incomplete prevents active vala", func(t *testing.T) {
+	t.Run("stale val0 incomplete summary blocks vala", func(t *testing.T) {
 		model := activePoint13ValAFoundation()
 		model.Dependency.Val0CurrentState = Point13Val0StateIncomplete
 		model.Dependency.Val0.CurrentState = Point13Val0StateIncomplete
 		model = ComputePoint13ValAFoundation(model)
-		if model.DependencyState != Point13ValAStateIncomplete || model.CurrentState != Point13ValAStateIncomplete {
-			t.Fatalf("expected incomplete Val0 to keep ValA incomplete, got %#v", model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected stale incomplete Val0 summary to block ValA, got %#v", model)
 		}
 	})
 
@@ -135,13 +135,80 @@ func TestPoint13ValADependencyState(t *testing.T) {
 		}
 	})
 
-	t.Run("point12 inherited dependency mismatch through val0 prevents active", func(t *testing.T) {
+	t.Run("stale point12 inherited review requirement through val0 blocks", func(t *testing.T) {
 		model := activePoint13ValAFoundation()
 		model.Dependency.Point12CurrentState = Point12ValEStateReviewRequired
 		model.Dependency.Val0.Dependency.Point12CurrentState = Point12ValEStateReviewRequired
 		model = ComputePoint13ValAFoundation(model)
-		if model.DependencyState != Point13ValAStateReviewRequired || model.CurrentState != Point13ValAStateReviewRequired {
-			t.Fatalf("expected inherited Point12 review requirement to propagate, got %#v", model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected stale inherited Point12 review requirement to block, got %#v", model)
+		}
+	})
+
+	t.Run("padded nested val0 state blocks recomputed dependency binding", func(t *testing.T) {
+		model := activePoint13ValAFoundation()
+		model.Dependency.Val0.CurrentState = " " + Point13Val0StateActive + " "
+		state, reasons := point13ValADependencyStateAndReasons(model.Dependency)
+		if state != Point13ValAStateBlocked || !point13Val0StringSliceContains(reasons, "val0_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected recomputed dependency snapshot mismatch, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValAFoundation(model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected padded nested Val0 state to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded val0 point identity blocks exact dependency identity", func(t *testing.T) {
+		model := activePoint13ValAFoundation()
+		model.Dependency.Val0PointID = " " + point13Val0PointID + " "
+		state, reasons := point13ValADependencyStateAndReasons(model.Dependency)
+		if state != Point13ValAStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValAFoundation(model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected padded Val0 point identity to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded val0 wave identity blocks exact dependency identity", func(t *testing.T) {
+		model := activePoint13ValAFoundation()
+		model.Dependency.Val0WaveID = " " + point13Val0WaveID + " "
+		state, reasons := point13ValADependencyStateAndReasons(model.Dependency)
+		if state != Point13ValAStateBlocked || !point13Val0StringSliceContains(reasons, "dependency_snapshot_identity_invalid") {
+			t.Fatalf("expected exact dependency identity invalid reason, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValAFoundation(model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected padded Val0 wave identity to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("padded inherited point12 pass token blocks raw-exact dependency binding", func(t *testing.T) {
+		model := activePoint13ValAFoundation()
+		padded := " " + point12ValEPoint12PassToken + " "
+		model.Dependency.Point12PassToken = padded
+		model.Dependency.Val0.Dependency.Point12PassToken = padded
+		state, reasons := point13ValADependencyStateAndReasons(model.Dependency)
+		if state != Point13ValAStateBlocked || !point13Val0StringSliceContains(reasons, "point12_inherited_not_pass_confirmed") {
+			t.Fatalf("expected exact point12 pass-token mismatch, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValAFoundation(model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected padded inherited Point12 pass token to block foundation, got %#v", model)
+		}
+	})
+
+	t.Run("stale embedded val0 point12 profile mutation blocks recompute", func(t *testing.T) {
+		model := activePoint13ValAFoundation()
+		model.Dependency.Val0.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+		state, reasons := point13ValADependencyStateAndReasons(model.Dependency)
+		if state != Point13ValAStateBlocked || !point13Val0StringSliceContains(reasons, "val0_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected exact Val0 recomputed snapshot mismatch, got state %q reasons %#v", state, reasons)
+		}
+		model = ComputePoint13ValAFoundation(model)
+		if model.DependencyState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected stale embedded Val0 profile mutation to block foundation, got %#v", model)
 		}
 	})
 }
@@ -616,6 +683,18 @@ func TestPoint13ValANoOverclaimState(t *testing.T) {
 		model = ComputePoint13ValAFoundation(model)
 		if model.NoOverclaimState != Point13ValAStateActive {
 			t.Fatalf("expected safe wording to remain allowed, got %#v", model)
+		}
+	})
+
+	t.Run("forbidden wording cannot be laundered through allowed list", func(t *testing.T) {
+		model := activePoint13ValAFoundation()
+		model.NoOverclaimCustomerWording.AllowedCustomerFacingWording = []string{"deployment approved"}
+		model = ComputePoint13ValAFoundation(model)
+		if model.NoOverclaimState != Point13ValAStateBlocked || model.CurrentState != Point13ValAStateBlocked {
+			t.Fatalf("expected forbidden allowed wording list mutation to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13ValAStateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
 		}
 	})
 

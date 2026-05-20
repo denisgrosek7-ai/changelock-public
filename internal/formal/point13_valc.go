@@ -215,7 +215,7 @@ func point13ValCStates() []string {
 }
 
 func point13ValCStateValid(value string) bool {
-	return point11Val0ContainsTrimmed(point13ValCStates(), value)
+	return point13Val0RawExactOneOf(value, point13ValCStates())
 }
 
 func point13ValCExportPackageRefValid(value string) bool {
@@ -337,19 +337,19 @@ func point13ValCComputedBindingHash(parts ...string) string {
 
 func point13ValCComputedExportManifestHash(model Point13ValCCustomerEvidenceExportPackage) string {
 	return point13ValCComputedBindingHash(
-		strings.TrimSpace(model.ExportPackageID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.OperationLedgerRef),
-		strings.TrimSpace(model.CustomerReviewTraceRef),
-		strings.TrimSpace(model.SupportTraceRef),
-		strings.TrimSpace(model.ExitEvidencePacketRef),
+		model.ExportPackageID,
+		model.TenantScope,
+		model.OperationLedgerRef,
+		model.CustomerReviewTraceRef,
+		model.SupportTraceRef,
+		model.ExitEvidencePacketRef,
 		strings.Join(model.ExportedEvidenceRefs, ","),
 		strings.Join(model.ExportedEvidenceHashRefs, ","),
-		strings.TrimSpace(model.RetentionClassRef),
-		strings.TrimSpace(model.ExportOwnerRef),
-		strings.TrimSpace(model.CustomerOwnerRef),
-		strings.TrimSpace(model.AuditEventRef),
-		strings.TrimSpace(model.PublicPrivateClassification),
+		model.RetentionClassRef,
+		model.ExportOwnerRef,
+		model.CustomerOwnerRef,
+		model.AuditEventRef,
+		model.PublicPrivateClassification,
 		strconv.FormatBool(model.ExportIsReadOnly),
 		strconv.FormatBool(model.ExportIsOperationalEvidenceOnly),
 		strconv.FormatBool(model.ExportCannotCreatePass),
@@ -361,13 +361,13 @@ func point13ValCComputedExportManifestHash(model Point13ValCCustomerEvidenceExpo
 
 func point13ValCComputedChecklistBindingHash(model Point13ValCOperationalHandoffChecklist) string {
 	return point13ValCComputedBindingHash(
-		strings.TrimSpace(model.HandoffChecklistID),
-		strings.TrimSpace(model.TenantScope),
-		strings.TrimSpace(model.HandoffOwnerRef),
-		strings.TrimSpace(model.CustomerOwnerRef),
-		strings.TrimSpace(model.SupportOwnerRef),
-		strings.TrimSpace(model.ExportPackageRef),
-		strings.TrimSpace(model.ExitPacketRef),
+		model.HandoffChecklistID,
+		model.TenantScope,
+		model.HandoffOwnerRef,
+		model.CustomerOwnerRef,
+		model.SupportOwnerRef,
+		model.ExportPackageRef,
+		model.ExitPacketRef,
 		strings.Join(model.ChecklistItems, ","),
 		strings.Join(model.RequiredAckRefs, ","),
 		strings.Join(model.AuditEventRefs, ","),
@@ -442,6 +442,7 @@ func point13ValCDependencyStateAndReasons(model Point13ValCDependencySnapshot) (
 	reviewReasons := []string{}
 	blockedReasons := []string{}
 	incompleteReasons := []string{}
+	recomputedValB := ComputePoint13ValBFoundation(model.ValB)
 
 	if !model.SnapshotFromComputedOutput || !model.ValBDependencyComputedFromUpstream {
 		blockedReasons = append(blockedReasons, "valb_dependency_not_computed_from_upstream")
@@ -454,8 +455,8 @@ func point13ValCDependencyStateAndReasons(model Point13ValCDependencySnapshot) (
 		!point13ValBStateValid(model.ValBPilotExitEvidencePacketState) ||
 		!point13ValBStateValid(model.ValBAIEvidenceOperationTraceState) ||
 		!point13ValBStateValid(model.ValBNoOverclaimState) ||
-		strings.TrimSpace(model.ValBPointID) != point13Val0PointID ||
-		strings.TrimSpace(model.ValBWaveID) != point13ValBWaveID ||
+		model.ValBPointID != point13Val0PointID ||
+		model.ValBWaveID != point13ValBWaveID ||
 		!point13ValAStateValid(model.InheritedValACurrentState) ||
 		!point13Val0StateValid(model.InheritedVal0CurrentState) ||
 		!point12ValEStateValid(model.InheritedPoint12CurrentState) ||
@@ -467,24 +468,44 @@ func point13ValCDependencyStateAndReasons(model Point13ValCDependencySnapshot) (
 		!point12Val0PermissionManifestHashValid(model.InheritedAIPermissionManifestHash) {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_identity_invalid")
 	}
-	if strings.TrimSpace(model.ValBCurrentState) != strings.TrimSpace(model.ValB.CurrentState) ||
-		strings.TrimSpace(model.ValBDependencyState) != strings.TrimSpace(model.ValB.DependencyState) ||
-		strings.TrimSpace(model.ValBPilotEvidenceOperationLedgerState) != strings.TrimSpace(model.ValB.PilotEvidenceOperationLedgerState) ||
-		strings.TrimSpace(model.ValBCustomerReviewTraceState) != strings.TrimSpace(model.ValB.CustomerReviewTraceState) ||
-		strings.TrimSpace(model.ValBSupportActionTraceState) != strings.TrimSpace(model.ValB.SupportActionTraceState) ||
-		strings.TrimSpace(model.ValBPilotExitEvidencePacketState) != strings.TrimSpace(model.ValB.PilotExitEvidencePacketState) ||
-		strings.TrimSpace(model.ValBAIEvidenceOperationTraceState) != strings.TrimSpace(model.ValB.AIEvidenceOperationTraceState) ||
-		strings.TrimSpace(model.ValBNoOverclaimState) != strings.TrimSpace(model.ValB.NoOverclaimState) ||
-		model.ValBDependencyComputedFromUpstream != model.ValB.Dependency.SnapshotFromComputedOutput ||
-		strings.TrimSpace(model.InheritedValACurrentState) != strings.TrimSpace(model.ValB.Dependency.ValACurrentState) ||
-		strings.TrimSpace(model.InheritedVal0CurrentState) != strings.TrimSpace(model.ValB.Dependency.InheritedVal0CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12CurrentState) != strings.TrimSpace(model.ValB.Dependency.InheritedPoint12CurrentState) ||
-		strings.TrimSpace(model.InheritedPoint12DependencyState) != strings.TrimSpace(model.ValB.Dependency.InheritedPoint12DependencyState) ||
-		strings.TrimSpace(model.InheritedPoint12PassClosureState) != strings.TrimSpace(model.ValB.Dependency.InheritedPoint12PassClosureManifestState) ||
-		strings.TrimSpace(model.InheritedPoint12ReviewerResult) != strings.TrimSpace(model.ValB.Dependency.InheritedPoint12ReviewerResult) ||
-		strings.TrimSpace(model.InheritedTenantScope) != strings.TrimSpace(model.ValB.Dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.InheritedAIModelOrRuleVersionRef) != strings.TrimSpace(model.ValB.Dependency.InheritedAIModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.InheritedAIPermissionManifestHash) != strings.TrimSpace(model.ValB.Dependency.InheritedAIPermissionManifestHash) {
+	if model.ValB.CurrentState != recomputedValB.CurrentState ||
+		model.ValB.DependencyState != recomputedValB.DependencyState ||
+		model.ValB.PilotEvidenceOperationLedgerState != recomputedValB.PilotEvidenceOperationLedgerState ||
+		model.ValB.CustomerReviewTraceState != recomputedValB.CustomerReviewTraceState ||
+		model.ValB.SupportActionTraceState != recomputedValB.SupportActionTraceState ||
+		model.ValB.PilotExitEvidencePacketState != recomputedValB.PilotExitEvidencePacketState ||
+		model.ValB.AIEvidenceOperationTraceState != recomputedValB.AIEvidenceOperationTraceState ||
+		model.ValB.NoOverclaimState != recomputedValB.NoOverclaimState ||
+		model.ValB.Dependency.SnapshotFromComputedOutput != recomputedValB.Dependency.SnapshotFromComputedOutput ||
+		model.ValB.Dependency.ValACurrentState != recomputedValB.Dependency.ValACurrentState ||
+		model.ValB.Dependency.InheritedVal0CurrentState != recomputedValB.Dependency.InheritedVal0CurrentState ||
+		model.ValB.Dependency.InheritedPoint12CurrentState != recomputedValB.Dependency.InheritedPoint12CurrentState ||
+		model.ValB.Dependency.InheritedPoint12DependencyState != recomputedValB.Dependency.InheritedPoint12DependencyState ||
+		model.ValB.Dependency.InheritedPoint12PassClosureManifestState != recomputedValB.Dependency.InheritedPoint12PassClosureManifestState ||
+		model.ValB.Dependency.InheritedPoint12ReviewerResult != recomputedValB.Dependency.InheritedPoint12ReviewerResult ||
+		model.ValB.Dependency.InheritedTenantScope != recomputedValB.Dependency.InheritedTenantScope ||
+		model.ValB.Dependency.InheritedAIModelOrRuleVersionRef != recomputedValB.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.ValB.Dependency.InheritedAIPermissionManifestHash != recomputedValB.Dependency.InheritedAIPermissionManifestHash {
+		blockedReasons = append(blockedReasons, "valb_recomputed_snapshot_mismatch")
+	}
+	if model.ValBCurrentState != recomputedValB.CurrentState ||
+		model.ValBDependencyState != recomputedValB.DependencyState ||
+		model.ValBPilotEvidenceOperationLedgerState != recomputedValB.PilotEvidenceOperationLedgerState ||
+		model.ValBCustomerReviewTraceState != recomputedValB.CustomerReviewTraceState ||
+		model.ValBSupportActionTraceState != recomputedValB.SupportActionTraceState ||
+		model.ValBPilotExitEvidencePacketState != recomputedValB.PilotExitEvidencePacketState ||
+		model.ValBAIEvidenceOperationTraceState != recomputedValB.AIEvidenceOperationTraceState ||
+		model.ValBNoOverclaimState != recomputedValB.NoOverclaimState ||
+		model.ValBDependencyComputedFromUpstream != recomputedValB.Dependency.SnapshotFromComputedOutput ||
+		model.InheritedValACurrentState != recomputedValB.Dependency.ValACurrentState ||
+		model.InheritedVal0CurrentState != recomputedValB.Dependency.InheritedVal0CurrentState ||
+		model.InheritedPoint12CurrentState != recomputedValB.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != recomputedValB.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != recomputedValB.Dependency.InheritedPoint12PassClosureManifestState ||
+		model.InheritedPoint12ReviewerResult != recomputedValB.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedTenantScope != recomputedValB.Dependency.InheritedTenantScope ||
+		model.InheritedAIModelOrRuleVersionRef != recomputedValB.Dependency.InheritedAIModelOrRuleVersionRef ||
+		model.InheritedAIPermissionManifestHash != recomputedValB.Dependency.InheritedAIPermissionManifestHash {
 		blockedReasons = append(blockedReasons, "dependency_snapshot_binding_mismatch")
 	}
 	if model.ValBPoint13PassSeen {
@@ -500,7 +521,7 @@ func point13ValCDependencyStateAndReasons(model Point13ValCDependencySnapshot) (
 		model.ValBAIEvidenceOperationTraceState,
 		model.ValBNoOverclaimState,
 	} {
-		switch strings.TrimSpace(state) {
+		switch state {
 		case Point13ValBStateBlocked:
 			blockedReasons = append(blockedReasons, "valb_component_blocked")
 		case Point13ValBStateReviewRequired:
@@ -509,7 +530,7 @@ func point13ValCDependencyStateAndReasons(model Point13ValCDependencySnapshot) (
 			incompleteReasons = append(incompleteReasons, "valb_component_incomplete")
 		}
 	}
-	switch strings.TrimSpace(model.InheritedPoint12CurrentState) {
+	switch model.InheritedPoint12CurrentState {
 	case Point12ValEStateBlocked:
 		blockedReasons = append(blockedReasons, "point12_inherited_blocked")
 	case Point12ValEStateReviewRequired:
@@ -517,10 +538,10 @@ func point13ValCDependencyStateAndReasons(model Point13ValCDependencySnapshot) (
 	case Point12ValEStateIncomplete:
 		incompleteReasons = append(incompleteReasons, "point12_inherited_incomplete")
 	}
-	if strings.TrimSpace(model.InheritedPoint12CurrentState) == Point12ValEStatePassConfirmed &&
-		(strings.TrimSpace(model.InheritedPoint12DependencyState) != Point12ValEStateActive ||
-			strings.TrimSpace(model.InheritedPoint12PassClosureState) != Point12ValEStateActive ||
-			strings.TrimSpace(model.InheritedPoint12ReviewerResult) != point12ValEReviewerResultPassConfirmed) {
+	if model.InheritedPoint12CurrentState == Point12ValEStatePassConfirmed &&
+		(model.InheritedPoint12DependencyState != Point12ValEStateActive ||
+			model.InheritedPoint12PassClosureState != Point12ValEStateActive ||
+			model.InheritedPoint12ReviewerResult != point12ValEReviewerResultPassConfirmed) {
 		blockedReasons = append(blockedReasons, "point12_inherited_not_pass_confirmed")
 	}
 	if len(blockedReasons) > 0 {
@@ -545,7 +566,7 @@ func EvaluatePoint13ValCCustomerEvidenceExportPackageState(model Point13ValCCust
 		!point13ValBEvidenceRefsValid(model.ExportedEvidenceRefs) ||
 		!point13ValBEvidenceHashRefsValid(model.ExportedEvidenceHashRefs) ||
 		!point13ValBEvidenceHashRefsMatchEvidenceRefs(model.ExportedEvidenceRefs, model.ExportedEvidenceHashRefs) ||
-		strings.TrimSpace(model.ExportManifestHash) != point13ValCComputedExportManifestHash(model) ||
+		model.ExportManifestHash != point13ValCComputedExportManifestHash(model) ||
 		!point12Val0RetentionClassRefValid(model.RetentionClassRef) ||
 		!point13ValAOwnerRefValid(model.ExportOwnerRef) ||
 		!point13ValAOwnerRefValid(model.CustomerOwnerRef) ||
@@ -559,16 +580,16 @@ func EvaluatePoint13ValCCustomerEvidenceExportPackageState(model Point13ValCCust
 		!model.ExportCannotMutateCanonicalEvidence {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.OperationLedgerRef) != strings.TrimSpace(dependency.ValB.PilotEvidenceOperationLedger.LedgerID) ||
-		strings.TrimSpace(model.CustomerReviewTraceRef) != strings.TrimSpace(dependency.ValB.CustomerReviewTrace.ReviewTraceID) ||
-		strings.TrimSpace(model.SupportTraceRef) != strings.TrimSpace(dependency.ValB.SupportActionTrace.SupportTraceID) ||
-		strings.TrimSpace(model.ExitEvidencePacketRef) != strings.TrimSpace(dependency.ValB.PilotExitEvidencePacket.PacketID) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.OperationLedgerRef != dependency.ValB.PilotEvidenceOperationLedger.LedgerID ||
+		model.CustomerReviewTraceRef != dependency.ValB.CustomerReviewTrace.ReviewTraceID ||
+		model.SupportTraceRef != dependency.ValB.SupportActionTrace.SupportTraceID ||
+		model.ExitEvidencePacketRef != dependency.ValB.PilotExitEvidencePacket.PacketID ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceRefs, dependency.ValB.Dependency.ValA.CustomerIntakeEvidenceGovernance.CustomerArtifactRefs) ||
 		!point12Val0ExactStringSetMatch(model.ExportedEvidenceHashRefs, dependency.ValB.Dependency.ValA.CustomerIntakeEvidenceGovernance.CustomerArtifactHashRefs) ||
-		strings.TrimSpace(model.ExportOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.PilotExecutionContract.PilotOwnerRef) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef) ||
-		strings.TrimSpace(model.RetentionClassRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.EvidenceRetentionClassRef) ||
+		model.ExportOwnerRef != dependency.ValB.Dependency.ValA.PilotExecutionContract.PilotOwnerRef ||
+		model.CustomerOwnerRef != dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef ||
+		model.RetentionClassRef != dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.EvidenceRetentionClassRef ||
 		point13ValAContainsCrossTenantArtifact(model.ExportedEvidenceRefs) {
 		return Point13ValCStateBlocked
 	}
@@ -591,11 +612,11 @@ func EvaluatePoint13ValCRedactionSafeDisclosureState(model Point13ValCRedactionS
 		!model.RedactionCannotHideDecisiveMissingProof {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.ExportPackageID) != strings.TrimSpace(exportPackage.ExportPackageID) {
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.ExportPackageID != exportPackage.ExportPackageID {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(exportState) != Point13ValCStateActive {
+	if exportState != Point13ValCStateActive {
 		return Point13ValCStateBlocked
 	}
 	if model.DecisiveEvidenceRemoved || point13ValCClaimsOverlap(model.SurvivingCustomerClaims, model.DisallowedCustomerClaims) {
@@ -624,19 +645,19 @@ func EvaluatePoint13ValCOperationalHandoffChecklistState(model Point13ValCOperat
 		len(model.RequiredAckRefs) == 0 ||
 		!point13ValAAuditRefsValid(model.AuditEventRefs) ||
 		len(model.AuditEventRefs) == 0 ||
-		strings.TrimSpace(model.ChecklistBindingHash) != point13ValCComputedChecklistBindingHash(model) ||
+		model.ChecklistBindingHash != point13ValCComputedChecklistBindingHash(model) ||
 		!model.HandoffIsOperationalOnly ||
 		!model.HandoffCannotApproveProduction ||
 		!model.HandoffCannotAuthorizeDeployment ||
 		!model.HandoffCannotCreatePass {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.HandoffOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.PilotExecutionContract.PilotOwnerRef) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef) ||
-		strings.TrimSpace(model.SupportOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.SupportResponsibilityMatrix.EscalationOwnerRef) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(exportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.ExitPacketRef) != strings.TrimSpace(dependency.ValB.PilotExitEvidencePacket.PacketID) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.HandoffOwnerRef != dependency.ValB.Dependency.ValA.PilotExecutionContract.PilotOwnerRef ||
+		model.CustomerOwnerRef != dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef ||
+		model.SupportOwnerRef != dependency.ValB.Dependency.ValA.SupportResponsibilityMatrix.EscalationOwnerRef ||
+		model.ExportPackageRef != exportPackage.ExportPackageID ||
+		model.ExitPacketRef != dependency.ValB.PilotExitEvidencePacket.PacketID ||
 		!point12Val0ExactStringSetMatch(model.ChecklistItems, point13ValCDefaultChecklistItems()) ||
 		!point12Val0ExactStringSetMatch(model.RequiredAckRefs, point13ValCDefaultRequiredAckRefs()) ||
 		!point12Val0ExactStringSetMatch(model.AuditEventRefs, point13ValCDefaultHandoffAuditRefs()) {
@@ -662,10 +683,10 @@ func EvaluatePoint13ValCCustomerAcceptanceTraceState(model Point13ValCCustomerAc
 		!model.AcceptanceCannotCreatePass {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(exportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.HandoffChecklistRef) != strings.TrimSpace(handoff.HandoffChecklistID) {
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.CustomerOwnerRef != dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef ||
+		model.ExportPackageRef != exportPackage.ExportPackageID ||
+		model.HandoffChecklistRef != handoff.HandoffChecklistID {
 		return Point13ValCStateBlocked
 	}
 	if point13Val0ContainsForbiddenClaim(
@@ -701,13 +722,13 @@ func EvaluatePoint13ValCSupportOffboardingHandoffState(model Point13ValCSupportO
 		!model.SupportOffboardingCannotApproveProduction {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.SupportOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.SupportResponsibilityMatrix.EscalationOwnerRef) ||
-		strings.TrimSpace(model.CustomerOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef) ||
-		strings.TrimSpace(model.RetentionOwnerRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.RetentionOwnerRef) ||
-		strings.TrimSpace(model.ExportPackageRef) != strings.TrimSpace(exportPackage.ExportPackageID) ||
-		strings.TrimSpace(model.SupportTraceRef) != strings.TrimSpace(dependency.ValB.SupportActionTrace.SupportTraceID) ||
-		strings.TrimSpace(model.DisposalPathRef) != strings.TrimSpace(dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.DisposalPathRef) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.SupportOwnerRef != dependency.ValB.Dependency.ValA.SupportResponsibilityMatrix.EscalationOwnerRef ||
+		model.CustomerOwnerRef != dependency.ValB.Dependency.ValA.PilotExecutionContract.CustomerOwnerRef ||
+		model.RetentionOwnerRef != dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.RetentionOwnerRef ||
+		model.ExportPackageRef != exportPackage.ExportPackageID ||
+		model.SupportTraceRef != dependency.ValB.SupportActionTrace.SupportTraceID ||
+		model.DisposalPathRef != dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.DisposalPathRef ||
 		!point12Val0ExactStringSetMatch(model.RetentionClassRefs, []string{
 			dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.EvidenceRetentionClassRef,
 			dependency.ValB.Dependency.ValA.Dependency.Val0.OffboardingRetentionBoundary.SupportArtifactRetentionClassRef,
@@ -721,7 +742,7 @@ func EvaluatePoint13ValCSupportOffboardingHandoffState(model Point13ValCSupportO
 }
 
 func EvaluatePoint13ValCAIEvidenceExportLineageState(model Point13ValCAIEvidenceExportLineageSummary, dependency Point13ValCDependencySnapshot) string {
-	if point11Val0ContainsTrimmed(point12Val0BlockedAIEvidenceCandidateTypes(), model.AIOutputType) {
+	if point13Val0RawExactOneOf(model.AIOutputType, point12Val0BlockedAIEvidenceCandidateTypes()) {
 		return Point13ValCStateBlocked
 	}
 	aiTrace := dependency.ValB.AIEvidenceOperationTrace
@@ -749,14 +770,14 @@ func EvaluatePoint13ValCAIEvidenceExportLineageState(model Point13ValCAIEvidence
 		model.CanonicalMutationAllowed {
 		return Point13ValCStateBlocked
 	}
-	if strings.TrimSpace(model.TenantScope) != strings.TrimSpace(dependency.InheritedTenantScope) ||
-		strings.TrimSpace(model.AITraceRef) != strings.TrimSpace(aiTrace.AITraceID) ||
-		strings.TrimSpace(model.EvidenceCandidateRef) != strings.TrimSpace(aiTrace.EvidenceCandidateRef) ||
+	if model.TenantScope != dependency.InheritedTenantScope ||
+		model.AITraceRef != aiTrace.AITraceID ||
+		model.EvidenceCandidateRef != aiTrace.EvidenceCandidateRef ||
 		!point12Val0ExactStringSetMatch(model.InputEvidenceRefs, aiTrace.InputEvidenceRefs) ||
 		!point12Val0ExactStringSetMatch(model.InputEvidenceHashRefs, aiTrace.InputEvidenceHashRefs) ||
-		strings.TrimSpace(model.ModelOrRuleVersionRef) != strings.TrimSpace(aiTrace.ModelOrRuleVersionRef) ||
-		strings.TrimSpace(model.PermissionManifestHash) != strings.TrimSpace(aiTrace.PermissionManifestHash) ||
-		strings.TrimSpace(model.AuditEventRef) != strings.TrimSpace(aiTrace.AuditEventRef) ||
+		model.ModelOrRuleVersionRef != aiTrace.ModelOrRuleVersionRef ||
+		model.PermissionManifestHash != aiTrace.PermissionManifestHash ||
+		model.AuditEventRef != aiTrace.AuditEventRef ||
 		point13ValAContainsCrossTenantArtifact(model.InputEvidenceRefs) {
 		return Point13ValCStateBlocked
 	}
@@ -777,7 +798,7 @@ func EvaluatePoint13ValCNoOverclaimState(model Point13ValCNoOverclaimExportWordi
 	}
 	if !point12Val0ExactStringSetMatch(model.AllowedSafeWording, point13ValCAllowedSafeWording()) ||
 		!point12Val0ExactStringSetMatch(model.BlockedWording, point13Val0ForbiddenClaims()) ||
-		strings.TrimSpace(model.ProjectionDisclaimer) != point13ValCProjectionDisclaimerBaseline {
+		model.ProjectionDisclaimer != point13ValCProjectionDisclaimerBaseline {
 		return Point13ValCStateBlocked
 	}
 	if point13Val0ContainsForbiddenClaim(

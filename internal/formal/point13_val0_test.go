@@ -172,6 +172,19 @@ func TestPoint13Val0DependencyState(t *testing.T) {
 			t.Fatalf("expected retagged inherited tenant scope to block foundation, got %#v", model)
 		}
 	})
+
+	t.Run("stale embedded point12 summary cannot hide mutated profile context", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.Dependency.Point12.Dependency.Val0.Manifest.ProfileContext.CurrentProfileHash = ""
+		got, reasons := point13Val0DependencyStateAndReasons(model.Dependency)
+		if got != Point13Val0StateBlocked || !point13Val0StringSliceContains(reasons, "point12_recomputed_snapshot_mismatch") {
+			t.Fatalf("expected stale embedded point12 recompute mismatch to block with exact reason, got state=%s reasons=%v", got, reasons)
+		}
+		model = ComputePoint13Val0Foundation(model)
+		if model.DependencyState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected stale embedded point12 profile context to block foundation, got %#v", model)
+		}
+	})
 }
 
 func TestPoint13Val0PilotReadinessState(t *testing.T) {
@@ -394,6 +407,18 @@ func TestPoint13Val0NoOverclaimCustomerWordingState(t *testing.T) {
 		model = ComputePoint13Val0Foundation(model)
 		if model.NoOverclaimState != Point13Val0StateActive {
 			t.Fatalf("expected safe wording to remain allowed, got %#v", model)
+		}
+	})
+
+	t.Run("forbidden wording cannot be laundered through allowed list", func(t *testing.T) {
+		model := activePoint13Val0Foundation()
+		model.NoOverclaimCustomerWording.AllowedCustomerFacingWording = []string{"production approved"}
+		model = ComputePoint13Val0Foundation(model)
+		if model.NoOverclaimState != Point13Val0StateBlocked || model.CurrentState != Point13Val0StateBlocked {
+			t.Fatalf("expected forbidden allowed wording list mutation to block, got %#v", model)
+		}
+		if !point13Val0StringSliceContains(model.BlockingReasons, "no_overclaim:"+Point13Val0StateBlocked) {
+			t.Fatalf("expected exact no-overclaim blocking reason, got %#v", model.BlockingReasons)
 		}
 	})
 
