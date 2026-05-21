@@ -826,6 +826,9 @@ func ComputePoint15ValADowngradeTriggerFoundation(model Point15ValADowngradeTrig
 	model.DecisionState = EvaluatePoint15ValADowngradeDecisionState(model.Decision)
 	model.AuthorityBoundaryState = EvaluatePoint15ValAAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValANoOverclaimGuardState(model.NoOverclaimGuard)
+	if model.TriggerDisclaimer != point15ValATriggerDisclaimer {
+		model.NoOverclaimState = Point15ValAStateBlocked
+	}
 
 	if model.AuthorityBoundary.TenantScope != model.Dependency.InheritedTenantScope {
 		model.AuthorityBoundaryState = Point15ValAStateBlocked

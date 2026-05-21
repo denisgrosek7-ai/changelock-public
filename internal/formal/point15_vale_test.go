@@ -178,6 +178,10 @@ func TestPoint15ValEDependencyState(t *testing.T) {
 			model.Point15ValD.Dependency.InheritedTenantScope = retagged
 		}, Point15ValEStateBlocked},
 		{"blocks when point15 pass appears before final path", func(model *Point15ValEDependencySnapshot) { model.Point15PassSeen = true }, Point15ValEStateBlocked},
+		{"blocks stale clean nested vald point15 pass payload", func(model *Point15ValEDependencySnapshot) {
+			model.Point15PassSeen = false
+			model.Point15ValD.ReviewPrerequisites = append(model.Point15ValD.ReviewPrerequisites, point15Val0BlockedPassToken)
+		}, Point15ValEStateBlocked},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1044,6 +1048,10 @@ func TestPoint15ValEFoundationState(t *testing.T) {
 		{"stale nested vald pass restore blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.Dependency.Point15ValD.NoMutationGuard.PassRestoreAttempted = true
 		}, Point15ValEStateBlocked, []string{"dependency"}},
+		{"stale nested vald hidden point15 pass payload blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15PassSeen = false
+			model.Dependency.Point15ValD.ReviewPrerequisites = append(model.Dependency.Point15ValD.ReviewPrerequisites, point15Val0BlockedPassToken)
+		}, Point15ValEStateBlocked, []string{"dependency"}},
 		{"stale nested vald no overclaim forbidden wording blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.Dependency.Point15ValD.NoOverclaimGuard.ObservedTexts = append(model.Dependency.Point15ValD.NoOverclaimGuard.ObservedTexts, "production approved")
 		}, Point15ValEStateBlocked, []string{"no_overclaim"}},
@@ -1092,6 +1100,21 @@ func TestPoint15ValEFoundationState(t *testing.T) {
 		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
 		{"stale nested val0 no-overclaim allowed ledger mutation blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording = append(model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording, "freshness certified")
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested val0 top-level freshness disclaimer overclaim blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.FreshnessDisclaimer = "continuous assurance guaranteed"
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested vala top-level trigger disclaimer retag blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.TriggerDisclaimer = " " + point15ValATriggerDisclaimer + " "
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested valb top-level revalidation disclaimer overclaim blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.Dependency.Point15ValB.RevalidationDisclaimer = "production approved"
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested valc top-level enforcement disclaimer retag blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.Dependency.Point15ValC.EnforcementDisclaimer = "\t" + point15ValCEnforcementDisclaimer + "\n"
+		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
+		{"stale nested vald top-level projection disclaimer overclaim blocks final closure", func(model *Point15ValEContinuousVerificationClosureFoundation) {
+			model.Dependency.Point15ValD.ProjectionDisclaimer = "deployment approved"
 		}, Point15ValEStateBlocked, []string{"dependency", "no_overclaim"}},
 		{"clb blocker prevents final pass", func(model *Point15ValEContinuousVerificationClosureFoundation) {
 			model.CLBFinalCheck.CLB1Present = true

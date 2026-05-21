@@ -1112,6 +1112,9 @@ func ComputePoint15ValCEnforcementBoundaryFoundation(model Point15ValCEnforcemen
 	model.TenantBoundaryState = EvaluatePoint15ValCTenantBoundaryState(model.TenantBoundary)
 	model.AuthorityBoundaryState = EvaluatePoint15ValCAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValCNoOverclaimGuardState(model.NoOverclaimGuard)
+	if model.EnforcementDisclaimer != point15ValCEnforcementDisclaimer {
+		model.NoOverclaimState = Point15ValCStateBlocked
+	}
 
 	expectedTenant := model.Dependency.InheritedTenantScope
 	expectedEvidenceID := model.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.EvidenceContext.EvidenceID

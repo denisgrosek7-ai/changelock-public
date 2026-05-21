@@ -2,6 +2,7 @@ package formal
 
 import (
 	"encoding/json"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -541,6 +542,456 @@ func EvaluatePoint15Val0DependencyState(model Point15Val0DependencySnapshot) str
 	return Point15Val0StateActive
 }
 
+func point15Val0Point11FoundationSnapshotActive(model Point11ValDFoundation) bool {
+	dependencyState := EvaluatePoint11ValDDependencyState(Point11ValDDependencyBundle{
+		Val0: model.Val0Dependency,
+		ValA: model.ValADependency,
+		ValB: model.ValBDependency,
+		ValC: model.ValCDependency,
+	})
+	integratedInvariantState := EvaluatePoint11ValDIntegratedInvariantState(model.IntegratedInvariantReview)
+	qualityMapState := EvaluatePoint11ValDQualityMapState(model.QualityMap)
+	publicationReviewState := EvaluatePoint11ValDPublicationReviewState(model.PublicationReview)
+	noOverclaimReviewState := EvaluatePoint11ValDNoOverclaimReviewState(model.NoOverclaimReview)
+	cleanRoomIPReviewState := EvaluatePoint11ValDCleanRoomIPReviewState(model.CleanRoomIPReview)
+	clbClosureState := EvaluatePoint11ValDCLBClosureState(model.CLBLedger)
+	passClosureManifestState := EvaluatePoint11ValDPassClosureManifestState(model.PassClosureManifest, model)
+	finalPassGateState := EvaluatePoint11ValDFinalPassGateState(model.FinalPassGate, model)
+
+	evaluated := model
+	evaluated.DependencyState = dependencyState
+	evaluated.IntegratedInvariantState = integratedInvariantState
+	evaluated.QualityMapState = qualityMapState
+	evaluated.PublicationReviewState = publicationReviewState
+	evaluated.NoOverclaimReviewState = noOverclaimReviewState
+	evaluated.CleanRoomIPReviewState = cleanRoomIPReviewState
+	evaluated.CLBClosureState = clbClosureState
+	evaluated.PassClosureManifestState = passClosureManifestState
+	evaluated.PassClosureManifest.CurrentState = passClosureManifestState
+	evaluated.FinalPassGateState = finalPassGateState
+	evaluated.FinalPassGate.CurrentState = finalPassGateState
+
+	return model.CurrentState == Point11ValDStateActive &&
+		EvaluatePoint11ValDFoundationState(evaluated) == Point11ValDStateActive &&
+		model.DependencyState == dependencyState &&
+		model.IntegratedInvariantState == integratedInvariantState &&
+		model.QualityMapState == qualityMapState &&
+		model.PublicationReviewState == publicationReviewState &&
+		model.NoOverclaimReviewState == noOverclaimReviewState &&
+		model.CleanRoomIPReviewState == cleanRoomIPReviewState &&
+		model.CLBClosureState == clbClosureState &&
+		model.PassClosureManifestState == passClosureManifestState &&
+		model.FinalPassGateState == finalPassGateState &&
+		dependencyState == Point11ValDDependencyStateActive &&
+		integratedInvariantState == Point11ValDIntegratedInvariantStateActive &&
+		qualityMapState == Point11ValDQualityMapStateActive &&
+		publicationReviewState == Point11ValDPublicationReviewStateActive &&
+		noOverclaimReviewState == Point11ValDNoOverclaimReviewStateActive &&
+		cleanRoomIPReviewState == Point11ValDCleanRoomIPReviewStateActive &&
+		clbClosureState == Point11ValDCLBClosureStateActive &&
+		passClosureManifestState == Point11ValDPassClosureManifestStateActive &&
+		finalPassGateState == Point11ValDFinalPassGateStateActive &&
+		model.Point11PassToken == point11ValDPoint11PassToken &&
+		model.PassClosureManifest.CurrentState == passClosureManifestState &&
+		model.PassClosureManifest.Point11PassAllowed &&
+		model.PassClosureManifest.Point11PassToken == point11ValDPoint11PassToken &&
+		model.FinalPassGate.CurrentState == finalPassGateState &&
+		model.FinalPassGate.Point11PassAllowed &&
+		model.FinalPassGate.Point11PassEmitted &&
+		model.FinalPassGate.Point11PassToken == point11ValDPoint11PassToken
+}
+
+func point15Val0Point14ValDChainSnapshotActive(model Point14ValDFoundation) bool {
+	timelineProjectionState := EvaluatePoint14ValDTimelineProjectionState(model.TimelineProjection)
+	signalTimelineEntryState := EvaluatePoint14ValDSignalTimelineEntryState(model.SignalTimelineEntry)
+	disputeTimelineState := EvaluatePoint14ValDDisputeTimelineProjectionState(model.DisputeTimelineProjection)
+	correctionReadProjectionState := EvaluatePoint14ValDCorrectionReadProjectionState(model.CorrectionReadProjection)
+	governanceTraceProjectionState := EvaluatePoint14ValDGovernanceTraceProjectionState(model.GovernanceTraceProjection)
+	queryProjectionState := EvaluatePoint14ValDQueryProjectionState(model.QueryProjection)
+	accessBoundaryState := EvaluatePoint14ValDAccessBoundaryState(model.AccessBoundary, model.Dependency)
+	tenantPrivacyTimelineState := EvaluatePoint14ValDTenantPrivacyTimelineProjectionGuardState(model.TenantPrivacyTimelineProjectionGuard, model.Dependency)
+	agentTimelineProjectionState := EvaluatePoint14ValDAgentTimelineProjectionState(model.AgentTimelineProjection, model.Dependency)
+	timestampIntegrityState := EvaluatePoint14ValDTimestampIntegrityGuardState(model.TimestampIntegrityGuard)
+	noMutationProjectionGuardState := EvaluatePoint14ValDNoMutationProjectionGuardState(model.NoMutationProjectionGuard)
+	noOverclaimTimelineWordingState := EvaluatePoint14ValDNoOverclaimTimelineWordingState(model.NoOverclaimTimelineWording)
+	dependencyState := EvaluatePoint14ValDDependencyState(model.Dependency)
+
+	return model.CurrentState == Point14ValDStateActive &&
+		model.DependencyState == dependencyState &&
+		model.TimelineProjectionState == timelineProjectionState &&
+		model.SignalTimelineEntryState == signalTimelineEntryState &&
+		model.DisputeTimelineState == disputeTimelineState &&
+		model.CorrectionReadProjectionState == correctionReadProjectionState &&
+		model.GovernanceTraceProjectionState == governanceTraceProjectionState &&
+		model.QueryProjectionState == queryProjectionState &&
+		model.AccessBoundaryState == accessBoundaryState &&
+		model.TenantPrivacyTimelineState == tenantPrivacyTimelineState &&
+		model.AgentTimelineProjectionState == agentTimelineProjectionState &&
+		model.TimestampIntegrityState == timestampIntegrityState &&
+		model.NoMutationProjectionGuardState == noMutationProjectionGuardState &&
+		model.NoOverclaimTimelineWordingState == noOverclaimTimelineWordingState &&
+		timelineProjectionState == Point14ValDStateActive &&
+		signalTimelineEntryState == Point14ValDStateActive &&
+		disputeTimelineState == Point14ValDStateActive &&
+		correctionReadProjectionState == Point14ValDStateActive &&
+		governanceTraceProjectionState == Point14ValDStateActive &&
+		queryProjectionState == Point14ValDStateActive &&
+		accessBoundaryState == Point14ValDStateActive &&
+		tenantPrivacyTimelineState == Point14ValDStateActive &&
+		agentTimelineProjectionState == Point14ValDStateActive &&
+		timestampIntegrityState == Point14ValDStateActive &&
+		noMutationProjectionGuardState == Point14ValDStateActive &&
+		noOverclaimTimelineWordingState == Point14ValDStateActive &&
+		dependencyState == Point14ValDStateActive &&
+		point14ValDFoundationEmbeddedSnapshotCopiesExact(model) &&
+		point14ValCDependencyChainComputedActive(model.Dependency.Point14ValC) &&
+		point14ValBDependencyChainComputedActive(model.Dependency.Point14ValB) &&
+		point14ValAFoundationComputedActive(model.Dependency.Point14ValA) &&
+		point14Val0FoundationComputedActive(model.Dependency.Point14Val0) &&
+		EvaluatePoint14ValCNoOverclaimPublicationWordingState(model.Dependency.Point14ValC.NoOverclaimPublicationWording) == Point14ValCStateActive &&
+		EvaluatePoint14ValBNoOverclaimDisputeWordingState(model.Dependency.Point14ValB.NoOverclaimDisputeWording) == Point14ValBStateActive &&
+		EvaluatePoint14ValANoOverclaimValidationWordingState(model.Dependency.Point14ValA.NoOverclaimValidationWording) == Point14ValAStateActive &&
+		point15Val0Point11FoundationSnapshotActive(model.Dependency.Point11) &&
+		point15Val0Point11FoundationSnapshotActive(model.Dependency.Point14ValC.Dependency.Point11) &&
+		point15Val0Point11FoundationSnapshotActive(model.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point11) &&
+		point15Val0Point11FoundationSnapshotActive(model.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point11) &&
+		point15Val0Point11FoundationSnapshotActive(model.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point14Val0.Dependency.Point11)
+}
+
+func point15Val0Point14ValEDependencySnapshotPassConfirmed(model Point14ValEDependencySnapshot) bool {
+	if !model.SnapshotFromComputedOutput ||
+		!model.Point14ValDComputedFromUpstream ||
+		!model.Point14ValDMerged ||
+		!model.Point14ValDCIGreen ||
+		!model.Point14ValDReviewedOnMain ||
+		model.Point14PassSeen ||
+		model.Point14ValDPointID != point14Val0PointID ||
+		model.Point14ValDWaveID != point14ValDWaveID ||
+		!point14ValDStateValid(model.Point14ValDCurrentState) ||
+		!point14ValDStateValid(model.Point14ValDDependencyState) ||
+		!point14ValDStateValid(model.Point14ValDTimelineProjectionState) ||
+		!point14ValDStateValid(model.Point14ValDSignalTimelineEntryState) ||
+		!point14ValDStateValid(model.Point14ValDDisputeTimelineState) ||
+		!point14ValDStateValid(model.Point14ValDCorrectionReadProjectionState) ||
+		!point14ValDStateValid(model.Point14ValDGovernanceTraceProjectionState) ||
+		!point14ValDStateValid(model.Point14ValDQueryProjectionState) ||
+		!point14ValDStateValid(model.Point14ValDAccessBoundaryState) ||
+		!point14ValDStateValid(model.Point14ValDTenantPrivacyTimelineState) ||
+		!point14ValDStateValid(model.Point14ValDAgentTimelineProjectionState) ||
+		!point14ValDStateValid(model.Point14ValDTimestampIntegrityState) ||
+		!point14ValDStateValid(model.Point14ValDNoMutationProjectionGuardState) ||
+		!point14ValDStateValid(model.Point14ValDNoOverclaimTimelineWordingState) ||
+		!point14ValCStateValid(model.InheritedPoint14ValCCurrentState) ||
+		!point14ValBStateValid(model.InheritedPoint14ValBCurrentState) ||
+		!point14ValAStateValid(model.InheritedPoint14ValACurrentState) ||
+		!point14Val0StateValid(model.InheritedPoint14Val0CurrentState) ||
+		!point13ValEStateValid(model.InheritedPoint13ValECurrentState) ||
+		!point13ValEStateValid(model.InheritedPoint13ValEPassClosureState) ||
+		!point12ValEStateValid(model.InheritedPoint12CurrentState) ||
+		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
+		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
+		!point12ValEReviewerResultValid(model.InheritedPoint12ReviewerResult) ||
+		model.InheritedPoint11CurrentState == "" ||
+		model.InheritedPoint11PublicationState == "" ||
+		model.InheritedPoint11NoOverclaimState == "" ||
+		model.InheritedPoint11FinalPassGateState == "" ||
+		model.InheritedPoint10CurrentState == "" ||
+		model.InheritedPoint10NoOverclaimState == "" ||
+		model.InheritedPoint10ProjectionState == "" ||
+		model.InheritedPoint10PassRuleState == "" ||
+		!point11Val0ScopeValid(model.InheritedTenantScope) ||
+		!point15Val0Point14ValDChainSnapshotActive(model.Point14ValD) {
+		return false
+	}
+	if model.Point14ValDCurrentState != model.Point14ValD.CurrentState ||
+		model.Point14ValDDependencyState != model.Point14ValD.DependencyState ||
+		model.Point14ValDTimelineProjectionState != model.Point14ValD.TimelineProjectionState ||
+		model.Point14ValDSignalTimelineEntryState != model.Point14ValD.SignalTimelineEntryState ||
+		model.Point14ValDDisputeTimelineState != model.Point14ValD.DisputeTimelineState ||
+		model.Point14ValDCorrectionReadProjectionState != model.Point14ValD.CorrectionReadProjectionState ||
+		model.Point14ValDGovernanceTraceProjectionState != model.Point14ValD.GovernanceTraceProjectionState ||
+		model.Point14ValDQueryProjectionState != model.Point14ValD.QueryProjectionState ||
+		model.Point14ValDAccessBoundaryState != model.Point14ValD.AccessBoundaryState ||
+		model.Point14ValDTenantPrivacyTimelineState != model.Point14ValD.TenantPrivacyTimelineState ||
+		model.Point14ValDAgentTimelineProjectionState != model.Point14ValD.AgentTimelineProjectionState ||
+		model.Point14ValDTimestampIntegrityState != model.Point14ValD.TimestampIntegrityState ||
+		model.Point14ValDNoMutationProjectionGuardState != model.Point14ValD.NoMutationProjectionGuardState ||
+		model.Point14ValDNoOverclaimTimelineWordingState != model.Point14ValD.NoOverclaimTimelineWordingState ||
+		model.Point14ValDComputedFromUpstream != model.Point14ValD.Dependency.SnapshotFromComputedOutput ||
+		model.InheritedPoint14ValCCurrentState != model.Point14ValD.Dependency.Point14ValCCurrentState ||
+		model.InheritedPoint14ValBCurrentState != model.Point14ValD.Dependency.InheritedPoint14ValBCurrentState ||
+		model.InheritedPoint14ValACurrentState != model.Point14ValD.Dependency.InheritedPoint14ValACurrentState ||
+		model.InheritedPoint14Val0CurrentState != model.Point14ValD.Dependency.InheritedPoint14Val0CurrentState ||
+		model.InheritedPoint13ValECurrentState != model.Point14ValD.Dependency.InheritedPoint13ValECurrentState ||
+		model.InheritedPoint13ValEPassClosureState != model.Point14ValD.Dependency.InheritedPoint13ValEPassClosureState ||
+		model.InheritedPoint13ValEPassAllowed != model.Point14ValD.Dependency.InheritedPoint13ValEPassAllowed ||
+		model.InheritedPoint13ValEPassToken != model.Point14ValD.Dependency.InheritedPoint13ValEPassToken ||
+		model.InheritedPoint12CurrentState != model.Point14ValD.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != model.Point14ValD.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != model.Point14ValD.Dependency.InheritedPoint12PassClosureState ||
+		model.InheritedPoint12ReviewerResult != model.Point14ValD.Dependency.InheritedPoint12ReviewerResult ||
+		model.InheritedPoint11CurrentState != model.Point14ValD.Dependency.InheritedPoint11CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point14ValD.Dependency.InheritedPoint11PublicationState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValD.Dependency.InheritedPoint11NoOverclaimState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValD.Dependency.InheritedPoint11FinalPassGateState ||
+		model.InheritedPoint11CurrentState != model.Point14ValD.Dependency.Point11.CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point14ValD.Dependency.Point11.PublicationReviewState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValD.Dependency.Point11.NoOverclaimReviewState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValD.Dependency.Point11.FinalPassGateState ||
+		model.InheritedPoint10CurrentState != model.Point14ValD.Dependency.InheritedPoint10CurrentState ||
+		model.InheritedPoint10NoOverclaimState != model.Point14ValD.Dependency.InheritedPoint10NoOverclaimState ||
+		model.InheritedPoint10ProjectionState != model.Point14ValD.Dependency.InheritedPoint10ProjectionState ||
+		model.InheritedPoint10PassRuleState != model.Point14ValD.Dependency.InheritedPoint10PassRuleState ||
+		model.InheritedTenantScope != model.Point14ValD.Dependency.InheritedTenantScope {
+		return false
+	}
+	return model.Point14ValDCurrentState == Point14ValDStateActive &&
+		model.Point14ValDDependencyState == Point14ValDStateActive &&
+		model.Point14ValDTimelineProjectionState == Point14ValDStateActive &&
+		model.Point14ValDSignalTimelineEntryState == Point14ValDStateActive &&
+		model.Point14ValDDisputeTimelineState == Point14ValDStateActive &&
+		model.Point14ValDCorrectionReadProjectionState == Point14ValDStateActive &&
+		model.Point14ValDGovernanceTraceProjectionState == Point14ValDStateActive &&
+		model.Point14ValDQueryProjectionState == Point14ValDStateActive &&
+		model.Point14ValDAccessBoundaryState == Point14ValDStateActive &&
+		model.Point14ValDTenantPrivacyTimelineState == Point14ValDStateActive &&
+		model.Point14ValDAgentTimelineProjectionState == Point14ValDStateActive &&
+		model.Point14ValDTimestampIntegrityState == Point14ValDStateActive &&
+		model.Point14ValDNoMutationProjectionGuardState == Point14ValDStateActive &&
+		model.Point14ValDNoOverclaimTimelineWordingState == Point14ValDStateActive &&
+		model.InheritedPoint14ValCCurrentState == Point14ValCStateActive &&
+		model.InheritedPoint14ValBCurrentState == Point14ValBStateActive &&
+		model.InheritedPoint14ValACurrentState == Point14ValAStateActive &&
+		model.InheritedPoint14Val0CurrentState == Point14Val0StateActive &&
+		model.InheritedPoint13ValECurrentState == Point13ValEStatePassConfirmed &&
+		model.InheritedPoint13ValEPassClosureState == Point13ValEStateActive &&
+		model.InheritedPoint13ValEPassAllowed &&
+		model.InheritedPoint13ValEPassToken == point13ValEPoint13PassToken &&
+		model.InheritedPoint12CurrentState == Point12ValEStatePassConfirmed &&
+		model.InheritedPoint12DependencyState == Point12ValEStateActive &&
+		model.InheritedPoint12PassClosureState == Point12ValEStateActive &&
+		model.InheritedPoint12ReviewerResult == point12ValEReviewerResultPassConfirmed &&
+		model.InheritedPoint11CurrentState == Point11ValDStateActive &&
+		model.InheritedPoint11PublicationState == Point11ValDPublicationReviewStateActive &&
+		model.InheritedPoint11NoOverclaimState == Point11ValDNoOverclaimReviewStateActive &&
+		model.InheritedPoint11FinalPassGateState == Point11ValDFinalPassGateStateActive &&
+		model.InheritedPoint10CurrentState == operability.DeploymentMultiTenantPoint10StatePass &&
+		model.InheritedPoint10NoOverclaimState == operability.DeploymentMultiTenantValENoOverclaimStateActive &&
+		model.InheritedPoint10ProjectionState == operability.DeploymentMultiTenantValEProjectionBoundaryStateActive &&
+		model.InheritedPoint10PassRuleState == operability.DeploymentMultiTenantValEPoint10PassRuleStateActive
+}
+
+func point15Val0Point14ValEFoundationSnapshotPassConfirmed(model Point14ValEFoundation) bool {
+	dependencyState := Point14ValEStateBlocked
+	if point15Val0Point14ValEDependencySnapshotPassConfirmed(model.Dependency) {
+		dependencyState = Point14ValEStatePassConfirmed
+	}
+	externalSignalState := EvaluatePoint14ValEExternalSignalValidationClosureCheckState(model.ExternalSignalValidationClosureCheck)
+	conflictDisputeState := EvaluatePoint14ValEConflictDisputeClosureCheckState(model.ConflictDisputeClosureCheck)
+	correctionPublicationState := EvaluatePoint14ValECorrectionPublicationClosureCheckState(model.CorrectionPublicationClosureCheck)
+	timelineProjectionState := EvaluatePoint14ValETimelineProjectionClosureCheckState(model.TimelineProjectionClosureCheck)
+	authorityBoundaryState := EvaluatePoint14ValEAuthorityBoundaryClosureCheckState(model.AuthorityBoundaryClosureCheck)
+	tenantPrivacyState := EvaluatePoint14ValETenantPrivacyClosureCheckState(model.TenantPrivacyClosureCheck, model.Dependency)
+	timestampIntegrityState := EvaluatePoint14ValETimestampIntegrityClosureCheckState(model.TimestampIntegrityClosureCheck, model.Dependency)
+	agentAdvisoryState := EvaluatePoint14ValEAgentAdvisoryClosureCheckState(model.AgentAdvisoryClosureCheck, model.Dependency)
+	derivedNoOverclaim := point14ValENoOverclaimFinalCheckModel(model.Dependency)
+	noOverclaimState := Point14ValEStateBlocked
+	if reflect.DeepEqual(model.NoOverclaimFinalCheck, derivedNoOverclaim) {
+		noOverclaimState = EvaluatePoint14ValENoOverclaimFinalCheckState(model.NoOverclaimFinalCheck)
+	}
+	clbState := EvaluatePoint14ValECLBFinalCheckState(model.CLBFinalCheck)
+
+	passCandidate := point14ValEFoundationState(
+		dependencyState,
+		externalSignalState,
+		conflictDisputeState,
+		correctionPublicationState,
+		timelineProjectionState,
+		authorityBoundaryState,
+		tenantPrivacyState,
+		timestampIntegrityState,
+		agentAdvisoryState,
+		noOverclaimState,
+		clbState,
+	) == Point14ValEStatePassConfirmed &&
+		model.ClosureEvaluator.ReadOnlyProjectionConfirmed &&
+		model.ClosureEvaluator.NoMutationPathsDetected &&
+		model.ClosureEvaluator.NoExternalAuthorityDetected &&
+		model.ClosureEvaluator.NoPrematurePoint14Pass &&
+		model.ClosureEvaluator.ReviewerResult == point12ValEReviewerResultPassConfirmed
+
+	closureEvaluator := model.ClosureEvaluator
+	closureEvaluator.DependencyState = dependencyState
+	closureEvaluator.ValidationClosureState = externalSignalState
+	closureEvaluator.DisputeClosureState = conflictDisputeState
+	closureEvaluator.CorrectionPublicationClosureState = correctionPublicationState
+	closureEvaluator.TimelineProjectionClosureState = timelineProjectionState
+	closureEvaluator.AuthorityBoundaryState = authorityBoundaryState
+	closureEvaluator.TenantPrivacyState = tenantPrivacyState
+	closureEvaluator.TimestampIntegrityState = timestampIntegrityState
+	closureEvaluator.AgentAdvisoryState = agentAdvisoryState
+	closureEvaluator.NoOverclaimState = noOverclaimState
+	closureEvaluator.CLBFinalState = clbState
+	closureEvaluator.FinalPassAllowed = passCandidate
+	closureEvaluatorState := EvaluatePoint14ValEClosureEvaluatorState(closureEvaluator)
+	closureEvaluator.CurrentState = closureEvaluatorState
+
+	passManifest := model.PassClosureManifest
+	passManifest.DependencyGateResult = dependencyState
+	passManifest.ClosureEvaluatorResult = closureEvaluatorState
+	passManifest.ProjectionBoundaryResult = timelineProjectionState
+	passManifest.NoExternalAuthorityResult = authorityBoundaryState
+	passManifest.NoOverclaimGrepResult = noOverclaimState
+	passManifest.TenantPrivacyResult = tenantPrivacyState
+	passManifest.TimestampIntegrityResult = timestampIntegrityState
+	passManifest.AIAgentBoundaryResult = agentAdvisoryState
+	passManifest.CLBResult = clbState
+	passManifest.Point14PassAllowed = passCandidate && closureEvaluatorState == Point14ValEStatePassConfirmed
+	if passManifest.Point14PassAllowed {
+		passManifest.Point14PassToken = point14Val0BlockedPassToken
+	} else {
+		passManifest.Point14PassToken = ""
+	}
+	passManifestState := EvaluatePoint14PassClosureManifestState(passManifest)
+	passManifest.CurrentState = passManifestState
+
+	currentState := point14ValEFoundationState(
+		dependencyState,
+		externalSignalState,
+		conflictDisputeState,
+		correctionPublicationState,
+		timelineProjectionState,
+		authorityBoundaryState,
+		tenantPrivacyState,
+		timestampIntegrityState,
+		agentAdvisoryState,
+		noOverclaimState,
+		clbState,
+		closureEvaluatorState,
+		passManifestState,
+	)
+	point14PassAllowed := currentState == Point14ValEStatePassConfirmed &&
+		closureEvaluatorState == Point14ValEStatePassConfirmed &&
+		passManifestState == Point14ValEStatePassConfirmed &&
+		passManifest.Point14PassAllowed
+	point14PassToken := ""
+	if point14PassAllowed {
+		point14PassToken = point14Val0BlockedPassToken
+	}
+
+	return currentState == Point14ValEStatePassConfirmed &&
+		model.CurrentState == currentState &&
+		model.DependencyState == dependencyState &&
+		model.ExternalSignalValidationClosureState == externalSignalState &&
+		model.ConflictDisputeClosureState == conflictDisputeState &&
+		model.CorrectionPublicationClosureState == correctionPublicationState &&
+		model.TimelineProjectionClosureState == timelineProjectionState &&
+		model.AuthorityBoundaryClosureState == authorityBoundaryState &&
+		model.TenantPrivacyClosureState == tenantPrivacyState &&
+		model.TimestampIntegrityClosureState == timestampIntegrityState &&
+		model.AgentAdvisoryClosureState == agentAdvisoryState &&
+		model.NoOverclaimFinalCheckState == noOverclaimState &&
+		model.CLBFinalCheckState == clbState &&
+		model.ClosureEvaluatorState == closureEvaluatorState &&
+		model.ClosureEvaluator.CurrentState == closureEvaluatorState &&
+		reflect.DeepEqual(model.ClosureEvaluator, closureEvaluator) &&
+		model.PassClosureManifestState == passManifestState &&
+		model.PassClosureManifest.CurrentState == passManifestState &&
+		reflect.DeepEqual(model.PassClosureManifest, passManifest) &&
+		model.Point14PassAllowed == point14PassAllowed &&
+		model.Point14PassToken == point14PassToken &&
+		point14PassAllowed &&
+		point14PassToken == point14Val0BlockedPassToken
+}
+
+func point15Val0EmbeddedDependencySnapshotActive(model Point15Val0DependencySnapshot) bool {
+	if !model.SnapshotFromComputedOutput ||
+		!model.Point14ValEComputedFromUpstream ||
+		!model.Point14ValEMerged ||
+		!model.Point14ValECIGreen ||
+		!model.Point14ValEReviewedOnMain ||
+		model.Point15PassSeen ||
+		!point14ValEStateValid(model.Point14ValECurrentState) ||
+		!point14ValEStateValid(model.Point14ValEDependencyState) ||
+		!point14ValEStateValid(model.Point14ValEClosureEvaluatorState) ||
+		!point14ValEStateValid(model.Point14ValEPassClosureManifestState) ||
+		!point13ValEStateValid(model.InheritedPoint13ValECurrentState) ||
+		!point13ValEStateValid(model.InheritedPoint13ValEPassClosureState) ||
+		!point12ValEStateValid(model.InheritedPoint12CurrentState) ||
+		!point12ValEStateValid(model.InheritedPoint12DependencyState) ||
+		!point12ValEStateValid(model.InheritedPoint12PassClosureState) ||
+		model.InheritedPoint11CurrentState == "" ||
+		model.InheritedPoint11PublicationState == "" ||
+		model.InheritedPoint11NoOverclaimState == "" ||
+		model.InheritedPoint11FinalPassGateState == "" ||
+		model.InheritedPoint10CurrentState == "" ||
+		model.InheritedPoint10NoOverclaimState == "" ||
+		model.InheritedPoint10ProjectionState == "" ||
+		model.InheritedPoint10PassRuleState == "" ||
+		!point15Val0Point14ValEFoundationSnapshotPassConfirmed(model.Point14ValE) ||
+		!point14ValDFoundationEmbeddedSnapshotCopiesExact(model.Point14ValE.Dependency.Point14ValD) ||
+		!point15Val0Point11FoundationSnapshotActive(model.Point14ValE.Dependency.Point14ValD.Dependency.Point11) ||
+		!point15Val0Point11FoundationSnapshotActive(model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point11) ||
+		!point15Val0Point11FoundationSnapshotActive(model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point11) ||
+		!point15Val0Point11FoundationSnapshotActive(model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point11) ||
+		!point15Val0Point11FoundationSnapshotActive(model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point14Val0.Dependency.Point11) ||
+		!point11Val0ScopeValid(model.InheritedTenantScope) {
+		return false
+	}
+	if model.Point14ValECurrentState != model.Point14ValE.CurrentState ||
+		model.Point14ValEDependencyState != model.Point14ValE.DependencyState ||
+		model.Point14ValEClosureEvaluatorState != model.Point14ValE.ClosureEvaluatorState ||
+		model.Point14ValEPassClosureManifestState != model.Point14ValE.PassClosureManifestState ||
+		model.Point14ValEComputedFromUpstream != model.Point14ValE.Dependency.SnapshotFromComputedOutput ||
+		model.Point14PassAllowed != model.Point14ValE.Point14PassAllowed ||
+		model.Point14PassToken != model.Point14ValE.Point14PassToken ||
+		model.Point14PassManifestPointID != model.Point14ValE.PassClosureManifest.PointID ||
+		model.Point14PassManifestWaveID != model.Point14ValE.PassClosureManifest.WaveID ||
+		model.Point14PassManifestClosureToken != model.Point14ValE.PassClosureManifest.ClosureToken ||
+		model.InheritedPoint13ValECurrentState != model.Point14ValE.Dependency.InheritedPoint13ValECurrentState ||
+		model.InheritedPoint13ValEPassClosureState != model.Point14ValE.Dependency.InheritedPoint13ValEPassClosureState ||
+		model.InheritedPoint12CurrentState != model.Point14ValE.Dependency.InheritedPoint12CurrentState ||
+		model.InheritedPoint12DependencyState != model.Point14ValE.Dependency.InheritedPoint12DependencyState ||
+		model.InheritedPoint12PassClosureState != model.Point14ValE.Dependency.InheritedPoint12PassClosureState ||
+		model.InheritedPoint11CurrentState != model.Point14ValE.Dependency.InheritedPoint11CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point14ValE.Dependency.InheritedPoint11PublicationState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValE.Dependency.InheritedPoint11NoOverclaimState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValE.Dependency.InheritedPoint11FinalPassGateState ||
+		model.InheritedPoint11CurrentState != model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.CurrentState ||
+		model.InheritedPoint11PublicationState != model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.PublicationReviewState ||
+		model.InheritedPoint11NoOverclaimState != model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.NoOverclaimReviewState ||
+		model.InheritedPoint11FinalPassGateState != model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.FinalPassGateState ||
+		model.InheritedPoint10CurrentState != model.Point14ValE.Dependency.InheritedPoint10CurrentState ||
+		model.InheritedPoint10NoOverclaimState != model.Point14ValE.Dependency.InheritedPoint10NoOverclaimState ||
+		model.InheritedPoint10ProjectionState != model.Point14ValE.Dependency.InheritedPoint10ProjectionState ||
+		model.InheritedPoint10PassRuleState != model.Point14ValE.Dependency.InheritedPoint10PassRuleState ||
+		model.InheritedTenantScope != model.Point14ValE.Dependency.InheritedTenantScope {
+		return false
+	}
+	return model.Point14ValECurrentState == Point14ValEStatePassConfirmed &&
+		model.Point14ValEDependencyState == Point14ValEStatePassConfirmed &&
+		model.Point14ValEClosureEvaluatorState == Point14ValEStatePassConfirmed &&
+		model.Point14ValEPassClosureManifestState == Point14ValEStatePassConfirmed &&
+		model.Point14PassAllowed &&
+		model.Point14PassToken == point14Val0BlockedPassToken &&
+		model.Point14PassManifestPointID == point14Val0PointID &&
+		model.Point14PassManifestWaveID == point14ValEWaveID &&
+		model.Point14PassManifestClosureToken == point14Val0BlockedPassToken &&
+		model.InheritedPoint13ValECurrentState == Point13ValEStatePassConfirmed &&
+		model.InheritedPoint13ValEPassClosureState == Point13ValEStateActive &&
+		model.InheritedPoint12CurrentState == Point12ValEStatePassConfirmed &&
+		model.InheritedPoint12DependencyState == Point12ValEStateActive &&
+		model.InheritedPoint12PassClosureState == Point12ValEStateActive &&
+		model.InheritedPoint11CurrentState == Point11ValDStateActive &&
+		model.InheritedPoint11PublicationState == Point11ValDPublicationReviewStateActive &&
+		model.InheritedPoint11NoOverclaimState == Point11ValDNoOverclaimReviewStateActive &&
+		model.InheritedPoint11FinalPassGateState == Point11ValDFinalPassGateStateActive &&
+		model.InheritedPoint10CurrentState == operability.DeploymentMultiTenantPoint10StatePass &&
+		model.InheritedPoint10NoOverclaimState == operability.DeploymentMultiTenantValENoOverclaimStateActive &&
+		model.InheritedPoint10ProjectionState == operability.DeploymentMultiTenantValEProjectionBoundaryStateActive &&
+		model.InheritedPoint10PassRuleState == operability.DeploymentMultiTenantValEPoint10PassRuleStateActive
+}
+
 func point15Val0FreshnessTaxonomyModel() Point15Val0EvidenceFreshnessTaxonomy {
 	return Point15Val0EvidenceFreshnessTaxonomy{
 		TaxonomyID:               "point15_val0_freshness_taxonomy_001",
@@ -945,6 +1396,9 @@ func ComputePoint15Val0FreshnessDisciplineFoundation(model Point15Val0FreshnessD
 	model.TimestampDisciplineState = EvaluatePoint15Val0TimestampDisciplineState(model.TimestampDiscipline)
 	model.AuthorityBoundaryState = EvaluatePoint15Val0AuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15Val0NoOverclaimGuardState(model.NoOverclaimGuard)
+	if model.FreshnessDisclaimer != point15Val0FreshnessDisclaimer {
+		model.NoOverclaimState = Point15Val0StateBlocked
+	}
 	expectedTenantScope := model.Dependency.InheritedTenantScope
 	if model.EvidenceContext.FreshnessStatus != model.FreshnessTaxonomy.FreshnessStatus {
 		model.EvidenceContextState = Point15Val0StateBlocked

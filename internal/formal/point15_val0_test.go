@@ -138,6 +138,18 @@ func TestPoint15Val0DependencyState(t *testing.T) {
 		{"blocks when nested point14 dependency embedded point11 dependency state is forged", func(model *Point15Val0DependencySnapshot) {
 			model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.DependencyState = Point11ValDDependencyStateBlocked
 		}, Point15Val0StateBlocked},
+		{"blocks when nested point14 dependency embedded point11 aggregate disclaimer is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.ProjectionDisclaimer = "canonical_truth"
+		}, Point15Val0StateBlocked},
+		{"blocks when nested point14 dependency embedded point11 authority flag is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point11.CreatesAuthorityClaims = true
+		}, Point15Val0StateBlocked},
+		{"blocks when nested point14d dependency snapshot computed flag is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.SnapshotFromComputedOutput = false
+		}, Point15Val0StateBlocked},
+		{"blocks when nested point14d dependency valc upstream flag is forged", func(model *Point15Val0DependencySnapshot) {
+			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValCComputedFromUpstream = false
+		}, Point15Val0StateBlocked},
 		{"blocks when deep nested valc embedded point11 val0 dependency is forged", func(model *Point15Val0DependencySnapshot) {
 			model.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point11.Val0Dependency.CurrentState = Point11Val0StateBlocked
 		}, Point15Val0StateBlocked},

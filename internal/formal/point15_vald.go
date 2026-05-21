@@ -748,6 +748,12 @@ func point15ValCEmbeddedNoOverclaimChainActive(valC Point15ValCEnforcementBounda
 	valB := valC.Dependency.Point15ValB
 	valA := valB.Dependency.Point15ValA
 	val0 := valA.Dependency.Point15Val0
+	if val0.FreshnessDisclaimer != point15Val0FreshnessDisclaimer ||
+		valA.TriggerDisclaimer != point15ValATriggerDisclaimer ||
+		valB.RevalidationDisclaimer != point15ValBRevalidationDisclaimer ||
+		valC.EnforcementDisclaimer != point15ValCEnforcementDisclaimer {
+		return false
+	}
 	if val0.NoOverclaimState != Point15Val0StateActive ||
 		EvaluatePoint15Val0NoOverclaimGuardState(val0.NoOverclaimGuard) != Point15Val0StateActive {
 		return false
@@ -768,25 +774,64 @@ func point15ValCEmbeddedNoOverclaimChainActive(valC Point15ValCEnforcementBounda
 }
 
 func point15Val0EmbeddedStateChainActive(val0 Point15Val0FreshnessDisciplineFoundation) bool {
-	recomputed := ComputePoint15Val0FreshnessDisciplineFoundation(val0)
-	return val0.CurrentState == recomputed.CurrentState &&
-		val0.DependencyState == recomputed.DependencyState &&
-		val0.FreshnessTaxonomyState == recomputed.FreshnessTaxonomyState &&
-		val0.DowngradeTaxonomyState == recomputed.DowngradeTaxonomyState &&
-		val0.EvidenceContextState == recomputed.EvidenceContextState &&
-		val0.TenantBoundaryState == recomputed.TenantBoundaryState &&
-		val0.TimestampDisciplineState == recomputed.TimestampDisciplineState &&
-		val0.AuthorityBoundaryState == recomputed.AuthorityBoundaryState &&
-		val0.NoOverclaimState == recomputed.NoOverclaimState &&
-		recomputed.CurrentState == Point15Val0StateActive &&
-		recomputed.DependencyState == Point15Val0StateActive &&
-		recomputed.FreshnessTaxonomyState == Point15Val0StateActive &&
-		recomputed.DowngradeTaxonomyState == Point15Val0StateActive &&
-		recomputed.EvidenceContextState == Point15Val0StateActive &&
-		recomputed.TenantBoundaryState == Point15Val0StateActive &&
-		recomputed.TimestampDisciplineState == Point15Val0StateActive &&
-		recomputed.AuthorityBoundaryState == Point15Val0StateActive &&
-		recomputed.NoOverclaimState == Point15Val0StateActive
+	dependencyState := Point15Val0StateBlocked
+	if point15Val0EmbeddedDependencySnapshotActive(val0.Dependency) {
+		dependencyState = Point15Val0StateActive
+	}
+	freshnessTaxonomyState := EvaluatePoint15Val0EvidenceFreshnessTaxonomyState(val0.FreshnessTaxonomy)
+	downgradeTaxonomyState := EvaluatePoint15Val0DowngradeTaxonomyState(val0.DowngradeTaxonomy)
+	evidenceContextState := EvaluatePoint15Val0FreshnessEvidenceContextState(val0.EvidenceContext)
+	tenantBoundaryState := EvaluatePoint15Val0TenantBoundaryState(val0.EvidenceContext)
+	timestampDisciplineState := EvaluatePoint15Val0TimestampDisciplineState(val0.TimestampDiscipline)
+	authorityBoundaryState := EvaluatePoint15Val0AuthorityBoundaryState(val0.AuthorityBoundary)
+	noOverclaimState := EvaluatePoint15Val0NoOverclaimGuardState(val0.NoOverclaimGuard)
+	if val0.FreshnessDisclaimer != point15Val0FreshnessDisclaimer {
+		noOverclaimState = Point15Val0StateBlocked
+	}
+
+	expectedTenantScope := val0.Dependency.InheritedTenantScope
+	if val0.EvidenceContext.FreshnessStatus != val0.FreshnessTaxonomy.FreshnessStatus {
+		evidenceContextState = Point15Val0StateBlocked
+	}
+	if val0.DowngradeTaxonomy.FreshnessStatus != val0.FreshnessTaxonomy.FreshnessStatus {
+		downgradeTaxonomyState = Point15Val0StateBlocked
+	}
+	if val0.TimestampDiscipline.FreshnessStatus != val0.FreshnessTaxonomy.FreshnessStatus {
+		timestampDisciplineState = Point15Val0StateBlocked
+	}
+	if val0.EvidenceContext.DowngradeOutcome != val0.DowngradeTaxonomy.DowngradeOutcome {
+		evidenceContextState = Point15Val0StateBlocked
+	}
+	if expectedTenantScope == "" ||
+		val0.EvidenceContext.TenantScope != expectedTenantScope ||
+		(val0.EvidenceContext.ReferencedTenantScope != "" && val0.EvidenceContext.ReferencedTenantScope != expectedTenantScope) {
+		evidenceContextState = Point15Val0StateBlocked
+		tenantBoundaryState = Point15Val0StateBlocked
+	}
+	if expectedTenantScope == "" || val0.TimestampDiscipline.TenantScope != expectedTenantScope {
+		timestampDisciplineState = Point15Val0StateBlocked
+	}
+	if expectedTenantScope == "" || val0.AuthorityBoundary.TenantScope != expectedTenantScope {
+		authorityBoundaryState = Point15Val0StateBlocked
+	}
+
+	return val0.CurrentState == Point15Val0StateActive &&
+		val0.DependencyState == dependencyState &&
+		val0.FreshnessTaxonomyState == freshnessTaxonomyState &&
+		val0.DowngradeTaxonomyState == downgradeTaxonomyState &&
+		val0.EvidenceContextState == evidenceContextState &&
+		val0.TenantBoundaryState == tenantBoundaryState &&
+		val0.TimestampDisciplineState == timestampDisciplineState &&
+		val0.AuthorityBoundaryState == authorityBoundaryState &&
+		val0.NoOverclaimState == noOverclaimState &&
+		dependencyState == Point15Val0StateActive &&
+		freshnessTaxonomyState == Point15Val0StateActive &&
+		downgradeTaxonomyState == Point15Val0StateActive &&
+		evidenceContextState == Point15Val0StateActive &&
+		tenantBoundaryState == Point15Val0StateActive &&
+		timestampDisciplineState == Point15Val0StateActive &&
+		authorityBoundaryState == Point15Val0StateActive &&
+		noOverclaimState == Point15Val0StateActive
 }
 
 func point15ValAEmbeddedStateChainActive(valA Point15ValADowngradeTriggerFoundation) bool {
@@ -867,7 +912,8 @@ func point15ValCEmbeddedStateChainActive(valC Point15ValCEnforcementBoundaryFoun
 
 func point15ValDEmbeddedStateChainActive(valD Point15ValDAssuranceProjectionFoundation) bool {
 	recomputed := ComputePoint15ValDAssuranceProjectionFoundation(valD)
-	return point15ValCEmbeddedStateChainActive(valD.Dependency.Point15ValC) &&
+	return valD.ProjectionDisclaimer == point15ValDProjectionDisclaimer &&
+		point15ValCEmbeddedStateChainActive(valD.Dependency.Point15ValC) &&
 		valD.CurrentState == recomputed.CurrentState &&
 		valD.DependencyState == recomputed.DependencyState &&
 		valD.TimelineState == recomputed.TimelineState &&
@@ -899,7 +945,8 @@ func point15ValDEmbeddedStateChainActive(valD Point15ValDAssuranceProjectionFoun
 }
 
 func point15ValDEmbeddedNoOverclaimChainActive(valD Point15ValDAssuranceProjectionFoundation) bool {
-	return valD.NoOverclaimState == Point15ValDStateActive &&
+	return valD.ProjectionDisclaimer == point15ValDProjectionDisclaimer &&
+		valD.NoOverclaimState == Point15ValDStateActive &&
 		EvaluatePoint15ValDNoOverclaimGuardState(valD.NoOverclaimGuard) == Point15ValDStateActive &&
 		point15ValCEmbeddedNoOverclaimChainActive(valD.Dependency.Point15ValC)
 }
@@ -1676,6 +1723,9 @@ func ComputePoint15ValDAssuranceProjectionFoundation(model Point15ValDAssuranceP
 	model.NoMutationState = EvaluatePoint15ValDNoMutationProjectionGuardState(model.NoMutationGuard)
 	model.AuthorityBoundaryState = EvaluatePoint15ValDAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValDNoOverclaimGuardState(model.NoOverclaimGuard)
+	if model.ProjectionDisclaimer != point15ValDProjectionDisclaimer {
+		model.NoOverclaimState = Point15ValDStateBlocked
+	}
 
 	expectedTenant := model.Dependency.InheritedTenantScope
 	val0 := model.Dependency.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0

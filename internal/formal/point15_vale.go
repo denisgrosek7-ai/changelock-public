@@ -729,6 +729,7 @@ func EvaluatePoint15ValEDependencyState(model Point15ValEDependencySnapshot) str
 		!model.Point15ValDCIGreen ||
 		!model.Point15ValDReviewedOnMain ||
 		model.Point15PassSeen ||
+		point15ValEValDPayloadContainsPoint15Pass(model.Point15ValD) ||
 		!formalRawExactValid(model.Point15ValDCurrentState, point15ValDStateValid) ||
 		!formalRawExactValid(model.Point15ValDDependencyState, point15ValDStateValid) ||
 		!formalRawExactValid(model.Point15ValDTimelineState, point15ValDStateValid) ||

@@ -1169,6 +1169,9 @@ func ComputePoint15ValBScheduledRevalidationFoundation(model Point15ValBSchedule
 	model.TimestampDisciplineState = EvaluatePoint15ValBTimestampDisciplineState(model.TimestampDiscipline)
 	model.AuthorityBoundaryState = EvaluatePoint15ValBAuthorityBoundaryState(model.AuthorityBoundary)
 	model.NoOverclaimState = EvaluatePoint15ValBNoOverclaimGuardState(model.NoOverclaimGuard)
+	if model.RevalidationDisclaimer != point15ValBRevalidationDisclaimer {
+		model.NoOverclaimState = Point15ValBStateBlocked
+	}
 
 	expectedTenant := model.Dependency.InheritedTenantScope
 	val0 := model.Dependency.Point15ValA.Dependency.Point15Val0

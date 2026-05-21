@@ -158,6 +158,30 @@ func TestPoint15ValDDependencyState(t *testing.T) {
 		{"blocks stale embedded val0 no-overclaim allowed ledger mutation", func(model *Point15ValDDependencySnapshot) {
 			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording = append(model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.NoOverclaimGuard.AllowedSafeWording, "freshness certified")
 		}, Point15ValDStateBlocked},
+		{"blocks stale embedded val0 top-level freshness disclaimer overclaim", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.FreshnessDisclaimer = "continuous assurance guaranteed"
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded vala top-level trigger disclaimer retag", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.TriggerDisclaimer = " " + point15ValATriggerDisclaimer + " "
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valb top-level revalidation disclaimer overclaim", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.RevalidationDisclaimer = "production approved"
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded valc top-level enforcement disclaimer retag", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.EnforcementDisclaimer = "\t" + point15ValCEnforcementDisclaimer + "\n"
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded val0 nested point11 dependency mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.Dependency.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point11.Val0Dependency.CurrentState = Point11Val0StateBlocked
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded val0 point14 closure evaluator mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.Dependency.Point14ValE.ClosureEvaluator.CurrentState = Point14ValEStateBlocked
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded val0 point14 vala chain mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.Dependency.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.CurrentState = Point14ValAStateBlocked
+		}, Point15ValDStateBlocked},
+		{"blocks stale embedded val0 point14 val0 chain mutation", func(model *Point15ValDDependencySnapshot) {
+			model.Point15ValC.Dependency.Point15ValB.Dependency.Point15ValA.Dependency.Point15Val0.Dependency.Point14ValE.Dependency.Point14ValD.Dependency.Point14ValC.Dependency.Point14ValB.Dependency.Point14ValA.Dependency.Point14Val0.CurrentState = Point14Val0StateBlocked
+		}, Point15ValDStateBlocked},
 		{"blocks on point15 pass token", func(model *Point15ValDDependencySnapshot) {
 			model.Point15PassSeen = true
 		}, Point15ValDStateBlocked},
@@ -1167,6 +1191,12 @@ func TestPoint15ValDAssuranceProjectionFoundationState(t *testing.T) {
 		}, Point15ValDStateBlocked},
 		{"split no overclaim wording blocks full ValD foundation", func(model *Point15ValDAssuranceProjectionFoundation) {
 			model.NoOverclaimGuard.ObservedTexts = []string{"deployment", "approved"}
+		}, Point15ValDStateBlocked},
+		{"top-level projection disclaimer overclaim blocks full ValD foundation", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.ProjectionDisclaimer = "production approved"
+		}, Point15ValDStateBlocked},
+		{"padded top-level projection disclaimer blocks full ValD foundation", func(model *Point15ValDAssuranceProjectionFoundation) {
+			model.ProjectionDisclaimer = " " + point15ValDProjectionDisclaimer + " "
 		}, Point15ValDStateBlocked},
 	}
 	for _, tc := range tests {
