@@ -1,26 +1,27 @@
 # ChangeLock Public Overview
 
-ChangeLock is a Kubernetes delivery-security and runtime-trust control plane.
-It is designed for teams that want policy-driven admission, stronger software-supply-chain trust, runtime visibility, audit-oriented evidence, and bounded operational response without turning every release into a manual security project.
+ChangeLock is an evidence-backed decision control plane for software delivery, runtime trust, and verifiable decision evidence.
+It is designed for teams that want policy-driven enforcement, stronger software-supply-chain trust, Kubernetes admission controls, runtime visibility, audit-oriented evidence, portable review packages, and bounded operational guidance without turning every release into a manual security project.
 
 This public repository is intentionally **docs-only**.
 It exists so buyers, partners, and technical reviewers can understand the product, review its operating model, and evaluate scope without exposing private implementation code.
 
 ## Why ChangeLock exists
 
-Modern delivery paths usually split trust across disconnected systems:
+Modern delivery and runtime paths usually split trust across disconnected systems:
 
 - CI signs something
 - admission checks something else
 - runtime notices drift later
+- advisory automation suggests action from partial context
 - audit and incident teams reconstruct the story manually
 
-ChangeLock is built to connect those layers into one operator-visible security model so teams can:
+ChangeLock is built to connect those layers into one operator-visible evidence model so teams can:
 
 - decide whether a workload should be allowed to run
-- explain why a workload was allowed, denied, quarantined, or replayed
+- explain why a workload, exception, proof, or remediation path was allowed, denied, quarantined, replayed, or escalated
 - preserve evidence and lineage for audit, incident response, and handoff
-- apply bounded runtime controls without collapsing into opaque automation
+- apply bounded runtime controls and AI-assisted guidance without collapsing into opaque automation
 
 ## What ChangeLock covers
 
@@ -30,18 +31,20 @@ At a program level, ChangeLock covers:
 - operator governance, approvals, and exception control
 - runtime drift and integrity-aware monitoring
 - audit evidence, reporting, and portable handoff
+- signed evidence, decision records, and replayable review context where enabled
 - topology, blast-radius, and forensic reconstruction
 - federated proof reuse across clusters or organizations
-- controlled validation and bounded runtime hardening
+- controlled validation, bounded runtime hardening, and advisory AI guidance
 
 ## Capability map
 
-### 1. Trust enforcement
+### 1. Trust enforcement and decision evidence
 
 - signature and provenance-aware decisioning
 - explicit policy evaluation
 - environment-aware admission controls
 - digest and signer-oriented trust boundaries
+- decision hashes, evidence refs, and replayable review context where enabled
 
 ### 2. Governance and operator control
 
@@ -57,12 +60,13 @@ At a program level, ChangeLock covers:
 - bounded containment and recovery paths
 - evidence-linked operational response
 
-### 4. Evidence, reporting, and handoff
+### 4. Evidence, reporting, and review packages
 
 - durable auditability
 - trust-sensitive reporting
 - portable evidence bundles
 - third-party-verifiable handoff artifacts
+- public-safe and partner-scoped evidence views where enabled
 
 ### 5. Intelligence and advanced operations
 
@@ -70,6 +74,7 @@ At a program level, ChangeLock covers:
 - replay and time-travel forensics
 - federation and proof reuse
 - validation harnesses and closed-loop hardening
+- bounded AI guidance that remains advisory and evidence-linked
 
 ## Program map
 
@@ -97,12 +102,12 @@ The ChangeLock program has evolved in layers. These phase labels are useful as a
    - identity, approvals, analytics, vulnerability operations, and production packaging
 
 8. **Phase 8: Advanced Trust Operations**
-   - preflight workflows, multi-cluster coordination, evidence signing, bounded runtime recovery, operational summaries, and later operational overlays
+   - preflight workflows, multi-cluster coordination, evidence signing, bounded runtime recovery, evidence review surfaces, operational summaries, and later operational overlays
 
 9. **Phase 9: Open-Source Trust Network Expansion**
-   - `9 / Val 0` OSS signal contract discipline
+   - bounded OSS trust-signal discipline
    - bounded trust marking semantics and maintainer identity lifecycle
-   - registry freshness and unsupported-state discipline
+   - trust-signal freshness and unsupported-state discipline
    - shared VEX and triage review discipline
    - source-weighted propagation discipline and local applicability boundaries
    - no-overclaim and no-global-truth guardrails for OSS trust signals
@@ -165,7 +170,7 @@ Detailed implementation review, source-level due diligence, and operational evid
 
 ## Practical boundary
 
-ChangeLock is designed to improve delivery and runtime trust posture.
+ChangeLock is designed to improve delivery, runtime, and decision-evidence trust posture.
 It is not positioned as:
 
 - a full SIEM
@@ -174,7 +179,7 @@ It is not positioned as:
 - a general-purpose GitOps platform
 - an unconstrained autonomous security engine
 
-Its value is in explainable enforcement, operator-visible evidence, and bounded control loops.
+Its value is in explainable enforcement, operator-visible evidence, portable review packages, and bounded control loops.
 
 ## License
 
